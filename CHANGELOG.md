@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.7.1 - 2026-07-05
+
+- Fixed "Next Shape": clicking it from the result screen previously reused
+  the same component instance with stale phase/result state (only the ghost
+  target visually updated). Added `key={selectedIndex}` so each shape gets a
+  fresh mount, correctly landing on a new "Study the shape" preview.
+- Added encouragement on a missed attempt (score below 70): a gentle,
+  synthesized two-note dip sound (`playEncourageSound`, still no external
+  audio) plus a random supportive message ("Not bad!", "Try again!", "So
+  close!", etc.), shown the same way the celebration banner is for a pass.
+
+## 0.7.0 - 2026-07-05
+
+Added sound and celebration on passing a Shape Challenge level.
+
+- `src/engine/soundEngine.ts`: a short success chime synthesized entirely
+  in-browser via the Web Audio API (oscillator tones) - no audio files,
+  samples, or third-party sound effects, so there's no copyright risk.
+- Passing a level (score 70+) now plays that chime and shows a random
+  encouraging banner ("Great job!", "Well done!", etc.).
+- Added a 🔊/🔇 `SoundToggleButton`, persisted in `localStorage`, shown in
+  the shared `AppHeader` (covering every screen that uses it) plus the two
+  result screens that render without a header.
+
+## 0.6.1 - 2026-07-05
+
+Replaying an already-passed shape and succeeding now shows "Next Shape"
+straight away (jumping to the shape right after it, already unlocked),
+instead of forcing a trip back to the map first.
+
+## 0.6.0 - 2026-07-05
+
+Added two ways to see the target shape more clearly in Shape Challenge.
+
+- Result screen now shows `ShapeOverlayCanvas`: the target shape (gray,
+  semi-transparent) overlaid with the player's own attempt (blue), with a
+  legend, so it's visually clear what to improve.
+- Added a "Show Guide" toggle during the drawing phase itself, letting the
+  player keep the target visible (same semi-transparent ghost style) while
+  actively drawing, to trace and build skill — the canvas stays fully
+  interactive while the guide is shown.
+
 ## 0.5.1 - 2026-07-05
 
 Clicking "Try Again" after a failed (or passed) Shape Challenge attempt now

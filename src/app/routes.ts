@@ -21,3 +21,11 @@ export function toPlay(challengeId: string): Screen {
 export function toShapeChallenge(): Screen {
   return { name: "shapeChallenge" };
 }
+
+export function toShop(): Screen {
+  return { name: "shop" };
+}
+
+export function toAchievements(): Screen {
+  return { name: "achievements" };
+}

@@ -3,4 +3,6 @@ export type Screen =
   | { name: "create" }
   | { name: "list" }
   | { name: "play"; challengeId: string }
-  | { name: "shapeChallenge" };
+  | { name: "shapeChallenge" }
+  | { name: "shop" }
+  | { name: "achievements" };

@@ -17,7 +17,9 @@ renamed easily if needed.
 This project uses only:
 
 - Original CSS/SVG/canvas visuals, built for this project.
-- System fonts.
+- System fonts and emoji glyphs (e.g. 🔒, 🔊) rendered by the OS/browser, not custom artwork.
+- Sounds synthesized at runtime via the Web Audio API (oscillator tones) - no
+  audio samples, recordings, or third-party sound effects are used anywhere.
 - Original copywriting.
 - User-generated freehand drawings (created by the player at runtime).
 - The default Vite/React scaffold's build tooling (not its branding, which has been

@@ -4,6 +4,8 @@ import CreateChallengeScreen from "./screens/CreateChallengeScreen";
 import MyChallengesScreen from "./screens/MyChallengesScreen";
 import PlayChallengeScreen from "./screens/PlayChallengeScreen";
 import ShapeChallengeScreen from "./screens/ShapeChallengeScreen";
+import ShopScreen from "./screens/ShopScreen";
+import AchievementsScreen from "./screens/AchievementsScreen";
 import type { Screen } from "./types/GameMode";
 
 export default function App() {
@@ -20,5 +22,9 @@ export default function App() {
       return <PlayChallengeScreen challengeId={screen.challengeId} onNavigate={setScreen} />;
     case "shapeChallenge":
       return <ShapeChallengeScreen onNavigate={setScreen} />;
+    case "shop":
+      return <ShopScreen onNavigate={setScreen} />;
+    case "achievements":
+      return <AchievementsScreen onNavigate={setScreen} />;
   }
 }

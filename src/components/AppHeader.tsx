@@ -1,12 +1,15 @@
 import { APP_NAME } from "../app/constants";
+import CoinIndicator from "./CoinIndicator";
+import SoundToggleButton from "./SoundToggleButton";
 
 type AppHeaderProps = {
   title?: string;
   subtitle?: string;
   onBack?: () => void;
+  onNavigateToAchievements?: () => void;
 };
 
-export default function AppHeader({ title = APP_NAME, subtitle, onBack }: AppHeaderProps) {
+export default function AppHeader({ title = APP_NAME, subtitle, onBack, onNavigateToAchievements }: AppHeaderProps) {
   return (
     <header className="app-header">
       {onBack && (
@@ -17,6 +20,20 @@ export default function AppHeader({ title = APP_NAME, subtitle, onBack }: AppHea
       <div className="app-header-text">
         <h1>{title}</h1>
         {subtitle && <p>{subtitle}</p>}
+      </div>
+      <div className="app-header-actions">
+        {onNavigateToAchievements && (
+          <button
+            type="button"
+            className="achievements-shortcut"
+            onClick={onNavigateToAchievements}
+            aria-label="Achievements"
+          >
+            🏆
+          </button>
+        )}
+        <CoinIndicator />
+        <SoundToggleButton />
       </div>
     </header>
   );

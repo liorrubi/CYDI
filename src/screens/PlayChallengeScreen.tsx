@@ -6,7 +6,7 @@ import ResultScreen from "./ResultScreen";
 import { ANALYZING_MAX_MS, ANALYZING_MIN_MS, CANVAS_SIZE, PREVIEW_DURATION_MS } from "../app/constants";
 import { getChallenge, updateChallenge } from "../services/challengeStorage";
 import { scoreAttempt } from "../engine/scoring";
-import { toList } from "../app/routes";
+import { toAchievements, toList } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { Challenge, DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -64,19 +64,35 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   if (!challenge) {
     return (
       <div className="screen">
-        <AppHeader title="Challenge not found" onBack={() => onNavigate(toList())} />
+        <AppHeader
+          title="Challenge not found"
+          onBack={() => onNavigate(toList())}
+          onNavigateToAchievements={() => onNavigate(toAchievements())}
+        />
         <Button onClick={() => onNavigate(toList())}>Back to My Challenges</Button>
       </div>
     );
   }
 
   if (phase === "result" && result) {
-    return <ResultScreen score={result} isNewBest={isNewBest} onRetry={handleRetry} onBack={() => onNavigate(toList())} />;
+    return (
+      <ResultScreen
+        score={result}
+        isNewBest={isNewBest}
+        onRetry={handleRetry}
+        onBack={() => onNavigate(toList())}
+        onNavigateToAchievements={() => onNavigate(toAchievements())}
+      />
+    );
   }
 
   return (
     <div className="screen">
-      <AppHeader title={challenge.name} onBack={() => onNavigate(toList())} />
+      <AppHeader
+        title={challenge.name}
+        onBack={() => onNavigate(toList())}
+        onNavigateToAchievements={() => onNavigate(toAchievements())}
+      />
       <p className="status-text">
         {phase === "preview" && "Study the shape"}
         {phase === "drawing" && "Now draw it"}

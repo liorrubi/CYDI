@@ -1,16 +1,37 @@
 import { SHAPE_CHALLENGE_STORAGE_KEY } from "../app/constants";
 
 export type ShapeChallengeProgress = {
-  levelIndex: number;
+  levelIndexByCategory: Record<string, number>;
   bestScores: Record<string, number>;
 };
 
-const DEFAULT_PROGRESS: ShapeChallengeProgress = { levelIndex: 0, bestScores: {} };
+const DEFAULT_PROGRESS: ShapeChallengeProgress = { levelIndexByCategory: {}, bestScores: {} };
 
-function isProgress(value: unknown): value is ShapeChallengeProgress {
-  if (typeof value !== "object" || value === null) return false;
-  const p = value as Record<string, unknown>;
-  return typeof p.levelIndex === "number" && typeof p.bestScores === "object" && p.bestScores !== null;
+/** Old (pre-categories) save format: a single flat levelIndex, implicitly for the "geometric" category. */
+type LegacyProgress = { levelIndex: number; bestScores: Record<string, number> };
+
+function isLegacyProgress(value: Record<string, unknown>): value is LegacyProgress {
+  return typeof value.levelIndex === "number" && typeof value.bestScores === "object" && value.bestScores !== null;
+}
+
+function isCurrentProgress(value: Record<string, unknown>): value is ShapeChallengeProgress {
+  return (
+    typeof value.levelIndexByCategory === "object" &&
+    value.levelIndexByCategory !== null &&
+    typeof value.bestScores === "object" &&
+    value.bestScores !== null
+  );
+}
+
+function parseProgress(value: unknown): ShapeChallengeProgress {
+  if (typeof value !== "object" || value === null) return DEFAULT_PROGRESS;
+  const record = value as Record<string, unknown>;
+
+  if (isCurrentProgress(record)) return record;
+  if (isLegacyProgress(record)) {
+    return { levelIndexByCategory: { geometric: record.levelIndex }, bestScores: record.bestScores };
+  }
+  return DEFAULT_PROGRESS;
 }
 
 export function getProgress(): ShapeChallengeProgress {
@@ -23,8 +44,7 @@ export function getProgress(): ShapeChallengeProgress {
   if (!raw) return DEFAULT_PROGRESS;
 
   try {
-    const parsed: unknown = JSON.parse(raw);
-    return isProgress(parsed) ? parsed : DEFAULT_PROGRESS;
+    return parseProgress(JSON.parse(raw));
   } catch {
     return DEFAULT_PROGRESS;
   }
@@ -36,4 +56,13 @@ export function saveProgress(progress: ShapeChallengeProgress): void {
   } catch (error) {
     console.warn("Failed to persist shape challenge progress", error);
   }
+}
+
+export function clearProgress(): ShapeChallengeProgress {
+  saveProgress(DEFAULT_PROGRESS);
+  return DEFAULT_PROGRESS;
+}
+
+export function getCategoryLevelIndex(progress: ShapeChallengeProgress, category: string): number {
+  return progress.levelIndexByCategory[category] ?? 0;
 }

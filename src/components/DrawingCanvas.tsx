@@ -18,7 +18,7 @@ type DrawingCanvasProps = {
   onComplete?: (path: DrawingPath) => void;
 };
 
-function drawStroke(ctx: CanvasRenderingContext2D, points: Point[], color: string) {
+export function drawStroke(ctx: CanvasRenderingContext2D, points: Point[], color: string) {
   if (points.length < 2) return;
   ctx.lineWidth = 5;
   ctx.lineCap = "round";

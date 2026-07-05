@@ -1,0 +1,86 @@
+import { useRef, useState } from "react";
+import type { FormEvent } from "react";
+import AppHeader from "../components/AppHeader";
+import Button from "../components/Button";
+import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
+import { CANVAS_SIZE, MIN_POINTS_TO_SAVE } from "../app/constants";
+import { saveChallenge } from "../services/challengeStorage";
+import { toHome, toList } from "../app/routes";
+import type { Screen } from "../types/GameMode";
+import type { DrawingPath } from "../types/Challenge";
+
+type CreateChallengeScreenProps = {
+  onNavigate: (screen: Screen) => void;
+};
+
+export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScreenProps) {
+  const canvasRef = useRef<DrawingCanvasHandle | null>(null);
+  const [currentPath, setCurrentPath] = useState<DrawingPath | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [namePromptOpen, setNamePromptOpen] = useState(false);
+  const [name, setName] = useState("");
+
+  function handleClear() {
+    canvasRef.current?.clear();
+    setCurrentPath(null);
+    setError(null);
+    setNamePromptOpen(false);
+  }
+
+  function handleSaveClick() {
+    if (!currentPath || currentPath.points.length < MIN_POINTS_TO_SAVE) {
+      setError("Draw a longer shape first.");
+      return;
+    }
+    setError(null);
+    setNamePromptOpen(true);
+  }
+
+  function handleConfirmSave(event: FormEvent) {
+    event.preventDefault();
+    if (!currentPath || !name.trim()) return;
+
+    saveChallenge({
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      target: currentPath,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      attempts: 0,
+    });
+
+    onNavigate(toList());
+  }
+
+  return (
+    <div className="screen">
+      <AppHeader title="Create Challenge" onBack={() => onNavigate(toHome())} />
+      <p className="status-text">Draw any shape</p>
+      <div className="canvas-wrapper">
+        <DrawingCanvas ref={canvasRef} width={CANVAS_SIZE} height={CANVAS_SIZE} onChange={setCurrentPath} />
+      </div>
+      {error && <p className="form-error">{error}</p>}
+      {!namePromptOpen && (
+        <div className="button-row">
+          <Button variant="secondary" onClick={handleClear}>
+            Clear
+          </Button>
+          <Button onClick={handleSaveClick}>Save Challenge</Button>
+        </div>
+      )}
+      {namePromptOpen && (
+        <form className="name-form" onSubmit={handleConfirmSave}>
+          <input autoFocus placeholder="Challenge name" value={name} onChange={(e) => setName(e.target.value)} />
+          <div className="button-row">
+            <Button type="button" variant="secondary" onClick={() => setNamePromptOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!name.trim()}>
+              Confirm
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}

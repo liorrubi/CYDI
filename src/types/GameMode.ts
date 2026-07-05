@@ -1,0 +1,5 @@
+export type Screen =
+  | { name: "home" }
+  | { name: "create" }
+  | { name: "list" }
+  | { name: "play"; challengeId: string };

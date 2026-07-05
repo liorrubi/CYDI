@@ -35,7 +35,7 @@ import {
   saveProgress,
   type ShapeChallengeProgress,
 } from "../services/shapeChallengeProgress";
-import { toAchievements, toHome } from "../app/routes";
+import { toAchievements, toHome, toShapeChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -82,7 +82,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
     setJustUnlockedIndex(null);
   }
 
-  const goToAchievements = () => onNavigate(toAchievements());
+  const goToAchievements = () => onNavigate(toAchievements(toShapeChallenge()));
 
   if (selectedCategory === null) {
     return (

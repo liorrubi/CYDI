@@ -1,6 +1,6 @@
 import AppHeader from "../components/AppHeader";
 import { APP_TAGLINE } from "../app/constants";
-import { toAchievements, toCreate, toList, toShapeChallenge, toShop } from "../app/routes";
+import { toAchievements, toCreate, toHome, toList, toShapeChallenge, toShop } from "../app/routes";
 import { playSelectSound } from "../engine/soundEngine";
 import type { Screen } from "../types/GameMode";
 
@@ -16,7 +16,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
 
   return (
     <div className="screen">
-      <AppHeader subtitle={APP_TAGLINE} onNavigateToAchievements={() => handleSelect(toAchievements())} />
+      <AppHeader subtitle={APP_TAGLINE} onNavigateToAchievements={() => handleSelect(toAchievements(toHome()))} />
       <div className="home-cards">
         <button
           type="button"

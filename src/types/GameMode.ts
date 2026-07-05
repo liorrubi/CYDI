@@ -5,4 +5,4 @@ export type Screen =
   | { name: "play"; challengeId: string }
   | { name: "shapeChallenge" }
   | { name: "shop" }
-  | { name: "achievements" };
+  | { name: "achievements"; from: Screen };

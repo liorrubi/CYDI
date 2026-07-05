@@ -5,7 +5,7 @@ import Button from "../components/Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import { CANVAS_SIZE, MIN_POINTS_TO_SAVE } from "../app/constants";
 import { saveChallenge } from "../services/challengeStorage";
-import { toAchievements, toHome, toList } from "../app/routes";
+import { toAchievements, toCreate, toHome, toList } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 
@@ -57,7 +57,7 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
       <AppHeader
         title="Create Challenge"
         onBack={() => onNavigate(toHome())}
-        onNavigateToAchievements={() => onNavigate(toAchievements())}
+        onNavigateToAchievements={() => onNavigate(toAchievements(toCreate()))}
       />
       <p className="status-text">Draw any shape</p>
       <div className="canvas-wrapper">

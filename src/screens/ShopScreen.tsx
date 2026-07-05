@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import { getCoins, onCoinsChanged } from "../services/coinsStore";
-import { toAchievements, toHome } from "../app/routes";
+import { toAchievements, toHome, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type ShopScreenProps = {
@@ -19,7 +19,7 @@ export default function ShopScreen({ onNavigate }: ShopScreenProps) {
       <AppHeader
         title="Shop"
         onBack={() => onNavigate(toHome())}
-        onNavigateToAchievements={() => onNavigate(toAchievements())}
+        onNavigateToAchievements={() => onNavigate(toAchievements(toShop()))}
       />
       <div className="card shop-balance">
         <p className="shop-balance-label">Your balance</p>
@@ -29,7 +29,7 @@ export default function ShopScreen({ onNavigate }: ShopScreenProps) {
         <p className="shop-empty-title">🛍️ Products are on the way!</p>
         <p className="status-text">Keep collecting CYDI Coins — new items are coming soon.</p>
       </div>
-      <Button variant="secondary" onClick={() => onNavigate(toAchievements())}>
+      <Button variant="secondary" onClick={() => onNavigate(toAchievements(toShop()))}>
         View Achievements
       </Button>
     </div>

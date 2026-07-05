@@ -26,6 +26,6 @@ export function toShop(): Screen {
   return { name: "shop" };
 }
 
-export function toAchievements(): Screen {
-  return { name: "achievements" };
+export function toAchievements(from: Screen): Screen {
+  return { name: "achievements", from };
 }

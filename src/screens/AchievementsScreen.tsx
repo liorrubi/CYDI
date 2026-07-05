@@ -8,14 +8,15 @@ import {
 } from "../app/achievements";
 import { getUnlockedAchievementIds } from "../services/achievementsStore";
 import { getProgress } from "../services/shapeChallengeProgress";
-import { toAchievements, toShop } from "../app/routes";
+import { toAchievements } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type AchievementsScreenProps = {
+  from: Screen;
   onNavigate: (screen: Screen) => void;
 };
 
-export default function AchievementsScreen({ onNavigate }: AchievementsScreenProps) {
+export default function AchievementsScreen({ from, onNavigate }: AchievementsScreenProps) {
   const progress = getProgress();
   const stats = computeAchievementStats(progress);
   const unlockedIds = getUnlockedAchievementIds();
@@ -24,8 +25,8 @@ export default function AchievementsScreen({ onNavigate }: AchievementsScreenPro
     <div className="screen">
       <AppHeader
         title="Achievements"
-        onBack={() => onNavigate(toShop())}
-        onNavigateToAchievements={() => onNavigate(toAchievements())}
+        onBack={() => onNavigate(from)}
+        onNavigateToAchievements={() => onNavigate(toAchievements(from))}
       />
       <div className="achievement-list">
         {ACHIEVEMENTS.map((achievement) => {

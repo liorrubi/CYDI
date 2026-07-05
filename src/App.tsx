@@ -25,6 +25,6 @@ export default function App() {
     case "shop":
       return <ShopScreen onNavigate={setScreen} />;
     case "achievements":
-      return <AchievementsScreen onNavigate={setScreen} />;
+      return <AchievementsScreen from={screen.from} onNavigate={setScreen} />;
   }
 }

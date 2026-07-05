@@ -1,6 +1,6 @@
 import AppHeader from "../components/AppHeader";
 import { APP_TAGLINE } from "../app/constants";
-import { toCreate, toList } from "../app/routes";
+import { toCreate, toList, toShapeChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type HomeScreenProps = {
@@ -24,6 +24,10 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           <h2>Daily Challenge</h2>
           <p>Coming soon</p>
         </div>
+        <button type="button" className="card home-card" onClick={() => onNavigate(toShapeChallenge())}>
+          <h2>Shape Challenge</h2>
+          <p>Draw what the game shows you</p>
+        </button>
       </div>
     </div>
   );

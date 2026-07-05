@@ -17,3 +17,7 @@ export function toList(): Screen {
 export function toPlay(challengeId: string): Screen {
   return { name: "play", challengeId };
 }
+
+export function toShapeChallenge(): Screen {
+  return { name: "shapeChallenge" };
+}

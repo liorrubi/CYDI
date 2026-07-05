@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.0 - 2026-07-05
+
+Added Shape Challenge mode: a system-generated progression loop.
+
+- Added `src/engine/shapeLibrary.ts`: eight original, parametrically generated
+  target shapes (circle, square, triangle, star, heart, spiral, infinity,
+  arrow) ordered by increasing difficulty, reused by the existing scoring
+  engine with no changes to it.
+- Added `src/services/shapeChallengeProgress.ts` for `localStorage`-backed
+  progression state (current level, per-shape best score) under the
+  `cydi.shapeChallenge.progress.v1` key, with the same defensive-parsing
+  approach as challenge storage.
+- Added `ShapeChallengeScreen`: study/draw/analyze/result loop against the
+  current level's generated shape, with Try Again (retry) and Next Shape
+  (advance, looping back to the start after the last shape) actions.
+- Added a fourth Home screen card, "Shape Challenge", alongside the existing
+  three (the "Daily Challenge — Coming Soon" placeholder is unchanged).
+
 ## 0.1.0 - 2026-07-05
 
 Initial CYDI MVP: local-only Create Challenge loop.

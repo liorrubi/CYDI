@@ -2,6 +2,7 @@ export const APP_NAME = "CYDI";
 export const APP_TAGLINE = "Quick drawing challenges";
 
 export const STORAGE_KEY = "cydi.challenges.v1";
+export const SHAPE_CHALLENGE_STORAGE_KEY = "cydi.shapeChallenge.progress.v1";
 
 export const CANVAS_SIZE = 320;
 

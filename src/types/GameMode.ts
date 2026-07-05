@@ -2,4 +2,5 @@ export type Screen =
   | { name: "home" }
   | { name: "create" }
   | { name: "list" }
-  | { name: "play"; challengeId: string };
+  | { name: "play"; challengeId: string }
+  | { name: "shapeChallenge" };

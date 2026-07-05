@@ -3,6 +3,7 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import CoinIndicator from "../components/CoinIndicator";
 import DrawingCanvas from "../components/DrawingCanvas";
+import PenColorMenu from "../components/PenColorMenu";
 import ScoreCard from "../components/ScoreCard";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
@@ -20,14 +21,24 @@ import {
   randomCelebrationMessage,
   randomEncouragementMessage,
   starRatingForScore,
+  type PenColorId,
 } from "../app/constants";
 import { computeAchievementStats, findNewlyUnlockedAchievements } from "../app/achievements";
 import { CATEGORIES, SHAPE_LIBRARY, shapesForCategory, type CategoryId } from "../engine/shapeLibrary";
 import { scoreAttempt } from "../engine/scoring";
-import { playEncourageSound, playSelectSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
+import {
+  playAchievementsPeekSound,
+  playChipSound,
+  playEncourageSound,
+  playSelectSound,
+  playSuccessSound,
+  primeAudioContext,
+} from "../engine/soundEngine";
+import { triggerCoinFlight } from "../engine/coinFlight";
 import { getUnlockedAchievementIds, markAchievementUnlocked } from "../services/achievementsStore";
 import { addCoins } from "../services/coinsStore";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
+import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import {
   clearProgress,
   getCategoryLevelIndex,
@@ -35,7 +46,7 @@ import {
   saveProgress,
   type ShapeChallengeProgress,
 } from "../services/shapeChallengeProgress";
-import { toAchievements, toHome, toShapeChallenge } from "../app/routes";
+import { toAchievements, toHome, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -52,6 +63,7 @@ function checkAndAwardAchievements(progress: ShapeChallengeProgress): void {
   for (const achievement of findNewlyUnlockedAchievements(stats, unlockedIds)) {
     markAchievementUnlocked(achievement.id);
     addCoins(achievement.coinReward);
+    triggerCoinFlight(document.querySelector(".achievements-shortcut"));
   }
 }
 
@@ -120,6 +132,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
       onNextShape={setSelectedIndex}
       onBackToMap={() => setSelectedIndex(null)}
       onNavigateToAchievements={goToAchievements}
+      onNavigateToShop={() => onNavigate(toShop(toShapeChallenge()))}
     />
   );
 }
@@ -148,7 +161,7 @@ function CategoryListScreen({
   }
 
   function handleSelectDifficulty(level: (typeof DIFFICULTY_LEVELS)[number]["id"]) {
-    playSelectSound();
+    playChipSound();
     setDifficulty(level);
     setDifficultyState(level);
   }
@@ -316,7 +329,10 @@ function ShapeMap({
               key={shape.id}
               type="button"
               className={index === justUnlockedIndex ? "shape-tile shape-tile-unlock" : "shape-tile"}
-              onClick={() => onSelect(index)}
+              onClick={() => {
+                playSelectSound();
+                onSelect(index);
+              }}
             >
               <ShapePreviewIcon shape={shape} />
               <p className="shape-tile-name">{shape.name}</p>
@@ -342,6 +358,7 @@ type ShapePlayProps = {
   onNextShape: (index: number) => void;
   onBackToMap: () => void;
   onNavigateToAchievements: () => void;
+  onNavigateToShop: () => void;
 };
 
 function ShapePlay({
@@ -352,6 +369,7 @@ function ShapePlay({
   onNextShape,
   onBackToMap,
   onNavigateToAchievements,
+  onNavigateToShop,
 }: ShapePlayProps) {
   const shapes = useMemo(() => shapesForCategory(category), [category]);
   const shape = shapes[levelIndex];
@@ -367,12 +385,26 @@ function ShapePlay({
   const [guideEnabled, setGuideEnabled] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
+  const [pendingScoreCoinFlight, setPendingScoreCoinFlight] = useState(false);
+  const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+
+  function handleSelectPenColor(id: PenColorId) {
+    setSelectedColor(id);
+    setPenColor(id);
+  }
 
   useEffect(() => {
     if (phase !== "preview") return;
     const timeoutId = window.setTimeout(() => setPhase("drawing"), PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
   }, [phase]);
+
+  // Fly reward coins from the score total once the result screen has actually rendered it.
+  useEffect(() => {
+    if (phase !== "result" || !pendingScoreCoinFlight) return;
+    triggerCoinFlight(document.querySelector(".score-total"));
+    setPendingScoreCoinFlight(false);
+  }, [phase, pendingScoreCoinFlight]);
 
   function handleDone() {
     if (!attemptPath) return;
@@ -396,7 +428,15 @@ function ShapePlay({
       };
       saveProgress(updatedProgress);
       onProgressChange(updatedProgress);
-      addCoins(coinsForStars(starRatingForScore(scoreResult.total)));
+      // Only pay out again if this attempt's star rating beats the shape's previous best -
+      // replaying at the same or a lower star count earns no additional coins.
+      const previousStars = bestScore !== undefined ? starRatingForScore(bestScore) : -1;
+      const newStars = starRatingForScore(scoreResult.total);
+      if (newStars > previousStars) {
+        const starCoins = coinsForStars(newStars);
+        addCoins(starCoins);
+        if (starCoins > 0) setPendingScoreCoinFlight(true);
+      }
 
       setResult(scoreResult);
       setIsNewBest(beatBest);
@@ -430,7 +470,10 @@ function ShapePlay({
           <button
             type="button"
             className="achievements-shortcut"
-            onClick={onNavigateToAchievements}
+            onClick={() => {
+              playAchievementsPeekSound();
+              onNavigateToAchievements();
+            }}
             aria-label="Achievements"
           >
             🏆
@@ -494,17 +537,21 @@ function ShapePlay({
           disabled={phase !== "drawing"}
           ghostPath={showTargetGhost ? target : undefined}
           showGhost={showTargetGhost}
+          strokeColor={penColor}
           onChange={setAttemptPath}
           onComplete={setAttemptPath}
         />
       </div>
       {phase === "drawing" && (
-        <div className="button-row">
-          <Button variant="secondary" onClick={() => setGuideEnabled((enabled) => !enabled)}>
-            {guideEnabled ? "Hide Guide" : "Show Guide"}
-          </Button>
-          <Button onClick={handleDone}>Done</Button>
-        </div>
+        <>
+          <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={onNavigateToShop} />
+          <div className="button-row">
+            <Button variant="secondary" onClick={() => setGuideEnabled((enabled) => !enabled)}>
+              {guideEnabled ? "Hide Guide" : "Show Guide"}
+            </Button>
+            <Button onClick={handleDone}>Done</Button>
+          </div>
+        </>
       )}
     </div>
   );

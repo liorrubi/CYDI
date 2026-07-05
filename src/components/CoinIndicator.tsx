@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getCoins, onCoinsChanged } from "../services/coinsStore";
+import { flyCoinsToTarget, onCoinFlightRequested } from "../engine/coinFlight";
 
 const COUNT_ANIMATION_MS = 600;
 
@@ -7,6 +8,7 @@ export default function CoinIndicator() {
   const [displayedCoins, setDisplayedCoins] = useState(() => getCoins());
   const displayedRef = useRef(displayedCoins);
   displayedRef.current = displayedCoins;
+  const indicatorRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     return onCoinsChanged(() => {
@@ -25,8 +27,14 @@ export default function CoinIndicator() {
     });
   }, []);
 
+  useEffect(() => {
+    return onCoinFlightRequested((sourceEl) => {
+      if (indicatorRef.current) flyCoinsToTarget(sourceEl, indicatorRef.current);
+    });
+  }, []);
+
   return (
-    <span className="coin-indicator" aria-label={`${displayedCoins} CYDI Coins`}>
+    <span ref={indicatorRef} className="coin-indicator" aria-label={`${displayedCoins} CYDI Coins`}>
       🪙 {displayedCoins}
     </span>
   );

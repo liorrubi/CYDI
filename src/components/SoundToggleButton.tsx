@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { isSoundEnabled, setSoundEnabled } from "../services/soundSettings";
+import { playToggleSound } from "../engine/soundEngine";
 
 export default function SoundToggleButton() {
   const [enabled, setEnabled] = useState(() => isSoundEnabled());
@@ -8,6 +9,7 @@ export default function SoundToggleButton() {
     const next = !enabled;
     setSoundEnabled(next);
     setEnabled(next);
+    playToggleSound();
   }
 
   return (

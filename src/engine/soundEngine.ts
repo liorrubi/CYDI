@@ -95,6 +95,89 @@ export function playEncourageSound(): void {
   oscillator.stop(now + 0.4);
 }
 
+/** A crisp, confident two-note rise for committing to a primary action (Done, Save, Confirm). */
+export function playPrimarySound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  playTone(ctx, 587.33, now, 0.1, 0.13, "triangle"); // D5
+  playTone(ctx, 880, now + 0.05, 0.16, 0.13, "triangle"); // A5
+}
+
+/** A soft, neutral single click for secondary actions (Cancel, Try Again, Clear). */
+export function playSecondarySound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  playTone(ctx, 440, ctx.currentTime, 0.08, 0.09, "sine"); // A4
+}
+
+/** A firmer, lower-pitched tone for destructive actions (Reset, Delete). */
+export function playDangerSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  playTone(ctx, 196, ctx.currentTime, 0.18, 0.13, "square"); // G3
+}
+
+/** A quick descending glide for back/navigate-up actions. */
+export function playBackSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  playTone(ctx, 659.25, now, 0.08, 0.1, "sine"); // E5
+  playTone(ctx, 493.88, now + 0.045, 0.1, 0.1, "sine"); // B4
+}
+
+/** A tiny mechanical tick for flipping a switch (sound toggle). */
+export function playToggleSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  playTone(ctx, 1046.5, ctx.currentTime, 0.04, 0.07, "square"); // C6
+}
+
+/** A light single blip for picking a difficulty chip. */
+export function playChipSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  playTone(ctx, 784, ctx.currentTime, 0.07, 0.1, "triangle"); // G5
+}
+
+/** A tiny sparkle for peeking at the achievements shortcut. */
+export function playAchievementsPeekSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  playTone(ctx, 1318.51, now, 0.06, 0.08, "triangle"); // E6
+  playTone(ctx, 1760, now + 0.04, 0.08, 0.08, "triangle"); // A6
+}
+
 /** A quick cascade of bright metallic clinks, like coins dropping onto a pile. */
 export function playCoinsSound(): void {
   if (!isSoundEnabled()) return;

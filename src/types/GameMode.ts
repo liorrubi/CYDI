@@ -4,5 +4,5 @@ export type Screen =
   | { name: "list" }
   | { name: "play"; challengeId: string }
   | { name: "shapeChallenge" }
-  | { name: "shop" }
+  | { name: "shop"; from: Screen }
   | { name: "achievements"; from: Screen };

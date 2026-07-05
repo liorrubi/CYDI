@@ -3,9 +3,11 @@ import type { FormEvent } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
-import { CANVAS_SIZE, MIN_POINTS_TO_SAVE } from "../app/constants";
+import PenColorMenu from "../components/PenColorMenu";
+import { CANVAS_SIZE, MIN_POINTS_TO_SAVE, type PenColorId } from "../app/constants";
 import { saveChallenge } from "../services/challengeStorage";
-import { toAchievements, toCreate, toHome, toList } from "../app/routes";
+import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { toAchievements, toCreate, toHome, toList, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 
@@ -19,6 +21,16 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
   const [error, setError] = useState<string | null>(null);
   const [namePromptOpen, setNamePromptOpen] = useState(false);
   const [name, setName] = useState("");
+  const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+
+  function handleSelectPenColor(id: PenColorId) {
+    setSelectedColor(id);
+    setPenColor(id);
+  }
+
+  function handleLockedColorClick() {
+    onNavigate(toShop(toCreate()));
+  }
 
   function handleClear() {
     canvasRef.current?.clear();
@@ -61,8 +73,15 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
       />
       <p className="status-text">Draw any shape</p>
       <div className="canvas-wrapper">
-        <DrawingCanvas ref={canvasRef} width={CANVAS_SIZE} height={CANVAS_SIZE} onChange={setCurrentPath} />
+        <DrawingCanvas
+          ref={canvasRef}
+          width={CANVAS_SIZE}
+          height={CANVAS_SIZE}
+          strokeColor={penColor}
+          onChange={setCurrentPath}
+        />
       </div>
+      <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={handleLockedColorClick} />
       {error && <p className="form-error">{error}</p>}
       {!namePromptOpen && (
         <div className="button-row">

@@ -1,4 +1,5 @@
 import { APP_NAME } from "../app/constants";
+import { playAchievementsPeekSound, playBackSound } from "../engine/soundEngine";
 import CoinIndicator from "./CoinIndicator";
 import SoundToggleButton from "./SoundToggleButton";
 
@@ -13,7 +14,15 @@ export default function AppHeader({ title = APP_NAME, subtitle, onBack, onNaviga
   return (
     <header className="app-header">
       {onBack && (
-        <button type="button" className="app-header-back" onClick={onBack} aria-label="Back">
+        <button
+          type="button"
+          className="app-header-back"
+          onClick={() => {
+            playBackSound();
+            onBack();
+          }}
+          aria-label="Back"
+        >
           ←
         </button>
       )}
@@ -26,7 +35,10 @@ export default function AppHeader({ title = APP_NAME, subtitle, onBack, onNaviga
           <button
             type="button"
             className="achievements-shortcut"
-            onClick={onNavigateToAchievements}
+            onClick={() => {
+              playAchievementsPeekSound();
+              onNavigateToAchievements();
+            }}
             aria-label="Achievements"
           >
             🏆

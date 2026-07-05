@@ -45,7 +45,10 @@ export default function AchievementsScreen({ from, onNavigate }: AchievementsScr
                   <h3>{achievement.name}</h3>
                   <p>{achievement.description}</p>
                 </div>
-                <span className="achievement-reward">{unlocked ? "✓" : `🪙 ${achievement.coinReward}`}</span>
+                <span className="achievement-reward">
+                  {unlocked && <span className="achievement-reward-check" aria-hidden="true">✓</span>}
+                  {`🪙 ${achievement.coinReward}`}
+                </span>
               </div>
               <div className="achievement-progress-row">
                 <div className="progress-bar-track">

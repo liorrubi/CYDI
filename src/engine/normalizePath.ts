@@ -66,15 +66,78 @@ export function resamplePath(points: Point[], count: number): Point[] {
   return result;
 }
 
+export type NormalizedPath = {
+  points: Point[];
+  /** Indices in `points` where a new pause-separated segment begins (excluding 0). Empty for a single continuous path. */
+  segmentStarts: number[];
+};
+
+/** Splits points into sub-arrays at the given break indices (each index starts a new segment). */
+function splitIntoSegments(points: Point[], breaks: number[] | undefined): Point[][] {
+  if (!breaks || breaks.length === 0) return points.length > 0 ? [points] : [];
+  const segments: Point[][] = [];
+  let start = 0;
+  for (const breakIndex of breaks) {
+    segments.push(points.slice(start, breakIndex));
+    start = breakIndex;
+  }
+  segments.push(points.slice(start));
+  return segments;
+}
+
 /**
  * Full normalization pipeline: dedupe -> resample -> center -> scale.
  * Returns exactly `count` points centered on the origin, scaled so the
  * longer bounding-box dimension is 1.
+ *
+ * Pause-separated segments (from lifting the pointer mid-drawing) are
+ * resampled independently and the point budget is allocated proportionally
+ * to each segment's own ink length - the invisible gap between segments
+ * never counts as drawn distance, so lifting the pointer can't inflate
+ * path length or smear points across a phantom connecting line.
  */
-export function normalizePath(path: DrawingPath, count = 128): Point[] {
-  const deduped = removeNearDuplicates(path.points);
-  const resampled = resamplePath(deduped, count);
-  const centered = centerPoints(resampled);
+export function normalizePath(path: DrawingPath, count = 128): NormalizedPath {
+  const segments = splitIntoSegments(path.points, path.breaks)
+    .map((segment) => removeNearDuplicates(segment))
+    .filter((segment) => segment.length > 0);
+
+  if (segments.length === 0) {
+    return { points: resamplePath([], count), segmentStarts: [] };
+  }
+
+  const segmentLengths = segments.map((segment) => pathLength(segment));
+  const totalLength = segmentLengths.reduce((sum, len) => sum + len, 0);
+
+  let allocations: number[];
+  if (totalLength < 1e-9) {
+    const base = Math.floor(count / segments.length);
+    allocations = segments.map(() => base);
+    allocations[allocations.length - 1] += count - base * segments.length;
+  } else {
+    allocations = segmentLengths.map((len) => Math.max(2, Math.round((len / totalLength) * count)));
+    let diff = count - allocations.reduce((sum, n) => sum + n, 0);
+    let i = 0;
+    while (diff !== 0 && i < count * 4) {
+      const idx = i % allocations.length;
+      if (diff > 0) {
+        allocations[idx]++;
+        diff--;
+      } else if (allocations[idx] > 2) {
+        allocations[idx]--;
+        diff++;
+      }
+      i++;
+    }
+  }
+
+  const points: Point[] = [];
+  const segmentStarts: number[] = [];
+  segments.forEach((segment, i) => {
+    if (i > 0) segmentStarts.push(points.length);
+    points.push(...resamplePath(segment, allocations[i]));
+  });
+
+  const centered = centerPoints(points);
   const scaled = scaleToUnit(centered);
-  return scaled;
+  return { points: scaled, segmentStarts };
 }

@@ -2,6 +2,7 @@ import ScoreCard from "../components/ScoreCard";
 import Button from "../components/Button";
 import CoinIndicator from "../components/CoinIndicator";
 import SoundToggleButton from "../components/SoundToggleButton";
+import { playAchievementsPeekSound } from "../engine/soundEngine";
 import type { ScoreBreakdown } from "../types/Score";
 
 type ResultScreenProps = {
@@ -20,7 +21,10 @@ export default function ResultScreen({ score, isNewBest, onRetry, onBack, onNavi
           <button
             type="button"
             className="achievements-shortcut"
-            onClick={onNavigateToAchievements}
+            onClick={() => {
+              playAchievementsPeekSound();
+              onNavigateToAchievements();
+            }}
             aria-label="Achievements"
           >
             🏆

@@ -23,7 +23,7 @@ export default function App() {
     case "shapeChallenge":
       return <ShapeChallengeScreen onNavigate={setScreen} />;
     case "shop":
-      return <ShopScreen onNavigate={setScreen} />;
+      return <ShopScreen from={screen.from} onNavigate={setScreen} />;
     case "achievements":
       return <AchievementsScreen from={screen.from} onNavigate={setScreen} />;
   }

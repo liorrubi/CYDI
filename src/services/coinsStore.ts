@@ -22,13 +22,27 @@ function saveCoins(amount: number): void {
   }
 }
 
-/** Adds coins (no-op for non-positive amounts), plays a coin-drop sound, and notifies any mounted CoinIndicator instances. */
+let flushScheduled = false;
+
+// Several coin awards (base reward + achievement bonuses) can happen within the
+// same synchronous tick. Batch them into a single sound + counter update instead
+// of firing overlapping sounds and racing counter animations.
+function scheduleFlush(): void {
+  if (flushScheduled) return;
+  flushScheduled = true;
+  setTimeout(() => {
+    flushScheduled = false;
+    playCoinsSound();
+    window.dispatchEvent(new Event(COINS_UPDATED_EVENT));
+  }, 0);
+}
+
+/** Adds coins (no-op for non-positive amounts); batches the coin-drop sound and CoinIndicator update with any other awards made in the same tick. */
 export function addCoins(amount: number): number {
   if (amount <= 0) return getCoins();
   const next = getCoins() + amount;
   saveCoins(next);
-  playCoinsSound();
-  window.dispatchEvent(new Event(COINS_UPDATED_EVENT));
+  scheduleFlush();
   return next;
 }
 

@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DrawingCanvas from "../components/DrawingCanvas";
+import PenColorMenu from "../components/PenColorMenu";
 import ResultScreen from "./ResultScreen";
-import { ANALYZING_MAX_MS, ANALYZING_MIN_MS, CANVAS_SIZE, PREVIEW_DURATION_MS } from "../app/constants";
+import { ANALYZING_MAX_MS, ANALYZING_MIN_MS, CANVAS_SIZE, PREVIEW_DURATION_MS, type PenColorId } from "../app/constants";
 import { getChallenge, updateChallenge } from "../services/challengeStorage";
+import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { scoreAttempt } from "../engine/scoring";
-import { toAchievements, toList, toPlay } from "../app/routes";
+import { toAchievements, toList, toPlay, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { Challenge, DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -24,6 +26,16 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
   const [result, setResult] = useState<ScoreBreakdown | null>(null);
   const [isNewBest, setIsNewBest] = useState(false);
+  const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+
+  function handleSelectPenColor(id: PenColorId) {
+    setSelectedColor(id);
+    setPenColor(id);
+  }
+
+  function handleLockedColorClick() {
+    onNavigate(toShop(toPlay(challengeId)));
+  }
 
   useEffect(() => {
     if (!challenge || phase !== "preview") return;
@@ -105,14 +117,18 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
           disabled={phase !== "drawing"}
           ghostPath={phase === "preview" ? challenge.target : undefined}
           showGhost={phase === "preview"}
+          strokeColor={penColor}
           onChange={setAttemptPath}
           onComplete={setAttemptPath}
         />
       </div>
       {phase === "drawing" && (
-        <div className="button-row">
-          <Button onClick={handleDone}>Done</Button>
-        </div>
+        <>
+          <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={handleLockedColorClick} />
+          <div className="button-row">
+            <Button onClick={handleDone}>Done</Button>
+          </div>
+        </>
       )}
     </div>
   );

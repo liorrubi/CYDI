@@ -38,16 +38,28 @@ function angleBetweenDeg(v1: Vec2, v2: Vec2): number {
   return (Math.acos(dot) * 180) / Math.PI;
 }
 
+// A near-180deg turn almost always means the stroke is intentionally doubling
+// back over itself (many target shapes require this - e.g. a peace sign's
+// spokes or an animal's eye detour), not a shaky hand. Exclude those turns
+// from the jitter penalty entirely.
+const RETRACE_ANGLE_THRESHOLD_DEG = 150;
+
 /** Penalizes jittery/shaky strokes based on average segment-to-segment direction change. */
-function computeSmoothness(normAttempt: Point[]): number {
+function computeSmoothness(normAttempt: Point[], segmentStarts: number[] = []): number {
   if (normAttempt.length < 3) return 100;
 
+  const boundaries = new Set(segmentStarts);
   let totalAngleChange = 0;
   let count = 0;
   for (let i = 1; i < normAttempt.length - 1; i++) {
+    // A pause boundary means points[i-1]->points[i] or points[i]->points[i+1]
+    // crosses an invisible gap, not a real drawn line - skip it entirely.
+    if (boundaries.has(i) || boundaries.has(i + 1)) continue;
     const v1 = { x: normAttempt[i].x - normAttempt[i - 1].x, y: normAttempt[i].y - normAttempt[i - 1].y };
     const v2 = { x: normAttempt[i + 1].x - normAttempt[i].x, y: normAttempt[i + 1].y - normAttempt[i].y };
-    totalAngleChange += angleBetweenDeg(v1, v2);
+    const angleChange = angleBetweenDeg(v1, v2);
+    if (angleChange >= RETRACE_ANGLE_THRESHOLD_DEG) continue;
+    totalAngleChange += angleChange;
     count++;
   }
 
@@ -74,8 +86,9 @@ function computeClosureScore(attemptPath: DrawingPath): number {
  * shape the target is, only on whether it is closed.
  */
 export function scoreAttempt(targetPath: DrawingPath, attemptPath: DrawingPath): ScoreBreakdown {
-  const normTarget = normalizePath(targetPath, RESAMPLE_POINT_COUNT);
-  const normAttempt = normalizePath(attemptPath, RESAMPLE_POINT_COUNT);
+  const normTarget = normalizePath(targetPath, RESAMPLE_POINT_COUNT).points;
+  const normAttemptResult = normalizePath(attemptPath, RESAMPLE_POINT_COUNT);
+  const normAttempt = normAttemptResult.points;
 
   const closed = isClosedPath(normTarget);
   const shapeMatch = closed
@@ -83,7 +96,7 @@ export function scoreAttempt(targetPath: DrawingPath, attemptPath: DrawingPath):
     : compareWithReverse(normTarget, normAttempt);
 
   const coverage = computeCoverage(normTarget, normAttempt);
-  const smoothness = computeSmoothness(normAttempt);
+  const smoothness = computeSmoothness(normAttempt, normAttemptResult.segmentStarts);
   const scale = computeScaleScore(targetPath, attemptPath);
 
   const total = clamp(

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { DrawingPath } from "../types/Challenge";
 import { CANVAS_SIZE } from "../app/constants";
-import { drawStroke } from "./DrawingCanvas";
+import { drawSegmentedStroke, drawSegmentedUserStroke } from "./DrawingCanvas";
+import { getSelectedColor } from "../services/penColorStore";
 
 type ShapeOverlayCanvasProps = {
   target: DrawingPath;
@@ -25,8 +26,8 @@ export default function ShapeOverlayCanvas({
     if (!canvas || !ctx) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawStroke(ctx, target.points, "rgba(30, 32, 46, 0.35)");
-    drawStroke(ctx, attempt.points, "#5b5bf7");
+    drawSegmentedStroke(ctx, target.points, target.breaks ?? [], "#2563eb", { lineWidth: 6, dash: [12, 8] });
+    drawSegmentedUserStroke(ctx, attempt.points, attempt.breaks ?? [], getSelectedColor());
   }, [target, attempt, width, height]);
 
   return (

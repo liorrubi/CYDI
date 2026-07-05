@@ -25,11 +25,11 @@ export const SCORE_WEIGHTS = {
 } as const;
 
 export function starRatingForScore(score: number): number {
-  if (score >= 95) return 5;
-  if (score >= 90) return 4;
-  if (score >= 80) return 3;
-  if (score >= 70) return 2;
-  if (score >= 60) return 1;
+  if (score >= 90) return 5;
+  if (score >= 80) return 4;
+  if (score >= 70) return 3;
+  if (score >= 60) return 2;
+  if (score >= 50) return 1;
   return 0;
 }
 
@@ -105,4 +105,30 @@ export const DEFAULT_DIFFICULTY: DifficultyLevel = "skilled";
 
 export function passScoreForDifficulty(level: DifficultyLevel): number {
   return DIFFICULTY_LEVELS.find((d) => d.id === level)?.passScore ?? SHAPE_CHALLENGE_PASS_SCORE;
+}
+
+export type PenColorId = "black" | "purple" | "green" | "orange" | "rainbow";
+
+export type PenColorOption = {
+  id: PenColorId;
+  name: string;
+  icon: string;
+  /** Fixed stroke color; omitted for "rainbow", which cycles hue while drawing instead. */
+  hex?: string;
+  /** Coin price to unlock in the shop; omitted for the free default. */
+  price?: number;
+};
+
+export const DEFAULT_PEN_COLOR: PenColorId = "black";
+
+export const PEN_COLORS: PenColorOption[] = [
+  { id: "black", name: "Black", icon: "⚫", hex: "#1e202e" },
+  { id: "purple", name: "Purple Pen", icon: "🟣", hex: "#8b5cf6", price: 1000 },
+  { id: "green", name: "Green Pen", icon: "🟢", hex: "#16a34a", price: 1000 },
+  { id: "orange", name: "Orange Pen", icon: "🟠", hex: "#f97316", price: 1000 },
+  { id: "rainbow", name: "Rainbow Pen", icon: "🌈", price: 10000 },
+];
+
+export function penColorById(id: PenColorId): PenColorOption {
+  return PEN_COLORS.find((c) => c.id === id) ?? PEN_COLORS[0];
 }

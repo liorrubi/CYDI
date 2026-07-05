@@ -22,8 +22,8 @@ export function toShapeChallenge(): Screen {
   return { name: "shapeChallenge" };
 }
 
-export function toShop(): Screen {
-  return { name: "shop" };
+export function toShop(from: Screen = { name: "home" }): Screen {
+  return { name: "shop", from };
 }
 
 export function toAchievements(from: Screen): Screen {

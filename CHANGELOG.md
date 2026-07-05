@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.5.1 - 2026-07-05
+
+Clicking "Try Again" after a failed (or passed) Shape Challenge attempt now
+returns to the "Study the shape" preview phase first, instead of jumping
+straight back to a blank drawing canvas — giving the player another look
+at the target shape before their next try.
+
+## 0.5.0 - 2026-07-05
+
+Made the scoring engine noticeably stricter about actual shape correctness.
+
+- `comparePointArrays` (`src/engine/comparePaths.ts`) now uses root-mean-square
+  point-to-point distance instead of a plain mean, which punishes localized
+  mismatches (e.g. a star's concave points not matching a circle's constant
+  radius) far more than an averaged distance did.
+- Rebalanced `SCORE_WEIGHTS` so `shapeMatch` — the only sub-score that
+  actually measures shape correctness — dominates the total (0.65 → 0.85),
+  since `coverage`/`smoothness`/`scale` were propping up scores for clearly
+  wrong shapes that happened to be a similar size.
+- Verified: a circle drawn against a star target dropped from 85 to 53; a
+  random scribble dropped further to 5; identical and reverse/rotated
+  redraws are unaffected (still 100).
+
+## 0.4.1 - 2026-07-05
+
+Locked shapes on the Shape Challenge map no longer reveal any preview of
+the shape itself — only the 🔒 icon and name are shown, removing the
+dimmed outline that previously hinted at what was coming.
+
+## 0.4.0 - 2026-07-05
+
+Added a Shape Challenge level map.
+
+- Entering Shape Challenge now opens a map screen showing all 52 shapes at
+  once (`ShapeChallengeScreen`'s new `ShapeMap` view), each rendered with a
+  small SVG outline preview (`src/components/ShapePreviewIcon.tsx`).
+- Shapes are strictly sequential and never repeat: a shape is locked (dimmed
+  preview, 🔒 icon, not clickable) until every shape before it has been
+  passed (score 70+); completed shapes stay unlocked, show their best score
+  as a badge, and can be replayed any time to improve it.
+- Removed the old auto-advancing/looping progression — progress is now
+  driven entirely by `progress.levelIndex` as a strict unlock frontier, with
+  no wraparound back to the first shape.
+
+## 0.3.0 - 2026-07-05
+
+Expanded Shape Challenge with more levels and a progression gate.
+
+- Grew the shape library from 8 to 52 shapes (`src/engine/shapeLibrary.ts`),
+  ordered by increasing difficulty: circle, regular polygons (3-12 sides),
+  point-stars (4-10 points), heart/arrow/crescent moon, multi-petal flowers
+  (3-10 petals), zigzags, waves, growing spirals, many-toothed gears, and
+  finally self-intersecting Lissajous curves.
+- Added a pass threshold (`SHAPE_CHALLENGE_PASS_SCORE = 70`): scoring below
+  70 disables "Next Shape" and shows an inline message; the required score
+  is now also shown up front, next to the current level's best score.
+
 ## 0.2.0 - 2026-07-05
 
 Added Shape Challenge mode: a system-generated progression loop.

@@ -3,10 +3,17 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DrawingCanvas from "../components/DrawingCanvas";
 import ScoreCard from "../components/ScoreCard";
-import { ANALYZING_MAX_MS, ANALYZING_MIN_MS, CANVAS_SIZE, PREVIEW_DURATION_MS } from "../app/constants";
-import { shapeAtLevel } from "../engine/shapeLibrary";
+import ShapePreviewIcon from "../components/ShapePreviewIcon";
+import {
+  ANALYZING_MAX_MS,
+  ANALYZING_MIN_MS,
+  CANVAS_SIZE,
+  PREVIEW_DURATION_MS,
+  SHAPE_CHALLENGE_PASS_SCORE,
+} from "../app/constants";
+import { SHAPE_LIBRARY } from "../engine/shapeLibrary";
 import { scoreAttempt } from "../engine/scoring";
-import { getProgress, saveProgress } from "../services/shapeChallengeProgress";
+import { getProgress, saveProgress, type ShapeChallengeProgress } from "../services/shapeChallengeProgress";
 import { toHome } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
@@ -19,21 +26,95 @@ type ShapeChallengeScreenProps = {
 };
 
 export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScreenProps) {
-  const [progress, setProgress] = useState(() => getProgress());
+  const [progress, setProgress] = useState<ShapeChallengeProgress>(() => {
+    const stored = getProgress();
+    return { ...stored, levelIndex: Math.min(stored.levelIndex, SHAPE_LIBRARY.length) };
+  });
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
+  if (selectedIndex === null) {
+    return <ShapeMap progress={progress} onSelect={setSelectedIndex} onBack={() => onNavigate(toHome())} />;
+  }
+
+  return (
+    <ShapePlay
+      levelIndex={selectedIndex}
+      progress={progress}
+      onProgressChange={setProgress}
+      onNextShape={setSelectedIndex}
+      onBackToMap={() => setSelectedIndex(null)}
+    />
+  );
+}
+
+type ShapeMapProps = {
+  progress: ShapeChallengeProgress;
+  onSelect: (index: number) => void;
+  onBack: () => void;
+};
+
+function ShapeMap({ progress, onSelect, onBack }: ShapeMapProps) {
+  const allComplete = progress.levelIndex >= SHAPE_LIBRARY.length;
+  const subtitle = allComplete
+    ? "All shapes complete!"
+    : `${progress.levelIndex} of ${SHAPE_LIBRARY.length} unlocked`;
+
+  return (
+    <div className="screen">
+      <AppHeader title="Shape Challenge" subtitle={subtitle} onBack={onBack} />
+      <div className="shape-grid">
+        {SHAPE_LIBRARY.map((shape, index) => {
+          const unlocked = index <= progress.levelIndex;
+          const completed = index < progress.levelIndex;
+          const best = progress.bestScores[shape.id];
+
+          if (!unlocked) {
+            return (
+              <div key={shape.id} className="shape-tile shape-tile-locked" aria-disabled="true">
+                <span className="shape-tile-lock-icon" aria-hidden="true">
+                  🔒
+                </span>
+                <p className="shape-tile-name">{shape.name}</p>
+              </div>
+            );
+          }
+
+          return (
+            <button key={shape.id} type="button" className="shape-tile" onClick={() => onSelect(index)}>
+              <ShapePreviewIcon shape={shape} />
+              {completed && best !== undefined && <span className="shape-tile-best">{best}</span>}
+              <p className="shape-tile-name">{shape.name}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+type ShapePlayProps = {
+  levelIndex: number;
+  progress: ShapeChallengeProgress;
+  onProgressChange: (progress: ShapeChallengeProgress) => void;
+  onNextShape: (index: number) => void;
+  onBackToMap: () => void;
+};
+
+function ShapePlay({ levelIndex, progress, onProgressChange, onNextShape, onBackToMap }: ShapePlayProps) {
+  const shape = SHAPE_LIBRARY[levelIndex];
+  const target = useMemo(() => shape.generate(CANVAS_SIZE), [shape]);
+  const bestScore = progress.bestScores[shape.id];
+
   const [phase, setPhase] = useState<Phase>("preview");
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
   const [result, setResult] = useState<ScoreBreakdown | null>(null);
   const [isNewBest, setIsNewBest] = useState(false);
 
-  const shape = shapeAtLevel(progress.levelIndex);
-  const target = useMemo(() => shape.generate(CANVAS_SIZE), [shape]);
-  const bestScore = progress.bestScores[shape.id];
-
   useEffect(() => {
     if (phase !== "preview") return;
     const timeoutId = window.setTimeout(() => setPhase("drawing"), PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
-  }, [phase, shape]);
+  }, [phase]);
 
   function handleDone() {
     if (!attemptPath) return;
@@ -43,13 +124,15 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
     window.setTimeout(() => {
       const scoreResult = scoreAttempt(target, attemptPath);
       const beatBest = bestScore === undefined || scoreResult.total > bestScore;
+      const passedNow = scoreResult.total >= SHAPE_CHALLENGE_PASS_SCORE;
+      const advancesFrontier = passedNow && levelIndex === progress.levelIndex;
 
-      const updatedProgress = {
-        ...progress,
+      const updatedProgress: ShapeChallengeProgress = {
+        levelIndex: advancesFrontier ? progress.levelIndex + 1 : progress.levelIndex,
         bestScores: { ...progress.bestScores, [shape.id]: beatBest ? scoreResult.total : bestScore! },
       };
       saveProgress(updatedProgress);
-      setProgress(updatedProgress);
+      onProgressChange(updatedProgress);
 
       setResult(scoreResult);
       setIsNewBest(beatBest);
@@ -61,20 +144,12 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
     setAttemptPath(null);
     setResult(null);
     setIsNewBest(false);
-    setPhase("drawing");
-  }
-
-  function handleNextShape() {
-    const updatedProgress = { ...progress, levelIndex: progress.levelIndex + 1 };
-    saveProgress(updatedProgress);
-    setProgress(updatedProgress);
-    setAttemptPath(null);
-    setResult(null);
-    setIsNewBest(false);
     setPhase("preview");
   }
 
-  const levelLabel = `Level ${progress.levelIndex + 1} · ${shape.name}`;
+  const passed = result !== null && result.total >= SHAPE_CHALLENGE_PASS_SCORE;
+  const nextIndex = levelIndex + 1;
+  const justUnlockedNext = passed && nextIndex === progress.levelIndex && nextIndex < SHAPE_LIBRARY.length;
   const bestLabel = bestScore === undefined ? "—" : String(bestScore);
 
   if (phase === "result" && result) {
@@ -85,10 +160,13 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
           <Button variant="secondary" onClick={handleTryAgain}>
             Try Again
           </Button>
-          <Button onClick={handleNextShape}>Next Shape</Button>
+          {justUnlockedNext && <Button onClick={() => onNextShape(nextIndex)}>Next Shape</Button>}
         </div>
-        <Button variant="secondary" onClick={() => onNavigate(toHome())}>
-          Home
+        {!passed && (
+          <p className="form-error">Score {SHAPE_CHALLENGE_PASS_SCORE}+ to unlock the next shape.</p>
+        )}
+        <Button variant="secondary" onClick={onBackToMap}>
+          Back to Map
         </Button>
       </div>
     );
@@ -96,7 +174,11 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
 
   return (
     <div className="screen">
-      <AppHeader title={levelLabel} subtitle={`Best: ${bestLabel}`} onBack={() => onNavigate(toHome())} />
+      <AppHeader
+        title={shape.name}
+        subtitle={`Best: ${bestLabel} · Pass score: ${SHAPE_CHALLENGE_PASS_SCORE}+`}
+        onBack={onBackToMap}
+      />
       <p className="status-text">
         {phase === "preview" && "Study the shape"}
         {phase === "drawing" && "Now draw it"}

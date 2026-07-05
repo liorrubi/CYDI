@@ -20,14 +20,14 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           <h2>My Challenges</h2>
           <p>Play saved challenges</p>
         </button>
-        <div className="card home-card disabled" aria-disabled="true">
-          <h2>Daily Challenge</h2>
-          <p>Coming soon</p>
-        </div>
         <button type="button" className="card home-card" onClick={() => onNavigate(toShapeChallenge())}>
           <h2>Shape Challenge</h2>
           <p>Draw what the game shows you</p>
         </button>
+        <div className="card home-card disabled" aria-disabled="true">
+          <h2>Daily Challenge</h2>
+          <p>Coming soon</p>
+        </div>
       </div>
     </div>
   );

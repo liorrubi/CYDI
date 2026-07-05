@@ -2,22 +2,26 @@ import type { Point } from "../types/Point";
 import { clamp, distance } from "./geometry";
 import { CLOSED_SHAPE_CLOSURE_THRESHOLD, CLOSED_SHAPE_OFFSET_STEP } from "../app/constants";
 
-const DISTANCE_TO_SCORE_FACTOR = 120;
+const DISTANCE_TO_SCORE_FACTOR = 320;
 
 /**
  * Compares two equal-length, already-normalized point arrays and returns a
- * 0-100 score based on average point-to-point distance (higher is better).
+ * 0-100 score based on root-mean-square point-to-point distance (higher is
+ * better). RMS (rather than plain mean) is used deliberately: it punishes
+ * localized deviations - like a star's concave points not matching a
+ * circle's constant radius - much harder than a mean would, which otherwise
+ * let structurally different but similarly-sized shapes score too high.
  */
 export function comparePointArrays(a: Point[], b: Point[]): number {
   if (a.length === 0 || b.length === 0) return 0;
 
   const length = Math.min(a.length, b.length);
-  let sum = 0;
+  let sumSquares = 0;
   for (let i = 0; i < length; i++) {
-    sum += distance(a[i], b[i]);
+    sumSquares += distance(a[i], b[i]) ** 2;
   }
-  const meanDistance = sum / length;
-  return clamp(100 - meanDistance * DISTANCE_TO_SCORE_FACTOR, 0, 100);
+  const rmsDistance = Math.sqrt(sumSquares / length);
+  return clamp(100 - rmsDistance * DISTANCE_TO_SCORE_FACTOR, 0, 100);
 }
 
 export function reversePoints(points: Point[]): Point[] {

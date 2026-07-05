@@ -3,6 +3,7 @@ export const APP_TAGLINE = "Quick drawing challenges";
 
 export const STORAGE_KEY = "cydi.challenges.v1";
 export const SHAPE_CHALLENGE_STORAGE_KEY = "cydi.shapeChallenge.progress.v1";
+export const SHAPE_CHALLENGE_PASS_SCORE = 70;
 
 export const CANVAS_SIZE = 320;
 
@@ -17,10 +18,10 @@ export const CLOSED_SHAPE_OFFSET_STEP = 8;
 export const CLOSED_SHAPE_CLOSURE_THRESHOLD = 0.15;
 
 export const SCORE_WEIGHTS = {
-  shapeMatch: 0.65,
-  coverage: 0.2,
-  smoothness: 0.1,
-  scale: 0.05,
+  shapeMatch: 0.85,
+  coverage: 0.08,
+  smoothness: 0.04,
+  scale: 0.03,
 } as const;
 
 export function scoreMessage(total: number): string {

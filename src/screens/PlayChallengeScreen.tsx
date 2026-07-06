@@ -8,7 +8,7 @@ import { ANALYZING_MAX_MS, ANALYZING_MIN_MS, CANVAS_SIZE, PREVIEW_DURATION_MS, t
 import { getChallenge, updateChallenge } from "../services/challengeStorage";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { scoreAttempt } from "../engine/scoring";
-import { toAchievements, toList, toPlay, toShop } from "../app/routes";
+import { toAchievements, toInstructions, toList, toPlay, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { Challenge, DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -26,6 +26,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
   const [result, setResult] = useState<ScoreBreakdown | null>(null);
   const [isNewBest, setIsNewBest] = useState(false);
+  const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
 
   function handleSelectPenColor(id: PenColorId) {
@@ -45,6 +46,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
 
   function handleDone() {
     if (!attemptPath || !challenge) return;
+    setPreviousBest(challenge.personalBest); // remember the best score as it stood before this attempt
     setPhase("analyzing");
 
     const delay = ANALYZING_MIN_MS + Math.random() * (ANALYZING_MAX_MS - ANALYZING_MIN_MS);
@@ -70,6 +72,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
     setAttemptPath(null);
     setResult(null);
     setIsNewBest(false);
+    setPreviousBest(undefined);
     setPhase("drawing");
   }
 
@@ -80,6 +83,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
           title="Challenge not found"
           onBack={() => onNavigate(toList())}
           onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
+          onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
         />
         <Button onClick={() => onNavigate(toList())}>Back to My Challenges</Button>
       </div>
@@ -91,9 +95,12 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
       <ResultScreen
         score={result}
         isNewBest={isNewBest}
+        previousBest={previousBest}
+        bestScore={challenge.personalBest}
         onRetry={handleRetry}
         onBack={() => onNavigate(toList())}
         onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
+        onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
       />
     );
   }
@@ -104,6 +111,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
         title={challenge.name}
         onBack={() => onNavigate(toList())}
         onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
+        onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
       />
       <p className="status-text">
         {phase === "preview" && "Study the shape"}

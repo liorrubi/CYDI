@@ -1,20 +1,22 @@
 import { useEffect, useRef } from "react";
 import type { DrawingPath } from "../types/Challenge";
-import { CANVAS_SIZE } from "../app/constants";
+import { CANVAS_SIZE, DEFAULT_PEN_COLOR, type PenColorId } from "../app/constants";
 import { drawSegmentedStroke, drawSegmentedUserStroke } from "./DrawingCanvas";
-import { getSelectedColor } from "../services/penColorStore";
 
 type ShapeOverlayCanvasProps = {
   target: DrawingPath;
   attempt: DrawingPath;
+  /** The pen color actually used to draw this attempt - never a fixed color, so the overlay always matches what the player saw on screen. */
+  attemptColor?: PenColorId;
   width?: number;
   height?: number;
 };
 
-/** Static, non-interactive comparison of a target shape (gray, semi-transparent) and the player's attempt (blue), overlaid. */
+/** Static, non-interactive comparison of a target shape (gray, semi-transparent) and the player's attempt (in their actual pen color), overlaid. */
 export default function ShapeOverlayCanvas({
   target,
   attempt,
+  attemptColor = DEFAULT_PEN_COLOR,
   width = CANVAS_SIZE,
   height = CANVAS_SIZE,
 }: ShapeOverlayCanvasProps) {
@@ -27,8 +29,8 @@ export default function ShapeOverlayCanvas({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawSegmentedStroke(ctx, target.points, target.breaks ?? [], "#2563eb", { lineWidth: 6, dash: [12, 8] });
-    drawSegmentedUserStroke(ctx, attempt.points, attempt.breaks ?? [], getSelectedColor());
-  }, [target, attempt, width, height]);
+    drawSegmentedUserStroke(ctx, attempt.points, attempt.breaks ?? [], attemptColor);
+  }, [target, attempt, attemptColor, width, height]);
 
   return (
     <canvas ref={canvasRef} width={width} height={height} className="drawing-canvas drawing-canvas-disabled" />

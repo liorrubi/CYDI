@@ -8,7 +8,7 @@ import {
 } from "../app/achievements";
 import { getUnlockedAchievementIds } from "../services/achievementsStore";
 import { getProgress } from "../services/shapeChallengeProgress";
-import { toAchievements } from "../app/routes";
+import { toAchievements, toInstructions } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type AchievementsScreenProps = {
@@ -27,6 +27,7 @@ export default function AchievementsScreen({ from, onNavigate }: AchievementsScr
         title="Achievements"
         onBack={() => onNavigate(from)}
         onNavigateToAchievements={() => onNavigate(toAchievements(from))}
+        onNavigateToInstructions={() => onNavigate(toInstructions(from))}
       />
       <div className="achievement-list">
         {ACHIEVEMENTS.map((achievement) => {

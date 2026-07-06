@@ -29,3 +29,7 @@ export function toShop(from: Screen = { name: "home" }): Screen {
 export function toAchievements(from: Screen): Screen {
   return { name: "achievements", from };
 }
+
+export function toInstructions(from: Screen): Screen {
+  return { name: "instructions", from };
+}

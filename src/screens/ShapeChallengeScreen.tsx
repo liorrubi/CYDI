@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import AchievementUnlockedBanner from "../components/AchievementUnlockedBanner";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import CoinIndicator from "../components/CoinIndicator";
+import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
 import DrawingCanvas from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
 import ScoreCard from "../components/ScoreCard";
@@ -18,27 +20,31 @@ import {
   coinsForStars,
   journeyRankForPercent,
   passScoreForDifficulty,
+  penColorCssBackground,
   randomCelebrationMessage,
   randomEncouragementMessage,
   starRatingForScore,
   type PenColorId,
 } from "../app/constants";
-import { computeAchievementStats, findNewlyUnlockedAchievements } from "../app/achievements";
+import { computeAchievementStats, findNewlyUnlockedAchievements, type Achievement } from "../app/achievements";
 import { CATEGORIES, SHAPE_LIBRARY, shapesForCategory, type CategoryId } from "../engine/shapeLibrary";
 import { scoreAttempt } from "../engine/scoring";
 import {
+  playAchievementUnlockedSound,
   playAchievementsPeekSound,
   playChipSound,
   playEncourageSound,
+  playInfoPeekSound,
   playSelectSound,
   playSuccessSound,
   primeAudioContext,
 } from "../engine/soundEngine";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { getUnlockedAchievementIds, markAchievementUnlocked } from "../services/achievementsStore";
-import { addCoins } from "../services/coinsStore";
+import { addCoins, addCoinsPending, revealPendingCoins } from "../services/coinsStore";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { recordRoundCompleted } from "../services/tutorialStore";
 import {
   clearProgress,
   getCategoryLevelIndex,
@@ -46,7 +52,7 @@ import {
   saveProgress,
   type ShapeChallengeProgress,
 } from "../services/shapeChallengeProgress";
-import { toAchievements, toHome, toShapeChallenge, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -57,14 +63,16 @@ type ShapeChallengeScreenProps = {
   onNavigate: (screen: Screen) => void;
 };
 
-function checkAndAwardAchievements(progress: ShapeChallengeProgress): void {
+/** Marks newly-unlocked achievements as unlocked and safely credits their coins to the real balance right away - the achievement queue passed back just controls when the celebratory banner/sound/counter-reveal happens, never whether the reward is actually paid out. */
+function detectAndBankNewAchievements(progress: ShapeChallengeProgress): Achievement[] {
   const stats = computeAchievementStats(progress);
   const unlockedIds = getUnlockedAchievementIds();
-  for (const achievement of findNewlyUnlockedAchievements(stats, unlockedIds)) {
+  const newlyUnlocked = findNewlyUnlockedAchievements(stats, unlockedIds);
+  for (const achievement of newlyUnlocked) {
     markAchievementUnlocked(achievement.id);
-    addCoins(achievement.coinReward);
-    triggerCoinFlight(document.querySelector(".achievements-shortcut"));
+    addCoinsPending(achievement.coinReward);
   }
+  return newlyUnlocked;
 }
 
 export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScreenProps) {
@@ -72,12 +80,19 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
   const [selectedCategory, setSelectedCategory] = useState<CategoryId | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [justUnlockedIndex, setJustUnlockedIndex] = useState<number | null>(null);
+  const [pendingAchievements, setPendingAchievements] = useState<Achievement[]>([]);
 
   // Retroactively award any achievements already satisfied by existing progress.
   useEffect(() => {
-    checkAndAwardAchievements(progress);
+    setPendingAchievements((prev) => [...prev, ...detectAndBankNewAchievements(progress)]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Play the fanfare each time a new achievement banner takes over the front of the queue.
+  useEffect(() => {
+    if (pendingAchievements.length > 0) playAchievementUnlockedSound();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAchievements[0]?.id]);
 
   function handleProgressChange(category: CategoryId, updated: ShapeChallengeProgress) {
     setProgress((prev) => {
@@ -86,7 +101,16 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
       }
       return updated;
     });
-    checkAndAwardAchievements(updated);
+    setPendingAchievements((prev) => [...prev, ...detectAndBankNewAchievements(updated)]);
+  }
+
+  function handleCollectAchievement(bannerEl: HTMLElement | null) {
+    triggerCoinFlight(bannerEl);
+    revealPendingCoins();
+  }
+
+  function handleAchievementBannerDismissed() {
+    setPendingAchievements((prev) => prev.slice(1));
   }
 
   function handleResetProgress() {
@@ -95,45 +119,66 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
   }
 
   const goToAchievements = () => onNavigate(toAchievements(toShapeChallenge()));
+  const goToInstructions = () => onNavigate(toInstructions(toShapeChallenge()));
+
+  const achievementBanner = pendingAchievements[0] && (
+    <AchievementUnlockedBanner
+      achievement={pendingAchievements[0]}
+      onCollect={handleCollectAchievement}
+      onDismissed={handleAchievementBannerDismissed}
+    />
+  );
 
   if (selectedCategory === null) {
     return (
-      <CategoryListScreen
-        progress={progress}
-        onSelectCategory={setSelectedCategory}
-        onBack={() => onNavigate(toHome())}
-        onResetProgress={handleResetProgress}
-        onNavigateToAchievements={goToAchievements}
-      />
+      <>
+        {achievementBanner}
+        <CategoryListScreen
+          progress={progress}
+          onSelectCategory={setSelectedCategory}
+          onBack={() => onNavigate(toHome())}
+          onResetProgress={handleResetProgress}
+          onNavigateToAchievements={goToAchievements}
+          onNavigateToInstructions={goToInstructions}
+        />
+      </>
     );
   }
 
   if (selectedIndex === null) {
     return (
-      <ShapeMap
-        category={selectedCategory}
-        progress={progress}
-        onSelect={setSelectedIndex}
-        onBack={() => setSelectedCategory(null)}
-        justUnlockedIndex={justUnlockedIndex}
-        onUnlockAnimationDone={() => setJustUnlockedIndex(null)}
-        onNavigateToAchievements={goToAchievements}
-      />
+      <>
+        {achievementBanner}
+        <ShapeMap
+          category={selectedCategory}
+          progress={progress}
+          onSelect={setSelectedIndex}
+          onBack={() => setSelectedCategory(null)}
+          justUnlockedIndex={justUnlockedIndex}
+          onUnlockAnimationDone={() => setJustUnlockedIndex(null)}
+          onNavigateToAchievements={goToAchievements}
+          onNavigateToInstructions={goToInstructions}
+        />
+      </>
     );
   }
 
   return (
-    <ShapePlay
-      key={`${selectedCategory}-${selectedIndex}`}
-      category={selectedCategory}
-      levelIndex={selectedIndex}
-      progress={progress}
-      onProgressChange={(updated) => handleProgressChange(selectedCategory, updated)}
-      onNextShape={setSelectedIndex}
-      onBackToMap={() => setSelectedIndex(null)}
-      onNavigateToAchievements={goToAchievements}
-      onNavigateToShop={() => onNavigate(toShop(toShapeChallenge()))}
-    />
+    <>
+      {achievementBanner}
+      <ShapePlay
+        key={`${selectedCategory}-${selectedIndex}`}
+        category={selectedCategory}
+        levelIndex={selectedIndex}
+        progress={progress}
+        onProgressChange={(updated) => handleProgressChange(selectedCategory, updated)}
+        onNextShape={setSelectedIndex}
+        onBackToMap={() => setSelectedIndex(null)}
+        onNavigateToAchievements={goToAchievements}
+        onNavigateToInstructions={goToInstructions}
+        onNavigateToShop={() => onNavigate(toShop(toShapeChallenge()))}
+      />
+    </>
   );
 }
 
@@ -143,6 +188,7 @@ type CategoryListScreenProps = {
   onBack: () => void;
   onResetProgress: () => void;
   onNavigateToAchievements: () => void;
+  onNavigateToInstructions: () => void;
 };
 
 function CategoryListScreen({
@@ -151,6 +197,7 @@ function CategoryListScreen({
   onBack,
   onResetProgress,
   onNavigateToAchievements,
+  onNavigateToInstructions,
 }: CategoryListScreenProps) {
   const [resetStep, setResetStep] = useState<0 | 1 | 2>(0);
   const [difficulty, setDifficultyState] = useState(() => getDifficulty());
@@ -173,7 +220,12 @@ function CategoryListScreen({
 
   return (
     <div className="screen">
-      <AppHeader title="Shape Challenge" onBack={onBack} onNavigateToAchievements={onNavigateToAchievements} />
+      <AppHeader
+        title="Shape Challenge"
+        onBack={onBack}
+        onNavigateToAchievements={onNavigateToAchievements}
+        onNavigateToInstructions={onNavigateToInstructions}
+      />
       <div className="journey-progress">
         <p className="journey-rank">{rank}</p>
         <div className="journey-stats">
@@ -273,6 +325,7 @@ type ShapeMapProps = {
   justUnlockedIndex: number | null;
   onUnlockAnimationDone: () => void;
   onNavigateToAchievements: () => void;
+  onNavigateToInstructions: () => void;
 };
 
 function ShapeMap({
@@ -283,6 +336,7 @@ function ShapeMap({
   justUnlockedIndex,
   onUnlockAnimationDone,
   onNavigateToAchievements,
+  onNavigateToInstructions,
 }: ShapeMapProps) {
   useEffect(() => {
     if (justUnlockedIndex === null) return;
@@ -304,6 +358,7 @@ function ShapeMap({
         subtitle={`${unlockedCount} of ${shapes.length} unlocked`}
         onBack={onBack}
         onNavigateToAchievements={onNavigateToAchievements}
+        onNavigateToInstructions={onNavigateToInstructions}
       />
       <div className="progress-bar-track">
         <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
@@ -358,6 +413,7 @@ type ShapePlayProps = {
   onNextShape: (index: number) => void;
   onBackToMap: () => void;
   onNavigateToAchievements: () => void;
+  onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
 };
 
@@ -369,6 +425,7 @@ function ShapePlay({
   onNextShape,
   onBackToMap,
   onNavigateToAchievements,
+  onNavigateToInstructions,
   onNavigateToShop,
 }: ShapePlayProps) {
   const shapes = useMemo(() => shapesForCategory(category), [category]);
@@ -385,7 +442,7 @@ function ShapePlay({
   const [guideEnabled, setGuideEnabled] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
-  const [pendingScoreCoinFlight, setPendingScoreCoinFlight] = useState(false);
+  const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
 
   function handleSelectPenColor(id: PenColorId) {
@@ -399,12 +456,11 @@ function ShapePlay({
     return () => window.clearTimeout(timeoutId);
   }, [phase]);
 
-  // Fly reward coins from the score total once the result screen has actually rendered it.
-  useEffect(() => {
-    if (phase !== "result" || !pendingScoreCoinFlight) return;
-    triggerCoinFlight(document.querySelector(".score-total"));
-    setPendingScoreCoinFlight(false);
-  }, [phase, pendingScoreCoinFlight]);
+  function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
+    addCoins(finalAmount);
+    triggerCoinFlight(anchorEl ?? document.querySelector(".score-total"));
+    setDoubleOfferAmount(null);
+  }
 
   function handleDone() {
     if (!attemptPath) return;
@@ -434,8 +490,7 @@ function ShapePlay({
       const newStars = starRatingForScore(scoreResult.total);
       if (newStars > previousStars) {
         const starCoins = coinsForStars(newStars);
-        addCoins(starCoins);
-        if (starCoins > 0) setPendingScoreCoinFlight(true);
+        if (starCoins > 0) setDoubleOfferAmount(starCoins);
       }
 
       setResult(scoreResult);
@@ -444,6 +499,7 @@ function ShapePlay({
       if (passedNow) playSuccessSound();
       else playEncourageSound();
       setPhase("result");
+      recordRoundCompleted();
     }, delay);
   }
 
@@ -452,6 +508,7 @@ function ShapePlay({
     setResult(null);
     setIsNewBest(false);
     setFeedbackMessage(null);
+    setDoubleOfferAmount(null);
     setPhase("preview");
   }
 
@@ -467,6 +524,17 @@ function ShapePlay({
     return (
       <div className="screen">
         <div className="app-header-actions">
+          <button
+            type="button"
+            className="info-shortcut"
+            onClick={() => {
+              playInfoPeekSound();
+              onNavigateToInstructions();
+            }}
+            aria-label="How to play"
+          >
+            i
+          </button>
           <button
             type="button"
             className="achievements-shortcut"
@@ -497,22 +565,28 @@ function ShapePlay({
             Your best: <strong>{bestScore}%</strong> <StarRating score={bestScore} size={44} />
           </p>
         )}
+        {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
         <div className="canvas-wrapper">
-          <ShapeOverlayCanvas target={target} attempt={attemptPath} width={CANVAS_SIZE} height={CANVAS_SIZE} />
+          <ShapeOverlayCanvas target={target} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
         </div>
         <p className="overlay-legend">
           <span className="overlay-legend-swatch overlay-legend-target" /> Target shape
-          <span className="overlay-legend-swatch overlay-legend-attempt" /> Your drawing
+          <span className="overlay-legend-swatch" style={{ background: penColorCssBackground(penColor), marginLeft: "var(--space-3)" }} /> Your
+          drawing
         </p>
-        <div className="button-row">
-          <Button variant="secondary" onClick={handleTryAgain}>
-            Try Again
-          </Button>
-          {canGoToNextShape && <Button onClick={() => onNextShape(nextIndex)}>Next Shape</Button>}
-        </div>
-        <Button variant="secondary" onClick={onBackToMap}>
-          Back to Map
-        </Button>
+        {doubleOfferAmount === null && (
+          <>
+            <div className="button-row">
+              <Button variant="secondary" onClick={handleTryAgain}>
+                Try Again
+              </Button>
+              {canGoToNextShape && <Button onClick={() => onNextShape(nextIndex)}>Next Shape</Button>}
+            </div>
+            <Button variant="secondary" onClick={onBackToMap}>
+              Back to Map
+            </Button>
+          </>
+        )}
       </div>
     );
   }
@@ -524,6 +598,7 @@ function ShapePlay({
         subtitle={`Best: ${bestLabel} · Pass score: ${passScore}+`}
         onBack={onBackToMap}
         onNavigateToAchievements={onNavigateToAchievements}
+        onNavigateToInstructions={onNavigateToInstructions}
       />
       <p className="status-text">
         {phase === "preview" && "Study the shape"}

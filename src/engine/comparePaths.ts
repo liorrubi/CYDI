@@ -37,12 +37,54 @@ export function compareWithReverse(a: Point[], b: Point[]): number {
 }
 
 /**
- * Whether a normalized path is a closed shape: its first and last points
- * are close together relative to the (unit-scaled) shape size.
+ * Order-independent fallback comparison: for every point in one array, finds
+ * the distance to its closest point in the other array (checked in both
+ * directions), and scores based on the WORST such gap (a Hausdorff-style
+ * distance). This tolerates a different (but geometrically equivalent)
+ * stroke order or retrace pattern - e.g. an X drawn as two separate crossing
+ * lines instead of a target's internal "retrace to center, then jump"
+ * artifact (needed only to keep the target itself a single continuous
+ * stroke) - without being nearly as easy to game with a loose scribble as a
+ * plain average-based nearest-neighbor comparison would be, since every
+ * single point must find a genuinely close match, not just most of them.
+ */
+export function compareOrderIndependent(a: Point[], b: Point[]): number {
+  if (a.length === 0 || b.length === 0) return 0;
+
+  function worstNearestNeighborDistance(from: Point[], to: Point[]): number {
+    let worst = 0;
+    for (const p of from) {
+      let nearest = Infinity;
+      for (const q of to) {
+        const d = distance(p, q);
+        if (d < nearest) nearest = d;
+      }
+      if (nearest > worst) worst = nearest;
+    }
+    return worst;
+  }
+
+  const hausdorffDistance = Math.max(worstNearestNeighborDistance(a, b), worstNearestNeighborDistance(b, a));
+  return clamp(100 - hausdorffDistance * DISTANCE_TO_SCORE_FACTOR, 0, 100);
+}
+
+/**
+ * Whether a normalized path is a closed shape: it comes back near its own
+ * starting point at some point along the way. Checked across the whole path
+ * (skipping the immediate start neighborhood, which is trivially close) -
+ * not just the very last point - because several shapes draw a fully closed
+ * main loop and then append a short decorative tail afterward (e.g. a peace
+ * sign's center spokes, a clock's hands, a medal's ribbon), which would
+ * otherwise misclassify an obviously-closed shape as open and disable the
+ * rotational-offset search, making the comparison far too strict.
  */
 export function isClosedPath(points: Point[]): boolean {
   if (points.length < 3) return false;
-  return distance(points[0], points[points.length - 1]) < CLOSED_SHAPE_CLOSURE_THRESHOLD;
+  const searchFrom = Math.max(1, Math.floor(points.length * 0.1));
+  for (let i = searchFrom; i < points.length; i++) {
+    if (distance(points[0], points[i]) < CLOSED_SHAPE_CLOSURE_THRESHOLD) return true;
+  }
+  return false;
 }
 
 /**

@@ -178,6 +178,33 @@ export function playAchievementsPeekSound(): void {
   playTone(ctx, 1760, now + 0.04, 0.08, 0.08, "triangle"); // A6
 }
 
+/** A plain, gentle two-note blip for opening the instructions/help page. */
+export function playInfoPeekSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  playTone(ctx, 587.33, now, 0.08, 0.09, "sine"); // D5
+  playTone(ctx, 783.99, now + 0.05, 0.1, 0.08, "sine"); // G5
+}
+
+/** A bright, triumphant fanfare for unlocking an achievement - bigger and more special than a plain level-pass chime. */
+export function playAchievementUnlockedSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51]; // C5 E5 G5 C6 E6 - full triumphant run
+  notes.forEach((frequency, i) => playTone(ctx, frequency, now + i * 0.08, 0.35, 0.2, "triangle"));
+  playTone(ctx, 1567.98, now + 0.42, 0.4, 0.14, "sine"); // G6 sparkle on top
+}
+
 /** A quick cascade of bright metallic clinks, like coins dropping onto a pile. */
 export function playCoinsSound(): void {
   if (!isSoundEnabled()) return;

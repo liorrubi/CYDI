@@ -1,3 +1,4 @@
+import { improvementTip } from "../app/constants";
 import type { ScoreBreakdown } from "../types/Score";
 
 type ScoreCardProps = {
@@ -6,6 +7,7 @@ type ScoreCardProps = {
 };
 
 export default function ScoreCard({ score, isNewBest }: ScoreCardProps) {
+  const tip = improvementTip(score);
   return (
     <div className="card score-card">
       {isNewBest && <div className="record-banner">New personal best!</div>}
@@ -35,6 +37,7 @@ export default function ScoreCard({ score, isNewBest }: ScoreCardProps) {
           </div>
         )}
       </div>
+      {tip && <p className="score-improvement-tip">💡 {tip}</p>}
     </div>
   );
 }

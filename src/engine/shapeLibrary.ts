@@ -34,11 +34,13 @@ export type ShapeDefinition = {
 
 type Vec2 = { x: number; y: number };
 
-function toPath(points: Vec2[], size: number): DrawingPath {
+/** `breaks` marks indices where a new visual segment starts - used to jump between two unconnected parts of a shape (e.g. a donut's outer ring and inner ring) without ever drawing a straight connector line between them, in the ghost guide, the result overlay, or the score comparison. */
+function toPath(points: Vec2[], size: number, breaks?: number[]): DrawingPath {
   return {
     points: points.map((p, i) => ({ x: p.x, y: p.y, t: i })),
     canvasWidth: size,
     canvasHeight: size,
+    breaks,
   };
 }
 
@@ -116,37 +118,58 @@ function smoothClosedPath(keyPoints: Vec2[], pointsPerSegment = 12): Vec2[] {
   return result;
 }
 
-/** Branches a small circular detail (an eye, a dot) off an existing point without lifting the pen: travel out to the loop, trace it, and return. */
-function withDetourLoop(points: Vec2[], anchorIndex: number, loopCenter: Vec2, loopRadius: number): Vec2[] {
-  const anchor = points[anchorIndex];
-  const approachSteps = 4;
-  const loopSteps = 12;
-  const detour: Vec2[] = [];
-  for (let i = 1; i <= approachSteps; i++) {
-    const t = i / approachSteps;
-    detour.push({ x: anchor.x + (loopCenter.x - anchor.x) * t, y: anchor.y + (loopCenter.y - anchor.y) * t });
+type PathWithBreaks = { points: Vec2[]; breaks: number[] };
+
+/** Concatenates multiple disconnected path segments into one shape, marking a break at every segment boundary so no connecting line is ever drawn between them (e.g. a donut's outer/inner rings, or a floating eye/dot next to a body outline). */
+function toPathFromParts(parts: Vec2[][], size: number): DrawingPath {
+  const points: Vec2[] = [];
+  const breaks: number[] = [];
+  for (const part of parts) {
+    if (part.length === 0) continue;
+    if (points.length > 0) breaks.push(points.length);
+    points.push(...part);
   }
+  return toPath(points, size, breaks);
+}
+
+/** Branches a small circular detail (an eye, a dot) off an existing point without lifting the pen for drawing purposes, but marks it as its own disconnected segment so no connecting line ever renders between the main shape and the detail. */
+function withDetourLoop(points: Vec2[], anchorIndex: number, loopCenter: Vec2, loopRadius: number): PathWithBreaks {
+  const loopSteps = 16;
+  const loop: Vec2[] = [];
   for (let i = 0; i <= loopSteps; i++) {
-    detour.push(polar(loopCenter, loopRadius, (i / loopSteps) * 360));
+    loop.push(polar(loopCenter, loopRadius, (i / loopSteps) * 360));
   }
-  for (let i = approachSteps - 1; i >= 0; i--) {
-    const t = i / approachSteps;
-    detour.push({ x: anchor.x + (loopCenter.x - anchor.x) * t, y: anchor.y + (loopCenter.y - anchor.y) * t });
-  }
-  return [...points.slice(0, anchorIndex + 1), ...detour, ...points.slice(anchorIndex + 1)];
+  const before = points.slice(0, anchorIndex + 1);
+  const after = points.slice(anchorIndex + 1);
+  return {
+    points: [...before, ...loop, ...after],
+    breaks: [before.length, before.length + loop.length],
+  };
 }
 
 type EyeSpec = { keyIndex: number; center: Vec2; radius: number };
 
-/** Smooth closed silhouette through key points, with small circular eye/detail loops branching off specific key points. */
-function organicBody(keyPoints: Vec2[], pointsPerSegment: number, eyes: EyeSpec[] = []): Vec2[] {
+/** Smooth closed silhouette through key points, with small circular eye/detail loops floating (unconnected) next to specific key points. */
+function organicBody(keyPoints: Vec2[], pointsPerSegment: number, eyes: EyeSpec[] = []): PathWithBreaks {
   const body = smoothClosedPath(keyPoints, pointsPerSegment);
   const sortedByIndexDesc = [...eyes].sort((a, b) => b.keyIndex - a.keyIndex);
-  let result = body;
+  let points = body;
+  let breaks: number[] = [];
   for (const eye of sortedByIndexDesc) {
-    result = withDetourLoop(result, eye.keyIndex * pointsPerSegment, eye.center, eye.radius);
+    const anchorIndex = eye.keyIndex * pointsPerSegment;
+    const beforeLength = points.length;
+    const result = withDetourLoop(points, anchorIndex, eye.center, eye.radius);
+    const insertedLength = result.points.length - beforeLength;
+    breaks = breaks.map((b) => (b > anchorIndex ? b + insertedLength : b));
+    breaks = [...breaks, ...result.breaks];
+    points = result.points;
   }
-  return result;
+  // Eyes are processed highest-keyIndex-first (so earlier insertions don't shift
+  // later anchor positions), which appends each eye's break pair in that same
+  // descending order - out of the ascending order every consumer (segment
+  // slicing, rendering, scoring) assumes. Sort once at the end to fix that.
+  breaks.sort((a, b) => a - b);
+  return { points, breaks };
 }
 
 function standalone(
@@ -457,7 +480,16 @@ function diamondSymbol(size: number): DrawingPath {
     [0.5, 0.85],
     [0.25, 0.5],
   ]);
-  return toPath(polygonEdges(vertices, 16), size);
+  const outline = polygonEdges(vertices, 16);
+  // horizontal facet line across the middle, like a cut gem
+  const facet = openPolyline(
+    fracPoints(size, [
+      [0.32, 0.4],
+      [0.68, 0.4],
+    ]),
+    10,
+  );
+  return toPath([...outline, ...facet], size);
 }
 
 function shieldSymbol(size: number): DrawingPath {
@@ -471,7 +503,20 @@ function shieldSymbol(size: number): DrawingPath {
     [0.2, 0.5],
     [0.2, 0.22],
   ]);
-  return toPath(smoothClosedPath(pts, 12), size);
+  const shield = smoothClosedPath(pts, 12);
+  // simple emblem cross on the shield face
+  const emblem = openPolyline(
+    fracPoints(size, [
+      [0.5, 0.32],
+      [0.5, 0.6],
+      [0.5, 0.46],
+      [0.38, 0.46],
+      [0.5, 0.46],
+      [0.62, 0.46],
+    ]),
+    8,
+  );
+  return toPathFromParts([shield, emblem], size);
 }
 
 function crossSymbol(size: number): DrawingPath {
@@ -528,7 +573,8 @@ function questionMarkSymbol(size: number): DrawingPath {
   const points: Vec2[] = [];
   for (let i = 0; i <= 50; i++) points.push(polar(center, radius, -90 + (i / 50) * 300));
   points.push({ x: size * 0.5, y: size * 0.55 }, { x: size * 0.5, y: size * 0.65 });
-  return toPath(withDetourLoop(points, points.length - 1, { x: size * 0.5, y: size * 0.8 }, size * 0.025), size);
+  const withDot = withDetourLoop(points, points.length - 1, { x: size * 0.5, y: size * 0.8 }, size * 0.025);
+  return toPath(withDot.points, size, withDot.breaks);
 }
 
 function exclamationSymbol(size: number): DrawingPath {
@@ -539,7 +585,8 @@ function exclamationSymbol(size: number): DrawingPath {
     ]),
     20,
   );
-  return toPath(withDetourLoop(points, points.length - 1, { x: size * 0.5, y: size * 0.78 }, size * 0.03), size);
+  const withDot = withDetourLoop(points, points.length - 1, { x: size * 0.5, y: size * 0.78 }, size * 0.03);
+  return toPath(withDot.points, size, withDot.breaks);
 }
 
 function musicNoteSymbol(size: number): DrawingPath {
@@ -550,7 +597,8 @@ function musicNoteSymbol(size: number): DrawingPath {
     ]),
     20,
   );
-  return toPath(withDetourLoop(stem, stem.length - 1, { x: size * 0.48, y: size * 0.72 }, size * 0.08), size);
+  const withHead = withDetourLoop(stem, stem.length - 1, { x: size * 0.48, y: size * 0.72 }, size * 0.08);
+  return toPath(withHead.points, size, withHead.breaks);
 }
 
 function anchorSymbol(size: number): DrawingPath {
@@ -595,17 +643,21 @@ function bellSymbol(size: number): DrawingPath {
     [0.25, 0.5],
     [0.32, 0.25],
   ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const bell = smoothClosedPath(pts, 10);
+  // hanging clapper at the bottom
+  const clapper = withDetourLoop(bell, bell.length - 1, { x: size * 0.5, y: size * 0.75 }, size * 0.035);
+  return toPath(clapper.points, size, clapper.breaks);
 }
 
 function targetSymbol(size: number): DrawingPath {
   const center = { x: size / 2, y: size / 2 };
-  const points: Vec2[] = [];
+  const rings: Vec2[][] = [];
   for (const radius of [size * 0.32, size * 0.2, size * 0.08]) {
-    for (let i = 0; i <= 40; i++) points.push(polar(center, radius, (i / 40) * 360 - 90));
-    points.push(center);
+    const ring: Vec2[] = [];
+    for (let i = 0; i <= 40; i++) ring.push(polar(center, radius, (i / 40) * 360 - 90));
+    rings.push(ring);
   }
-  return toPath(points, size);
+  return toPathFromParts(rings, size);
 }
 
 function speechBubbleSymbol(size: number): DrawingPath {
@@ -618,7 +670,14 @@ function speechBubbleSymbol(size: number): DrawingPath {
     [0.32, 0.6],
     [0.2, 0.6],
   ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const bubble = smoothClosedPath(pts, 10);
+  // three dots suggesting typed text inside the bubble
+  const dotParts: Vec2[][] = [bubble];
+  for (const fx of [0.38, 0.5, 0.62]) {
+    const dot = { x: size * fx, y: size * 0.42 };
+    dotParts.push([dot, polar(dot, size * 0.02, 0), dot]);
+  }
+  return toPathFromParts(dotParts, size);
 }
 
 function lightningBoltSymbol(size: number): DrawingPath {
@@ -705,7 +764,8 @@ function fishShape(size: number): DrawingPath {
     [0.3, 0.68],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 0, center: { x: size * 0.23, y: size * 0.47 }, radius: size * 0.025 }];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function birdShape(size: number): DrawingPath {
@@ -721,7 +781,8 @@ function birdShape(size: number): DrawingPath {
     [0.28, 0.45],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 1, center: { x: size * 0.52, y: size * 0.35 }, radius: size * 0.022 }];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function snailShape(size: number): DrawingPath {
@@ -739,7 +800,8 @@ function snailShape(size: number): DrawingPath {
     [0.82, 0.65],
   ]);
   points.push(...openPolyline([points[points.length - 1], ...bodyPts], 10));
-  return toPath(withDetourLoop(points, points.length - 1, { x: size * 0.86, y: size * 0.56 }, size * 0.02), size);
+  const withEye = withDetourLoop(points, points.length - 1, { x: size * 0.86, y: size * 0.56 }, size * 0.02);
+  return toPath(withEye.points, size, withEye.breaks);
 }
 
 function mouseShape(size: number): DrawingPath {
@@ -764,7 +826,7 @@ function mouseShape(size: number): DrawingPath {
     const t = i / steps;
     tail.push({ x: size * (0.55 + 0.35 * t), y: size * (0.72 + 0.15 * Math.sin(t * Math.PI * 0.7)) });
   }
-  return toPath([...body, ...tail], size);
+  return toPath([...body.points, ...tail], size, body.breaks);
 }
 
 function catShape(size: number): DrawingPath {
@@ -786,7 +848,8 @@ function catShape(size: number): DrawingPath {
     { keyIndex: 3, center: { x: size * 0.62, y: size * 0.42 }, radius: size * 0.028 },
     { keyIndex: 9, center: { x: size * 0.38, y: size * 0.42 }, radius: size * 0.028 },
   ];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function dogShape(size: number): DrawingPath {
@@ -808,7 +871,8 @@ function dogShape(size: number): DrawingPath {
     { keyIndex: 3, center: { x: size * 0.6, y: size * 0.45 }, radius: size * 0.026 },
     { keyIndex: 9, center: { x: size * 0.4, y: size * 0.45 }, radius: size * 0.026 },
   ];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function rabbitShape(size: number): DrawingPath {
@@ -824,7 +888,8 @@ function rabbitShape(size: number): DrawingPath {
     [0.58, 0.1],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 2, center: { x: size * 0.42, y: size * 0.5 }, radius: size * 0.025 }];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function duckShape(size: number): DrawingPath {
@@ -843,7 +908,8 @@ function duckShape(size: number): DrawingPath {
     [0.22, 0.6],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 3, center: { x: size * 0.63, y: size * 0.32 }, radius: size * 0.02 }];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function frogShape(size: number): DrawingPath {
@@ -863,7 +929,8 @@ function frogShape(size: number): DrawingPath {
     { keyIndex: 0, center: { x: size * 0.35, y: size * 0.26 }, radius: size * 0.03 },
     { keyIndex: 3, center: { x: size * 0.65, y: size * 0.26 }, radius: size * 0.03 },
   ];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function pigShape(size: number): DrawingPath {
@@ -880,7 +947,8 @@ function pigShape(size: number): DrawingPath {
     [0.32, 0.22],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 2, center: { x: size * 0.68, y: size * 0.42 }, radius: size * 0.025 }];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function turtleShape(size: number): DrawingPath {
@@ -901,7 +969,8 @@ function turtleShape(size: number): DrawingPath {
     [0.3, 0.3],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 0, center: { x: size * 0.5, y: size * 0.16 }, radius: size * 0.022 }];
-  return toPath(organicBody(pts, 8, eyes), size);
+  const body = organicBody(pts, 8, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function sheepShape(size: number): DrawingPath {
@@ -913,7 +982,8 @@ function sheepShape(size: number): DrawingPath {
     keyPts.push(polar(center, r, (360 / bumps) * i - 90));
   }
   const eyes: EyeSpec[] = [{ keyIndex: 1, center: { x: size * 0.62, y: size * 0.4 }, radius: size * 0.02 }];
-  return toPath(organicBody(keyPts, 10, eyes), size);
+  const body = organicBody(keyPts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function foxShape(size: number): DrawingPath {
@@ -936,7 +1006,7 @@ function foxShape(size: number): DrawingPath {
     const t = i / steps;
     tail.push({ x: size * (0.68 + 0.24 * t), y: size * (0.5 + 0.28 * Math.sin(t * Math.PI * 0.6)) });
   }
-  return toPath([...body, ...tail], size);
+  return toPath([...body.points, ...tail], size, body.breaks);
 }
 
 function bearShape(size: number): DrawingPath {
@@ -953,7 +1023,8 @@ function bearShape(size: number): DrawingPath {
     [0.22, 0.35],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 3, center: { x: size * 0.64, y: size * 0.4 }, radius: size * 0.026 }];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function owlShape(size: number): DrawingPath {
@@ -973,7 +1044,8 @@ function owlShape(size: number): DrawingPath {
     { keyIndex: 3, center: { x: size * 0.62, y: size * 0.42 }, radius: size * 0.035 },
     { keyIndex: 9, center: { x: size * 0.38, y: size * 0.42 }, radius: size * 0.035 },
   ];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function butterflyShape(size: number): DrawingPath {
@@ -1000,7 +1072,8 @@ function butterflyShape(size: number): DrawingPath {
     [0.35, 0.15],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 0, center: { x: size * 0.5, y: size * 0.21 }, radius: size * 0.018 }];
-  return toPath(organicBody(pts, 8, eyes), size);
+  const body = organicBody(pts, 8, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function elephantShape(size: number): DrawingPath {
@@ -1021,7 +1094,8 @@ function elephantShape(size: number): DrawingPath {
     [0.25, 0.3],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 4, center: { x: size * 0.6, y: size * 0.38 }, radius: size * 0.028 }];
-  return toPath(organicBody(pts, 8, eyes), size);
+  const body = organicBody(pts, 8, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function lionShape(size: number): DrawingPath {
@@ -1033,7 +1107,8 @@ function lionShape(size: number): DrawingPath {
     keyPts.push(polar(center, r, (360 / maneBumps) * i - 90));
   }
   const eyes: EyeSpec[] = [{ keyIndex: 2, center: { x: size * 0.6, y: size * 0.44 }, radius: size * 0.025 }];
-  return toPath(organicBody(keyPts, 8, eyes), size);
+  const body = organicBody(keyPts, 8, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function penguinShape(size: number): DrawingPath {
@@ -1051,7 +1126,8 @@ function penguinShape(size: number): DrawingPath {
     [0.42, 0.25],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 1, center: { x: size * 0.54, y: size * 0.28 }, radius: size * 0.02 }];
-  return toPath(organicBody(pts, 10, eyes), size);
+  const body = organicBody(pts, 10, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 function horseShape(size: number): DrawingPath {
@@ -1071,7 +1147,8 @@ function horseShape(size: number): DrawingPath {
     [0.4, 0.3],
   ]);
   const eyes: EyeSpec[] = [{ keyIndex: 3, center: { x: size * 0.62, y: size * 0.42 }, radius: size * 0.022 }];
-  return toPath(organicBody(pts, 8, eyes), size);
+  const body = organicBody(pts, 8, eyes);
+  return toPath(body.points, size, body.breaks);
 }
 
 const ANIMAL_SHAPES: ShapeDefinition[] = [
@@ -1110,7 +1187,16 @@ function leafShape(size: number): DrawingPath {
     [0.2, 0.6],
     [0.25, 0.35],
   ]);
-  return toPath(smoothClosedPath(pts, 12), size);
+  const leaf = smoothClosedPath(pts, 12);
+  // central vein running down the middle
+  const vein = openPolyline(
+    fracPoints(size, [
+      [0.5, 0.16],
+      [0.5, 0.84],
+    ]),
+    12,
+  );
+  return toPath([...leaf, ...vein], size);
 }
 
 function simpleFlowerShape(size: number): DrawingPath {
@@ -1125,7 +1211,9 @@ function simpleFlowerShape(size: number): DrawingPath {
     const r = inner + (outer - inner) * Math.abs(Math.sin((petals / 2) * t));
     points.push({ x: center.x + r * Math.cos(t), y: center.y + r * Math.sin(t) });
   }
-  return toPath(points, size);
+  // small center disc where the petals meet
+  const withCenter = withDetourLoop(points, points.length - 1, center, size * 0.06);
+  return toPath(withCenter.points, size, withCenter.breaks);
 }
 
 function treeShape(size: number): DrawingPath {
@@ -1174,7 +1262,19 @@ function mountainShape(size: number): DrawingPath {
     [0.6, 0.25],
     [0.9, 0.75],
   ]);
-  return toPath(polygonEdges(vertices, 14), size);
+  const ridge = polygonEdges(vertices, 14);
+  // snow cap notch on the taller peak
+  const snowCap = openPolyline(
+    fracPoints(size, [
+      [0.53, 0.35],
+      [0.6, 0.25],
+      [0.67, 0.35],
+      [0.6, 0.32],
+      [0.55, 0.37],
+    ]),
+    6,
+  );
+  return toPathFromParts([ridge, snowCap], size);
 }
 
 function sunShape(size: number): DrawingPath {
@@ -1251,7 +1351,20 @@ function cactusShape(size: number): DrawingPath {
     [0.6, 0.45],
     [0.6, 0.85],
   ]);
-  return toPath(polygonEdges(vertices, 8), size);
+  const body = polygonEdges(vertices, 8);
+  // short spine ticks along the main trunk
+  const spines = openPolyline(
+    fracPoints(size, [
+      [0.44, 0.5],
+      [0.48, 0.5],
+      [0.44, 0.6],
+      [0.48, 0.6],
+      [0.44, 0.7],
+      [0.48, 0.7],
+    ]),
+    3,
+  );
+  return toPathFromParts([body, spines], size);
 }
 
 function mushroomShape(size: number): DrawingPath {
@@ -1265,7 +1378,11 @@ function mushroomShape(size: number): DrawingPath {
     [0.4, 0.8],
     [0.4, 0.48],
   ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const mushroom = smoothClosedPath(pts, 10);
+  // spots on the cap
+  const spotL = withDetourLoop(mushroom, mushroom.length - 1, { x: size * 0.4, y: size * 0.33 }, size * 0.03);
+  const spotR = withDetourLoop(spotL.points, spotL.points.length - 1, { x: size * 0.58, y: size * 0.35 }, size * 0.03);
+  return toPath(spotR.points, size, [...spotL.breaks, ...spotR.breaks]);
 }
 
 function acornShape(size: number): DrawingPath {
@@ -1279,7 +1396,16 @@ function acornShape(size: number): DrawingPath {
     [0.28, 0.4],
     [0.32, 0.28],
   ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const acorn = smoothClosedPath(pts, 10);
+  // horizontal texture line marking the cap edge
+  const capLine = openPolyline(
+    fracPoints(size, [
+      [0.3, 0.36],
+      [0.7, 0.36],
+    ]),
+    10,
+  );
+  return toPathFromParts([acorn, capLine], size);
 }
 
 function pineconeShape(size: number): DrawingPath {
@@ -1292,7 +1418,19 @@ function pineconeShape(size: number): DrawingPath {
     const p = polar(center, radius, angle);
     keyPts.push({ x: center.x + (p.x - center.x) * 0.55, y: p.y });
   }
-  return toPath(smoothClosedPath(keyPts, 10), size);
+  const body = smoothClosedPath(keyPts, 10);
+  // diagonal scale lines crossing the body
+  const scales = openPolyline(
+    fracPoints(size, [
+      [0.35, 0.32],
+      [0.55, 0.4],
+      [0.35, 0.5],
+      [0.55, 0.58],
+      [0.35, 0.68],
+    ]),
+    8,
+  );
+  return toPathFromParts([body, scales], size);
 }
 
 function seedlingShape(size: number): DrawingPath {
@@ -1343,7 +1481,7 @@ function tulipShape(size: number): DrawingPath {
     ]),
     16,
   );
-  return toPath([...cup, ...stem], size);
+  return toPathFromParts([cup, stem], size);
 }
 
 function palmTreeShape(size: number): DrawingPath {
@@ -1371,7 +1509,8 @@ function volcanoShape(size: number): DrawingPath {
   ]);
   const pointsPerEdge = 12;
   const body = polygonEdges(vertices, pointsPerEdge);
-  return toPath(withDetourLoop(body, 2 * pointsPerEdge, { x: size * 0.5, y: size * 0.22 }, size * 0.04), size);
+  const withSmoke = withDetourLoop(body, 2 * pointsPerEdge, { x: size * 0.5, y: size * 0.22 }, size * 0.04);
+  return toPath(withSmoke.points, size, withSmoke.breaks);
 }
 
 function stormCloudShape(size: number): DrawingPath {
@@ -1465,7 +1604,20 @@ function watermelonShape(size: number): DrawingPath {
     [0.8, 0.25],
     [0.5, 0.85],
   ]);
-  return toPath(smoothClosedPath(pts, 14), size);
+  const wedge = smoothClosedPath(pts, 14);
+  // scattered seeds in the flesh
+  const seedParts: Vec2[][] = [wedge];
+  for (const [fx, fy] of [
+    [0.42, 0.4],
+    [0.58, 0.42],
+    [0.46, 0.55],
+    [0.54, 0.6],
+    [0.5, 0.72],
+  ] as [number, number][]) {
+    const seed = { x: size * fx, y: size * fy };
+    seedParts.push([seed, polar(seed, size * 0.015, 0), seed]);
+  }
+  return toPathFromParts(seedParts, size);
 }
 
 function pizzaShape(size: number): DrawingPath {
@@ -1475,7 +1627,21 @@ function pizzaShape(size: number): DrawingPath {
     [0.5, 0.15],
     [0.85, 0.25],
   ]);
-  return toPath(polygonEdges(vertices, 16), size);
+  const slice = polygonEdges(vertices, 16);
+  // pepperoni dots scattered on the slice
+  const pepperoniParts: Vec2[][] = [slice];
+  for (const [fx, fy] of [
+    [0.42, 0.38],
+    [0.58, 0.4],
+    [0.48, 0.52],
+    [0.4, 0.62],
+  ] as [number, number][]) {
+    const c = { x: size * fx, y: size * fy };
+    const dot: Vec2[] = [];
+    for (let i = 0; i <= 12; i++) dot.push(polar(c, size * 0.025, (i / 12) * 360));
+    pepperoniParts.push(dot);
+  }
+  return toPathFromParts(pepperoniParts, size);
 }
 
 function iceCreamShape(size: number): DrawingPath {
@@ -1488,7 +1654,20 @@ function iceCreamShape(size: number): DrawingPath {
     [0.5, 0.85],
     [0.42, 0.45],
   ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const cone = smoothClosedPath(pts, 10);
+  // waffle-cone crosshatch on the lower triangle
+  const waffle = openPolyline(
+    fracPoints(size, [
+      [0.44, 0.5],
+      [0.56, 0.62],
+      [0.44, 0.62],
+      [0.55, 0.5],
+      [0.46, 0.72],
+      [0.52, 0.72],
+    ]),
+    6,
+  );
+  return toPathFromParts([cone, waffle], size);
 }
 
 function cupcakeShape(size: number): DrawingPath {
@@ -1522,8 +1701,9 @@ function cherryShape(size: number): DrawingPath {
 function cookieShape(size: number): DrawingPath {
   const center = { x: size / 2, y: size / 2 };
   const r = size * 0.3;
-  const points: Vec2[] = [];
-  for (let i = 0; i <= 60; i++) points.push(polar(center, r, (i / 60) * 360 - 90));
+  const outline: Vec2[] = [];
+  for (let i = 0; i <= 60; i++) outline.push(polar(center, r, (i / 60) * 360 - 90));
+  const chipParts: Vec2[][] = [outline];
   for (const [fx, fy] of [
     [0.42, 0.4],
     [0.6, 0.42],
@@ -1532,9 +1712,9 @@ function cookieShape(size: number): DrawingPath {
     [0.62, 0.65],
   ] as [number, number][]) {
     const dot = { x: size * fx, y: size * fy };
-    points.push(dot, polar(dot, size * 0.02, 0), dot);
+    chipParts.push([dot, polar(dot, size * 0.02, 0), dot]);
   }
-  return toPath(points, size);
+  return toPathFromParts(chipParts, size);
 }
 
 function breadLoafShape(size: number): DrawingPath {
@@ -1546,7 +1726,20 @@ function breadLoafShape(size: number): DrawingPath {
     [0.8, 0.5],
     [0.8, 0.7],
   ]);
-  return toPath(smoothClosedPath(pts, 12), size);
+  const loaf = smoothClosedPath(pts, 12);
+  // diagonal score slashes across the crust
+  const slashes = openPolyline(
+    fracPoints(size, [
+      [0.32, 0.55],
+      [0.4, 0.35],
+      [0.32, 0.62],
+      [0.48, 0.35],
+      [0.4, 0.65],
+      [0.58, 0.35],
+    ]),
+    6,
+  );
+  return toPathFromParts([loaf, slashes], size);
 }
 
 function bananaShape(size: number): DrawingPath {
@@ -1580,11 +1773,12 @@ function eggShape(size: number): DrawingPath {
 
 function donutShape(size: number): DrawingPath {
   const center = { x: size / 2, y: size / 2 };
-  const points: Vec2[] = [];
-  for (let i = 0; i <= 70; i++) points.push(polar(center, size * 0.32, (i / 70) * 360 - 90));
-  points.push(polar(center, size * 0.32, -90), center, polar(center, size * 0.13, -90));
-  for (let i = 0; i <= 50; i++) points.push(polar(center, size * 0.13, -90 + (i / 50) * 360));
-  return toPath(points, size);
+  const outer: Vec2[] = [];
+  for (let i = 0; i <= 70; i++) outer.push(polar(center, size * 0.32, (i / 70) * 360 - 90));
+  const inner: Vec2[] = [];
+  for (let i = 0; i <= 50; i++) inner.push(polar(center, size * 0.13, -90 + (i / 50) * 360));
+  // no connecting line between the two rings - just a clean jump
+  return toPath([...outer, ...inner], size, [outer.length]);
 }
 
 function carrotShape(size: number): DrawingPath {
@@ -1624,15 +1818,18 @@ function grapesShape(size: number): DrawingPath {
     [0.5, 0.83],
   ];
   const r = size * 0.1;
-  const points: Vec2[] = [
+  const stem: Vec2[] = [
     { x: size * 0.5, y: size * 0.28 },
     { x: size * 0.5, y: size * 0.1 },
   ];
+  const parts: Vec2[][] = [stem];
   for (const [fx, fy] of centers) {
     const c = { x: size * fx, y: size * fy };
-    for (let i = 0; i <= 20; i++) points.push(polar(c, r, (i / 20) * 360 - 90));
+    const grape: Vec2[] = [];
+    for (let i = 0; i <= 20; i++) grape.push(polar(c, r, (i / 20) * 360 - 90));
+    parts.push(grape);
   }
-  return toPath(points, size);
+  return toPathFromParts(parts, size);
 }
 
 function strawberryShape(size: number): DrawingPath {
@@ -1667,7 +1864,19 @@ function tacoShape(size: number): DrawingPath {
   for (let i = 0; i <= 50; i++) points.push(polar(center, r, 200 - (i / 50) * 20));
   for (let i = 0; i <= 50; i++) points.push(polar(center, r, 180 + (i / 50) * 20));
   points.push(center);
-  return toPath(points, size);
+  // filling line peeking out of the shell
+  const filling = openPolyline(
+    fracPoints(size, [
+      [0.25, 0.55],
+      [0.35, 0.48],
+      [0.45, 0.53],
+      [0.55, 0.47],
+      [0.65, 0.53],
+      [0.75, 0.47],
+    ]),
+    6,
+  );
+  return toPathFromParts([points, filling], size);
 }
 
 function hamburgerShape(size: number): DrawingPath {
@@ -1738,8 +1947,15 @@ function cheeseWedgeShape(size: number): DrawingPath {
     [0.2, 0.75],
   ]);
   const body = polygonEdges(vertices, 14);
-  const withHoles = withDetourLoop(body, 14 * 2, { x: size * 0.5, y: size * 0.5 }, size * 0.05);
-  return toPath(withDetourLoop(withHoles, 14 * 3, { x: size * 0.65, y: size * 0.6 }, size * 0.04), size);
+  // Insert the later (higher-index) hole first, so its anchor position is still
+  // valid against the original body - otherwise the second insertion below
+  // would land inside the first hole's own loop instead of the intended spot.
+  const holeB = withDetourLoop(body, 14 * 3, { x: size * 0.65, y: size * 0.6 }, size * 0.04);
+  const holeA = withDetourLoop(holeB.points, 14 * 2, { x: size * 0.5, y: size * 0.5 }, size * 0.05);
+  const insertedLength = holeA.points.length - holeB.points.length;
+  const shiftedHoleBBreaks = holeB.breaks.map((b) => (b > 14 * 2 ? b + insertedLength : b));
+  const breaks = [...shiftedHoleBBreaks, ...holeA.breaks].sort((a, b) => a - b);
+  return toPath(holeA.points, size, breaks);
 }
 
 function coffeeCupShape(size: number): DrawingPath {
@@ -1753,7 +1969,7 @@ function coffeeCupShape(size: number): DrawingPath {
   const handleCenter = { x: size * 0.78, y: size * 0.55 };
   const handle: Vec2[] = [];
   for (let i = 0; i <= 30; i++) handle.push(polar(handleCenter, size * 0.1, -100 + (i / 30) * 200));
-  return toPath([...cup, ...handle], size);
+  return toPathFromParts([cup, handle], size);
 }
 
 const FOOD_SHAPES: ShapeDefinition[] = [
@@ -1786,7 +2002,43 @@ function basketballShape(size: number): DrawingPath {
   const r = size * 0.32;
   const points: Vec2[] = [];
   for (let i = 0; i <= 70; i++) points.push(polar(center, r, (i / 70) * 360 - 90));
+  // classic vertical + horizontal seam cross
   points.push(polar(center, r, 90), polar(center, r, -90));
+  points.push(center, polar(center, r, 0), polar(center, r, 180));
+  return toPath(points, size);
+}
+
+function soccerBallShape(size: number): DrawingPath {
+  const center = { x: size / 2, y: size / 2 };
+  const r = size * 0.32;
+  const pentR = r * 0.45;
+  const angles = [0, 1, 2, 3, 4].map((i) => -90 + (360 / 5) * i);
+  const pentagon = angles.map((a) => polar(center, pentR, a));
+  const points: Vec2[] = [];
+  for (let i = 0; i <= 70; i++) points.push(polar(center, r, (i / 70) * 360 - 90));
+  // classic center pentagon panel with two seams radiating to the outer edge
+  points.push(pentagon[0], pentagon[1], pentagon[2], pentagon[3], pentagon[4], pentagon[0]);
+  points.push(polar(center, r, angles[0]));
+  points.push(pentagon[0], pentagon[2]);
+  points.push(polar(center, r, angles[2]));
+  return toPath(points, size);
+}
+
+function tennisBallShape(size: number): DrawingPath {
+  const center = { x: size / 2, y: size / 2 };
+  const r = size * 0.32;
+  const points: Vec2[] = [];
+  for (let i = 0; i <= 70; i++) points.push(polar(center, r, (i / 70) * 360 - 90));
+  const steps = 30;
+  // the two curved seam arcs that give a tennis ball its signature look
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    points.push({ x: center.x + r * 0.55 * Math.sin(t * Math.PI), y: center.y - r + t * r * 2 });
+  }
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    points.push({ x: center.x - r * 0.55 * Math.sin(t * Math.PI), y: center.y - r + t * r * 2 });
+  }
   return toPath(points, size);
 }
 
@@ -1809,7 +2061,25 @@ function trophyShape(size: number): DrawingPath {
     [0.15, 0.35],
     [0.32, 0.4],
   ]);
-  return toPath(smoothClosedPath(pts, 6), size);
+  const cup = smoothClosedPath(pts, 6);
+  // small engraved star on the cup face
+  const star = openPolyline(
+    fracPoints(size, [
+      [0.5, 0.3],
+      [0.53, 0.37],
+      [0.6, 0.38],
+      [0.54, 0.43],
+      [0.56, 0.5],
+      [0.5, 0.46],
+      [0.44, 0.5],
+      [0.46, 0.43],
+      [0.4, 0.38],
+      [0.47, 0.37],
+      [0.5, 0.3],
+    ]),
+    4,
+  );
+  return toPathFromParts([cup, star], size);
 }
 
 function medalShape(size: number): DrawingPath {
@@ -1822,6 +2092,9 @@ function medalShape(size: number): DrawingPath {
     { x: center.x, y: center.y - r },
   ];
   for (let i = 0; i <= 60; i++) points.push(polar(center, r, (i / 60) * 360 - 90));
+  // inner rim + embossed star on the medal face
+  points.push(center, polar(center, r * 0.65, -90));
+  for (let i = 0; i <= 40; i++) points.push(polar(center, r * 0.65, (i / 40) * 360 - 90));
   return toPath(points, size);
 }
 
@@ -1834,6 +2107,14 @@ function racketShape(size: number): DrawingPath {
     const t = (i / 60) * Math.PI * 2;
     points.push({ x: head.x + rx * Math.sin(t), y: head.y - ry * Math.cos(t) });
   }
+  // a couple of strings crossing the head to suggest the stringbed
+  points.push(
+    { x: head.x, y: head.y - ry },
+    { x: head.x, y: head.y + ry },
+    { x: head.x, y: head.y - ry },
+    { x: head.x - rx, y: head.y },
+    { x: head.x + rx, y: head.y },
+  );
   points.push({ x: size * 0.5, y: size * 0.6 }, { x: size * 0.5, y: size * 0.88 });
   return toPath(points, size);
 }
@@ -1857,11 +2138,19 @@ function baseballShape(size: number): DrawingPath {
   const r = size * 0.3;
   const points: Vec2[] = [];
   for (let i = 0; i <= 70; i++) points.push(polar(center, r, (i / 70) * 360 - 90));
-  const steps = 40;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const angle = -60 + t * 120;
-    points.push(polar(center, r * (0.75 + 0.1 * Math.sin(t * Math.PI * 3)), angle));
+  const steps = 30;
+  // two opposing wavy seams with short cross-stitches, like a real baseball
+  for (const baseAngle of [-60, 120]) {
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const angle = baseAngle + t * 120;
+      const seamPoint = polar(center, r * (0.75 + 0.1 * Math.sin(t * Math.PI * 3)), angle);
+      points.push(seamPoint);
+      if (i % 6 === 3) {
+        const stitchTip = polar(center, r * 0.68, angle);
+        points.push(stitchTip, seamPoint);
+      }
+    }
   }
   return toPath(points, size);
 }
@@ -1891,15 +2180,12 @@ function whistleShape(size: number): DrawingPath {
     { x: size * 0.85, y: size * 0.36 },
     { x: size * 0.62, y: size * 0.52 },
   );
-  return toPath(points, size);
+  // small sound-hole cut into the barrel
+  const withHole = withDetourLoop(points, points.length - 1, { x: size * 0.35, y: size * 0.55 }, size * 0.05);
+  return toPath(withHole.points, size, withHole.breaks);
 }
 
 function dumbbellShape(size: number): DrawingPath {
-  const barPts = fracPoints(size, [
-    [0.28, 0.5],
-    [0.72, 0.5],
-  ]);
-  const bar = openPolyline(barPts, 16);
   const leftOuter = { x: size * 0.18, y: size * 0.5 };
   const leftInner = { x: size * 0.28, y: size * 0.5 };
   const rightInner = { x: size * 0.72, y: size * 0.5 };
@@ -1922,18 +2208,12 @@ function dumbbellShape(size: number): DrawingPath {
     ]),
     8,
   );
-  return toPath(
-    [
-      leftInner,
-      ...openPolyline([leftInner, leftOuter], 8),
-      ...leftPlate,
-      ...openPolyline([leftInner, rightInner], 16),
-      ...bar,
-      ...openPolyline([rightInner, rightOuter], 8),
-      ...rightPlate,
-    ],
-    size,
-  );
+  const mainLine = [
+    ...openPolyline([leftOuter, leftInner], 8),
+    ...openPolyline([leftInner, rightInner], 16),
+    ...openPolyline([rightInner, rightOuter], 8),
+  ];
+  return toPathFromParts([mainLine, leftPlate, rightPlate], size);
 }
 
 function golfClubShape(size: number): DrawingPath {
@@ -1954,7 +2234,18 @@ function golfClubShape(size: number): DrawingPath {
     ]),
     10,
   );
-  return toPath([...shaft, ...head], size);
+  // a couple of face grooves on the club head
+  const grooves = openPolyline(
+    fracPoints(size, [
+      [0.68, 0.78],
+      [0.78, 0.76],
+      [0.68, 0.78],
+      [0.7, 0.83],
+      [0.79, 0.81],
+    ]),
+    6,
+  );
+  return toPathFromParts([[...shaft, ...head], grooves], size);
 }
 
 function baseballBatShape(size: number): DrawingPath {
@@ -1968,7 +2259,19 @@ function baseballBatShape(size: number): DrawingPath {
     [0.42, 0.65],
     [0.4, 0.35],
   ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const bat = smoothClosedPath(pts, 10);
+  // grip-wrap rings near the handle end
+  const grip = openPolyline(
+    fracPoints(size, [
+      [0.43, 0.78],
+      [0.57, 0.78],
+      [0.43, 0.78],
+      [0.43, 0.7],
+      [0.57, 0.7],
+    ]),
+    6,
+  );
+  return toPathFromParts([bat, grip], size);
 }
 
 function skateboardShape(size: number): DrawingPath {
@@ -1984,14 +2287,11 @@ function skateboardShape(size: number): DrawingPath {
   const leftWheel = { x: size * 0.32, y: size * 0.68 };
   const rightWheel = { x: size * 0.68, y: size * 0.68 };
   const r = size * 0.06;
-  const wheels: Vec2[] = [
-    { x: leftWheel.x, y: size * 0.55 },
-    leftWheel,
-  ];
-  for (let i = 0; i <= 20; i++) wheels.push(polar(leftWheel, r, (i / 20) * 360));
-  wheels.push(leftWheel, { x: rightWheel.x, y: size * 0.55 }, rightWheel);
-  for (let i = 0; i <= 20; i++) wheels.push(polar(rightWheel, r, (i / 20) * 360));
-  return toPath([...deck, ...wheels], size);
+  const leftWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) leftWheelLoop.push(polar(leftWheel, r, (i / 20) * 360));
+  const rightWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) rightWheelLoop.push(polar(rightWheel, r, (i / 20) * 360));
+  return toPathFromParts([deck, leftWheelLoop, rightWheelLoop], size);
 }
 
 function bowlingPinShape(size: number): DrawingPath {
@@ -2008,7 +2308,18 @@ function bowlingPinShape(size: number): DrawingPath {
     [0.46, 0.3],
     [0.42, 0.22],
   ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const pin = smoothClosedPath(pts, 10);
+  // the pin's signature neck stripes
+  const stripes = openPolyline(
+    fracPoints(size, [
+      [0.38, 0.38],
+      [0.62, 0.38],
+      [0.38, 0.44],
+      [0.63, 0.44],
+    ]),
+    6,
+  );
+  return toPathFromParts([pin, stripes], size);
 }
 
 function boxingGloveShape(size: number): DrawingPath {
@@ -2025,7 +2336,23 @@ function boxingGloveShape(size: number): DrawingPath {
     [0.3, 0.5],
     [0.28, 0.35],
   ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const glove = smoothClosedPath(pts, 10);
+  // wrist cuff line and thumb seam
+  const cuff = openPolyline(
+    fracPoints(size, [
+      [0.28, 0.35],
+      [0.72, 0.35],
+    ]),
+    10,
+  );
+  const thumbSeam = openPolyline(
+    fracPoints(size, [
+      [0.3, 0.5],
+      [0.42, 0.48],
+    ]),
+    8,
+  );
+  return toPathFromParts([glove, cuff, thumbSeam], size);
 }
 
 function hockeyStickShape(size: number): DrawingPath {
@@ -2111,7 +2438,20 @@ function runningShoeShape(size: number): DrawingPath {
     [0.75, 0.78],
     [0.2, 0.78],
   ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const shoe = smoothClosedPath(pts, 10);
+  // crossing laces over the tongue
+  const laces = openPolyline(
+    fracPoints(size, [
+      [0.42, 0.46],
+      [0.55, 0.5],
+      [0.45, 0.53],
+      [0.58, 0.57],
+      [0.48, 0.6],
+      [0.6, 0.64],
+    ]),
+    6,
+  );
+  return toPathFromParts([shoe, laces], size);
 }
 
 function americanFootballShape(size: number): DrawingPath {
@@ -2134,8 +2474,8 @@ function americanFootballShape(size: number): DrawingPath {
 }
 
 const SPORTS_SHAPES: ShapeDefinition[] = [
-  standalone("sport-soccer", "Soccer Ball", "sports", circle),
-  standalone("sport-tennisball", "Tennis Ball", "sports", circle),
+  standalone("sport-soccer", "Soccer Ball", "sports", soccerBallShape),
+  standalone("sport-tennisball", "Tennis Ball", "sports", tennisBallShape),
   standalone("sport-baseball", "Baseball", "sports", baseballShape),
   standalone("sport-basketball", "Basketball", "sports", basketballShape),
   standalone("sport-volleyball", "Volleyball", "sports", volleyballShape),
@@ -2167,7 +2507,25 @@ function carShape(size: number): DrawingPath {
     [0.8, 0.45],
     [0.85, 0.62],
   ]);
-  return toPath(smoothClosedPath(pts, 14), size);
+  const body = smoothClosedPath(pts, 14);
+  // window divider and two wheels
+  const window = openPolyline(
+    fracPoints(size, [
+      [0.4, 0.45],
+      [0.42, 0.36],
+      [0.58, 0.36],
+      [0.6, 0.45],
+    ]),
+    8,
+  );
+  const leftWheel = { x: size * 0.32, y: size * 0.68 };
+  const rightWheel = { x: size * 0.68, y: size * 0.68 };
+  const r = size * 0.07;
+  const leftWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) leftWheelLoop.push(polar(leftWheel, r, (i / 20) * 360));
+  const rightWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) rightWheelLoop.push(polar(rightWheel, r, (i / 20) * 360));
+  return toPathFromParts([body, window, leftWheelLoop, rightWheelLoop], size);
 }
 
 function bicycleShape(size: number): DrawingPath {
@@ -2216,7 +2574,10 @@ function shipShape(size: number): DrawingPath {
     [0.7, 0.78],
     [0.3, 0.78],
   ]);
-  return toPath(smoothClosedPath(pts, 8), size);
+  const hull = smoothClosedPath(pts, 8);
+  // a porthole window on the hull
+  const porthole = withDetourLoop(hull, hull.length - 1, { x: size * 0.5, y: size * 0.65 }, size * 0.05);
+  return toPath(porthole.points, size, porthole.breaks);
 }
 
 function rocketShape(size: number): DrawingPath {
@@ -2233,7 +2594,10 @@ function rocketShape(size: number): DrawingPath {
     [0.38, 0.65],
     [0.38, 0.35],
   ]);
-  return toPath(smoothClosedPath(pts, 8), size);
+  const body = smoothClosedPath(pts, 8);
+  // round porthole window on the nose section
+  const withWindow = withDetourLoop(body, body.length - 1, { x: size * 0.5, y: size * 0.4 }, size * 0.07);
+  return toPath(withWindow.points, size, withWindow.breaks);
 }
 
 function trainShape(size: number): DrawingPath {
@@ -2248,7 +2612,22 @@ function trainShape(size: number): DrawingPath {
     [0.75, 0.4],
     [0.8, 0.75],
   ]);
-  return toPath(polygonEdges(vertices, 10), size);
+  const body = polygonEdges(vertices, 10);
+  // cab window and front wheel
+  const window = openPolyline(
+    fracPoints(size, [
+      [0.34, 0.45],
+      [0.46, 0.45],
+      [0.46, 0.58],
+      [0.34, 0.58],
+      [0.34, 0.45],
+    ]),
+    8,
+  );
+  const wheel = { x: size * 0.65, y: size * 0.75 };
+  const wheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) wheelLoop.push(polar(wheel, size * 0.06, (i / 20) * 360));
+  return toPathFromParts([body, window, wheelLoop], size);
 }
 
 function scooterShape(size: number): DrawingPath {
@@ -2271,11 +2650,11 @@ function scooterShape(size: number): DrawingPath {
   const frontWheel = { x: size * 0.68, y: size * 0.78 };
   const backWheel = { x: size * 0.25, y: size * 0.78 };
   const r = size * 0.07;
-  const points: Vec2[] = [...body, ...handle, { x: size * 0.7, y: size * 0.7 }, { x: size * 0.68, y: size * 0.71 }];
-  for (let i = 0; i <= 20; i++) points.push(polar(frontWheel, r, (i / 20) * 360));
-  points.push({ x: size * 0.25, y: size * 0.71 });
-  for (let i = 0; i <= 20; i++) points.push(polar(backWheel, r, (i / 20) * 360));
-  return toPath(points, size);
+  const frontWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) frontWheelLoop.push(polar(frontWheel, r, (i / 20) * 360));
+  const backWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) backWheelLoop.push(polar(backWheel, r, (i / 20) * 360));
+  return toPathFromParts([body, handle, frontWheelLoop, backWheelLoop], size);
 }
 
 function trafficLightShape(size: number): DrawingPath {
@@ -2287,9 +2666,17 @@ function trafficLightShape(size: number): DrawingPath {
   ]);
   const body = polygonEdges(vertices, 10);
   const withA = withDetourLoop(body, 10, { x: size * 0.5, y: size * 0.28 }, size * 0.07);
-  const withB = withDetourLoop(withA, withA.length - 1, { x: size * 0.5, y: size * 0.45 }, size * 0.07);
-  const withC = withDetourLoop(withB, withB.length - 1, { x: size * 0.5, y: size * 0.62 }, size * 0.07);
-  return toPath([...withC, { x: size * 0.5, y: size * 0.75 }, { x: size * 0.5, y: size * 0.9 }], size);
+  const withB = withDetourLoop(withA.points, withA.points.length - 1, { x: size * 0.5, y: size * 0.45 }, size * 0.07);
+  const withC = withDetourLoop(withB.points, withB.points.length - 1, { x: size * 0.5, y: size * 0.62 }, size * 0.07);
+  const post = openPolyline(
+    fracPoints(size, [
+      [0.5, 0.75],
+      [0.5, 0.9],
+    ]),
+    10,
+  );
+  const breaks = [...withA.breaks, ...withB.breaks, ...withC.breaks, withC.points.length];
+  return toPath([...withC.points, ...post], size, breaks);
 }
 
 function roadSignShape(size: number): DrawingPath {
@@ -2307,7 +2694,7 @@ function roadSignShape(size: number): DrawingPath {
     ]),
     12,
   );
-  return toPath([...diamond, ...post], size);
+  return toPathFromParts([diamond, post], size);
 }
 
 function tramShape(size: number): DrawingPath {
@@ -2323,11 +2710,11 @@ function tramShape(size: number): DrawingPath {
   const leftWheel = { x: size * 0.32, y: size * 0.78 };
   const rightWheel = { x: size * 0.68, y: size * 0.78 };
   const r = size * 0.06;
-  const points: Vec2[] = [...body, { x: size * 0.32, y: size * 0.7 }, leftWheel];
-  for (let i = 0; i <= 20; i++) points.push(polar(leftWheel, r, (i / 20) * 360));
-  points.push(leftWheel, { x: size * 0.68, y: size * 0.7 }, rightWheel);
-  for (let i = 0; i <= 20; i++) points.push(polar(rightWheel, r, (i / 20) * 360));
-  return toPath(points, size);
+  const leftWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) leftWheelLoop.push(polar(leftWheel, r, (i / 20) * 360));
+  const rightWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) rightWheelLoop.push(polar(rightWheel, r, (i / 20) * 360));
+  return toPathFromParts([body, leftWheelLoop, rightWheelLoop], size);
 }
 
 function sailboatShape(size: number): DrawingPath {
@@ -2376,7 +2763,7 @@ function kayakShape(size: number): DrawingPath {
     ]),
     14,
   );
-  return toPath([...boat, ...paddle], size);
+  return toPathFromParts([boat, paddle], size);
 }
 
 function tractorShape(size: number): DrawingPath {
@@ -2393,11 +2780,11 @@ function tractorShape(size: number): DrawingPath {
   );
   const backWheel = { x: size * 0.32, y: size * 0.78 };
   const frontWheel = { x: size * 0.72, y: size * 0.82 };
-  const points: Vec2[] = [...cabin, { x: size * 0.32, y: size * 0.7 }];
-  for (let i = 0; i <= 24; i++) points.push(polar(backWheel, size * 0.14, (i / 24) * 360));
-  points.push({ x: size * 0.32, y: size * 0.7 }, { x: size * 0.72, y: size * 0.7 });
-  for (let i = 0; i <= 24; i++) points.push(polar(frontWheel, size * 0.08, (i / 24) * 360));
-  return toPath(points, size);
+  const backWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 24; i++) backWheelLoop.push(polar(backWheel, size * 0.14, (i / 24) * 360));
+  const frontWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 24; i++) frontWheelLoop.push(polar(frontWheel, size * 0.08, (i / 24) * 360));
+  return toPathFromParts([cabin, backWheelLoop, frontWheelLoop], size);
 }
 
 function motorcycleShape(size: number): DrawingPath {
@@ -2422,11 +2809,11 @@ function motorcycleShape(size: number): DrawingPath {
   const backWheel = { x: size * 0.28, y: size * 0.72 };
   const frontWheel = { x: size * 0.72, y: size * 0.72 };
   const r = size * 0.14;
-  const points: Vec2[] = [...body, ...seat, { x: size * 0.3, y: size * 0.55 }, { x: size * 0.28, y: size * 0.58 }];
-  for (let i = 0; i <= 24; i++) points.push(polar(backWheel, r, (i / 24) * 360));
-  points.push(backWheel, frontWheel);
-  for (let i = 0; i <= 24; i++) points.push(polar(frontWheel, r, (i / 24) * 360));
-  return toPath(points, size);
+  const backWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 24; i++) backWheelLoop.push(polar(backWheel, r, (i / 24) * 360));
+  const frontWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 24; i++) frontWheelLoop.push(polar(frontWheel, r, (i / 24) * 360));
+  return toPathFromParts([body, seat, backWheelLoop, frontWheelLoop], size);
 }
 
 function busShape(size: number): DrawingPath {
@@ -2442,11 +2829,11 @@ function busShape(size: number): DrawingPath {
   const leftWheel = { x: size * 0.3, y: size * 0.8 };
   const rightWheel = { x: size * 0.7, y: size * 0.8 };
   const r = size * 0.07;
-  const points: Vec2[] = [...body, { x: size * 0.3, y: size * 0.72 }, leftWheel];
-  for (let i = 0; i <= 20; i++) points.push(polar(leftWheel, r, (i / 20) * 360));
-  points.push(leftWheel, { x: size * 0.7, y: size * 0.72 }, rightWheel);
-  for (let i = 0; i <= 20; i++) points.push(polar(rightWheel, r, (i / 20) * 360));
-  return toPath(points, size);
+  const leftWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) leftWheelLoop.push(polar(leftWheel, r, (i / 20) * 360));
+  const rightWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) rightWheelLoop.push(polar(rightWheel, r, (i / 20) * 360));
+  return toPathFromParts([body, leftWheelLoop, rightWheelLoop], size);
 }
 
 function truckShape(size: number): DrawingPath {
@@ -2471,11 +2858,11 @@ function truckShape(size: number): DrawingPath {
   const leftWheel = { x: size * 0.28, y: size * 0.8 };
   const rightWheel = { x: size * 0.68, y: size * 0.8 };
   const r = size * 0.07;
-  const points: Vec2[] = [...cargo, ...cab, { x: size * 0.28, y: size * 0.72 }, leftWheel];
-  for (let i = 0; i <= 20; i++) points.push(polar(leftWheel, r, (i / 20) * 360));
-  points.push(leftWheel, { x: size * 0.68, y: size * 0.72 }, rightWheel);
-  for (let i = 0; i <= 20; i++) points.push(polar(rightWheel, r, (i / 20) * 360));
-  return toPath(points, size);
+  const leftWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) leftWheelLoop.push(polar(leftWheel, r, (i / 20) * 360));
+  const rightWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) rightWheelLoop.push(polar(rightWheel, r, (i / 20) * 360));
+  return toPathFromParts([cargo, cab, leftWheelLoop, rightWheelLoop], size);
 }
 
 function fireTruckShape(size: number): DrawingPath {
@@ -2500,11 +2887,11 @@ function fireTruckShape(size: number): DrawingPath {
   const leftWheel = { x: size * 0.28, y: size * 0.78 };
   const rightWheel = { x: size * 0.68, y: size * 0.78 };
   const r = size * 0.07;
-  const points: Vec2[] = [...body, ...ladder, { x: size * 0.28, y: size * 0.7 }, leftWheel];
-  for (let i = 0; i <= 20; i++) points.push(polar(leftWheel, r, (i / 20) * 360));
-  points.push(leftWheel, { x: size * 0.68, y: size * 0.7 }, rightWheel);
-  for (let i = 0; i <= 20; i++) points.push(polar(rightWheel, r, (i / 20) * 360));
-  return toPath(points, size);
+  const leftWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) leftWheelLoop.push(polar(leftWheel, r, (i / 20) * 360));
+  const rightWheelLoop: Vec2[] = [];
+  for (let i = 0; i <= 20; i++) rightWheelLoop.push(polar(rightWheel, r, (i / 20) * 360));
+  return toPathFromParts([body, ladder, leftWheelLoop, rightWheelLoop], size);
 }
 
 function submarineShape(size: number): DrawingPath {
@@ -2534,7 +2921,7 @@ function submarineShape(size: number): DrawingPath {
     ]),
     8,
   );
-  return toPath([...body, ...tower, ...periscope], size);
+  return toPathFromParts([body, [...tower, ...periscope]], size);
 }
 
 function hotAirBalloonShape(size: number): DrawingPath {
@@ -2557,7 +2944,7 @@ function hotAirBalloonShape(size: number): DrawingPath {
     ]),
     10,
   );
-  return toPath([...balloon, ...basket], size);
+  return toPathFromParts([balloon, basket], size);
 }
 
 function helicopterShape(size: number): DrawingPath {
@@ -2601,7 +2988,7 @@ function helicopterShape(size: number): DrawingPath {
     ]),
     10,
   );
-  return toPath([...body, ...tailAndRotor, ...mastAndRotor, ...skid], size);
+  return toPathFromParts([body, tailAndRotor, mastAndRotor, skid], size);
 }
 
 const TRANSPORTATION_SHAPES: ShapeDefinition[] = [
@@ -2639,7 +3026,18 @@ function houseShape(size: number): DrawingPath {
     [0.28, 0.45],
     [0.15, 0.45],
   ]);
-  return toPath(polygonEdges(vertices, 14), size);
+  const outline = polygonEdges(vertices, 14);
+  // a front door
+  const door = openPolyline(
+    fracPoints(size, [
+      [0.44, 0.82],
+      [0.44, 0.62],
+      [0.56, 0.62],
+      [0.56, 0.82],
+    ]),
+    10,
+  );
+  return toPathFromParts([outline, door], size);
 }
 
 function keyShape(size: number): DrawingPath {
@@ -2676,7 +3074,7 @@ function lampShape(size: number): DrawingPath {
     ]),
     10,
   );
-  return toPath([...shade, ...stand], size);
+  return toPathFromParts([shade, stand], size);
 }
 
 function clockShape(size: number): DrawingPath {
@@ -2731,7 +3129,8 @@ function doorShape(size: number): DrawingPath {
     [0.68, 0.85],
   ]);
   const frame = polygonEdges(vertices, 12);
-  return toPath(withDetourLoop(frame, 24, { x: size * 0.6, y: size * 0.55 }, size * 0.025), size);
+  const withKnob = withDetourLoop(frame, 24, { x: size * 0.6, y: size * 0.55 }, size * 0.025);
+  return toPath(withKnob.points, size, withKnob.breaks);
 }
 
 function windowShape(size: number): DrawingPath {
@@ -2767,7 +3166,16 @@ function mugShape(size: number): DrawingPath {
   const handleCenter = { x: size * 0.72, y: size * 0.52 };
   const handle: Vec2[] = [];
   for (let i = 0; i <= 30; i++) handle.push(polar(handleCenter, size * 0.1, -100 + (i / 30) * 200));
-  return toPath([...body, ...handle], size);
+  // steam wisp rising from the cup
+  const steam = openPolyline(
+    fracPoints(size, [
+      [0.4, 0.24],
+      [0.46, 0.16],
+      [0.4, 0.1],
+    ]),
+    8,
+  );
+  return toPathFromParts([body, handle, steam], size);
 }
 
 function candleShape(size: number): DrawingPath {
@@ -2786,8 +3194,9 @@ function candleShape(size: number): DrawingPath {
     8,
   );
   const center = { x: size * 0.5, y: size * 0.12 };
-  const points = [...body, ...wick];
-  return toPath(withDetourLoop(points, points.length - 1, center, size * 0.035), size);
+  const withFlame = withDetourLoop(wick, wick.length - 1, center, size * 0.035);
+  const breaks = [body.length, ...withFlame.breaks.map((b) => b + body.length)];
+  return toPath([...body, ...withFlame.points], size, breaks);
 }
 
 function scissorsShape(size: number): DrawingPath {
@@ -2843,7 +3252,7 @@ function tableShape(size: number): DrawingPath {
     ]),
     10,
   );
-  return toPath([...top, { x: size * 0.2, y: size * 0.45 }, ...legFL, { x: size * 0.78, y: size * 0.45 }, ...legFR], size);
+  return toPathFromParts([top, legFL, legFR], size);
 }
 
 function hammerShape(size: number): DrawingPath {
@@ -2865,7 +3274,7 @@ function hammerShape(size: number): DrawingPath {
     ]),
     10,
   );
-  return toPath([...handle, ...head], size);
+  return toPathFromParts([handle, head], size);
 }
 
 function broomShape(size: number): DrawingPath {
@@ -2921,7 +3330,7 @@ function bedShape(size: number): DrawingPath {
     ]),
     10,
   );
-  return toPath([...frame, ...headboard, ...pillow], size);
+  return toPathFromParts([frame, headboard, pillow], size);
 }
 
 function sofaShape(size: number): DrawingPath {
@@ -2963,12 +3372,17 @@ function bathtubShape(size: number): DrawingPath {
     [0.85, 0.7],
   ]);
   const body = smoothClosedPath(pts, 10);
-  const feet = openPolyline(
+  const footLeft = openPolyline(
     fracPoints(size, [
       [0.2, 0.7],
       [0.18, 0.8],
       [0.24, 0.8],
       [0.22, 0.7],
+    ]),
+    6,
+  );
+  const footRight = openPolyline(
+    fracPoints(size, [
       [0.78, 0.7],
       [0.76, 0.8],
       [0.82, 0.8],
@@ -2976,7 +3390,7 @@ function bathtubShape(size: number): DrawingPath {
     ]),
     6,
   );
-  return toPath([...body, ...feet], size);
+  return toPathFromParts([body, footLeft, footRight], size);
 }
 
 function teapotShape(size: number): DrawingPath {
@@ -3009,14 +3423,7 @@ function teapotShape(size: number): DrawingPath {
     ]),
     8,
   );
-  const spoutToHandle = openPolyline(
-    [
-      { x: size * 0.7, y: size * 0.48 },
-      { x: size * 0.28, y: size * 0.5 },
-    ],
-    10,
-  );
-  return toPath([...body, ...spout, ...spoutToHandle, ...handle, ...lid], size);
+  return toPathFromParts([body, spout, handle, lid], size);
 }
 
 const HOME_SHAPES: ShapeDefinition[] = [
@@ -3477,7 +3884,8 @@ function skullShape(size: number): DrawingPath {
   const eyeL = { x: size * 0.4, y: size * 0.48 };
   const eyeR = { x: size * 0.6, y: size * 0.48 };
   const withEyeL = withDetourLoop(skull, skull.length - 1, eyeL, size * 0.06);
-  return toPath(withDetourLoop(withEyeL, withEyeL.length - 1, eyeR, size * 0.06), size);
+  const withBothEyes = withDetourLoop(withEyeL.points, withEyeL.points.length - 1, eyeR, size * 0.06);
+  return toPath(withBothEyes.points, size, [...withEyeL.breaks, ...withBothEyes.breaks]);
 }
 
 function ghostShape(size: number): DrawingPath {
@@ -3514,7 +3922,7 @@ function wizardHatShape(size: number): DrawingPath {
     ]),
     10,
   );
-  return toPath([...cone, ...brim], size);
+  return toPathFromParts([cone, brim], size);
 }
 
 function fairyWingsShape(size: number): DrawingPath {
@@ -3618,7 +4026,7 @@ function cauldronShape(size: number): DrawingPath {
     ],
     8,
   );
-  return toPath([...body, ...handleL, ...acrossTop, ...handleR, ...legs], size);
+  return toPathFromParts([[...body, ...handleL, ...acrossTop, ...handleR], legs], size);
 }
 
 function treasureChestShape(size: number): DrawingPath {
@@ -3756,7 +4164,7 @@ function phoenixShape(size: number): DrawingPath {
     ]),
     8,
   );
-  return toPath([...body, ...leftWing, ...rightWing, ...tail], size);
+  return toPathFromParts([[...body, ...leftWing, ...rightWing], tail], size);
 }
 
 function mermaidTailShape(size: number): DrawingPath {

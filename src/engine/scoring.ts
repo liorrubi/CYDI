@@ -5,7 +5,7 @@ import { RESAMPLE_POINT_COUNT, SCORE_WEIGHTS, scoreMessage } from "../app/consta
 import type { Vec2 } from "./geometry";
 import { boundingBox, clamp, distance, pathLength } from "./geometry";
 import { normalizePath } from "./normalizePath";
-import { compareClosedShapeWithOffsets, compareWithReverse, isClosedPath } from "./comparePaths";
+import { compareClosedShapeWithOffsets, compareOrderIndependent, compareWithReverse, isClosedPath } from "./comparePaths";
 
 /** Ratio of normalized arc lengths - did the attempt trace a comparable amount of path. */
 function computeCoverage(normTarget: Point[], normAttempt: Point[]): number {
@@ -91,9 +91,34 @@ export function scoreAttempt(targetPath: DrawingPath, attemptPath: DrawingPath):
   const normAttempt = normAttemptResult.points;
 
   const closed = isClosedPath(normTarget);
-  const shapeMatch = closed
+  const shapeMatchSegmented = closed
     ? compareClosedShapeWithOffsets(normTarget, normAttempt)
     : compareWithReverse(normTarget, normAttempt);
+
+  // Also score the attempt as if it were one unbroken path, ignoring any
+  // pause breaks entirely - the proportional per-segment resampling used
+  // above can shift the point-by-point parameterization just enough to hurt
+  // an otherwise excellent trace, especially for open (non-looping) shapes
+  // that have no rotational search to absorb the shift. Lifting the pointer
+  // to reposition should never be able to score worse than not pausing at
+  // all, so take whichever interpretation matches better.
+  const normAttemptContinuous = normalizePath({ ...attemptPath, breaks: undefined }, RESAMPLE_POINT_COUNT).points;
+  const shapeMatchContinuous = closed
+    ? compareClosedShapeWithOffsets(normTarget, normAttemptContinuous)
+    : compareWithReverse(normTarget, normAttemptContinuous);
+
+  // Also try an order-independent comparison as a last resort - it rescues
+  // shapes drawn with a different (but visually equivalent) stroke order or
+  // retrace pattern than the target's authored path, without being used as
+  // the primary metric (it's far more gameable than the sequential
+  // comparisons above, so it can only raise the score, never substitute for
+  // a genuinely wrong shape scoring appropriately low on the stricter checks).
+  const shapeMatchOrderIndependent = Math.max(
+    compareOrderIndependent(normTarget, normAttempt),
+    compareOrderIndependent(normTarget, normAttemptContinuous),
+  );
+
+  const shapeMatch = Math.max(shapeMatchSegmented, shapeMatchContinuous, shapeMatchOrderIndependent);
 
   const coverage = computeCoverage(normTarget, normAttempt);
   const smoothness = computeSmoothness(normAttempt, normAttemptResult.segmentStarts);

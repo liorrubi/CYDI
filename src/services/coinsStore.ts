@@ -37,13 +37,29 @@ function scheduleFlush(): void {
   }, 0);
 }
 
+function creditSilently(amount: number): number {
+  const next = getCoins() + amount;
+  saveCoins(next);
+  return next;
+}
+
 /** Adds coins (no-op for non-positive amounts); batches the coin-drop sound and CoinIndicator update with any other awards made in the same tick. */
 export function addCoins(amount: number): number {
   if (amount <= 0) return getCoins();
-  const next = getCoins() + amount;
-  saveCoins(next);
+  const next = creditSilently(amount);
   scheduleFlush();
   return next;
+}
+
+/** Credits coins to the real balance immediately (nothing is ever lost) but does NOT play a sound or animate the counter - use with `revealPendingCoins()` for a "tap to collect" reveal moment (e.g. an achievement banner). */
+export function addCoinsPending(amount: number): number {
+  if (amount <= 0) return getCoins();
+  return creditSilently(amount);
+}
+
+/** Plays the coin-drop sound and animates the counter up to the current balance - use after `addCoinsPending()` once the player "collects" the reward. */
+export function revealPendingCoins(): void {
+  scheduleFlush();
 }
 
 /** Spends coins (no-op for non-positive amounts), plays a cash-register sound, and notifies any mounted CoinIndicator instances. */

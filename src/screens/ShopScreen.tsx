@@ -3,8 +3,8 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import { PEN_COLORS, DEFAULT_PEN_COLOR } from "../app/constants";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
-import { getUnlockedColors, unlockColor } from "../services/penColorStore";
-import { toAchievements, toHome, toShop } from "../app/routes";
+import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
+import { toAchievements, toHome, toInstructions, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type ShopScreenProps = {
@@ -24,6 +24,7 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
     if (coins < price || unlocked.includes(id)) return;
     spendCoins(price);
     unlockColor(id);
+    setSelectedColor(id);
     setUnlocked(getUnlockedColors());
   }
 
@@ -33,6 +34,7 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
         title="Shop"
         onBack={() => onNavigate(toHome())}
         onNavigateToAchievements={() => onNavigate(toAchievements(toShop(from)))}
+        onNavigateToInstructions={() => onNavigate(toInstructions(toShop(from)))}
       />
       <div className="card shop-balance">
         <p className="shop-balance-label">Your balance</p>

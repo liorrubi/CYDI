@@ -149,31 +149,6 @@ function withDetourLoop(points: Vec2[], anchorIndex: number, loopCenter: Vec2, l
   };
 }
 
-type EyeSpec = { keyIndex: number; center: Vec2; radius: number };
-
-/** Smooth closed silhouette through key points, with small circular eye/detail loops floating (unconnected) next to specific key points. */
-function organicBody(keyPoints: Vec2[], pointsPerSegment: number, eyes: EyeSpec[] = []): PathWithBreaks {
-  const body = smoothClosedPath(keyPoints, pointsPerSegment);
-  const sortedByIndexDesc = [...eyes].sort((a, b) => b.keyIndex - a.keyIndex);
-  let points = body;
-  let breaks: number[] = [];
-  for (const eye of sortedByIndexDesc) {
-    const anchorIndex = eye.keyIndex * pointsPerSegment;
-    const beforeLength = points.length;
-    const result = withDetourLoop(points, anchorIndex, eye.center, eye.radius);
-    const insertedLength = result.points.length - beforeLength;
-    breaks = breaks.map((b) => (b > anchorIndex ? b + insertedLength : b));
-    breaks = [...breaks, ...result.breaks];
-    points = result.points;
-  }
-  // Eyes are processed highest-keyIndex-first (so earlier insertions don't shift
-  // later anchor positions), which appends each eye's break pair in that same
-  // descending order - out of the ascending order every consumer (segment
-  // slicing, rendering, scoring) assumes. Sort once at the end to fix that.
-  breaks.sort((a, b) => a - b);
-  return { points, breaks };
-}
-
 function standalone(
   id: string,
   name: string,
@@ -4210,7 +4185,6 @@ function hotAirBalloonShape(size: number): DrawingPath {
     }
     return pts;
   };
-  const neck = { x: cx, y: size * 0.6 };
   const basketTop = 0.72;
   // Suspension cables from the envelope neck down to the basket corners.
   const cableL = openPolyline(

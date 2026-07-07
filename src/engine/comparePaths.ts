@@ -2,7 +2,7 @@ import type { Point } from "../types/Point";
 import { clamp, distance } from "./geometry";
 import { CLOSED_SHAPE_CLOSURE_THRESHOLD, CLOSED_SHAPE_OFFSET_STEP } from "../app/constants";
 
-const DISTANCE_TO_SCORE_FACTOR = 320;
+const DISTANCE_TO_SCORE_FACTOR = 380;
 
 /**
  * Compares two equal-length, already-normalized point arrays and returns a

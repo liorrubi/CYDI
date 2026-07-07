@@ -171,6 +171,66 @@ function circle(size: number): DrawingPath {
   return toPath(points, size);
 }
 
+function ellipseShape(size: number): DrawingPath {
+  const center = { x: size / 2, y: size / 2 };
+  const rx = size * 0.38;
+  const ry = size * 0.24;
+  const points: Vec2[] = [];
+  const steps = 80;
+  for (let i = 0; i <= steps; i++) {
+    const a = (i / steps) * Math.PI * 2 - Math.PI / 2;
+    points.push({ x: center.x + rx * Math.cos(a), y: center.y + ry * Math.sin(a) });
+  }
+  return toPath(points, size);
+}
+
+function roundedRectShape(size: number): DrawingPath {
+  const x0 = size * 0.18;
+  const x1 = size * 0.82;
+  const y0 = size * 0.28;
+  const y1 = size * 0.72;
+  const r = size * 0.12;
+  const points: Vec2[] = [];
+  const corner = (cx: number, cy: number, startDeg: number) => {
+    for (let i = 0; i <= 12; i++) points.push(polar({ x: cx, y: cy }, r, startDeg + (i / 12) * 90));
+  };
+  corner(x0 + r, y0 + r, 180); // top-left
+  corner(x1 - r, y0 + r, 270); // top-right
+  corner(x1 - r, y1 - r, 0); // bottom-right
+  corner(x0 + r, y1 - r, 90); // bottom-left
+  points.push(points[0]);
+  return toPath(points, size);
+}
+
+function trapezoidShape(size: number): DrawingPath {
+  const vertices = fracPoints(size, [
+    [0.32, 0.3],
+    [0.68, 0.3],
+    [0.82, 0.72],
+    [0.18, 0.72],
+  ]);
+  return toPath(polygonEdges(vertices, 16), size);
+}
+
+function parallelogramShape(size: number): DrawingPath {
+  const vertices = fracPoints(size, [
+    [0.3, 0.3],
+    [0.84, 0.3],
+    [0.7, 0.7],
+    [0.16, 0.7],
+  ]);
+  return toPath(polygonEdges(vertices, 16), size);
+}
+
+function semicircleShape(size: number): DrawingPath {
+  const c = { x: size * 0.5, y: size * 0.38 };
+  const R = size * 0.34;
+  const points: Vec2[] = [{ x: c.x - R, y: c.y }]; // left end of the flat top
+  points.push({ x: c.x + R, y: c.y }); // straight across to the right end
+  for (let i = 0; i <= 44; i++) points.push(polar(c, R, (i / 44) * 180)); // arc right -> bottom -> left
+  return toPath(points, size);
+}
+
 function crescentMoon(size: number): DrawingPath {
   // Arc angles are the two circles' true intersection points (not
   // approximated), so the outer and inner arcs meet exactly at both horns
@@ -196,11 +256,6 @@ const POLYGON_NAMES: Record<number, string> = {
   5: "Pentagon",
   6: "Hexagon",
   7: "Heptagon",
-  8: "Octagon",
-  9: "Nonagon",
-  10: "Decagon",
-  11: "Hendecagon",
-  12: "Dodecagon",
 };
 
 function regularPolygon(sides: number): ShapeDefinition {
@@ -380,7 +435,12 @@ const LISSAJOUS_PAIRS: [number, number][] = [
 
 const GEOMETRIC_SHAPES: ShapeDefinition[] = [
   standalone("circle", "Circle", "geometric", circle),
-  ...[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(regularPolygon),
+  standalone("ellipse", "Oval", "geometric", ellipseShape),
+  ...[3, 4, 5, 6, 7].map(regularPolygon),
+  standalone("rounded-rect", "Rounded Rectangle", "geometric", roundedRectShape),
+  standalone("trapezoid", "Trapezoid", "geometric", trapezoidShape),
+  standalone("parallelogram", "Parallelogram", "geometric", parallelogramShape),
+  standalone("semicircle", "Semicircle", "geometric", semicircleShape),
   ...[4, 5, 6, 7, 8, 9, 10].map(starShape),
   standalone("crescent-moon", "Crescent Moon", "geometric", crescentMoon),
   ...[3, 4, 5, 6, 7, 8, 9, 10].map(roseShape),
@@ -2357,26 +2417,40 @@ function appleShape(size: number): DrawingPath {
 }
 
 function watermelonShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.2, 0.25],
-    [0.5, 0.15],
-    [0.8, 0.25],
-    [0.5, 0.85],
-  ]);
-  const wedge = smoothClosedPath(pts, 14);
-  // scattered seeds in the flesh
-  const seedParts: Vec2[][] = [wedge];
-  for (const [fx, fy] of [
-    [0.42, 0.4],
-    [0.58, 0.42],
-    [0.46, 0.55],
-    [0.54, 0.6],
-    [0.5, 0.72],
-  ] as [number, number][]) {
-    const seed = { x: size * fx, y: size * fy };
-    seedParts.push([seed, polar(seed, size * 0.015, 0), seed]);
-  }
-  return toPathFromParts(seedParts, size);
+  // Classic slice: a semicircle with the cut face flat on top and the rind
+  // curving underneath. The outer edge plus a concentric inner arc read as
+  // the green rind band; teardrop seeds are scattered through the flesh.
+  const c = { x: 0.5 * size, y: 0.32 * size };
+  const rOuter = 0.36 * size;
+  const rInner = 0.275 * size;
+
+  const slice: Vec2[] = [polar(c, rOuter, 180)]; // left corner of the flat top
+  slice.push(polar(c, rOuter, 0)); // straight across to the right corner
+  for (let i = 0; i <= 44; i++) slice.push(polar(c, rOuter, (i / 44) * 180)); // arc right -> bottom -> left
+
+  const rind: Vec2[] = [];
+  for (let i = 0; i <= 44; i++) rind.push(polar(c, rInner, (i / 44) * 180));
+
+  const seed = (fx: number, fy: number): Vec2[] => {
+    const cx = fx * size;
+    const cy = fy * size;
+    const ang = Math.atan2(cy - c.y, cx - c.x); // long axis points radially outward
+    const cos = Math.cos(ang);
+    const sin = Math.sin(ang);
+    const sx = 0.032 * size;
+    const sy = 0.014 * size;
+    const oval: Vec2[] = [];
+    for (let i = 0; i <= 14; i++) {
+      const t = (i / 14) * Math.PI * 2;
+      const ex = sx * Math.cos(t);
+      const ey = sy * Math.sin(t);
+      oval.push({ x: cx + ex * cos - ey * sin, y: cy + ex * sin + ey * cos });
+    }
+    return oval;
+  };
+  const seeds = [seed(0.5, 0.45), seed(0.39, 0.47), seed(0.61, 0.47), seed(0.45, 0.56), seed(0.55, 0.56)];
+
+  return toPathFromParts([slice, rind, ...seeds], size);
 }
 
 function pizzaShape(size: number): DrawingPath {
@@ -2404,44 +2478,79 @@ function pizzaShape(size: number): DrawingPath {
 }
 
 function iceCreamShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.35, 0.35],
-    [0.4, 0.2],
-    [0.6, 0.2],
-    [0.65, 0.35],
-    [0.58, 0.45],
-    [0.5, 0.85],
-    [0.42, 0.45],
-  ]);
-  const cone = smoothClosedPath(pts, 10);
-  // waffle-cone crosshatch on the lower triangle
-  const waffle = openPolyline(
+  const f = (fx: number, fy: number): Vec2 => ({ x: fx * size, y: fy * size });
+
+  // Waffle cone: a downward-pointing triangle.
+  const cone = polygonEdges([f(0.34, 0.5), f(0.66, 0.5), f(0.5, 0.92)], 12);
+
+  // Crosshatch waffle texture: two sets of diagonals forming diamonds, all
+  // kept well inside the tapering triangle.
+  const hatch: Vec2[][] = [
+    [f(0.42, 0.7), f(0.6, 0.56)],
+    [f(0.46, 0.8), f(0.58, 0.62)],
+    [f(0.4, 0.56), f(0.58, 0.7)],
+    [f(0.42, 0.62), f(0.54, 0.8)],
+  ];
+
+  // Scoop: a rounded ball overhanging the cone rim, bulging slightly onto it.
+  const scoop = smoothClosedPath(
     fracPoints(size, [
-      [0.44, 0.5],
-      [0.56, 0.62],
-      [0.44, 0.62],
-      [0.55, 0.5],
-      [0.46, 0.72],
-      [0.52, 0.72],
+      [0.3, 0.48],
+      [0.31, 0.36],
+      [0.38, 0.28],
+      [0.44, 0.24],
+      [0.5, 0.23],
+      [0.56, 0.24],
+      [0.62, 0.28],
+      [0.69, 0.36],
+      [0.7, 0.48],
+      [0.5, 0.52],
     ]),
-    6,
+    8,
   );
-  return toPathFromParts([cone, waffle], size);
+
+  return toPathFromParts([cone, ...hatch, scoop], size);
 }
 
 function cupcakeShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.3, 0.55],
-    [0.35, 0.35],
-    [0.45, 0.42],
-    [0.5, 0.25],
-    [0.55, 0.42],
-    [0.65, 0.35],
-    [0.7, 0.55],
-    [0.62, 0.85],
-    [0.38, 0.85],
-  ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  const f = (fx: number, fy: number): Vec2 => ({ x: fx * size, y: fy * size });
+
+  // Fluted wrapper: a trapezoid, wider at the top than the base.
+  const wrapper = polygonEdges([f(0.32, 0.56), f(0.68, 0.56), f(0.6, 0.83), f(0.4, 0.83)], 10);
+
+  // Vertical flute ridges following the wrapper's taper (top width 0.36 -> base 0.2).
+  const ridge = (topX: number): Vec2[] => {
+    const botX = 0.5 + (topX - 0.5) * (0.2 / 0.36);
+    return [f(topX, 0.57), f(botX, 0.82)];
+  };
+  const ridges = [ridge(0.41), ridge(0.5), ridge(0.59)];
+
+  // Swirled frosting dome, overhanging the wrapper rim, rising to a peak.
+  const frosting = smoothClosedPath(
+    fracPoints(size, [
+      [0.3, 0.56],
+      [0.3, 0.46],
+      [0.38, 0.42],
+      [0.34, 0.36],
+      [0.42, 0.32],
+      [0.4, 0.26],
+      [0.5, 0.22],
+      [0.6, 0.26],
+      [0.58, 0.32],
+      [0.66, 0.36],
+      [0.62, 0.42],
+      [0.7, 0.46],
+      [0.7, 0.56],
+    ]),
+    8,
+  );
+
+  // Cherry on top, as its own floating loop above the peak.
+  const cherryC = f(0.5, 0.19);
+  const cherry: Vec2[] = [];
+  for (let i = 0; i <= 14; i++) cherry.push(polar(cherryC, 0.035 * size, (i / 14) * 360));
+
+  return toPathFromParts([wrapper, ...ridges, frosting, cherry], size);
 }
 
 function cherryShape(size: number): DrawingPath {
@@ -2477,18 +2586,41 @@ function cookieShape(size: number): DrawingPath {
 }
 
 function pretzelShape(size: number): DrawingPath {
-  // Replaces the bread loaf - a pretzel's twisted-loop silhouette is exactly
-  // one continuous line, a much simpler/more iconic shape.
-  const center = { x: size / 2, y: size / 2 };
+  // A pretzel is a single continuous strand of dough: two little end nubs at the
+  // top, two strands crossing in an X just below them (the twist), and a big
+  // round belly loop underneath. Traced as one open Catmull-Rom stroke so the
+  // two nubs stay as free ends with a valley between them (no line across the
+  // top) while the crossing reads as the signature knot.
+  const key = fracPoints(size, [
+    [0.6, 0.24], // right end nub
+    [0.55, 0.34],
+    [0.46, 0.46], // diagonal 1: upper-right down toward centre
+    [0.36, 0.54], // ...crossing past centre to the left
+    [0.22, 0.58], // left belly shoulder
+    [0.17, 0.72],
+    [0.3, 0.84], // lower-left of the belly
+    [0.5, 0.88], // bottom centre
+    [0.7, 0.84], // lower-right of the belly
+    [0.83, 0.72],
+    [0.78, 0.58], // right belly shoulder
+    [0.64, 0.54], // diagonal 2: lower-right up toward centre
+    [0.54, 0.46], // ...crossing past centre to the right
+    [0.45, 0.34],
+    [0.4, 0.24], // left end nub
+  ]);
+
+  const pointsPerSegment = 12;
   const points: Vec2[] = [];
-  const steps = 140;
-  for (let i = 0; i <= steps; i++) {
-    const t = (i / steps) * Math.PI * 2;
-    points.push({
-      x: center.x + size * 0.3 * Math.sin(2 * t),
-      y: center.y + size * 0.22 * Math.sin(3 * t),
-    });
+  for (let i = 0; i < key.length - 1; i++) {
+    const p0 = key[Math.max(0, i - 1)];
+    const p1 = key[i];
+    const p2 = key[i + 1];
+    const p3 = key[Math.min(key.length - 1, i + 2)];
+    for (let step = 0; step < pointsPerSegment; step++) {
+      points.push(catmullRomPoint(p0, p1, p2, p3, step / pointsPerSegment));
+    }
   }
+  points.push(key[key.length - 1]);
   return toPath(points, size);
 }
 
@@ -2580,27 +2712,53 @@ function donutShape(size: number): DrawingPath {
 }
 
 function carrotShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.42, 0.2],
-    [0.58, 0.2],
-    [0.55, 0.85],
-    [0.5, 0.92],
-    [0.45, 0.85],
-  ]);
-  const body = smoothClosedPath(pts, 12);
-  const leaves = openPolyline(
+  const f = (fx: number, fy: number): Vec2 => ({ x: fx * size, y: fy * size });
+
+  // Root: wide rounded shoulder at the top tapering to a sharp point at the
+  // bottom (~1:3 width:length), built as a smooth closed outline.
+  const body = smoothClosedPath(
     fracPoints(size, [
-      [0.5, 0.2],
-      [0.4, 0.08],
-      [0.48, 0.22],
-      [0.5, 0.06],
-      [0.55, 0.22],
-      [0.62, 0.09],
-      [0.5, 0.2],
+      [0.36, 0.34],
+      [0.42, 0.29],
+      [0.5, 0.28],
+      [0.58, 0.29],
+      [0.64, 0.34],
+      [0.585, 0.5],
+      [0.545, 0.68],
+      [0.51, 0.84],
+      [0.5, 0.92], // pointed tip
+      [0.49, 0.84],
+      [0.455, 0.68],
+      [0.415, 0.5],
     ]),
-    10,
+    9,
   );
-  return toPath([...body, ...leaves], size);
+
+  // Signature horizontal ridges across the root, each a short bowed line.
+  const ridge = (x0: number, x1: number, y: number): Vec2[] =>
+    openPolyline([f(x0, y), f((x0 + x1) / 2, y + 0.02), f(x1, y)], 6);
+  const ridges = [ridge(0.42, 0.58, 0.42), ridge(0.455, 0.545, 0.57), ridge(0.485, 0.515, 0.71)];
+
+  // Leafy top: three almond-shaped fronds fanning up from the shoulder, each
+  // its own closed part with real width.
+  const leaf = (bx: number, by: number, tx: number, ty: number, w: number): Vec2[] => {
+    const B = f(bx, by);
+    const T = f(tx, ty);
+    const dx = T.x - B.x;
+    const dy = T.y - B.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = (-dy / len) * w * size;
+    const ny = (dx / len) * w * size;
+    const mid = { x: (B.x + T.x) / 2, y: (B.y + T.y) / 2 };
+    return smoothClosedPath([B, { x: mid.x + nx, y: mid.y + ny }, T, { x: mid.x - nx, y: mid.y - ny }], 8);
+  };
+  const leaves = [
+    leaf(0.5, 0.3, 0.5, 0.05, 0.045),
+    leaf(0.47, 0.31, 0.37, 0.1, 0.04),
+    leaf(0.53, 0.31, 0.63, 0.1, 0.04),
+  ];
+
+  return toPathFromParts([body, ...ridges, ...leaves], size);
 }
 
 function grapesShape(size: number): DrawingPath {
@@ -2690,29 +2848,77 @@ function waffleShape(size: number): DrawingPath {
 }
 
 function hamburgerShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.2, 0.4],
-    [0.25, 0.22],
-    [0.75, 0.22],
-    [0.8, 0.4],
-  ]);
-  const bunTop = smoothClosedPath(pts, 10);
-  const layers = openPolyline(
+  const f = (fx: number, fy: number): Vec2 => ({ x: fx * size, y: fy * size });
+
+  // Top bun: a half-ellipse dome closed off with a flat bottom edge.
+  const domeC = { x: 0.5 * size, y: 0.42 * size };
+  const rx = 0.3 * size;
+  const ry = 0.23 * size;
+  const bunTop: Vec2[] = [];
+  for (let i = 0; i <= 44; i++) {
+    const a = Math.PI + (i / 44) * Math.PI; // left rim, over the top, to right rim
+    bunTop.push({ x: domeC.x + rx * Math.cos(a), y: domeC.y + ry * Math.sin(a) });
+  }
+  bunTop.push({ x: domeC.x - rx, y: domeC.y }); // close the flat bottom
+
+  // Three sesame seeds (small tilted ovals) scattered on the dome.
+  const seed = (cx: number, cy: number, tilt: number): Vec2[] => {
+    const c = f(cx, cy);
+    const sx = 0.02 * size;
+    const sy = 0.036 * size;
+    const cos = Math.cos(tilt);
+    const sin = Math.sin(tilt);
+    const oval: Vec2[] = [];
+    for (let i = 0; i <= 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const ex = sx * Math.cos(a);
+      const ey = sy * Math.sin(a);
+      oval.push({ x: c.x + ex * cos - ey * sin, y: c.y + ex * sin + ey * cos });
+    }
+    return oval;
+  };
+  const seeds = [seed(0.4, 0.3, -0.5), seed(0.5, 0.26, 0), seed(0.6, 0.3, 0.5)];
+
+  // Lettuce: a band with a wavy (scalloped) lower edge poking out past the buns.
+  const lx0 = 0.15;
+  const lx1 = 0.85;
+  const lyTop = 0.44;
+  const lyBot = 0.5;
+  const lettuce: Vec2[] = [f(lx0, lyTop), f(lx1, lyTop)];
+  for (let i = 0; i <= 28; i++) {
+    const t = i / 28;
+    const x = (lx1 - (lx1 - lx0) * t) * size;
+    const y = (lyBot + 0.025 * Math.sin(t * Math.PI * 7)) * size;
+    lettuce.push({ x, y });
+  }
+  lettuce.push(f(lx0, lyTop)); // close
+
+  // Patty: a rounded bar.
+  const patty = smoothClosedPath(
     fracPoints(size, [
-      [0.18, 0.5],
-      [0.82, 0.5],
-      [0.8, 0.58],
-      [0.2, 0.58],
-      [0.18, 0.5],
-      [0.2, 0.68],
-      [0.8, 0.68],
-      [0.78, 0.82],
-      [0.22, 0.82],
-      [0.2, 0.68],
+      [0.21, 0.575],
+      [0.25, 0.53],
+      [0.5, 0.52],
+      [0.75, 0.53],
+      [0.79, 0.575],
+      [0.75, 0.62],
+      [0.5, 0.63],
+      [0.25, 0.62],
     ]),
     8,
   );
-  return toPath([...bunTop, ...layers], size);
+
+  // Bottom bun: flat top with a rounded bottom.
+  const bbC = { x: 0.5 * size, y: 0.66 * size };
+  const brx = 0.28 * size;
+  const bry = 0.16 * size;
+  const bottomBun: Vec2[] = [f(0.22, 0.66), f(0.78, 0.66)];
+  for (let i = 0; i <= 44; i++) {
+    const a = (i / 44) * Math.PI; // right rim, under the bottom, to left rim
+    bottomBun.push({ x: bbC.x + brx * Math.cos(a), y: bbC.y + bry * Math.sin(a) });
+  }
+
+  return toPathFromParts([bunTop, ...seeds, lettuce, patty, bottomBun], size);
 }
 
 function hotDogShape(size: number): DrawingPath {
@@ -4340,21 +4546,38 @@ function houseShape(size: number): DrawingPath {
 }
 
 function keyShape(size: number): DrawingPath {
-  const center = { x: size * 0.32, y: size * 0.35 };
-  const r = size * 0.16;
-  const points: Vec2[] = [];
-  // Starts and ends the loop at the rightmost point (angle 0), exactly where
-  // the shaft begins, so there's no chord cutting across the loop's middle.
-  for (let i = 0; i <= 50; i++) points.push(polar(center, r, (i / 50) * 360));
-  points.push(
-    { x: size * 0.8, y: size * 0.75 },
-    { x: size * 0.72, y: size * 0.83 },
-    { x: size * 0.65, y: size * 0.76 },
-    { x: size * 0.6, y: size * 0.85 },
-    { x: size * 0.52, y: size * 0.77 },
-    { x: center.x + r, y: center.y },
+  // Horizontal key: a round bow with a real hole on the left, a shaft with
+  // genuine width extending right, and a toothed bit cut into its lower edge.
+  const bowC = { x: 0.22 * size, y: 0.495 * size };
+  const outerBow: Vec2[] = [];
+  for (let i = 0; i <= 50; i++) outerBow.push(polar(bowC, 0.15 * size, (i / 50) * 360));
+  const innerBow: Vec2[] = [];
+  for (let i = 0; i <= 40; i++) innerBow.push(polar(bowC, 0.075 * size, (i / 40) * 360));
+
+  // Closed shaft-and-bit profile: straight top edge, tip at the right, then the
+  // bottom edge steps up and down into square teeth on the way back.
+  const shaft = polygonEdges(
+    fracPoints(size, [
+      [0.36, 0.47],
+      [0.82, 0.47],
+      [0.82, 0.58], // tip / rightmost tooth
+      [0.8, 0.58],
+      [0.8, 0.52],
+      [0.76, 0.52],
+      [0.76, 0.58], // tall tooth
+      [0.72, 0.58],
+      [0.72, 0.52],
+      [0.68, 0.52],
+      [0.68, 0.56], // shorter tooth
+      [0.64, 0.56],
+      [0.64, 0.52],
+      [0.6, 0.52],
+      [0.36, 0.52], // shaft underside back to the bow
+    ]),
+    3,
   );
-  return toPath(points, size);
+
+  return toPathFromParts([outerBow, innerBow, shaft], size);
 }
 
 function lampShape(size: number): DrawingPath {
@@ -4537,15 +4760,42 @@ function candleShape(size: number): DrawingPath {
 }
 
 function scissorsShape(size: number): DrawingPath {
-  const leftLoop = { x: size * 0.32, y: size * 0.75 };
-  const rightLoop = { x: size * 0.62, y: size * 0.75 };
-  const pivot = { x: size * 0.48, y: size * 0.5 };
-  const points: Vec2[] = [];
-  for (let i = 0; i <= 24; i++) points.push(polar(leftLoop, size * 0.1, (i / 24) * 360));
-  points.push(leftLoop, pivot, { x: size * 0.75, y: size * 0.2 }, pivot, rightLoop);
-  for (let i = 0; i <= 24; i++) points.push(polar(rightLoop, size * 0.1, (i / 24) * 360));
-  points.push(rightLoop, pivot, { x: size * 0.22, y: size * 0.2 });
-  return toPath(points, size);
+  const f = (fx: number, fy: number): Vec2 => ({ x: fx * size, y: fy * size });
+  const pivot = f(0.5, 0.48);
+
+  // Two blades: thin closed triangles from a narrow base at the pivot to a
+  // pointed tip, crossed in an open X - real width, not bare lines.
+  const blade = (tip: Vec2): Vec2[] => {
+    const dx = tip.x - pivot.x;
+    const dy = tip.y - pivot.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const px = (-dy / len) * 0.032 * size;
+    const py = (dx / len) * 0.032 * size;
+    return polygonEdges([{ x: pivot.x + px, y: pivot.y + py }, tip, { x: pivot.x - px, y: pivot.y - py }], 10);
+  };
+
+  // Finger rings: ellipses elongated toward the pivot so they read as
+  // attached handles rather than floating circles.
+  const ring = (ux: number, uy: number): Vec2[] => {
+    const cx = pivot.x + ux * 0.21 * size;
+    const cy = pivot.y + uy * 0.21 * size;
+    const major = 0.155 * size;
+    const minor = 0.085 * size;
+    const pts: Vec2[] = [];
+    for (let i = 0; i <= 28; i++) {
+      const t = (i / 28) * Math.PI * 2;
+      const a = major * Math.cos(t);
+      const b = minor * Math.sin(t);
+      pts.push({ x: cx + ux * a - uy * b, y: cy + uy * a + ux * b });
+    }
+    return pts;
+  };
+
+  // Pivot screw as its own small floating circle.
+  const screw: Vec2[] = [];
+  for (let i = 0; i <= 14; i++) screw.push(polar(pivot, 0.03 * size, (i / 14) * 360));
+
+  return toPathFromParts([blade(f(0.2, 0.12)), blade(f(0.8, 0.12)), ring(-0.474, 0.881), ring(0.474, 0.881), screw], size);
 }
 
 function pictureFrameShape(size: number): DrawingPath {
@@ -4568,122 +4818,192 @@ function pictureFrameShape(size: number): DrawingPath {
 }
 
 function tableShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.15, 0.35],
-    [0.85, 0.35],
-    [0.85, 0.45],
-    [0.15, 0.45],
-  ]);
-  const top = openPolyline(pts, 12);
-  const legFL = openPolyline(
-    fracPoints(size, [
-      [0.2, 0.45],
-      [0.22, 0.85],
-    ]),
-    10,
-  );
-  const legFR = openPolyline(
-    fracPoints(size, [
-      [0.78, 0.45],
-      [0.8, 0.85],
-    ]),
-    10,
-  );
-  return toPathFromParts([top, legFL, legFR], size);
+  const rect = (x0: number, y0: number, x1: number, y1: number, per = 8): Vec2[] =>
+    polygonEdges(fracPoints(size, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]), per);
+
+  // Thick tabletop slab, two sturdy legs with real width, and a low cross
+  // stretcher tying the legs together - all closed parts, no bare lines.
+  const top = rect(0.12, 0.32, 0.88, 0.4, 12);
+  const legLeft = rect(0.17, 0.4, 0.23, 0.85);
+  const legRight = rect(0.77, 0.4, 0.83, 0.85);
+  const stretcher = rect(0.23, 0.73, 0.77, 0.78, 10);
+
+  return toPathFromParts([top, legLeft, legRight, stretcher], size);
 }
 
 function hammerShape(size: number): DrawingPath {
-  // A solid, closed block for the head instead of a lopsided open pentagon
-  // that read as an arrow rather than a hammer.
-  const handle = openPolyline(
-    fracPoints(size, [
-      [0.38, 0.88],
-      [0.5, 0.42],
-    ]),
-    16,
-  );
+  // Cross-peen head: a solid block with a tapered wedge on the left, plus a
+  // handle drawn as a real closed band (not a bare line).
   const head = polygonEdges(
     fracPoints(size, [
-      [0.5, 0.42],
-      [0.4, 0.24],
-      [0.78, 0.16],
-      [0.84, 0.34],
+      [0.18, 0.25], // wedge tip
+      [0.36, 0.14],
+      [0.82, 0.14],
+      [0.82, 0.36],
+      [0.36, 0.36],
     ]),
-    12,
+    10,
   );
-  return toPathFromParts([handle, head], size);
+  const handle = polygonEdges(
+    fracPoints(size, [
+      [0.54, 0.36],
+      [0.64, 0.36],
+      [0.62, 0.9],
+      [0.56, 0.9],
+    ]),
+    10,
+  );
+  // Eye detail where the handle passes through the head, as a floating loop.
+  const eyeC = { x: 0.59 * size, y: 0.25 * size };
+  const eye: Vec2[] = [];
+  for (let i = 0; i <= 14; i++) eye.push(polar(eyeC, 0.035 * size, (i / 14) * 360));
+  return toPathFromParts([head, handle, eye], size);
 }
 
 function broomShape(size: number): DrawingPath {
-  const handle = openPolyline(
+  const f = (fx: number, fy: number): Vec2 => ({ x: fx * size, y: fy * size });
+
+  // Handle: a long thin band with real width, not a bare line.
+  const handle = polygonEdges(
     fracPoints(size, [
-      [0.65, 0.12],
-      [0.42, 0.65],
+      [0.47, 0.06],
+      [0.53, 0.06],
+      [0.53, 0.48],
+      [0.47, 0.48],
     ]),
-    16,
+    10,
   );
-  const bristles = openPolyline(
+
+  // Ferrule binding the brush to the handle.
+  const ferrule = polygonEdges(
     fracPoints(size, [
-      [0.42, 0.65],
-      [0.2, 0.9],
-      [0.32, 0.68],
-      [0.28, 0.92],
-      [0.42, 0.7],
-      [0.4, 0.92],
-      [0.52, 0.7],
-      [0.5, 0.9],
-      [0.42, 0.65],
+      [0.44, 0.48],
+      [0.56, 0.48],
+      [0.6, 0.6],
+      [0.4, 0.6],
     ]),
     8,
   );
-  return toPath([...handle, ...bristles], size);
+
+  // Brush: a flaring trapezoid whose bottom edge is a sawtooth of bristle tips.
+  const brushVerts: Vec2[] = [f(0.4, 0.6), f(0.28, 0.9)];
+  const teeth = 8;
+  for (let k = 1; k < teeth; k++) {
+    const x = 0.28 + (0.72 - 0.28) * (k / teeth);
+    brushVerts.push(f(x, k % 2 === 1 ? 0.85 : 0.9));
+  }
+  brushVerts.push(f(0.72, 0.9), f(0.6, 0.6));
+  const brush = polygonEdges(brushVerts, 4);
+
+  // Interior bristle strands fanning from the ferrule toward the tips.
+  const strands: Vec2[][] = [
+    [f(0.46, 0.63), f(0.4, 0.85)],
+    [f(0.5, 0.63), f(0.5, 0.85)],
+    [f(0.54, 0.63), f(0.6, 0.85)],
+  ];
+
+  return toPathFromParts([handle, ferrule, brush, ...strands], size);
 }
 
 function bedShape(size: number): DrawingPath {
-  const frame = openPolyline(
+  // Side view: a tall round-topped headboard post, a lower footboard post,
+  // a rounded mattress band spanning them, and a puffy pillow at the head.
+  const post = (x0: number, x1: number, yTop: number, yBot: number): Vec2[] => {
+    const r = (x1 - x0) / 2;
+    const cx = x0 + r;
+    const yc = yTop + r;
+    const pts: Vec2[] = [{ x: x0 * size, y: yBot * size }];
+    for (let i = 0; i <= 16; i++) {
+      const a = Math.PI + (i / 16) * Math.PI; // left side, over the rounded top, to right side
+      pts.push({ x: (cx + r * Math.cos(a)) * size, y: (yc + r * Math.sin(a)) * size });
+    }
+    pts.push({ x: x1 * size, y: yBot * size }, { x: x0 * size, y: yBot * size }); // close along the floor
+    return pts;
+  };
+  const headboard = post(0.1, 0.2, 0.18, 0.82);
+  const footboard = post(0.8, 0.9, 0.42, 0.82);
+
+  const mattress = smoothClosedPath(
     fracPoints(size, [
-      [0.15, 0.85],
-      [0.15, 0.45],
-      [0.85, 0.45],
-      [0.85, 0.85],
+      [0.21, 0.53],
+      [0.5, 0.51],
+      [0.79, 0.53],
+      [0.81, 0.595],
+      [0.79, 0.66],
+      [0.5, 0.68],
+      [0.21, 0.66],
+      [0.19, 0.595],
     ]),
-    14,
+    8,
   );
-  const headboard = openPolyline(
+
+  const pillow = smoothClosedPath(
     fracPoints(size, [
-      [0.15, 0.45],
-      [0.15, 0.25],
-      [0.3, 0.25],
-      [0.3, 0.45],
+      [0.24, 0.48],
+      [0.31, 0.435],
+      [0.38, 0.48],
+      [0.31, 0.51],
     ]),
     10,
   );
-  const pillow = openPolyline(
-    fracPoints(size, [
-      [0.32, 0.45],
-      [0.32, 0.35],
-      [0.55, 0.35],
-      [0.55, 0.45],
-    ]),
-    10,
-  );
-  return toPathFromParts([frame, headboard, pillow], size);
+
+  return toPathFromParts([headboard, footboard, mattress, pillow], size);
 }
 
 function sofaShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.15, 0.75],
-    [0.15, 0.45],
-    [0.25, 0.35],
-    [0.75, 0.35],
-    [0.85, 0.45],
-    [0.85, 0.75],
-    [0.72, 0.75],
-    [0.72, 0.6],
-    [0.28, 0.6],
-    [0.28, 0.75],
-  ]);
-  return toPath(openPolyline(pts, 10), size);
+  // Front view built from real parts: a rounded backrest between two rounded
+  // armrests, a seat cushion spanning them, and two stub legs.
+  const back = smoothClosedPath(
+    fracPoints(size, [
+      [0.24, 0.56],
+      [0.24, 0.38],
+      [0.3, 0.3],
+      [0.5, 0.28],
+      [0.7, 0.3],
+      [0.76, 0.38],
+      [0.76, 0.56],
+      [0.5, 0.58],
+    ]),
+    8,
+  );
+  const arm = (x0: number): Vec2[] =>
+    smoothClosedPath(
+      fracPoints(size, [
+        [x0, 0.74],
+        [x0, 0.52],
+        [x0 + 0.03, 0.44],
+        [x0 + 0.08, 0.42],
+        [x0 + 0.13, 0.44],
+        [x0 + 0.16, 0.52],
+        [x0 + 0.16, 0.74],
+        [x0 + 0.08, 0.755],
+      ]),
+      7,
+    );
+  const seat = smoothClosedPath(
+    fracPoints(size, [
+      [0.26, 0.58],
+      [0.5, 0.56],
+      [0.74, 0.58],
+      [0.76, 0.65],
+      [0.74, 0.72],
+      [0.5, 0.74],
+      [0.26, 0.72],
+      [0.24, 0.65],
+    ]),
+    8,
+  );
+  const leg = (x0: number): Vec2[] =>
+    polygonEdges(
+      fracPoints(size, [
+        [x0, 0.755],
+        [x0 + 0.05, 0.755],
+        [x0 + 0.05, 0.86],
+        [x0, 0.86],
+      ]),
+      6,
+    );
+  return toPathFromParts([back, arm(0.1), arm(0.74), seat, leg(0.15), leg(0.8)], size);
 }
 
 function mirrorShape(size: number): DrawingPath {
@@ -4712,67 +5032,117 @@ function mirrorShape(size: number): DrawingPath {
 }
 
 function bathtubShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.15, 0.7],
-    [0.15, 0.45],
-    [0.25, 0.4],
-    [0.75, 0.4],
-    [0.85, 0.45],
-    [0.85, 0.7],
-  ]);
-  const body = smoothClosedPath(pts, 10);
-  const footLeft = openPolyline(
+  // Clawfoot tub, side view: the outer wall runs down the left, across the
+  // bottom and up the right, then the inner rim dips back down as the basin -
+  // so the wall thickness and the hollow both read.
+  const tub = smoothClosedPath(
     fracPoints(size, [
-      [0.2, 0.7],
-      [0.18, 0.8],
-      [0.24, 0.8],
-      [0.22, 0.7],
+      [0.14, 0.48], // top-left rim (outer)
+      [0.13, 0.6],
+      [0.2, 0.72],
+      [0.5, 0.75],
+      [0.8, 0.72],
+      [0.87, 0.6],
+      [0.86, 0.48], // top-right rim (outer)
+      [0.8, 0.5], // inner rim right
+      [0.5, 0.62], // basin dip
+      [0.2, 0.5], // inner rim left
     ]),
-    6,
+    7,
   );
-  const footRight = openPolyline(
+
+  // Gooseneck faucet mounted on the left rim, arching over into the basin.
+  const faucet = polygonEdges(
     fracPoints(size, [
-      [0.78, 0.7],
-      [0.76, 0.8],
-      [0.82, 0.8],
-      [0.8, 0.7],
+      [0.15, 0.48],
+      [0.15, 0.33],
+      [0.26, 0.33],
+      [0.26, 0.42],
+      [0.23, 0.42],
+      [0.23, 0.36],
+      [0.19, 0.36],
+      [0.19, 0.48],
     ]),
-    6,
+    5,
   );
-  return toPathFromParts([body, footLeft, footRight], size);
+
+  // Two clawfoot feet, flaring out at the base.
+  const foot = (cx: number): Vec2[] =>
+    smoothClosedPath(
+      fracPoints(size, [
+        [cx - 0.03, 0.71],
+        [cx - 0.045, 0.82],
+        [cx, 0.86],
+        [cx + 0.045, 0.82],
+        [cx + 0.03, 0.71],
+      ]),
+      6,
+    );
+
+  return toPathFromParts([tub, faucet, foot(0.26), foot(0.74)], size);
 }
 
 function teapotShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.3, 0.6],
-    [0.28, 0.42],
-    [0.4, 0.32],
-    [0.6, 0.32],
-    [0.7, 0.45],
-    [0.68, 0.62],
-    [0.5, 0.68],
-  ]);
-  const body = smoothClosedPath(pts, 10);
-  const spout = openPolyline(
+  // Rounded belly with a flatter rim on top for the lid to sit on.
+  const body = smoothClosedPath(
     fracPoints(size, [
-      [0.7, 0.48],
-      [0.85, 0.4],
+      [0.28, 0.55],
+      [0.3, 0.42],
+      [0.42, 0.36],
+      [0.58, 0.36],
+      [0.7, 0.42],
+      [0.72, 0.55],
+      [0.66, 0.69],
+      [0.5, 0.73],
+      [0.34, 0.69],
     ]),
-    10,
+    9,
   );
-  const handleCenter = { x: size * 0.24, y: size * 0.5 };
-  const handle: Vec2[] = [];
-  for (let i = 0; i <= 24; i++) handle.push(polar(handleCenter, size * 0.09, 100 + (i / 24) * 200));
-  const lid = openPolyline(
+
+  // Tapered pouring spout angling up off the right shoulder (a solid closed
+  // shape with real width, not a bare line).
+  const spout = polygonEdges(
     fracPoints(size, [
-      [0.45, 0.32],
-      [0.48, 0.24],
-      [0.55, 0.24],
-      [0.55, 0.32],
+      [0.68, 0.42],
+      [0.9, 0.32],
+      [0.88, 0.4],
+      [0.7, 0.52],
     ]),
     8,
   );
-  return toPathFromParts([body, spout, handle, lid], size);
+
+  // Handle: a closed band bulging left with a hollow through the middle - the
+  // outer edge runs down, the inner edge runs back up.
+  const handle = smoothClosedPath(
+    fracPoints(size, [
+      [0.3, 0.44],
+      [0.16, 0.44],
+      [0.12, 0.54],
+      [0.16, 0.64],
+      [0.3, 0.62],
+      [0.22, 0.6],
+      [0.19, 0.54],
+      [0.22, 0.46],
+    ]),
+    7,
+  );
+
+  // Lid: a shallow dome on the rim, plus a floating knob on top.
+  const lid = smoothClosedPath(
+    fracPoints(size, [
+      [0.42, 0.36],
+      [0.46, 0.31],
+      [0.5, 0.3],
+      [0.54, 0.31],
+      [0.58, 0.36],
+    ]),
+    8,
+  );
+  const knobC = { x: 0.5 * size, y: 0.265 * size };
+  const knob: Vec2[] = [];
+  for (let i = 0; i <= 14; i++) knob.push(polar(knobC, 0.03 * size, (i / 14) * 360));
+
+  return toPathFromParts([body, spout, handle, lid, knob], size);
 }
 
 const HOME_SHAPES: ShapeDefinition[] = [
@@ -5875,30 +6245,45 @@ function mermaidTailShape(size: number): DrawingPath {
 }
 
 function griffinWingShape(size: number): DrawingPath {
-  // Feathered wing: a smooth leading edge sweeping up to the tip, a scalloped
-  // trailing edge of feather tips, plus two covert-feather lines inside.
-  const outline = polygonEdges(
-    fracPoints(size, [
-      [0.18, 0.8],
-      [0.3, 0.5],
-      [0.45, 0.3],
-      [0.62, 0.2],
-      [0.78, 0.22],
-      [0.86, 0.32],
-      [0.78, 0.42],
-      [0.7, 0.36],
-      [0.64, 0.52],
-      [0.56, 0.44],
-      [0.48, 0.6],
-      [0.4, 0.5],
-      [0.32, 0.68],
-      [0.24, 0.6],
-      [0.2, 0.76],
-    ]),
-    5,
-  );
-  const covert = (from: [number, number], to: [number, number]) => openPolyline(fracPoints(size, [from, to]), 6);
-  return toPathFromParts([outline, covert([0.34, 0.52], [0.62, 0.32]), covert([0.44, 0.62], [0.7, 0.42])], size);
+  // Feathered wing: a smooth concave leading edge sweeping from the shoulder up
+  // to the tip, then a trailing edge built as evenly-layered feather scallops
+  // (longest primaries near the tip), rounded by the closing spline. Two covert
+  // rows inside mark the feather layers.
+  const S = { x: 0.16 * size, y: 0.82 * size }; // shoulder
+  const T = { x: 0.86 * size, y: 0.24 * size }; // wingtip
+  const nx = 0.64; // outward normal along the trailing edge (down-right)
+  const ny = 0.77;
+
+  const leading: Vec2[] = [
+    S,
+    { x: 0.26 * size, y: 0.62 * size },
+    { x: 0.4 * size, y: 0.44 * size },
+    { x: 0.56 * size, y: 0.31 * size },
+    { x: 0.72 * size, y: 0.24 * size },
+    T,
+  ];
+
+  const feathers = 6;
+  const trailing: Vec2[] = [];
+  for (let i = 0; i < feathers; i++) {
+    const uTip = (i + 0.5) / feathers;
+    const uCusp = (i + 1) / feathers;
+    const depth = (0.13 - 0.06 * uTip) * size; // primaries longest near the tip
+    const tipB = { x: T.x + (S.x - T.x) * uTip, y: T.y + (S.y - T.y) * uTip };
+    const cuspB = { x: T.x + (S.x - T.x) * uCusp, y: T.y + (S.y - T.y) * uCusp };
+    trailing.push({ x: tipB.x + nx * depth, y: tipB.y + ny * depth });
+    trailing.push(cuspB);
+  }
+
+  const outline = smoothClosedPath([...leading, ...trailing], 6);
+
+  const covert = (row: [number, number][]): Vec2[] => openPolyline(fracPoints(size, row), 5);
+  const coverts = [
+    covert([[0.34, 0.5], [0.5, 0.4], [0.66, 0.33]]),
+    covert([[0.3, 0.62], [0.46, 0.52], [0.62, 0.44]]),
+  ];
+
+  return toPathFromParts([outline, ...coverts], size);
 }
 
 const FANTASY_SHAPES: ShapeDefinition[] = [

@@ -23,9 +23,9 @@ export const CLOSED_SHAPE_OFFSET_STEP = 1;
 export const CLOSED_SHAPE_CLOSURE_THRESHOLD = 0.15;
 
 export const SCORE_WEIGHTS = {
-  shapeMatch: 0.6,
-  coverage: 0.1,
-  smoothness: 0.1,
+  shapeMatch: 0.7,
+  coverage: 0.05,
+  smoothness: 0.05,
   scale: 0.2,
 } as const;
 

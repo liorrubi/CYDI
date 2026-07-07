@@ -229,7 +229,7 @@ export function playAchievementUnlockedSound(): void {
   playTone(ctx, 1567.98, now + 0.42, 0.4, 0.14, "sine"); // G6 sparkle on top
 }
 
-/** A quick cascade of bright metallic clinks, like coins dropping onto a pile. */
+/** A fast arcade-style coin collection sound - a tight run of bright metallic clicks rising in pitch, like a mobile game reward jingle. */
 export function playCoinsSound(): void {
   if (!isSoundEnabled()) return;
 
@@ -238,11 +238,12 @@ export function playCoinsSound(): void {
   if (ctx.state === "suspended") ctx.resume().catch(() => {});
 
   const now = ctx.currentTime;
-  const clinks = 5;
-  for (let i = 0; i < clinks; i++) {
-    const startTime = now + i * 0.06 + Math.random() * 0.02;
-    const frequency = 1800 - i * 120 + Math.random() * 100;
-    playTone(ctx, frequency, startTime, 0.12, 0.1, "triangle");
+  const clicks = 6;
+  for (let i = 0; i < clicks; i++) {
+    const t = i / (clicks - 1);
+    const startTime = now + i * 0.045;
+    const frequency = 1100 + t * 1500 + Math.random() * 40; // rises from ~1100Hz to ~2600Hz
+    playTone(ctx, frequency, startTime, 0.08, 0.12, "square");
   }
 }
 

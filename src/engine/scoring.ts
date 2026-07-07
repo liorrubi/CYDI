@@ -1,3 +1,7 @@
+/*
+ * © 2026 Lior Rubinovich. All rights reserved.
+ * Unauthorized copying, modification, distribution, or commercial use is prohibited.
+ */
 import type { Point } from "../types/Point";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";

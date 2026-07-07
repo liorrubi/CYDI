@@ -1,3 +1,7 @@
+/*
+ * © 2026 Lior Rubinovich. All rights reserved.
+ * Unauthorized copying, modification, distribution, or commercial use is prohibited.
+ */
 import type { DrawingPath } from "../types/Challenge";
 
 export type CategoryId =
@@ -300,19 +304,26 @@ function roseShape(petalCount: number): ShapeDefinition {
     name: `${petalCount}-Petal Flower`,
     category: "geometric",
     generate: (size) => {
-      const isOdd = petalCount % 2 === 1;
-      const k = isOdd ? petalCount : petalCount / 2;
-      const thetaMax = isOdd ? Math.PI : Math.PI * 2;
+      // Lobe construction: r = base + (outer-base)*|sin((n/2)θ)| over [0,2π]
+      // yields exactly `petalCount` rounded petals for any n (odd or even),
+      // unlike the raw rhodonea r=cos(kθ) which retraces for odd k over 2π.
       const center = { x: size / 2, y: size / 2 };
-      const radius = size * 0.35;
-      const steps = 200;
-      const points: Vec2[] = [];
+      const outer = size * 0.38;
+      const base = size * 0.11; // petals meet on a small central disc, not a pinch point
+      const steps = 360;
+      const petals: Vec2[] = [];
       for (let i = 0; i <= steps; i++) {
-        const theta = (i / steps) * thetaMax;
-        const r = radius * Math.cos(k * theta);
-        points.push({ x: center.x + r * Math.cos(theta), y: center.y + r * Math.sin(theta) });
+        const theta = (i / steps) * Math.PI * 2;
+        const r = base + (outer - base) * Math.abs(Math.sin((petalCount / 2) * theta));
+        petals.push({ x: center.x + r * Math.cos(theta), y: center.y + r * Math.sin(theta) });
       }
-      return toPath(points, size);
+      // signature detail: the flower's center disc, as its own part (no connector)
+      const disc: Vec2[] = [];
+      const discSteps = 24;
+      for (let i = 0; i <= discSteps; i++) {
+        disc.push(polar(center, base * 0.7, (i / discSteps) * 360));
+      }
+      return toPathFromParts([petals, disc], size);
     },
   };
 }
@@ -1859,54 +1870,62 @@ function penguinShape(size: number): DrawingPath {
 }
 
 function horseShape(size: number): DrawingPath {
-  // Horse head-and-neck profile: forehead down the face to the muzzle, curved
-  // jaw and neck, two ears, a flowing mane along the neck, an eye and nostril.
-  const head = smoothClosedPath(
+  // Full standing-horse silhouette (facing left) - far more unambiguous than a
+  // bare head profile. One outline traces head, neck, topline, hindquarters
+  // and belly; the four legs and the tail are separate parts, plus an eye.
+  const body = smoothClosedPath(
     fracPoints(size, [
-      [0.44, 0.14],
-      [0.52, 0.2],
-      [0.58, 0.36],
-      [0.66, 0.54],
-      [0.66, 0.66],
-      [0.58, 0.72],
-      [0.5, 0.68],
-      [0.46, 0.54],
-      [0.36, 0.5],
-      [0.28, 0.62],
-      [0.24, 0.82],
-      [0.36, 0.84],
-      [0.4, 0.62],
-      [0.5, 0.5],
-      [0.44, 0.34],
-      [0.38, 0.2],
+      [0.2, 0.12], // ear tip / top of head
+      [0.15, 0.22], // forehead
+      [0.11, 0.32], // face
+      [0.1, 0.4], // muzzle tip
+      [0.14, 0.44], // mouth
+      [0.2, 0.44], // chin / jaw
+      [0.26, 0.5], // throat (front of neck)
+      [0.34, 0.62], // lower neck
+      [0.37, 0.68], // brisket / chest
+      [0.5, 0.7], // belly
+      [0.66, 0.68], // flank
+      [0.74, 0.62], // stifle
+      [0.84, 0.52], // buttock / tail base
+      [0.82, 0.42], // croup (top of rump)
+      [0.64, 0.42], // back
+      [0.46, 0.44], // withers
+      [0.34, 0.38], // crest (back of neck)
+      [0.28, 0.28],
+      [0.24, 0.18], // poll
     ]),
     9,
   );
-  const ear = (mirror: number) =>
+  const leg = (x0: number, x1: number, top: number, bottom: number) =>
     polygonEdges(
       fracPoints(size, [
-        [0.42 + mirror * 0.04, 0.16],
-        [0.4 + mirror * 0.05, 0.04],
-        [0.48 + mirror * 0.04, 0.14],
+        [x0, top],
+        [x1, top],
+        [x1 - 0.005, bottom],
+        [x0 + 0.005, bottom],
       ]),
-      4,
+      5,
     );
-  // Mane flowing down the back of the neck.
-  const mane = openPolyline(
+  const frontFar = leg(0.33, 0.37, 0.66, 0.9);
+  const frontNear = leg(0.4, 0.45, 0.67, 0.92);
+  const hindFar = leg(0.75, 0.79, 0.64, 0.9);
+  const hindNear = leg(0.68, 0.73, 0.66, 0.92);
+  // Flowing tail hanging off the rump.
+  const tail = smoothClosedPath(
     fracPoints(size, [
-      [0.42, 0.16],
-      [0.36, 0.28],
-      [0.34, 0.44],
-      [0.28, 0.6],
-      [0.24, 0.8],
+      [0.83, 0.46],
+      [0.9, 0.58],
+      [0.89, 0.78],
+      [0.84, 0.8],
+      [0.83, 0.58],
+      [0.8, 0.5],
     ]),
     8,
   );
   const eye: Vec2[] = [];
-  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.5, y: size * 0.34 }, size * 0.02, (i / 12) * 360));
-  const nostril: Vec2[] = [];
-  for (let i = 0; i <= 10; i++) nostril.push(polar({ x: size * 0.58, y: size * 0.62 }, size * 0.02, (i / 10) * 360));
-  return toPathFromParts([head, ear(-1), ear(1), mane, eye, nostril], size);
+  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.17, y: size * 0.3 }, size * 0.018, (i / 12) * 360));
+  return toPathFromParts([body, frontFar, frontNear, hindFar, hindNear, tail, eye], size);
 }
 
 const ANIMAL_SHAPES: ShapeDefinition[] = [
@@ -1975,24 +1994,39 @@ function simpleFlowerShape(size: number): DrawingPath {
 }
 
 function treeShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.5, 0.12],
-    [0.7, 0.3],
-    [0.62, 0.32],
-    [0.78, 0.5],
-    [0.68, 0.52],
-    [0.6, 0.68],
-    [0.56, 0.68],
-    [0.58, 0.85],
-    [0.42, 0.85],
-    [0.44, 0.68],
-    [0.4, 0.68],
-    [0.32, 0.52],
-    [0.22, 0.5],
-    [0.38, 0.32],
-    [0.3, 0.3],
-  ]);
-  return toPath(smoothClosedPath(pts, 8), size);
+  // Broadleaf tree: a full lumpy crown of foliage sitting on a flared trunk.
+  const crown = smoothClosedPath(
+    fracPoints(size, [
+      [0.5, 0.07],
+      [0.63, 0.11],
+      [0.72, 0.21],
+      [0.75, 0.34],
+      [0.69, 0.47],
+      [0.58, 0.53],
+      [0.5, 0.52],
+      [0.42, 0.53],
+      [0.31, 0.47],
+      [0.25, 0.34],
+      [0.28, 0.21],
+      [0.37, 0.11],
+    ]),
+    10,
+  );
+  // Trunk with flared roots and a slight center dip at the base. Its top pushes
+  // up into the crown so the two overlap and read as one connected tree.
+  const trunk = smoothClosedPath(
+    fracPoints(size, [
+      [0.42, 0.9],
+      [0.46, 0.85],
+      [0.47, 0.47],
+      [0.53, 0.47],
+      [0.54, 0.85],
+      [0.58, 0.9],
+      [0.5, 0.87],
+    ]),
+    5,
+  );
+  return toPathFromParts([crown, trunk], size);
 }
 
 function cloudShape(size: number): DrawingPath {
@@ -2102,52 +2136,79 @@ function rainbowShape(size: number): DrawingPath {
 }
 
 function cactusShape(size: number): DrawingPath {
-  const vertices = fracPoints(size, [
-    [0.4, 0.85],
-    [0.4, 0.4],
-    [0.25, 0.4],
-    [0.25, 0.25],
-    [0.4, 0.25],
-    [0.4, 0.15],
-    [0.6, 0.15],
-    [0.6, 0.3],
-    [0.75, 0.3],
-    [0.75, 0.45],
-    [0.6, 0.45],
-    [0.6, 0.85],
-  ]);
-  const body = polygonEdges(vertices, 8);
-  // short spine ticks along the main trunk
-  const spines = openPolyline(
+  // Rounded saguaro: a central trunk with one arm curving up on each side.
+  const body = smoothClosedPath(
     fracPoints(size, [
-      [0.44, 0.5],
-      [0.48, 0.5],
-      [0.44, 0.6],
-      [0.48, 0.6],
-      [0.44, 0.7],
-      [0.48, 0.7],
+      [0.44, 0.9],
+      [0.44, 0.46],
+      [0.4, 0.42],
+      [0.3, 0.44],
+      [0.26, 0.36],
+      [0.28, 0.28],
+      [0.36, 0.26],
+      [0.42, 0.3],
+      [0.44, 0.18],
+      [0.47, 0.11],
+      [0.53, 0.11],
+      [0.56, 0.18],
+      [0.56, 0.34],
+      [0.62, 0.3],
+      [0.7, 0.28],
+      [0.74, 0.36],
+      [0.72, 0.44],
+      [0.6, 0.42],
+      [0.56, 0.5],
+      [0.56, 0.9],
     ]),
-    3,
+    7,
   );
-  return toPathFromParts([body, spines], size);
+  // Vertical ridge pleats down the trunk.
+  const ridge = (x: number, top: number) => openPolyline(fracPoints(size, [[x, top], [x, 0.86]]), 10);
+  // A small scalloped blossom on the crown.
+  const center = { x: size * 0.5, y: size * 0.09 };
+  const flower: Vec2[] = [];
+  for (let i = 0; i <= 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const r = size * (0.02 + 0.016 * Math.abs(Math.cos(2.5 * a)));
+    flower.push({ x: center.x + r * Math.cos(a), y: center.y + r * Math.sin(a) });
+  }
+  return toPathFromParts([body, ridge(0.5, 0.16), ridge(0.47, 0.2), ridge(0.53, 0.2), flower], size);
 }
 
 function mushroomShape(size: number): DrawingPath {
-  const pts = fracPoints(size, [
-    [0.3, 0.45],
-    [0.35, 0.25],
-    [0.65, 0.25],
-    [0.7, 0.45],
-    [0.6, 0.48],
-    [0.6, 0.8],
-    [0.4, 0.8],
-    [0.4, 0.48],
-  ]);
-  const mushroom = smoothClosedPath(pts, 10);
-  // spots on the cap
-  const spotL = withDetourLoop(mushroom, mushroom.length - 1, { x: size * 0.4, y: size * 0.33 }, size * 0.03);
-  const spotR = withDetourLoop(spotL.points, spotL.points.length - 1, { x: size * 0.58, y: size * 0.35 }, size * 0.03);
-  return toPath(spotR.points, size, [...spotL.breaks, ...spotR.breaks]);
+  // A domed cap overhanging a separate stem with a flared base.
+  const cap = smoothClosedPath(
+    fracPoints(size, [
+      [0.5, 0.18],
+      [0.68, 0.24],
+      [0.77, 0.4],
+      [0.66, 0.46],
+      [0.5, 0.49],
+      [0.34, 0.46],
+      [0.23, 0.4],
+      [0.32, 0.24],
+    ]),
+    12,
+  );
+  const stem = smoothClosedPath(
+    fracPoints(size, [
+      [0.42, 0.47],
+      [0.41, 0.72],
+      [0.37, 0.82],
+      [0.5, 0.85],
+      [0.63, 0.82],
+      [0.59, 0.72],
+      [0.58, 0.47],
+    ]),
+    6,
+  );
+  const spot = (cx: number, cy: number, r: number): Vec2[] => {
+    const c = { x: size * cx, y: size * cy };
+    const loop: Vec2[] = [];
+    for (let i = 0; i <= 16; i++) loop.push(polar(c, size * r, (i / 16) * 360));
+    return loop;
+  };
+  return toPathFromParts([cap, stem, spot(0.4, 0.3, 0.035), spot(0.58, 0.33, 0.03)], size);
 }
 
 function acornShape(size: number): DrawingPath {
@@ -2174,51 +2235,54 @@ function acornShape(size: number): DrawingPath {
 }
 
 function featherShape(size: number): DrawingPath {
-  // Vane with a small split notch on the left edge, like a real feather.
-  const vane = smoothClosedPath(
-    fracPoints(size, [
-      [0.52, 0.08],
-      [0.62, 0.2],
-      [0.67, 0.38],
-      [0.63, 0.55],
-      [0.54, 0.7],
-      [0.46, 0.78],
-      [0.4, 0.66],
-      [0.36, 0.58],
-      [0.44, 0.52],
-      [0.35, 0.46],
-      [0.34, 0.32],
-      [0.42, 0.17],
-    ]),
-    10,
-  );
-  // Curved central shaft that continues past the vane as a bare quill.
-  const shaft = openPolyline(
-    fracPoints(size, [
-      [0.52, 0.12],
-      [0.5, 0.35],
-      [0.47, 0.6],
-      [0.45, 0.78],
-      [0.43, 0.95],
-    ]),
-    8,
-  );
-  // Barbs branching up-and-out from the shaft toward each edge of the vane.
-  const barb = (from: [number, number], to: [number, number]) =>
-    openPolyline(fracPoints(size, [from, to]), 8);
-  return toPathFromParts(
-    [
-      vane,
-      shaft,
-      barb([0.505, 0.3], [0.61, 0.22]),
-      barb([0.49, 0.45], [0.62, 0.36]),
-      barb([0.475, 0.58], [0.58, 0.5]),
-      barb([0.505, 0.3], [0.42, 0.23]),
-      barb([0.49, 0.45], [0.37, 0.37]),
-      barb([0.475, 0.58], [0.4, 0.5]),
-    ],
-    size,
-  );
+  // Vane built by offsetting a gently curved shaft (rachis) by a width profile,
+  // giving a symmetric feather pointed at the tip and tapering into a bare quill.
+  const p0 = { x: 0.52 * size, y: 0.08 * size };
+  const p1 = { x: 0.46 * size, y: 0.42 * size };
+  const p2 = { x: 0.44 * size, y: 0.72 * size };
+  const spine = (t: number): Vec2 => ({
+    x: (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x,
+    y: (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y,
+  });
+  const normal = (t: number): Vec2 => {
+    const dx = 2 * (1 - t) * (p1.x - p0.x) + 2 * t * (p2.x - p1.x);
+    const dy = 2 * (1 - t) * (p1.y - p0.y) + 2 * t * (p2.y - p1.y);
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: -dy / len, y: dx / len };
+  };
+  const halfWidth = (t: number) => size * 0.12 * Math.sin(Math.PI * Math.pow(t, 0.9));
+  const steps = 24;
+  const vane: Vec2[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const s = spine(t);
+    const n = normal(t);
+    const w = halfWidth(t);
+    vane.push({ x: s.x + n.x * w, y: s.y + n.y * w });
+  }
+  for (let i = steps; i >= 0; i--) {
+    const t = i / steps;
+    const s = spine(t);
+    const n = normal(t);
+    const w = halfWidth(t);
+    vane.push({ x: s.x - n.x * w, y: s.y - n.y * w });
+  }
+  vane.push(vane[0]);
+  // Rachis continuing past the vane as a bare quill.
+  const shaft: Vec2[] = [];
+  for (let i = 0; i <= steps; i++) shaft.push(spine(i / steps));
+  shaft.push({ x: 0.43 * size, y: 0.83 * size }, { x: 0.42 * size, y: 0.93 * size });
+  // Barbs slanting up-and-out from the rachis to each edge of the vane.
+  const parts: Vec2[][] = [vane, shaft];
+  for (const t of [0.24, 0.38, 0.52, 0.66]) {
+    const base = spine(t + 0.05);
+    const n = normal(t);
+    const edge = spine(t);
+    const w = halfWidth(t) * 0.95;
+    parts.push([base, { x: edge.x + n.x * w, y: edge.y + n.y * w }]);
+    parts.push([base, { x: edge.x - n.x * w, y: edge.y - n.y * w }]);
+  }
+  return toPathFromParts(parts, size);
 }
 
 function seedlingShape(size: number): DrawingPath {
@@ -2253,38 +2317,113 @@ function seedlingShape(size: number): DrawingPath {
 }
 
 function tulipShape(size: number): DrawingPath {
-  const cupPts = fracPoints(size, [
-    [0.5, 0.25],
-    [0.62, 0.3],
-    [0.6, 0.45],
-    [0.5, 0.4],
-    [0.4, 0.45],
-    [0.38, 0.3],
-  ]);
-  const cup = smoothClosedPath(cupPts, 10);
+  // Classic tulip bloom: a rounded goblet cup whose rim rises into three petal
+  // tips (two outer, one center). Traced as one closed outline for a clean scallop.
+  const bloom = smoothClosedPath(
+    fracPoints(size, [
+      [0.5, 0.14], // center petal tip
+      [0.57, 0.24], // dip between center and right petal
+      [0.66, 0.15], // right petal tip
+      [0.64, 0.34], // right shoulder of the cup
+      [0.6, 0.48], // right side wall
+      [0.5, 0.54], // rounded base of the cup
+      [0.4, 0.48], // left side wall
+      [0.36, 0.34], // left shoulder of the cup
+      [0.34, 0.15], // left petal tip
+      [0.43, 0.24], // dip between left and center petal
+    ]),
+    12,
+  );
+  // Inner seams hinting the front petal overlapping the two behind it.
+  const seams = openPolyline(
+    fracPoints(size, [
+      [0.42, 0.22],
+      [0.5, 0.5],
+      [0.58, 0.22],
+    ]),
+    10,
+  );
+  // Slightly curved stem.
   const stem = openPolyline(
     fracPoints(size, [
-      [0.5, 0.45],
-      [0.5, 0.85],
+      [0.5, 0.53],
+      [0.51, 0.68],
+      [0.5, 0.88],
     ]),
-    16,
+    14,
   );
-  return toPathFromParts([cup, stem], size);
+  // A single long blade leaf sweeping up from the stem.
+  const leaf = smoothClosedPath(
+    fracPoints(size, [
+      [0.5, 0.82],
+      [0.66, 0.66],
+      [0.72, 0.5],
+      [0.62, 0.62],
+      [0.52, 0.74],
+    ]),
+    12,
+  );
+  return toPathFromParts([bloom, seams, stem, leaf], size);
 }
 
 function palmTreeShape(size: number): DrawingPath {
-  const trunk: Vec2[] = [];
-  const steps = 30;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    trunk.push({ x: size * (0.5 + 0.08 * Math.sin(t * Math.PI * 0.5)), y: size * (0.85 - 0.5 * t) });
-  }
-  const top = trunk[trunk.length - 1];
-  const fronds: Vec2[] = [];
-  for (const angle of [200, 240, 280, 320, 340]) {
-    fronds.push(top, polar(top, size * 0.22, angle));
-  }
-  return toPath([...trunk, ...fronds], size);
+  const quadPoint = (p0: Vec2, p1: Vec2, p2: Vec2, t: number): Vec2 => ({
+    x: (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x,
+    y: (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y,
+  });
+  const quadNormal = (p0: Vec2, p1: Vec2, p2: Vec2, t: number): Vec2 => {
+    const dx = 2 * (1 - t) * (p1.x - p0.x) + 2 * t * (p2.x - p1.x);
+    const dy = 2 * (1 - t) * (p1.y - p0.y) + 2 * t * (p2.y - p1.y);
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: -dy / len, y: dx / len };
+  };
+  // A tapered band offset from a bezier spine - used for both the trunk and each frond blade.
+  const blade = (p0: Vec2, p1: Vec2, p2: Vec2, widthFn: (t: number) => number, steps: number): Vec2[] => {
+    const pts: Vec2[] = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const s = quadPoint(p0, p1, p2, t);
+      const n = quadNormal(p0, p1, p2, t);
+      const w = widthFn(t);
+      pts.push({ x: s.x + n.x * w, y: s.y + n.y * w });
+    }
+    for (let i = steps; i >= 0; i--) {
+      const t = i / steps;
+      const s = quadPoint(p0, p1, p2, t);
+      const n = quadNormal(p0, p1, p2, t);
+      const w = widthFn(t);
+      pts.push({ x: s.x - n.x * w, y: s.y - n.y * w });
+    }
+    pts.push(pts[0]);
+    return pts;
+  };
+
+  // Trunk: gentle lean, tapering from a wide base to a narrow crown.
+  const trunkBase = { x: 0.5 * size, y: 0.94 * size };
+  const trunkMid = { x: 0.62 * size, y: 0.55 * size };
+  const crown = { x: 0.54 * size, y: 0.27 * size };
+  const trunk = blade(trunkBase, trunkMid, crown, (t) => size * (0.02 + 0.035 * (1 - t)), 22);
+
+  // Fronds fan out from the crown: the center blade points up, outer ones arc over and droop down.
+  const fronds = [-1, -0.5, 0, 0.5, 1].map((k) => {
+    const ctrl = { x: crown.x + k * 0.3 * size, y: crown.y - size * (0.28 - 0.06 * Math.abs(k)) };
+    const tip = { x: crown.x + k * 0.46 * size, y: crown.y + size * (-0.18 + 0.3 * Math.abs(k)) };
+    return blade(crown, ctrl, tip, (t) => size * 0.045 * Math.sin(Math.PI * t), 16);
+  });
+
+  // A pair of coconuts hanging just under the crown.
+  const coconutCenter = { x: crown.x - size * 0.015, y: crown.y + size * 0.05 };
+  const coconut = (offset: Vec2, r: number) => {
+    const center = { x: coconutCenter.x + offset.x, y: coconutCenter.y + offset.y };
+    const loop: Vec2[] = [];
+    for (let i = 0; i <= 14; i++) loop.push(polar(center, r, (i / 14) * 360));
+    return loop;
+  };
+
+  return toPathFromParts(
+    [trunk, ...fronds, coconut({ x: -size * 0.028, y: size * 0.01 }, size * 0.032), coconut({ x: size * 0.028, y: size * 0.015 }, size * 0.032)],
+    size,
+  );
 }
 
 function volcanoShape(size: number): DrawingPath {
@@ -3215,22 +3354,48 @@ function volleyballShape(size: number): DrawingPath {
 }
 
 function baseballCapShape(size: number): DrawingPath {
-  // Replaces the old baseball (ball) shape, which kept looking wrong even
-  // after two attempts at the seam pattern - a cap is a simpler, more
-  // reliably-readable silhouette: a rounded crown with a brim poking out to
-  // one side, framed with neck pinch points the same way the rabbit/elephant
-  // ears were.
-  const pts = fracPoints(size, [
-    [0.28, 0.55],
-    [0.3, 0.32],
-    [0.48, 0.18],
-    [0.68, 0.28],
-    [0.7, 0.46],
-    [0.88, 0.56],
-    [0.66, 0.58],
-    [0.35, 0.58],
-  ]);
-  return toPath(smoothClosedPath(pts, 10), size);
+  // Rounded dome crown sitting on a flat headband, a separate curved bill
+  // sweeping out to the right, the little top button and a front panel seam -
+  // the signature parts that make a cap read as a cap rather than a blob.
+  const crown = smoothClosedPath(
+    fracPoints(size, [
+      [0.24, 0.56], // back of headband
+      [0.21, 0.45],
+      [0.27, 0.35],
+      [0.4, 0.29],
+      [0.52, 0.28], // top
+      [0.63, 0.33],
+      [0.68, 0.46],
+      [0.67, 0.56], // front of headband
+    ]),
+    12,
+  );
+  // Curved bill: a closed crescent band jutting forward from the front.
+  const bill = smoothClosedPath(
+    fracPoints(size, [
+      [0.66, 0.55],
+      [0.8, 0.58],
+      [0.9, 0.63],
+      [0.87, 0.68],
+      [0.76, 0.64],
+      [0.65, 0.6],
+    ]),
+    10,
+  );
+  // Top button.
+  const buttonCenter = { x: size * 0.52, y: size * 0.28 };
+  const button: Vec2[] = [];
+  for (let i = 0; i <= 16; i++) button.push(polar(buttonCenter, size * 0.022, (i / 16) * 360));
+  // Front panel seam curving down from the button.
+  const seam = openPolyline(
+    fracPoints(size, [
+      [0.52, 0.3],
+      [0.57, 0.42],
+      [0.61, 0.54],
+    ]),
+    8,
+  );
+  return toPathFromParts([crown, bill, button, seam], size);
 }
 
 function stopwatchShape(size: number): DrawingPath {
@@ -3248,22 +3413,34 @@ function stopwatchShape(size: number): DrawingPath {
 }
 
 function whistleShape(size: number): DrawingPath {
-  // The mouthpiece used to be appended straight after the barrel circle
-  // closed, drawing a diagonal line clear across the barrel to reach it -
-  // now it's a separate part.
-  const center = { x: size * 0.35, y: size * 0.55 };
+  // Classic pea-whistle silhouette: a round sound chamber, a flat mouthpiece
+  // tube reaching out to the right, a lanyard ring on top and the little pea
+  // hole on the chamber face - each a cleanly separated part.
+  const center = { x: size * 0.4, y: size * 0.6 };
   const r = size * 0.2;
-  const barrel: Vec2[] = [];
-  for (let i = 0; i <= 50; i++) barrel.push(polar(center, r, 90 + (i / 50) * 360));
-  const withHole = withDetourLoop(barrel, barrel.length - 1, { x: size * 0.35, y: size * 0.55 }, size * 0.05);
-  const mouthpiece = [
-    { x: size * 0.55, y: size * 0.45 },
-    { x: size * 0.78, y: size * 0.3 },
-    { x: size * 0.85, y: size * 0.36 },
-    { x: size * 0.62, y: size * 0.52 },
-  ];
-  const breaks = [...withHole.breaks, withHole.points.length];
-  return toPath([...withHole.points, ...mouthpiece], size, breaks);
+  const body: Vec2[] = [];
+  for (let i = 0; i <= 48; i++) body.push(polar(center, r, (i / 48) * 360));
+  // Mouthpiece: a rounded tube extending right, overlapping the chamber so it
+  // reads as attached.
+  const mouthpiece = smoothClosedPath(
+    fracPoints(size, [
+      [0.55, 0.5],
+      [0.83, 0.5],
+      [0.85, 0.55],
+      [0.83, 0.6],
+      [0.55, 0.6],
+    ]),
+    6,
+  );
+  // Lanyard ring sitting on top of the chamber.
+  const ringCenter = { x: size * 0.4, y: size * 0.34 };
+  const ring: Vec2[] = [];
+  for (let i = 0; i <= 24; i++) ring.push(polar(ringCenter, size * 0.06, (i / 24) * 360));
+  // Pea hole on the chamber face.
+  const holeCenter = { x: size * 0.4, y: size * 0.6 };
+  const hole: Vec2[] = [];
+  for (let i = 0; i <= 16; i++) hole.push(polar(holeCenter, size * 0.055, (i / 16) * 360));
+  return toPathFromParts([body, mouthpiece, ring, hole], size);
 }
 
 function dumbbellShape(size: number): DrawingPath {
@@ -3330,16 +3507,45 @@ function golfClubShape(size: number): DrawingPath {
 }
 
 function swimGogglesShape(size: number): DrawingPath {
-  // Replaces the baseball bat - a simple iconic shape (two lenses joined by
-  // a bridge, one continuous stroke) per the project's preference for
-  // simple icon/symbol/geometric shapes over detailed realistic objects.
-  const leftCenter = { x: size * 0.32, y: size * 0.5 };
-  const rightCenter = { x: size * 0.68, y: size * 0.5 };
-  const r = size * 0.17;
-  const points: Vec2[] = [];
-  for (let i = 0; i <= 50; i++) points.push(polar(leftCenter, r, (i / 50) * 360));
-  for (let i = 0; i <= 50; i++) points.push(polar(rightCenter, r, 180 + (i / 50) * 360));
-  return toPath(points, size);
+  // Two rounded lenses, a short nose bridge dipping between them, and a strap
+  // stub flaring off each outer edge - the parts that separate goggles from a
+  // plain pair of circles.
+  const leftCenter = { x: size * 0.34, y: size * 0.5 };
+  const rightCenter = { x: size * 0.66, y: size * 0.5 };
+  const r = size * 0.16;
+  const leftLens: Vec2[] = [];
+  for (let i = 0; i <= 40; i++) leftLens.push(polar(leftCenter, r, (i / 40) * 360));
+  const rightLens: Vec2[] = [];
+  for (let i = 0; i <= 40; i++) rightLens.push(polar(rightCenter, r, (i / 40) * 360));
+  // Nose bridge dipping down between the inner edges.
+  const bridge = openPolyline(
+    fracPoints(size, [
+      [0.47, 0.49],
+      [0.5, 0.55],
+      [0.53, 0.49],
+    ]),
+    6,
+  );
+  // Tapered strap stubs flaring outward from the outer edge of each lens.
+  const leftStrap = polygonEdges(
+    fracPoints(size, [
+      [0.19, 0.45],
+      [0.06, 0.42],
+      [0.06, 0.48],
+      [0.19, 0.53],
+    ]),
+    6,
+  );
+  const rightStrap = polygonEdges(
+    fracPoints(size, [
+      [0.81, 0.45],
+      [0.94, 0.42],
+      [0.94, 0.48],
+      [0.81, 0.53],
+    ]),
+    6,
+  );
+  return toPathFromParts([leftLens, rightLens, bridge, leftStrap, rightStrap], size);
 }
 
 function skateboardShape(size: number): DrawingPath {
@@ -3494,34 +3700,39 @@ function finishFlagShape(size: number): DrawingPath {
 }
 
 function jumpRopeShape(size: number): DrawingPath {
-  // Replaces the running shoe, which never read cleanly as a shoe even after
-  // a redesign - two small handles connected by a big hanging rope arc is a
-  // simpler, more reliable silhouette.
+  // Two cylindrical grips held up at the top, joined by a rope that hangs in a
+  // real catenary (cosh) sag between them - lowest at the middle, tapering to
+  // nothing where it meets each handle.
   const leftHandle = smoothClosedPath(
     fracPoints(size, [
-      [0.15, 0.16],
-      [0.23, 0.16],
-      [0.23, 0.34],
-      [0.15, 0.34],
+      [0.19, 0.1],
+      [0.26, 0.1],
+      [0.26, 0.32],
+      [0.19, 0.32],
     ]),
     8,
   );
   const rightHandle = smoothClosedPath(
     fracPoints(size, [
-      [0.77, 0.16],
-      [0.85, 0.16],
-      [0.85, 0.34],
-      [0.77, 0.34],
+      [0.74, 0.1],
+      [0.81, 0.1],
+      [0.81, 0.32],
+      [0.74, 0.32],
     ]),
     8,
   );
   const rope: Vec2[] = [];
-  const steps = 40;
+  const steps = 48;
+  const k = 1.7;
+  const denom = Math.cosh(k) - 1;
+  const topY = 0.31;
+  const sagDepth = 0.53;
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
+    const droop = (Math.cosh(k) - Math.cosh((t - 0.5) * 2 * k)) / denom;
     rope.push({
-      x: size * (0.19 + t * 0.62),
-      y: size * (0.34 + Math.sin(t * Math.PI) * 0.5),
+      x: size * (0.225 + t * 0.55),
+      y: size * (topY + droop * sagDepth),
     });
   }
   return toPathFromParts([leftHandle, rightHandle, rope], size);
@@ -3940,7 +4151,10 @@ function trafficLightShape(size: number): DrawingPath {
     ]),
     10,
   );
-  const breaks = [...withA.breaks, ...withB.breaks, ...withC.breaks, withC.points.length];
+  // Chained detour loops share boundary indices (each loop is anchored at the
+  // end of the previous one), so dedupe to keep breaks strictly ascending.
+  const rawBreaks = [...withA.breaks, ...withB.breaks, ...withC.breaks, withC.points.length];
+  const breaks = [...new Set(rawBreaks)].sort((a, b) => a - b);
   return toPath([...withC.points, ...post], size, breaks);
 }
 

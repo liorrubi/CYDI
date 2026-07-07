@@ -1,3 +1,7 @@
+/*
+ * © 2026 Lior Rubinovich. All rights reserved.
+ * Unauthorized copying, modification, distribution, or commercial use is prohibited.
+ */
 import { useEffect, useState } from "react";
 import AchievementsTutorialOverlay from "./components/AchievementsTutorialOverlay";
 import HomeScreen from "./screens/HomeScreen";

@@ -21,6 +21,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [creditsOpen, setCreditsOpen] = useState(false);
 
   function handleSelectDifficulty(level: (typeof DIFFICULTY_LEVELS)[number]["id"]) {
     playChipSound();
@@ -89,6 +90,44 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
           {allUnlocked ? "🔓 Re-lock Everything" : "🔒 Unlock Everything"}
         </Button>
       </div>
+
+      <div className="card instructions-card">
+        <h2>Legal / Credits</h2>
+        <p className="status-text">
+          © 2026 Lior Rubinovich. All rights reserved.
+          <br />
+          Game design, code, graphics, sounds, and original content are protected by copyright.
+          <br />
+          Unauthorized copying, distribution, modification, or commercial use is prohibited.
+        </p>
+        <Button variant="secondary" onClick={() => setCreditsOpen(true)}>
+          Copyright &amp; Credits
+        </Button>
+      </div>
+
+      {creditsOpen && (
+        <div className="password-prompt-overlay" onClick={() => setCreditsOpen(false)}>
+          <div className="password-prompt-card credits-card" onClick={(event) => event.stopPropagation()}>
+            <h2>Copyright &amp; Credits</h2>
+            <p className="status-text">
+              © 2026 Lior Rubinovich. All rights reserved.
+              <br />
+              <br />
+              This game, including its original design, gameplay elements, code, graphics, sounds, icons, text, and
+              other creative assets, is protected by copyright and other applicable intellectual property laws.
+              <br />
+              <br />
+              No part of this game may be copied, modified, redistributed, republished, uploaded, sold, or used
+              commercially without prior written permission.
+              <br />
+              <br />
+              Third-party assets, libraries, fonts, icons, or sounds, if used, remain the property of their
+              respective owners and are used according to their applicable licenses.
+            </p>
+            <Button onClick={() => setCreditsOpen(false)}>Close</Button>
+          </div>
+        </div>
+      )}
 
       {passwordPromptOpen && (
         <div className="password-prompt-overlay">

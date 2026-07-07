@@ -528,6 +528,12 @@ body {
   font-size: 16px;
 }
 
+.credits-card {
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;

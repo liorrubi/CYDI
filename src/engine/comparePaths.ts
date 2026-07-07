@@ -24,7 +24,7 @@ export function comparePointArrays(a: Point[], b: Point[]): number {
   return clamp(100 - rmsDistance * DISTANCE_TO_SCORE_FACTOR, 0, 100);
 }
 
-export function reversePoints(points: Point[]): Point[] {
+function reversePoints(points: Point[]): Point[] {
   return [...points].reverse();
 }
 
@@ -93,7 +93,7 @@ export function isClosedPath(points: Point[]): boolean {
  * resampled to the same point count, so shifting indices approximates
  * starting the trace at a different point along the shape.
  */
-export function rotateOffset<T>(points: T[], offset: number): T[] {
+function rotateOffset<T>(points: T[], offset: number): T[] {
   const n = points.length;
   if (n === 0) return points;
   const k = ((offset % n) + n) % n;

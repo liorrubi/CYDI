@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
-import DrawingCanvas from "../components/DrawingCanvas";
+import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
 import ResultScreen from "./ResultScreen";
 import { ANALYZING_MAX_MS, ANALYZING_MIN_MS, CANVAS_SIZE, PREVIEW_DURATION_MS, type PenColorId } from "../app/constants";
 import { getChallenge, updateChallenge } from "../services/challengeStorage";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { encodeResultLink } from "../services/shareLink";
+import { shareOrCopy } from "../services/nativeShare";
 import { scoreAttempt } from "../engine/scoring";
-import { toAchievements, toInstructions, toList, toPlay, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toList, toPlay, toSettings, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { Challenge, DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -28,6 +30,8 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   const [isNewBest, setIsNewBest] = useState(false);
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const canvasRef = useRef<DrawingCanvasHandle | null>(null);
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
@@ -36,6 +40,10 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
 
   function handleLockedColorClick() {
     onNavigate(toShop(toPlay(challengeId)));
+  }
+
+  function handleUndo() {
+    canvasRef.current?.undoLastStroke();
   }
 
   useEffect(() => {
@@ -73,7 +81,30 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
     setResult(null);
     setIsNewBest(false);
     setPreviousBest(undefined);
+    setShareFeedback(null);
     setPhase("drawing");
+  }
+
+  async function handleShareResult() {
+    if (!result || !attemptPath || !challenge) return;
+    const url = encodeResultLink({
+      challengeId: challenge.id,
+      challengeName: challenge.name,
+      score: result,
+      target: challenge.target,
+      attempt: attemptPath,
+    });
+    const outcome = await shareOrCopy({
+      title: `CYDI Result: ${challenge.name}`,
+      text: `I scored ${result.total}% on "${challenge.name}"! Think you can beat it?`,
+      url,
+    });
+    if (outcome === "copied") {
+      setShareFeedback("Link copied!");
+      window.setTimeout(() => setShareFeedback(null), 2500);
+    } else if (outcome === "failed") {
+      setShareFeedback(`Couldn't share automatically - copy this link: ${url}`);
+    }
   }
 
   if (!challenge) {
@@ -84,23 +115,34 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
           onBack={() => onNavigate(toList())}
           onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
           onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
+          onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
+          onNavigateToHome={() => onNavigate(toHome())}
+          onNavigateToSettings={() => onNavigate(toSettings())}
         />
         <Button onClick={() => onNavigate(toList())}>Back to My Challenges</Button>
       </div>
     );
   }
 
-  if (phase === "result" && result) {
+  if (phase === "result" && result && attemptPath) {
     return (
       <ResultScreen
         score={result}
         isNewBest={isNewBest}
         previousBest={previousBest}
         bestScore={challenge.personalBest}
+        target={challenge.target}
+        attempt={attemptPath}
+        attemptColor={penColor}
         onRetry={handleRetry}
         onBack={() => onNavigate(toList())}
+        onShareResult={handleShareResult}
+        shareFeedback={shareFeedback}
         onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
+        onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
+        onNavigateToHome={() => onNavigate(toHome())}
+        onNavigateToSettings={() => onNavigate(toSettings())}
       />
     );
   }
@@ -112,6 +154,9 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
         onBack={() => onNavigate(toList())}
         onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
+        onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
+        onNavigateToHome={() => onNavigate(toHome())}
+        onNavigateToSettings={() => onNavigate(toSettings())}
       />
       <p className="status-text">
         {phase === "preview" && "Study the shape"}
@@ -120,6 +165,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
       </p>
       <div className="canvas-wrapper">
         <DrawingCanvas
+          ref={canvasRef}
           width={CANVAS_SIZE}
           height={CANVAS_SIZE}
           disabled={phase !== "drawing"}
@@ -134,6 +180,9 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
         <>
           <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={handleLockedColorClick} />
           <div className="button-row">
+            <Button variant="secondary" onClick={handleUndo} disabled={!attemptPath || attemptPath.points.length === 0}>
+              Undo
+            </Button>
             <Button onClick={handleDone}>Done</Button>
           </div>
         </>

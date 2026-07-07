@@ -12,13 +12,6 @@ export function pathLength(points: Vec2[]): number {
   return total;
 }
 
-export function interpolatePoint(a: Vec2, b: Vec2, t: number): Vec2 {
-  return {
-    x: a.x + (b.x - a.x) * t,
-    y: a.y + (b.y - a.y) * t,
-  };
-}
-
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }

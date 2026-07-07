@@ -73,7 +73,7 @@ export type NormalizedPath = {
 };
 
 /** Splits points into sub-arrays at the given break indices (each index starts a new segment). */
-function splitIntoSegments(points: Point[], breaks: number[] | undefined): Point[][] {
+export function splitIntoSegments(points: Point[], breaks: number[] | undefined): Point[][] {
   if (!breaks || breaks.length === 0) return points.length > 0 ? [points] : [];
   const segments: Point[][] = [];
   let start = 0;
@@ -86,25 +86,13 @@ function splitIntoSegments(points: Point[], breaks: number[] | undefined): Point
 }
 
 /**
- * Full normalization pipeline: dedupe -> resample -> center -> scale.
- * Returns exactly `count` points centered on the origin, scaled so the
- * longer bounding-box dimension is 1.
- *
- * Pause-separated segments (from lifting the pointer mid-drawing) are
- * resampled independently and the point budget is allocated proportionally
- * to each segment's own ink length - the invisible gap between segments
- * never counts as drawn distance, so lifting the pointer can't inflate
- * path length or smear points across a phantom connecting line.
+ * Resamples each segment to a share of `count` points proportional to its own
+ * arc length (never fewer than 2), leaving coordinates in their original
+ * space (no centering/scaling) - used both by `normalizePath` and by
+ * anything that needs a point-budget-limited copy of a path for its own sake
+ * (e.g. shrinking a shared link) rather than for shape comparison.
  */
-export function normalizePath(path: DrawingPath, count = 128): NormalizedPath {
-  const segments = splitIntoSegments(path.points, path.breaks)
-    .map((segment) => removeNearDuplicates(segment))
-    .filter((segment) => segment.length > 0);
-
-  if (segments.length === 0) {
-    return { points: resamplePath([], count), segmentStarts: [] };
-  }
-
+export function resampleAllSegments(segments: Point[][], count: number): NormalizedPath {
   const segmentLengths = segments.map((segment) => pathLength(segment));
   const totalLength = segmentLengths.reduce((sum, len) => sum + len, 0);
 
@@ -137,6 +125,30 @@ export function normalizePath(path: DrawingPath, count = 128): NormalizedPath {
     points.push(...resamplePath(segment, allocations[i]));
   });
 
+  return { points, segmentStarts };
+}
+
+/**
+ * Full normalization pipeline: dedupe -> resample -> center -> scale.
+ * Returns exactly `count` points centered on the origin, scaled so the
+ * longer bounding-box dimension is 1.
+ *
+ * Pause-separated segments (from lifting the pointer mid-drawing) are
+ * resampled independently and the point budget is allocated proportionally
+ * to each segment's own ink length - the invisible gap between segments
+ * never counts as drawn distance, so lifting the pointer can't inflate
+ * path length or smear points across a phantom connecting line.
+ */
+export function normalizePath(path: DrawingPath, count = 128): NormalizedPath {
+  const segments = splitIntoSegments(path.points, path.breaks)
+    .map((segment) => removeNearDuplicates(segment))
+    .filter((segment) => segment.length > 0);
+
+  if (segments.length === 0) {
+    return { points: resamplePath([], count), segmentStarts: [] };
+  }
+
+  const { points, segmentStarts } = resampleAllSegments(segments, count);
   const centered = centerPoints(points);
   const scaled = scaleToUnit(centered);
   return { points: scaled, segmentStarts };

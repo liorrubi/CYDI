@@ -1,21 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AchievementUnlockedBanner from "../components/AchievementUnlockedBanner";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
-import CoinIndicator from "../components/CoinIndicator";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
-import DrawingCanvas from "../components/DrawingCanvas";
+import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
 import ScoreCard from "../components/ScoreCard";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
-import SoundToggleButton from "../components/SoundToggleButton";
 import StarRating from "../components/StarRating";
 import {
   ANALYZING_MAX_MS,
   ANALYZING_MIN_MS,
   CANVAS_SIZE,
-  DIFFICULTY_LEVELS,
+  CATEGORY_UNLOCK_COST,
   PREVIEW_DURATION_MS,
   coinsForStars,
   journeyRankForPercent,
@@ -31,20 +29,19 @@ import { CATEGORIES, SHAPE_LIBRARY, shapesForCategory, type CategoryId } from ".
 import { scoreAttempt } from "../engine/scoring";
 import {
   playAchievementUnlockedSound,
-  playAchievementsPeekSound,
-  playChipSound,
   playEncourageSound,
-  playInfoPeekSound,
   playSelectSound,
   playSuccessSound,
   primeAudioContext,
 } from "../engine/soundEngine";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { getUnlockedAchievementIds, markAchievementUnlocked } from "../services/achievementsStore";
-import { addCoins, addCoinsPending, revealPendingCoins } from "../services/coinsStore";
-import { getDifficulty, setDifficulty } from "../services/difficultySettings";
+import { addCoins, addCoinsPending, getCoins, onCoinsChanged, revealPendingCoins, spendCoins } from "../services/coinsStore";
+import { getUnlockedCategoryIds, unlockCategory } from "../services/categoryUnlockStore";
+import { getDifficulty } from "../services/difficultySettings";
+import { isUnlockEverythingActive } from "../services/unlockOverrideStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
-import { recordRoundCompleted } from "../services/tutorialStore";
+import { recordRoundCompleted, shouldShowAchievementsTutorial } from "../services/tutorialStore";
 import {
   clearProgress,
   getCategoryLevelIndex,
@@ -52,7 +49,7 @@ import {
   saveProgress,
   type ShapeChallengeProgress,
 } from "../services/shapeChallengeProgress";
-import { toAchievements, toHome, toInstructions, toShapeChallenge, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -83,8 +80,23 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
   const [pendingAchievements, setPendingAchievements] = useState<Achievement[]>([]);
 
   // Retroactively award any achievements already satisfied by existing progress.
+  // `detectAndBankNewAchievements` has real side effects (marks achievements
+  // unlocked in localStorage, credits coins), so it must be called exactly
+  // once as a plain statement here - React's StrictMode deliberately
+  // double-invokes useState updater functions in dev to catch impure ones,
+  // and calling a side-effecting function *inside* the updater used to mean
+  // the first (throwaway) invocation would mark the achievements unlocked,
+  // then the second (real) invocation would find them already unlocked and
+  // compute zero newly-unlocked achievements - so the coins/localStorage
+  // side effect landed correctly but the celebratory banner never appeared.
   useEffect(() => {
-    setPendingAchievements((prev) => [...prev, ...detectAndBankNewAchievements(progress)]);
+    let newlyUnlocked = detectAndBankNewAchievements(progress);
+    // Same "let the tutorial cover it" rule as handleProgressChange, for a
+    // returning player whose first round already qualifies at app boot.
+    if (shouldShowAchievementsTutorial()) {
+      newlyUnlocked = newlyUnlocked.filter((achievement) => achievement.id !== "first-steps");
+    }
+    setPendingAchievements((prev) => [...prev, ...newlyUnlocked]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -95,13 +107,20 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
   }, [pendingAchievements[0]?.id]);
 
   function handleProgressChange(category: CategoryId, updated: ShapeChallengeProgress) {
-    setProgress((prev) => {
-      if (updated.levelIndexByCategory[category] > (prev.levelIndexByCategory[category] ?? 0)) {
-        setJustUnlockedIndex(updated.levelIndexByCategory[category]);
-      }
-      return updated;
-    });
-    setPendingAchievements((prev) => [...prev, ...detectAndBankNewAchievements(updated)]);
+    if (updated.levelIndexByCategory[category] > (progress.levelIndexByCategory[category] ?? 0)) {
+      setJustUnlockedIndex(updated.levelIndexByCategory[category]);
+    }
+    setProgress(updated);
+    let newlyUnlocked = detectAndBankNewAchievements(updated);
+    // The very first achievement ("First Steps") lands on the same round that
+    // triggers the achievements tutorial coach-mark - showing the normal
+    // celebratory banner and the tutorial back-to-back would be redundant, so
+    // this one case defers to the tutorial instead. Its coins are still
+    // banked above regardless; only the banner is skipped.
+    if (shouldShowAchievementsTutorial()) {
+      newlyUnlocked = newlyUnlocked.filter((achievement) => achievement.id !== "first-steps");
+    }
+    setPendingAchievements((prev) => [...prev, ...newlyUnlocked]);
   }
 
   function handleCollectAchievement(bannerEl: HTMLElement | null) {
@@ -120,6 +139,9 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
 
   const goToAchievements = () => onNavigate(toAchievements(toShapeChallenge()));
   const goToInstructions = () => onNavigate(toInstructions(toShapeChallenge()));
+  const goToShop = () => onNavigate(toShop(toShapeChallenge()));
+  const goToHome = () => onNavigate(toHome());
+  const goToSettings = () => onNavigate(toSettings());
 
   const achievementBanner = pendingAchievements[0] && (
     <AchievementUnlockedBanner
@@ -140,6 +162,9 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
           onResetProgress={handleResetProgress}
           onNavigateToAchievements={goToAchievements}
           onNavigateToInstructions={goToInstructions}
+          onNavigateToShop={goToShop}
+          onNavigateToHome={goToHome}
+          onNavigateToSettings={goToSettings}
         />
       </>
     );
@@ -158,6 +183,9 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
           onUnlockAnimationDone={() => setJustUnlockedIndex(null)}
           onNavigateToAchievements={goToAchievements}
           onNavigateToInstructions={goToInstructions}
+          onNavigateToShop={goToShop}
+          onNavigateToHome={goToHome}
+          onNavigateToSettings={goToSettings}
         />
       </>
     );
@@ -177,6 +205,8 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
         onNavigateToAchievements={goToAchievements}
         onNavigateToInstructions={goToInstructions}
         onNavigateToShop={() => onNavigate(toShop(toShapeChallenge()))}
+        onNavigateToHome={goToHome}
+        onNavigateToSettings={goToSettings}
       />
     </>
   );
@@ -189,6 +219,9 @@ type CategoryListScreenProps = {
   onResetProgress: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
+  onNavigateToShop: () => void;
+  onNavigateToHome: () => void;
+  onNavigateToSettings: () => void;
 };
 
 function CategoryListScreen({
@@ -198,19 +231,45 @@ function CategoryListScreen({
   onResetProgress,
   onNavigateToAchievements,
   onNavigateToInstructions,
+  onNavigateToShop,
+  onNavigateToHome,
+  onNavigateToSettings,
 }: CategoryListScreenProps) {
   const [resetStep, setResetStep] = useState<0 | 1 | 2>(0);
-  const [difficulty, setDifficultyState] = useState(() => getDifficulty());
+  const [unlockedCategoryIds, setUnlockedCategoryIds] = useState(() => getUnlockedCategoryIds());
+  const [coins, setCoins] = useState(() => getCoins());
+  // The category mid-way through its short lock-opening animation - payment
+  // and persistence already happened, this only delays the *visual* reveal
+  // (progress bar etc.) so the player sees the lock pop open first.
+  const [unlockingCategory, setUnlockingCategory] = useState<CategoryId | null>(null);
+  const [showUnlockBanner, setShowUnlockBanner] = useState(false);
+
+  useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
 
   function handleConfirmReset() {
     onResetProgress();
     setResetStep(0);
   }
 
-  function handleSelectDifficulty(level: (typeof DIFFICULTY_LEVELS)[number]["id"]) {
-    playChipSound();
-    setDifficulty(level);
-    setDifficultyState(level);
+  // A category with progress already made under the old (pre-paywall) rules
+  // stays accessible - the gate only applies to categories the player hasn't
+  // touched yet, so this change can never retroactively lock out shapes
+  // someone already unlocked by playing.
+  function isCategoryAccessible(category: CategoryId): boolean {
+    return unlockedCategoryIds.includes(category) || getCategoryLevelIndex(progress, category) > 0;
+  }
+
+  function handleUnlockCategory(category: CategoryId) {
+    if (coins < CATEGORY_UNLOCK_COST) return;
+    spendCoins(CATEGORY_UNLOCK_COST);
+    unlockCategory(category);
+    setUnlockingCategory(category);
+    window.setTimeout(() => {
+      setUnlockingCategory(null);
+      setUnlockedCategoryIds(getUnlockedCategoryIds());
+      setShowUnlockBanner(true);
+      window.setTimeout(() => setShowUnlockBanner(false), 2000);
+    }, 700);
   }
 
   const totalUnlocked = Object.values(progress.levelIndexByCategory).reduce((sum, n) => sum + n, 0);
@@ -225,6 +284,9 @@ function CategoryListScreen({
         onBack={onBack}
         onNavigateToAchievements={onNavigateToAchievements}
         onNavigateToInstructions={onNavigateToInstructions}
+        onNavigateToShop={onNavigateToShop}
+        onNavigateToHome={onNavigateToHome}
+        onNavigateToSettings={onNavigateToSettings}
       />
       <div className="journey-progress">
         <p className="journey-rank">{rank}</p>
@@ -239,45 +301,65 @@ function CategoryListScreen({
         </div>
       </div>
 
-      <div className="difficulty-picker">
-        <p className="difficulty-picker-label">Difficulty</p>
-        <div className="difficulty-picker-options">
-          {DIFFICULTY_LEVELS.map((level) => (
-            <button
-              key={level.id}
-              type="button"
-              className={level.id === difficulty ? "difficulty-chip difficulty-chip-selected" : "difficulty-chip"}
-              onClick={() => handleSelectDifficulty(level.id)}
-            >
-              {level.icon} {level.name}
-            </button>
-          ))}
-        </div>
-        <p className="difficulty-picker-hint">Pass score: {passScoreForDifficulty(difficulty)}+</p>
-      </div>
+      {showUnlockBanner && <div className="celebration-banner">🔓 New Category Unlocked!</div>}
 
       <div className="category-grid">
-        {CATEGORIES.map((category) => {
+        {CATEGORIES.map((category, index) => {
           const shapes = shapesForCategory(category.id);
           const unlocked = Math.min(getCategoryLevelIndex(progress, category.id), shapes.length);
+          const percent = Math.round((unlocked / shapes.length) * 100);
+          const hue = Math.round((index / CATEGORIES.length) * 360);
+          const accessible = isCategoryAccessible(category.id);
+          const isUnlocking = unlockingCategory === category.id;
+          const showAsLocked = !accessible && !isUnlocking;
+          const canAffordUnlock = coins >= CATEGORY_UNLOCK_COST;
           return (
-            <button
-              key={category.id}
-              type="button"
-              className="category-card"
-              onClick={() => {
-                playSelectSound();
-                onSelectCategory(category.id);
-              }}
-            >
-              <span className="category-card-icon" aria-hidden="true">
-                {category.icon}
-              </span>
-              <span className="category-card-name">{category.name}</span>
-              <span className="category-card-progress">
-                {unlocked} of {shapes.length} unlocked
-              </span>
-            </button>
+            <div key={category.id} className="category-card-wrapper">
+              <button
+                type="button"
+                className={showAsLocked ? "category-card category-card-locked" : "category-card"}
+                style={{ background: `linear-gradient(135deg, hsl(${hue} 70% 97%), hsl(${hue} 55% 91%))` }}
+                onClick={() => {
+                  if (showAsLocked || isUnlocking) return;
+                  playSelectSound();
+                  onSelectCategory(category.id);
+                }}
+                disabled={showAsLocked || isUnlocking}
+              >
+                <span className="category-card-icon-wrap">
+                  <span className="category-card-icon" aria-hidden="true">
+                    {category.icon}
+                  </span>
+                  {isUnlocking && (
+                    <span className="category-card-lock-open-overlay" aria-hidden="true">
+                      🔓
+                    </span>
+                  )}
+                </span>
+                <span className="category-card-name">{category.name}</span>
+                {accessible && (
+                  <>
+                    <span className="category-card-progress">
+                      {unlocked} of {shapes.length} unlocked
+                    </span>
+                    <div className="category-card-progress-track">
+                      <div className="category-card-progress-fill" style={{ width: `${percent}%` }} />
+                    </div>
+                  </>
+                )}
+                {showAsLocked && <span className="category-card-lock-badge">🔒 Locked</span>}
+              </button>
+              {showAsLocked && (
+                <Button
+                  variant="secondary"
+                  className="category-card-unlock-btn"
+                  disabled={!canAffordUnlock}
+                  onClick={() => handleUnlockCategory(category.id)}
+                >
+                  Unlock for {CATEGORY_UNLOCK_COST} 🪙
+                </Button>
+              )}
+            </div>
           );
         })}
       </div>
@@ -326,6 +408,9 @@ type ShapeMapProps = {
   onUnlockAnimationDone: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
+  onNavigateToShop: () => void;
+  onNavigateToHome: () => void;
+  onNavigateToSettings: () => void;
 };
 
 function ShapeMap({
@@ -337,6 +422,9 @@ function ShapeMap({
   onUnlockAnimationDone,
   onNavigateToAchievements,
   onNavigateToInstructions,
+  onNavigateToShop,
+  onNavigateToHome,
+  onNavigateToSettings,
 }: ShapeMapProps) {
   useEffect(() => {
     if (justUnlockedIndex === null) return;
@@ -350,6 +438,10 @@ function ShapeMap({
   const levelIndex = getCategoryLevelIndex(progress, category);
   const unlockedCount = Math.min(levelIndex, shapes.length);
   const progressPercent = Math.round((unlockedCount / shapes.length) * 100);
+  // The Settings "lock management" cheat toggle makes every tile playable without
+  // touching real progress, so the header stat/progress bar above still reflect
+  // shapes actually completed, not the override.
+  const unlockAllOverride = isUnlockEverythingActive();
 
   return (
     <div className="screen">
@@ -359,13 +451,16 @@ function ShapeMap({
         onBack={onBack}
         onNavigateToAchievements={onNavigateToAchievements}
         onNavigateToInstructions={onNavigateToInstructions}
+        onNavigateToShop={onNavigateToShop}
+        onNavigateToHome={onNavigateToHome}
+        onNavigateToSettings={onNavigateToSettings}
       />
       <div className="progress-bar-track">
         <div className="progress-bar-fill" style={{ width: `${progressPercent}%` }} />
       </div>
       <div className="shape-grid">
         {shapes.map((shape, index) => {
-          const unlocked = index <= levelIndex;
+          const unlocked = unlockAllOverride || index <= levelIndex;
           const best = progress.bestScores[shape.id];
 
           if (!unlocked) {
@@ -415,6 +510,8 @@ type ShapePlayProps = {
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
+  onNavigateToHome: () => void;
+  onNavigateToSettings: () => void;
 };
 
 function ShapePlay({
@@ -427,6 +524,8 @@ function ShapePlay({
   onNavigateToAchievements,
   onNavigateToInstructions,
   onNavigateToShop,
+  onNavigateToHome,
+  onNavigateToSettings,
 }: ShapePlayProps) {
   const shapes = useMemo(() => shapesForCategory(category), [category]);
   const shape = shapes[levelIndex];
@@ -444,10 +543,15 @@ function ShapePlay({
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const canvasRef = useRef<DrawingCanvasHandle | null>(null);
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
     setPenColor(id);
+  }
+
+  function handleUndo() {
+    canvasRef.current?.undoLastStroke();
   }
 
   useEffect(() => {
@@ -483,15 +587,21 @@ function ShapePlay({
         bestScores: { ...progress.bestScores, [shape.id]: beatBest ? scoreResult.total : bestScore! },
       };
       saveProgress(updatedProgress);
+      // Recorded before onProgressChange so that achievement detection (which
+      // reads shouldShowAchievementsTutorial to decide whether to suppress the
+      // "First Steps" banner in favor of the achievements tutorial) already
+      // sees this round counted.
+      recordRoundCompleted();
       onProgressChange(updatedProgress);
-      // Only pay out again if this attempt's star rating beats the shape's previous best -
-      // replaying at the same or a lower star count earns no additional coins.
+      // Pay out only the improvement over the shape's previous best - not the full
+      // reward for the new star tier every time. Otherwise climbing 3 stars, then
+      // 5 stars, on the same shape would pay both tiers in full (35 + 80), more
+      // than acing it in one attempt (80) ever would. Replaying at the same or a
+      // lower star count earns nothing, since the delta is zero or negative.
       const previousStars = bestScore !== undefined ? starRatingForScore(bestScore) : -1;
       const newStars = starRatingForScore(scoreResult.total);
-      if (newStars > previousStars) {
-        const starCoins = coinsForStars(newStars);
-        if (starCoins > 0) setDoubleOfferAmount(starCoins);
-      }
+      const starCoins = coinsForStars(newStars) - coinsForStars(previousStars);
+      if (starCoins > 0) setDoubleOfferAmount(starCoins);
 
       setResult(scoreResult);
       setIsNewBest(beatBest);
@@ -499,7 +609,6 @@ function ShapePlay({
       if (passedNow) playSuccessSound();
       else playEncourageSound();
       setPhase("result");
-      recordRoundCompleted();
     }, delay);
   }
 
@@ -523,32 +632,13 @@ function ShapePlay({
     const passed = result.total >= passScore;
     return (
       <div className="screen">
-        <div className="app-header-actions">
-          <button
-            type="button"
-            className="info-shortcut"
-            onClick={() => {
-              playInfoPeekSound();
-              onNavigateToInstructions();
-            }}
-            aria-label="How to play"
-          >
-            i
-          </button>
-          <button
-            type="button"
-            className="achievements-shortcut"
-            onClick={() => {
-              playAchievementsPeekSound();
-              onNavigateToAchievements();
-            }}
-            aria-label="Achievements"
-          >
-            🏆
-          </button>
-          <CoinIndicator />
-          <SoundToggleButton />
-        </div>
+        <AppHeader
+          onNavigateToHome={onNavigateToHome}
+          onNavigateToInstructions={onNavigateToInstructions}
+          onNavigateToAchievements={onNavigateToAchievements}
+          onNavigateToShop={onNavigateToShop}
+          onNavigateToSettings={onNavigateToSettings}
+        />
         {!canGoToNextShape && nextIndex < shapes.length && (
           <p className="form-error">Score {passScore}+ to unlock the next shape.</p>
         )}
@@ -599,6 +689,9 @@ function ShapePlay({
         onBack={onBackToMap}
         onNavigateToAchievements={onNavigateToAchievements}
         onNavigateToInstructions={onNavigateToInstructions}
+        onNavigateToShop={onNavigateToShop}
+        onNavigateToHome={onNavigateToHome}
+        onNavigateToSettings={onNavigateToSettings}
       />
       <p className="status-text">
         {phase === "preview" && "Study the shape"}
@@ -607,6 +700,7 @@ function ShapePlay({
       </p>
       <div className="canvas-wrapper">
         <DrawingCanvas
+          ref={canvasRef}
           width={CANVAS_SIZE}
           height={CANVAS_SIZE}
           disabled={phase !== "drawing"}
@@ -623,6 +717,9 @@ function ShapePlay({
           <div className="button-row">
             <Button variant="secondary" onClick={() => setGuideEnabled((enabled) => !enabled)}>
               {guideEnabled ? "Hide Guide" : "Show Guide"}
+            </Button>
+            <Button variant="secondary" onClick={handleUndo} disabled={!attemptPath || attemptPath.points.length === 0}>
+              Undo
             </Button>
             <Button onClick={handleDone}>Done</Button>
           </div>

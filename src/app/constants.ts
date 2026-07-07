@@ -139,7 +139,6 @@ export function randomEncouragementMessage(): string {
 }
 
 export const ACHIEVEMENT_UNLOCK_MESSAGES = [
-  "Achievement Unlocked!",
   "Incredible!",
   "Legendary!",
   "You're unstoppable!",
@@ -173,6 +172,9 @@ export const SHAPE_CHALLENGE_COIN_REWARDS: Record<number, number> = {
 export function coinsForStars(stars: number): number {
   return SHAPE_CHALLENGE_COIN_REWARDS[stars] ?? 0;
 }
+
+/** Coin cost to unlock a Shape Challenge category beyond the first (which is always free). Change this single value to retune pricing. */
+export const CATEGORY_UNLOCK_COST = 1000;
 
 export type DifficultyLevel = "beginner" | "intermediate" | "skilled" | "expert" | "master";
 

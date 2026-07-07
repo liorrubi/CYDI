@@ -1,4 +1,6 @@
+import { starRatingForScore } from "./constants";
 import { SHAPE_LIBRARY } from "../engine/shapeLibrary";
+import { getLongestStreak } from "../services/dailyStreakStore";
 import type { ShapeChallengeProgress } from "../services/shapeChallengeProgress";
 
 export type AchievementStats = {
@@ -8,6 +10,7 @@ export type AchievementStats = {
   unlockedShapesCount: number;
   totalShapesCount: number;
   hasCompletedFirst: boolean;
+  longestDailyStreak: number;
 };
 
 export type Achievement = {
@@ -24,12 +27,13 @@ export function computeAchievementStats(progress: ShapeChallengeProgress): Achie
   const scores = Object.values(progress.bestScores);
   const unlockedShapesCount = Object.values(progress.levelIndexByCategory).reduce((sum, n) => sum + n, 0);
   return {
-    fiveStarCount: scores.filter((s) => s >= 95).length,
+    fiveStarCount: scores.filter((s) => starRatingForScore(s) === 5).length,
     aboveNinetyCount: scores.filter((s) => s >= 90).length,
     hasHundredScore: scores.some((s) => s === 100),
     unlockedShapesCount,
     totalShapesCount: SHAPE_LIBRARY.length,
     hasCompletedFirst: unlockedShapesCount >= 1,
+    longestDailyStreak: getLongestStreak(),
   };
 }
 
@@ -157,6 +161,15 @@ export const ACHIEVEMENTS: Achievement[] = [
     currentValue: (s) => s.unlockedShapesCount,
   },
   {
+    id: "painter",
+    icon: "🧩",
+    name: "Painter",
+    description: "Unlock 50 shapes",
+    coinReward: 1000,
+    target: 50,
+    currentValue: (s) => s.unlockedShapesCount,
+  },
+  {
     id: "master-explorer",
     icon: "🧩",
     name: "Master Explorer",
@@ -164,6 +177,51 @@ export const ACHIEVEMENTS: Achievement[] = [
     coinReward: 3000,
     target: SHAPE_LIBRARY.length,
     currentValue: (s) => s.unlockedShapesCount,
+  },
+  {
+    id: "streak-3",
+    icon: "🔥",
+    name: "Daily Streak",
+    description: "Visit 3 days in a row",
+    coinReward: 100,
+    target: 3,
+    currentValue: (s) => s.longestDailyStreak,
+  },
+  {
+    id: "streak-7",
+    icon: "🔥",
+    name: "Daily Streak",
+    description: "Visit 7 days in a row",
+    coinReward: 250,
+    target: 7,
+    currentValue: (s) => s.longestDailyStreak,
+  },
+  {
+    id: "streak-14",
+    icon: "🔥",
+    name: "Daily Streak",
+    description: "Visit 14 days in a row",
+    coinReward: 500,
+    target: 14,
+    currentValue: (s) => s.longestDailyStreak,
+  },
+  {
+    id: "streak-30",
+    icon: "🔥",
+    name: "Daily Streak",
+    description: "Visit 30 days in a row",
+    coinReward: 1200,
+    target: 30,
+    currentValue: (s) => s.longestDailyStreak,
+  },
+  {
+    id: "streak-100",
+    icon: "🔥",
+    name: "Daily Streak",
+    description: "Visit 100 days in a row",
+    coinReward: 5000,
+    target: 100,
+    currentValue: (s) => s.longestDailyStreak,
   },
 ];
 

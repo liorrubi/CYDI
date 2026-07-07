@@ -1,6 +1,6 @@
 import AppHeader from "../components/AppHeader";
 import { SCORE_PARAMETERS, SCORE_WEIGHTS, STAR_RATING_THRESHOLDS } from "../app/constants";
-import { toAchievements, toInstructions } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type InstructionsScreenProps = {
@@ -24,6 +24,9 @@ export default function InstructionsScreen({ from, onNavigate }: InstructionsScr
         onBack={() => onNavigate(from)}
         onNavigateToAchievements={() => onNavigate(toAchievements(from))}
         onNavigateToInstructions={() => onNavigate(toInstructions(from))}
+        onNavigateToShop={() => onNavigate(toShop(from))}
+        onNavigateToHome={() => onNavigate(toHome())}
+        onNavigateToSettings={() => onNavigate(toSettings())}
       />
 
       <div className="card instructions-card">

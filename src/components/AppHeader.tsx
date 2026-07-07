@@ -1,5 +1,11 @@
-import { APP_NAME } from "../app/constants";
-import { playAchievementsPeekSound, playBackSound, playInfoPeekSound } from "../engine/soundEngine";
+import {
+  playAchievementsPeekSound,
+  playBackSound,
+  playCoinsPeekSound,
+  playInfoPeekSound,
+  playLogoPeekSound,
+} from "../engine/soundEngine";
+import AppLogo from "./AppLogo";
 import CoinIndicator from "./CoinIndicator";
 import SoundToggleButton from "./SoundToggleButton";
 
@@ -9,14 +15,20 @@ type AppHeaderProps = {
   onBack?: () => void;
   onNavigateToAchievements?: () => void;
   onNavigateToInstructions?: () => void;
+  onNavigateToShop?: () => void;
+  onNavigateToHome?: () => void;
+  onNavigateToSettings?: () => void;
 };
 
 export default function AppHeader({
-  title = APP_NAME,
+  title,
   subtitle,
   onBack,
   onNavigateToAchievements,
   onNavigateToInstructions,
+  onNavigateToShop,
+  onNavigateToHome,
+  onNavigateToSettings,
 }: AppHeaderProps) {
   return (
     <header className="app-header">
@@ -33,10 +45,29 @@ export default function AppHeader({
           ←
         </button>
       )}
-      <div className="app-header-text">
-        <h1>{title}</h1>
-        {subtitle && <p>{subtitle}</p>}
-      </div>
+      {onNavigateToHome ? (
+        <button
+          type="button"
+          className="app-logo-button"
+          onClick={() => {
+            playLogoPeekSound();
+            onNavigateToHome();
+          }}
+          aria-label="Go to home"
+        >
+          <AppLogo />
+        </button>
+      ) : (
+        <span className="app-logo-button app-logo-static">
+          <AppLogo />
+        </span>
+      )}
+      {title && (
+        <div className="app-header-text">
+          <h1>{title}</h1>
+          {subtitle && <p>{subtitle}</p>}
+        </div>
+      )}
       <div className="app-header-actions">
         {onNavigateToInstructions && (
           <button
@@ -64,8 +95,26 @@ export default function AppHeader({
             🏆
           </button>
         )}
-        <CoinIndicator />
+        <CoinIndicator
+          onClick={
+            onNavigateToShop &&
+            (() => {
+              playCoinsPeekSound();
+              onNavigateToShop();
+            })
+          }
+        />
         <SoundToggleButton />
+        {onNavigateToSettings && (
+          <button
+            type="button"
+            className="settings-shortcut"
+            onClick={onNavigateToSettings}
+            aria-label="Settings"
+          >
+            ⚙️
+          </button>
+        )}
       </div>
     </header>
   );

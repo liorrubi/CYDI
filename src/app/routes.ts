@@ -1,4 +1,5 @@
 import type { Screen } from "../types/GameMode";
+import type { DecodedSharedResult } from "../services/shareLink";
 
 export type { Screen };
 
@@ -22,6 +23,10 @@ export function toShapeChallenge(): Screen {
   return { name: "shapeChallenge" };
 }
 
+export function toSettings(): Screen {
+  return { name: "settings" };
+}
+
 export function toShop(from: Screen = { name: "home" }): Screen {
   return { name: "shop", from };
 }
@@ -32,4 +37,8 @@ export function toAchievements(from: Screen): Screen {
 
 export function toInstructions(from: Screen): Screen {
   return { name: "instructions", from };
+}
+
+export function toSharedResult(data: DecodedSharedResult): Screen {
+  return { name: "sharedResult", data };
 }

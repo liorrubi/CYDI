@@ -178,6 +178,30 @@ export function playAchievementsPeekSound(): void {
   playTone(ctx, 1760, now + 0.04, 0.08, 0.08, "triangle"); // A6
 }
 
+/** A single bright coin clink for peeking at the coin balance shortcut into the shop. */
+export function playCoinsPeekSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  playTone(ctx, 1800, ctx.currentTime, 0.1, 0.1, "triangle");
+}
+
+/** A short upward two-note chime for tapping the logo to head back home. */
+export function playLogoPeekSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  playTone(ctx, 659.25, now, 0.07, 0.09, "sine"); // E5
+  playTone(ctx, 987.77, now + 0.05, 0.09, 0.09, "sine"); // B5
+}
+
 /** A plain, gentle two-note blip for opening the instructions/help page. */
 export function playInfoPeekSound(): void {
   if (!isSoundEnabled()) return;

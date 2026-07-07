@@ -6,10 +6,11 @@ import StarRating from "./StarRating";
 type ChallengeCardProps = {
   challenge: Challenge;
   onPlay: () => void;
+  onShare: () => void;
   onDelete: () => void;
 };
 
-export default function ChallengeCard({ challenge, onPlay, onDelete }: ChallengeCardProps) {
+export default function ChallengeCard({ challenge, onPlay, onShare, onDelete }: ChallengeCardProps) {
   const created = new Date(challenge.createdAt).toLocaleDateString();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -40,6 +41,9 @@ export default function ChallengeCard({ challenge, onPlay, onDelete }: Challenge
       ) : (
         <div className="challenge-card-actions">
           <Button onClick={onPlay}>Play</Button>
+          <Button variant="secondary" onClick={onShare}>
+            Share
+          </Button>
           <Button variant="danger" onClick={() => setConfirmingDelete(true)}>
             Delete
           </Button>

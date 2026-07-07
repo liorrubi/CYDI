@@ -56,6 +56,7 @@ body {
   width: 100%;
   max-width: 420px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
 }
@@ -77,6 +78,22 @@ body {
   box-shadow: 0 1px 2px rgba(30, 32, 46, 0.08);
 }
 
+.app-logo-button {
+  border: none;
+  background: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.app-logo-static {
+  cursor: default;
+}
+
 .app-header-text h1 {
   margin: 0;
   font-size: 28px;
@@ -89,7 +106,9 @@ body {
 
 .app-header-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
   margin-left: auto;
   align-self: flex-end;
@@ -110,6 +129,51 @@ body {
   white-space: nowrap;
 }
 
+.coin-indicator-button {
+  position: relative;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.coin-indicator-alert {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-danger, #dc2626);
+  border: 2px solid var(--color-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  animation: coin-alert-pop 300ms ease;
+}
+
+.coin-indicator-alert::after {
+  content: "!";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+@keyframes coin-alert-pop {
+  0% {
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .flying-coin {
   position: fixed;
   font-size: 20px;
@@ -121,7 +185,8 @@ body {
 
 .sound-toggle,
 .achievements-shortcut,
-.info-shortcut {
+.info-shortcut,
+.settings-shortcut {
   border: none;
   background: var(--color-card);
   border-radius: var(--radius-sm);
@@ -428,6 +493,41 @@ body {
   font-size: 16px;
 }
 
+.password-prompt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(20, 12, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.password-prompt-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 360px;
+  padding: var(--space-5);
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(30, 32, 46, 0.35);
+}
+
+.password-prompt-card h2 {
+  margin: 0;
+}
+
+.password-prompt-input {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  font-size: 16px;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -575,85 +675,107 @@ body {
   animation: banner-pop 400ms ease;
 }
 
-.achievement-unlock-banner {
+.achievement-unlock-overlay {
   position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  inset: 0;
   z-index: 1000;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  width: calc(100% - 32px);
-  max-width: 420px;
-  background: linear-gradient(135deg, #f5b400, #f97316);
-  color: white;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   border: none;
-  border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-  box-shadow: 0 10px 30px rgba(245, 180, 0, 0.4);
+  margin: 0;
+  padding: var(--space-4);
+  background: rgba(20, 12, 0, 0.55);
+  backdrop-filter: blur(2px);
   cursor: pointer;
-  text-align: left;
   font: inherit;
-  animation: achievement-banner-in 400ms ease;
+  animation: achievement-overlay-in 400ms ease;
 }
 
-.achievement-unlock-banner-closing {
-  animation: achievement-banner-out 300ms ease forwards;
+.achievement-unlock-overlay-closing {
+  animation: achievement-overlay-out 300ms ease forwards;
+}
+
+.achievement-unlock-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 380px;
+  padding: var(--space-6) var(--space-5);
+  background: linear-gradient(160deg, #ffcf40, #f5b400 45%, #f97316);
+  color: white;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(245, 180, 0, 0.5);
+  text-align: center;
+  animation: achievement-card-in 450ms cubic-bezier(0.2, 1.4, 0.4, 1);
 }
 
 .achievement-unlock-icon {
-  font-size: 36px;
-  flex-shrink: 0;
+  font-size: 64px;
+  line-height: 1;
 }
 
-.achievement-unlock-text {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
+.achievement-unlock-headline {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
 .achievement-unlock-message {
   font-weight: 700;
-  font-size: 15px;
+  font-size: 20px;
 }
 
 .achievement-unlock-name {
-  font-size: 13px;
-  opacity: 0.9;
+  font-size: 16px;
+  opacity: 0.95;
 }
 
 .achievement-unlock-reward {
-  flex-shrink: 0;
-  font-weight: 700;
-  font-size: 16px;
+  margin-top: var(--space-2);
+  font-weight: 800;
+  font-size: 28px;
   white-space: nowrap;
 }
 
-@keyframes achievement-banner-in {
+.achievement-unlock-hint {
+  margin-top: var(--space-3);
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+@keyframes achievement-overlay-in {
   0% {
-    transform: translate(-50%, -30px);
     opacity: 0;
   }
-  60% {
-    transform: translate(-50%, 4px);
-    opacity: 1;
-  }
   100% {
-    transform: translate(-50%, 0);
     opacity: 1;
   }
 }
 
-@keyframes achievement-banner-out {
+@keyframes achievement-overlay-out {
   0% {
-    transform: translate(-50%, 0);
     opacity: 1;
   }
   100% {
-    transform: translate(-50%, -20px);
     opacity: 0;
+  }
+}
+
+@keyframes achievement-card-in {
+  0% {
+    transform: scale(0.75);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
   }
 }
 
@@ -874,11 +996,18 @@ body {
   max-width: 520px;
 }
 
+.category-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .category-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-1);
+  width: 100%;
   background: var(--color-card);
   border: none;
   border-radius: var(--radius-md);
@@ -899,8 +1028,63 @@ body {
   transform: translateY(-1px);
 }
 
+.category-card-locked {
+  filter: grayscale(0.6);
+  opacity: 0.75;
+  cursor: default;
+}
+
+.category-card-locked:hover {
+  transform: none;
+  box-shadow: 0 2px 8px rgba(30, 32, 46, 0.08);
+}
+
+.category-card-lock-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.category-card-unlock-btn {
+  width: 100%;
+  font-size: 13px;
+  padding: var(--space-2) var(--space-3);
+}
+
+.category-card-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .category-card-icon {
+  font-size: 40px;
+}
+
+.category-card-lock-open-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 32px;
+  animation: category-lock-open 700ms ease forwards;
+}
+
+@keyframes category-lock-open {
+  0% {
+    transform: scale(0.8) rotate(0deg);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(1.3) rotate(-15deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.7) rotate(-25deg);
+    opacity: 0;
+  }
 }
 
 .category-card-name {
@@ -912,6 +1096,21 @@ body {
 .category-card-progress {
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+.category-card-progress-track {
+  width: 100%;
+  height: 5px;
+  background: rgba(30, 32, 46, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.category-card-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-dark));
+  border-radius: 999px;
+  transition: width 500ms ease;
 }
 
 .shape-grid {
@@ -1032,18 +1231,6 @@ body {
   margin: var(--space-1) 0 0;
   font-size: 36px;
   font-weight: 700;
-  color: var(--color-text);
-}
-
-.shop-empty {
-  text-align: center;
-  color: var(--color-text-muted);
-}
-
-.shop-empty-title {
-  margin: 0 0 var(--space-2);
-  font-size: 18px;
-  font-weight: 600;
   color: var(--color-text);
 }
 

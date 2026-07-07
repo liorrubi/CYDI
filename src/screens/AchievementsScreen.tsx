@@ -1,3 +1,4 @@
+import { useState } from "react";
 import AppHeader from "../components/AppHeader";
 import {
   ACHIEVEMENTS,
@@ -8,7 +9,7 @@ import {
 } from "../app/achievements";
 import { getUnlockedAchievementIds } from "../services/achievementsStore";
 import { getProgress } from "../services/shapeChallengeProgress";
-import { toAchievements, toInstructions } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type AchievementsScreenProps = {
@@ -17,9 +18,9 @@ type AchievementsScreenProps = {
 };
 
 export default function AchievementsScreen({ from, onNavigate }: AchievementsScreenProps) {
-  const progress = getProgress();
+  const [progress] = useState(() => getProgress());
+  const [unlockedIds] = useState(() => getUnlockedAchievementIds());
   const stats = computeAchievementStats(progress);
-  const unlockedIds = getUnlockedAchievementIds();
 
   return (
     <div className="screen">
@@ -28,6 +29,9 @@ export default function AchievementsScreen({ from, onNavigate }: AchievementsScr
         onBack={() => onNavigate(from)}
         onNavigateToAchievements={() => onNavigate(toAchievements(from))}
         onNavigateToInstructions={() => onNavigate(toInstructions(from))}
+        onNavigateToShop={() => onNavigate(toShop(from))}
+        onNavigateToHome={() => onNavigate(toHome())}
+        onNavigateToSettings={() => onNavigate(toSettings())}
       />
       <div className="achievement-list">
         {ACHIEVEMENTS.map((achievement) => {

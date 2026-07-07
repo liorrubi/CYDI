@@ -30,12 +30,6 @@ export default function ScoreCard({ score, isNewBest }: ScoreCardProps) {
           <span>Scale</span>
           <strong>{score.scale}</strong>
         </div>
-        {score.closure !== undefined && (
-          <div>
-            <span>Closure</span>
-            <strong>{score.closure}</strong>
-          </div>
-        )}
       </div>
       {tip && <p className="score-improvement-tip">💡 {tip}</p>}
     </div>

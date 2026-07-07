@@ -6,6 +6,7 @@ import { CANVAS_SIZE, DEFAULT_PEN_COLOR, PEN_COLORS, type PenColorId } from "../
 
 export type DrawingCanvasHandle = {
   clear: () => void;
+  undoLastStroke: () => void;
 };
 
 type DrawingCanvasProps = {
@@ -164,6 +165,22 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
       segmentBreaksRef.current = [];
       redraw();
       onChange?.({ points: [], canvasWidth: width, canvasHeight: height, breaks: [] });
+    },
+    undoLastStroke() {
+      if (pointsRef.current.length === 0) return;
+      const breaks = segmentBreaksRef.current;
+      if (breaks.length > 0) {
+        // Multiple pen-lifts so far - drop only the most recent segment.
+        const lastBreak = breaks[breaks.length - 1];
+        pointsRef.current = pointsRef.current.slice(0, lastBreak);
+        segmentBreaksRef.current = breaks.slice(0, -1);
+      } else {
+        // Only one segment has ever been drawn - undoing it means clearing.
+        pointsRef.current = [];
+        segmentBreaksRef.current = [];
+      }
+      redraw();
+      onChange?.({ points: pointsRef.current, canvasWidth: width, canvasHeight: height, breaks: segmentBreaksRef.current });
     },
   }));
 

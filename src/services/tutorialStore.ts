@@ -2,7 +2,7 @@ const ROUND_COUNT_KEY = "cydi.completedRounds.v1";
 const TUTORIAL_SHOWN_KEY = "cydi.achievementsTutorialShown.v1";
 const ROUND_COMPLETED_EVENT = "cydi:round-completed";
 
-export const ACHIEVEMENTS_TUTORIAL_ROUND_THRESHOLD = 2;
+export const ACHIEVEMENTS_TUTORIAL_ROUND_THRESHOLD = 1;
 
 function getCompletedRoundCount(): number {
   try {

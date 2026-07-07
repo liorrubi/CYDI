@@ -4,6 +4,5 @@ export type ScoreBreakdown = {
   coverage: number;
   smoothness: number;
   scale: number;
-  closure?: number;
   message: string;
 };

@@ -3,7 +3,7 @@ import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
 import { RESAMPLE_POINT_COUNT, SCORE_WEIGHTS, scoreMessage } from "../app/constants";
 import type { Vec2 } from "./geometry";
-import { boundingBox, clamp, distance, pathLength } from "./geometry";
+import { boundingBox, clamp, pathLength } from "./geometry";
 import { normalizePath } from "./normalizePath";
 import { compareClosedShapeWithOffsets, compareOrderIndependent, compareWithReverse, isClosedPath } from "./comparePaths";
 
@@ -67,19 +67,6 @@ function computeSmoothness(normAttempt: Point[], segmentStarts: number[] = []): 
   return clamp(100 - meanAngleChange * 1.5, 0, 100);
 }
 
-/** How well the attempt closed its own loop (independent, informational sub-score). */
-function computeClosureScore(attemptPath: DrawingPath): number {
-  const points = attemptPath.points;
-  if (points.length < 2) return 0;
-
-  const box = boundingBox(points);
-  const diag = Math.hypot(box.width, box.height);
-  if (diag < 1e-9) return 100;
-
-  const gap = distance(points[0], points[points.length - 1]);
-  return clamp(100 - (gap / diag) * 150, 0, 100);
-}
-
 /**
  * Compares a target path against a player attempt and returns a 0-100
  * score with a breakdown. Shape-agnostic: never branches on what kind of
@@ -141,7 +128,6 @@ export function scoreAttempt(targetPath: DrawingPath, attemptPath: DrawingPath):
     coverage: Math.round(coverage),
     smoothness: Math.round(smoothness),
     scale: Math.round(scale),
-    closure: closed ? Math.round(computeClosureScore(attemptPath)) : undefined,
     message: scoreMessage(total),
   };
 }

@@ -4,7 +4,7 @@ import Button from "../components/Button";
 import { PEN_COLORS, DEFAULT_PEN_COLOR } from "../app/constants";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
-import { toAchievements, toHome, toInstructions, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type ShopScreenProps = {
@@ -35,6 +35,8 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
         onBack={() => onNavigate(toHome())}
         onNavigateToAchievements={() => onNavigate(toAchievements(toShop(from)))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toShop(from)))}
+        onNavigateToHome={() => onNavigate(toHome())}
+        onNavigateToSettings={() => onNavigate(toSettings())}
       />
       <div className="card shop-balance">
         <p className="shop-balance-label">Your balance</p>

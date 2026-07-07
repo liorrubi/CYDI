@@ -3,7 +3,9 @@ import AppHeader from "../components/AppHeader";
 import ChallengeCard from "../components/ChallengeCard";
 import EmptyState from "../components/EmptyState";
 import { deleteChallenge, getChallenges } from "../services/challengeStorage";
-import { toAchievements, toCreate, toHome, toInstructions, toList, toPlay } from "../app/routes";
+import { encodeChallengeLink } from "../services/shareLink";
+import { shareOrCopy } from "../services/nativeShare";
+import { toAchievements, toCreate, toHome, toInstructions, toList, toPlay, toSettings, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { Challenge } from "../types/Challenge";
 
@@ -13,6 +15,7 @@ type MyChallengesScreenProps = {
 
 export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenProps) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     setChallenges(getChallenges());
@@ -23,6 +26,21 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
     setChallenges(getChallenges());
   }
 
+  async function handleShare(challenge: Challenge) {
+    const url = encodeChallengeLink(challenge);
+    const outcome = await shareOrCopy({
+      title: `CYDI Challenge: ${challenge.name}`,
+      text: `Can you draw "${challenge.name}"? Try my CYDI challenge!`,
+      url,
+    });
+    if (outcome === "copied") {
+      setShareFeedback("Link copied!");
+      window.setTimeout(() => setShareFeedback(null), 2500);
+    } else if (outcome === "failed") {
+      setShareFeedback(`Couldn't share automatically - copy this link: ${url}`);
+    }
+  }
+
   return (
     <div className="screen">
       <AppHeader
@@ -30,7 +48,11 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
         onBack={() => onNavigate(toHome())}
         onNavigateToAchievements={() => onNavigate(toAchievements(toList()))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toList()))}
+        onNavigateToShop={() => onNavigate(toShop(toList()))}
+        onNavigateToHome={() => onNavigate(toHome())}
+        onNavigateToSettings={() => onNavigate(toSettings())}
       />
+      {shareFeedback && <p className="status-text">{shareFeedback}</p>}
       {challenges.length === 0 ? (
         <EmptyState message="No challenges yet" actionLabel="Create one" onAction={() => onNavigate(toCreate())} />
       ) : (
@@ -40,6 +62,7 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
               key={challenge.id}
               challenge={challenge}
               onPlay={() => onNavigate(toPlay(challenge.id))}
+              onShare={() => handleShare(challenge)}
               onDelete={() => handleDelete(challenge.id)}
             />
           ))}

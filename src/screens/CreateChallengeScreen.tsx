@@ -7,7 +7,7 @@ import PenColorMenu from "../components/PenColorMenu";
 import { CANVAS_SIZE, MIN_POINTS_TO_SAVE, type PenColorId } from "../app/constants";
 import { saveChallenge } from "../services/challengeStorage";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
-import { toAchievements, toCreate, toHome, toInstructions, toList, toShop } from "../app/routes";
+import { toAchievements, toCreate, toHome, toInstructions, toList, toSettings, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 
@@ -37,6 +37,10 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
     setCurrentPath(null);
     setError(null);
     setNamePromptOpen(false);
+  }
+
+  function handleUndo() {
+    canvasRef.current?.undoLastStroke();
   }
 
   function handleSaveClick() {
@@ -71,6 +75,9 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
         onBack={() => onNavigate(toHome())}
         onNavigateToAchievements={() => onNavigate(toAchievements(toCreate()))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toCreate()))}
+        onNavigateToShop={() => onNavigate(toShop(toCreate()))}
+        onNavigateToHome={() => onNavigate(toHome())}
+        onNavigateToSettings={() => onNavigate(toSettings())}
       />
       <p className="status-text">Draw any shape</p>
       <div className="canvas-wrapper">
@@ -86,6 +93,9 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
       {error && <p className="form-error">{error}</p>}
       {!namePromptOpen && (
         <div className="button-row">
+          <Button variant="secondary" onClick={handleUndo} disabled={!currentPath || currentPath.points.length === 0}>
+            Undo
+          </Button>
           <Button variant="secondary" onClick={handleClear}>
             Clear
           </Button>

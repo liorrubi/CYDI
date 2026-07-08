@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
-import { DIFFICULTY_LEVELS, passScoreForDifficulty } from "../app/constants";
+import { APP_BUILD, APP_VERSION, DIFFICULTY_LEVELS, passScoreForDifficulty } from "../app/constants";
 import { playChipSound } from "../engine/soundEngine";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive, setUnlockEverything } from "../services/unlockOverrideStore";
@@ -173,6 +173,12 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
           Copyright &amp; Credits
         </Button>
       </div>
+
+      <p className="settings-version-footer">
+        Version {APP_VERSION}
+        <br />
+        Build {APP_BUILD}
+      </p>
 
       {creditsOpen && (
         <div className="password-prompt-overlay" onClick={() => setCreditsOpen(false)}>

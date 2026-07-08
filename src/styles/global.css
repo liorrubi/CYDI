@@ -1441,6 +1441,14 @@ body {
   }
 }
 
+.settings-version-footer {
+  margin: var(--space-2) 0 var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .instructions-card {
   text-align: left;
 }

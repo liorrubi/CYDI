@@ -1,6 +1,12 @@
 export const APP_NAME = "CYDI - Can You Draw It?";
 export const APP_TAGLINE = "Quick drawing challenges";
 
+// Bumped by hand only when a new product version ships - unrelated to SaveData's
+// internal schemaVersion, which tracks the save file format, not the game itself.
+export const APP_VERSION = "0.2.0";
+// Short git commit hash (or a build timestamp fallback), set automatically at build time.
+export const APP_BUILD = __APP_BUILD__;
+
 export const STORAGE_KEY = "cydi.challenges.v1";
 export const SHAPE_CHALLENGE_STORAGE_KEY = "cydi.shapeChallenge.progress.v1";
 export const SHAPE_CHALLENGE_PASS_SCORE = 70;

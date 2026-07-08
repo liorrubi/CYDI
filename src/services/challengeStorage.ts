@@ -1,5 +1,5 @@
 import type { Challenge } from "../types/Challenge";
-import { STORAGE_KEY } from "../app/constants";
+import { getSaveData, updateSaveData } from "./saveStore";
 
 function isChallenge(value: unknown): value is Challenge {
   if (typeof value !== "object" || value === null) return false;
@@ -16,61 +16,39 @@ function isChallenge(value: unknown): value is Challenge {
   );
 }
 
-function readAll(): Challenge[] {
-  let raw: string | null;
-  try {
-    raw = localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return [];
-  }
-  if (!raw) return [];
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isChallenge);
-  } catch {
-    return [];
-  }
-}
-
-function writeAll(challenges: Challenge[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(challenges));
-  } catch (error) {
-    console.warn("Failed to persist challenges", error);
-  }
-}
-
 export function getChallenges(): Challenge[] {
-  return readAll();
+  return getSaveData().progress.challenges.filter(isChallenge);
 }
 
 export function getChallenge(id: string): Challenge | null {
-  return readAll().find((c) => c.id === id) ?? null;
+  return getChallenges().find((c) => c.id === id) ?? null;
 }
 
 export function saveChallenge(challenge: Challenge): void {
-  const list = readAll();
-  list.push(challenge);
-  writeAll(list);
+  updateSaveData((data) => {
+    data.progress.challenges.push(challenge);
+  });
 }
 
 export function updateChallenge(challenge: Challenge): void {
-  const list = readAll();
-  const index = list.findIndex((c) => c.id === challenge.id);
-  if (index === -1) {
-    list.push(challenge);
-  } else {
-    list[index] = challenge;
-  }
-  writeAll(list);
+  updateSaveData((data) => {
+    const index = data.progress.challenges.findIndex((c) => c.id === challenge.id);
+    if (index === -1) {
+      data.progress.challenges.push(challenge);
+    } else {
+      data.progress.challenges[index] = challenge;
+    }
+  });
 }
 
 export function deleteChallenge(id: string): void {
-  writeAll(readAll().filter((c) => c.id !== id));
+  updateSaveData((data) => {
+    data.progress.challenges = data.progress.challenges.filter((c) => c.id !== id);
+  });
 }
 
 export function clearAllChallenges(): void {
-  writeAll([]);
+  updateSaveData((data) => {
+    data.progress.challenges = [];
+  });
 }

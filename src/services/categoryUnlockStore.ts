@@ -1,21 +1,13 @@
 import { CATEGORIES, type CategoryId } from "../engine/shapeLibrary";
 import { isUnlockEverythingActive } from "./unlockOverrideStore";
-
-const STORAGE_KEY = "cydi.unlockedCategories.v1";
+import { getSaveData, updateSaveData } from "./saveStore";
 
 function firstCategoryId(): CategoryId {
   return CATEGORIES[0].id;
 }
 
 function readUnlocked(): CategoryId[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return getSaveData().progress.unlockedCategories as CategoryId[];
 }
 
 /** The first category is always free; every other category must be purchased with coins - unless the lock management override is active. */
@@ -33,9 +25,7 @@ export function isCategoryUnlocked(id: CategoryId): boolean {
 export function unlockCategory(id: CategoryId): void {
   const current = getUnlockedCategoryIds();
   if (current.includes(id)) return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...current, id]));
-  } catch (error) {
-    console.warn("Failed to persist unlocked categories", error);
-  }
+  updateSaveData((data) => {
+    data.progress.unlockedCategories = [...current, id];
+  });
 }

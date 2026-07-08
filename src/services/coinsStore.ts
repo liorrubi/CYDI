@@ -1,25 +1,16 @@
 import { playCashRegisterSound, playCoinsSound } from "../engine/soundEngine";
+import { getSaveData, updateSaveData } from "./saveStore";
 
-const STORAGE_KEY = "cydi.coins.v1";
 const COINS_UPDATED_EVENT = "cydi:coins-updated";
 
 export function getCoins(): number {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return 0;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? parsed : 0;
-  } catch {
-    return 0;
-  }
+  return getSaveData().progress.coins;
 }
 
 function saveCoins(amount: number): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, String(amount));
-  } catch (error) {
-    console.warn("Failed to persist coins", error);
-  }
+  updateSaveData((data) => {
+    data.progress.coins = amount;
+  });
 }
 
 let flushScheduled = false;

@@ -1,18 +1,9 @@
 import { DEFAULT_PEN_COLOR, PEN_COLORS, type PenColorId } from "../app/constants";
 import { getCoins } from "./coinsStore";
-
-const UNLOCKED_KEY = "cydi.unlockedPenColors.v1";
-const SELECTED_KEY = "cydi.selectedPenColor.v1";
+import { getSaveData, updateSaveData } from "./saveStore";
 
 function readUnlocked(): PenColorId[] {
-  try {
-    const raw = localStorage.getItem(UNLOCKED_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return getSaveData().progress.unlockedPenColors;
 }
 
 export function getUnlockedColors(): PenColorId[] {
@@ -27,29 +18,21 @@ export function isColorUnlocked(id: PenColorId): boolean {
 export function unlockColor(id: PenColorId): void {
   const current = getUnlockedColors();
   if (current.includes(id)) return;
-  try {
-    localStorage.setItem(UNLOCKED_KEY, JSON.stringify([...current, id]));
-  } catch (error) {
-    console.warn("Failed to persist unlocked pen colors", error);
-  }
+  updateSaveData((data) => {
+    data.progress.unlockedPenColors = [...current, id];
+  });
 }
 
 export function getSelectedColor(): PenColorId {
-  try {
-    const raw = localStorage.getItem(SELECTED_KEY) as PenColorId | null;
-    if (raw && isColorUnlocked(raw)) return raw;
-    return DEFAULT_PEN_COLOR;
-  } catch {
-    return DEFAULT_PEN_COLOR;
-  }
+  const selected = getSaveData().settings.selectedPenColor;
+  if (selected && isColorUnlocked(selected)) return selected;
+  return DEFAULT_PEN_COLOR;
 }
 
 export function setSelectedColor(id: PenColorId): void {
-  try {
-    localStorage.setItem(SELECTED_KEY, id);
-  } catch (error) {
-    console.warn("Failed to persist selected pen color", error);
-  }
+  updateSaveData((data) => {
+    data.settings.selectedPenColor = id;
+  });
 }
 
 /** True when the player can already afford at least one shop product (pen color) they haven't unlocked yet - drives the "you can afford something new" badge on the shop icon. */

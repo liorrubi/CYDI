@@ -32,6 +32,11 @@
   box-sizing: border-box;
 }
 
+:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -121,7 +126,7 @@ body {
   background: var(--color-card);
   border-radius: var(--radius-sm);
   padding: 0 var(--space-2);
-  height: 40px;
+  height: 44px;
   font-size: 14px;
   font-weight: 700;
   color: var(--color-text);
@@ -190,8 +195,8 @@ body {
   border: none;
   background: var(--color-card);
   border-radius: var(--radius-sm);
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -323,7 +328,7 @@ body {
 }
 
 .home-card.home-card-accent-blue h2 {
-  color: var(--accent-blue);
+  color: #2f5f96;
 }
 
 .home-card.home-card-accent-purple {
@@ -331,7 +336,7 @@ body {
 }
 
 .home-card.home-card-accent-purple h2 {
-  color: var(--accent-purple);
+  color: #5b3fa6;
 }
 
 .home-card.home-card-accent-green {
@@ -339,7 +344,7 @@ body {
 }
 
 .home-card.home-card-accent-green h2 {
-  color: var(--accent-green);
+  color: #1f7a52;
 }
 
 .home-card.home-card-accent-orange {
@@ -347,7 +352,7 @@ body {
 }
 
 .home-card.home-card-accent-orange h2 {
-  color: var(--accent-orange);
+  color: #a15a1f;
 }
 
 .home-card.home-card-accent-gold {
@@ -435,8 +440,8 @@ body {
 }
 
 .pen-color-trigger {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 2px solid var(--color-border);
   cursor: pointer;
@@ -591,7 +596,7 @@ body {
 }
 
 .btn-compact {
-  min-height: 36px;
+  min-height: 44px;
   padding: var(--space-2) var(--space-3);
   font-size: 13px;
 }
@@ -1362,7 +1367,7 @@ body {
 }
 
 .star-filled {
-  color: var(--color-accent);
+  color: #8a6200;
 }
 
 .star-empty {
@@ -1508,6 +1513,19 @@ body {
     height: auto;
     aspect-ratio: 1 / 1;
   }
+
+  .sound-toggle,
+  .achievements-shortcut,
+  .info-shortcut,
+  .settings-shortcut,
+  .pen-color-trigger {
+    width: 48px;
+    height: 48px;
+  }
+
+  .coin-indicator {
+    height: 48px;
+  }
 }
 
 .tutorial-overlay {
@@ -1646,7 +1664,7 @@ body {
   align-items: center;
   justify-content: space-between;
   font-size: 14px;
-  color: var(--color-accent);
+  color: #8a6200;
   padding: var(--space-1) 0;
 }
 

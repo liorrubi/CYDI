@@ -325,6 +325,7 @@ function CategoryListScreen({
                   onSelectCategory(category.id);
                 }}
                 disabled={showAsLocked || isUnlocking}
+                aria-label={showAsLocked ? `${category.name}, locked` : `${category.name}, ${unlocked} of ${shapes.length} unlocked`}
               >
                 <span className="category-card-icon-wrap">
                   <span className="category-card-icon" aria-hidden="true">
@@ -465,7 +466,7 @@ function ShapeMap({
 
           if (!unlocked) {
             return (
-              <div key={shape.id} className="shape-tile shape-tile-locked" aria-disabled="true">
+              <div key={shape.id} className="shape-tile shape-tile-locked" aria-disabled="true" aria-label={`${shape.name} (locked)`}>
                 <span className="shape-tile-lock-icon" aria-hidden="true">
                   🔒
                 </span>

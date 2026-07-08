@@ -28,13 +28,19 @@ export default function DailyLeaderboardTable({ entries, highlightPlayerId }: Da
           </tr>
         </thead>
         <tbody>
-          {entries.map((entry, index) => (
-            <tr key={entry.playerId} className={entry.playerId === highlightPlayerId ? "daily-leaderboard-row-self" : undefined}>
-              <td>{index + 1}</td>
-              <td>{entry.playerName}</td>
-              <td>{entry.score}%</td>
-            </tr>
-          ))}
+          {entries.map((entry, index) => {
+            const isSelf = entry.playerId === highlightPlayerId;
+            return (
+              <tr key={entry.playerId} className={isSelf ? "daily-leaderboard-row-self" : undefined}>
+                <td>{index + 1}</td>
+                <td>
+                  {entry.playerName}
+                  {isSelf && " (You)"}
+                </td>
+                <td>{entry.score}%</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

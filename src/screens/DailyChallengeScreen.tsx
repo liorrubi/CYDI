@@ -310,7 +310,12 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
               onKeyDown={(e) => e.key === "Enter" && setIsEditingName(false)}
             />
           ) : (
-            <button type="button" className="daily-name-display" onClick={() => setIsEditingName(true)}>
+            <button
+              type="button"
+              className="daily-name-display"
+              onClick={() => setIsEditingName(true)}
+              aria-label={`Edit display name, currently ${nameDraft.trim() || ANONYMOUS_PLAYER_NAME}`}
+            >
               Playing as: <strong>{nameDraft.trim() || ANONYMOUS_PLAYER_NAME}</strong> <span aria-hidden="true">✏️</span>
             </button>
           )}

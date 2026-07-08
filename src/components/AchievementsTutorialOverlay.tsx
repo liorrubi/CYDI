@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 
 type AchievementsTutorialOverlayProps = {
   onNavigateToAchievements: () => void;
@@ -11,6 +12,7 @@ export default function AchievementsTutorialOverlay({
   onDismiss,
 }: AchievementsTutorialOverlayProps) {
   const [rect, setRect] = useState<DOMRect | null>(null);
+  const dialogRef = useDialogA11y<HTMLDivElement>(rect !== null, { onClose: onDismiss });
 
   useEffect(() => {
     function measure() {
@@ -33,7 +35,14 @@ export default function AchievementsTutorialOverlay({
   const centerY = rect.top + rect.height / 2;
 
   return (
-    <div className="tutorial-overlay" onClick={onDismiss}>
+    <div
+      ref={dialogRef}
+      className="tutorial-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Achievements tutorial"
+      onClick={onDismiss}
+    >
       <button
         type="button"
         className="tutorial-spotlight-icon"

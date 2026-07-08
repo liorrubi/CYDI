@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import { APP_BUILD, APP_BUILD_TIME, APP_VERSION, DIFFICULTY_LEVELS, passScoreForDifficulty } from "../app/constants";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import { playChipSound } from "../engine/soundEngine";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive, setUnlockEverything } from "../services/unlockOverrideStore";
@@ -33,6 +34,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const [legalOpen, setLegalOpen] = useState(false);
+  const [accessibilityOpen, setAccessibilityOpen] = useState(false);
   const [transferMode, setTransferMode] = useState<"export" | "import" | null>(null);
   const [exportCode, setExportCode] = useState("");
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
@@ -40,6 +42,13 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const [importError, setImportError] = useState<string | null>(null);
   const [importConfirmOpen, setImportConfirmOpen] = useState(false);
   const [importDone, setImportDone] = useState(false);
+
+  const creditsDialogRef = useDialogA11y<HTMLDivElement>(creditsOpen, { onClose: () => setCreditsOpen(false) });
+  const legalDialogRef = useDialogA11y<HTMLDivElement>(legalOpen, { onClose: () => setLegalOpen(false) });
+  const accessibilityDialogRef = useDialogA11y<HTMLDivElement>(accessibilityOpen, { onClose: () => setAccessibilityOpen(false) });
+  const exportDialogRef = useDialogA11y<HTMLDivElement>(transferMode === "export", { onClose: handleCloseTransfer });
+  const importDialogRef = useDialogA11y<HTMLDivElement>(transferMode === "import", { onClose: handleCloseTransfer });
+  const passwordDialogRef = useDialogA11y<HTMLFormElement>(passwordPromptOpen, { onClose: handleCancelLockPrompt });
 
   function handleSelectDifficulty(level: (typeof DIFFICULTY_LEVELS)[number]["id"]) {
     playChipSound();
@@ -139,7 +148,9 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
               type="button"
               className={level.id === difficulty ? "difficulty-chip difficulty-chip-selected" : "difficulty-chip"}
               onClick={() => handleSelectDifficulty(level.id)}
+              aria-pressed={level.id === difficulty}
             >
+              {level.id === difficulty ? "✓ " : ""}
               {level.icon} {level.name}
             </button>
           ))}
@@ -194,6 +205,9 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
           <Button variant="secondary" onClick={() => setLegalOpen(true)}>
             Terms &amp; Privacy
           </Button>
+          <Button variant="secondary" onClick={() => setAccessibilityOpen(true)}>
+            Accessibility
+          </Button>
         </div>
       </div>
 
@@ -209,8 +223,15 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
 
       {creditsOpen && (
         <div className="password-prompt-overlay" onClick={() => setCreditsOpen(false)}>
-          <div className="password-prompt-card credits-card" onClick={(event) => event.stopPropagation()}>
-            <h2>Copyright &amp; Credits</h2>
+          <div
+            ref={creditsDialogRef}
+            className="password-prompt-card credits-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="credits-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="credits-modal-title">Copyright &amp; Credits</h2>
             <p className="status-text">
               © 2026 Lior Rubinovich. All rights reserved.
               <br />
@@ -233,8 +254,15 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
 
       {legalOpen && (
         <div className="password-prompt-overlay" onClick={() => setLegalOpen(false)}>
-          <div className="password-prompt-card credits-card" onClick={(event) => event.stopPropagation()}>
-            <h2>Terms &amp; Privacy</h2>
+          <div
+            ref={legalDialogRef}
+            className="password-prompt-card credits-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="legal-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="legal-modal-title">Terms &amp; Privacy</h2>
 
             <h3>Disclaimer</h3>
             <p className="status-text">
@@ -298,10 +326,61 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         </div>
       )}
 
+      {accessibilityOpen && (
+        <div className="password-prompt-overlay" onClick={() => setAccessibilityOpen(false)}>
+          <div
+            ref={accessibilityDialogRef}
+            className="password-prompt-card credits-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="accessibility-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="accessibility-modal-title">Accessibility</h2>
+            <p className="status-text">
+              We're actively working to make CYDI more accessible, and this is an ongoing effort rather than a
+              finished one. Feedback on what still needs improvement is welcome.
+            </p>
+
+            <h3>What's supported today</h3>
+            <ul className="status-text legal-list">
+              <li>
+                Keyboard navigation for menus, buttons, settings, and dialogs - Tab / Shift+Tab to move between
+                controls, Enter or Space to activate them, and Escape to close dialogs.
+              </li>
+              <li>Descriptive labels on icon-only buttons for screen readers.</li>
+              <li>Color-contrast-checked text, and states that are never conveyed by color alone.</li>
+              <li>Large touch targets, especially on mobile.</li>
+            </ul>
+
+            <h3>Known limitation</h3>
+            <p className="status-text">
+              The core drawing gameplay is a freehand pointer/touch interaction - drawing a shape with a mouse,
+              finger, or stylus - and does not currently have a full keyboard alternative.
+            </p>
+
+            <h3>Report a problem</h3>
+            <p className="status-text">
+              Found an accessibility issue, or have a suggestion? Contact us at{" "}
+              <a href="mailto:support@playcydi.com">support@playcydi.com</a>.
+            </p>
+
+            <Button onClick={() => setAccessibilityOpen(false)}>Close</Button>
+          </div>
+        </div>
+      )}
+
       {transferMode === "export" && (
         <div className="password-prompt-overlay" onClick={handleCloseTransfer}>
-          <div className="password-prompt-card credits-card" onClick={(event) => event.stopPropagation()}>
-            <h2>Your Backup Code</h2>
+          <div
+            ref={exportDialogRef}
+            className="password-prompt-card credits-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="export-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="export-modal-title">Your Backup Code</h2>
             <p className="status-text">Copy this code, then paste it into Settings → Restore from Code on your other device.</p>
             <textarea
               readOnly
@@ -323,8 +402,15 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
 
       {transferMode === "import" && (
         <div className="password-prompt-overlay" onClick={handleCloseTransfer}>
-          <div className="password-prompt-card credits-card" onClick={(event) => event.stopPropagation()}>
-            <h2>Restore from Code</h2>
+          <div
+            ref={importDialogRef}
+            className="password-prompt-card credits-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="import-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="import-modal-title">Restore from Code</h2>
             {importDone ? (
               <p className="status-text">Progress restored! Reloading…</p>
             ) : importConfirmOpen ? (
@@ -343,7 +429,6 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
               <>
                 <p className="status-text">Paste the backup code from your other device.</p>
                 <textarea
-                  autoFocus
                   className="password-prompt-input backup-code-textarea"
                   placeholder="Paste backup code here"
                   value={importText}
@@ -368,10 +453,16 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
 
       {passwordPromptOpen && (
         <div className="password-prompt-overlay">
-          <form className="password-prompt-card" onSubmit={handleConfirmLockPassword}>
-            <h2>Enter Password</h2>
+          <form
+            ref={passwordDialogRef}
+            className="password-prompt-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="password-modal-title"
+            onSubmit={handleConfirmLockPassword}
+          >
+            <h2 id="password-modal-title">Enter Password</h2>
             <input
-              autoFocus
               type="password"
               inputMode="numeric"
               placeholder="Password"

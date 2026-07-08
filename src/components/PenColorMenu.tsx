@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PEN_COLORS, type PenColorId } from "../app/constants";
 import { isColorUnlocked } from "../services/penColorStore";
 import { playSelectSound, playToggleSound } from "../engine/soundEngine";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 
 type PenColorMenuProps = {
   selected: PenColorId;
@@ -13,6 +14,10 @@ type PenColorMenuProps = {
 export default function PenColorMenu({ selected, onSelect, onLockedColorClick }: PenColorMenuProps) {
   const [open, setOpen] = useState(false);
   const selectedOption = PEN_COLORS.find((c) => c.id === selected) ?? PEN_COLORS[0];
+  // Not a full trap: the dropdown is a lightweight disclosure of plain buttons, so Tab
+  // should still be free to move on through the page as usual - only Escape and the
+  // initial focus placement are handled here.
+  const dropdownRef = useDialogA11y<HTMLDivElement>(open, { onClose: () => setOpen(false), trapFocus: false });
 
   return (
     <div className="pen-color-menu">
@@ -25,12 +30,13 @@ export default function PenColorMenu({ selected, onSelect, onLockedColorClick }:
           setOpen((isOpen) => !isOpen);
         }}
         aria-label="Change pen color"
+        aria-haspopup="true"
         aria-expanded={open}
       >
         🖊️
       </button>
       {open && (
-        <div className="pen-color-dropdown">
+        <div ref={dropdownRef} className="pen-color-dropdown">
           {PEN_COLORS.map((color) => {
             const unlocked = isColorUnlocked(color.id);
             const classes = ["pen-color-option"];
@@ -41,6 +47,7 @@ export default function PenColorMenu({ selected, onSelect, onLockedColorClick }:
                 key={color.id}
                 type="button"
                 className={classes.join(" ")}
+                aria-label={unlocked ? color.name : `${color.name} (locked)`}
                 onClick={() => {
                   if (!unlocked) {
                     onLockedColorClick(color.id);

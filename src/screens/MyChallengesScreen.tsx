@@ -4,6 +4,7 @@ import Button from "../components/Button";
 import ChallengeCard from "../components/ChallengeCard";
 import EmptyState from "../components/EmptyState";
 import { deleteChallenge, getChallenges } from "../services/challengeStorage";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import { encodeChallengeLink } from "../services/shareLink";
 import { createShortChallengeLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
@@ -20,6 +21,7 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(() => shouldShowMyChallengesTutorial());
+  const tutorialDialogRef = useDialogA11y<HTMLDivElement>(showTutorial, { onClose: handleDismissTutorial });
 
   useEffect(() => {
     setChallenges(getChallenges());
@@ -63,8 +65,15 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
       />
       {showTutorial && (
         <div className="myc-tutorial-overlay" onClick={handleDismissTutorial}>
-          <div className="password-prompt-card" onClick={(event) => event.stopPropagation()}>
-            <h2>My Challenges</h2>
+          <div
+            ref={tutorialDialogRef}
+            className="password-prompt-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="my-challenges-tutorial-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="my-challenges-tutorial-title">My Challenges</h2>
             <p className="status-text">Choose how you want to play:</p>
             <ol className="instructions-tip-list">
               <li>Tap Play to challenge a friend on this device.</li>

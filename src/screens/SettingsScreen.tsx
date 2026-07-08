@@ -32,6 +32,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [creditsOpen, setCreditsOpen] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(false);
   const [transferMode, setTransferMode] = useState<"export" | "import" | null>(null);
   const [exportCode, setExportCode] = useState("");
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
@@ -170,6 +171,14 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
       </div>
 
       <div className="card instructions-card">
+        <h2>Help &amp; Support</h2>
+        <p className="status-text">
+          Questions, bug reports, or feedback? Contact us at{" "}
+          <a href="mailto:support@playcydi.com">support@playcydi.com</a>
+        </p>
+      </div>
+
+      <div className="card instructions-card">
         <h2>Legal / Credits</h2>
         <p className="status-text">
           © 2026 Lior Rubinovich. All rights reserved.
@@ -178,9 +187,14 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
           <br />
           Unauthorized copying, distribution, modification, or commercial use is prohibited.
         </p>
-        <Button variant="secondary" onClick={() => setCreditsOpen(true)}>
-          Copyright &amp; Credits
-        </Button>
+        <div className="button-row">
+          <Button variant="secondary" onClick={() => setCreditsOpen(true)}>
+            Copyright &amp; Credits
+          </Button>
+          <Button variant="secondary" onClick={() => setLegalOpen(true)}>
+            Terms &amp; Privacy
+          </Button>
+        </div>
       </div>
 
       <p className="settings-version-footer">
@@ -213,6 +227,73 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
               respective owners and are used according to their applicable licenses.
             </p>
             <Button onClick={() => setCreditsOpen(false)}>Close</Button>
+          </div>
+        </div>
+      )}
+
+      {legalOpen && (
+        <div className="password-prompt-overlay" onClick={() => setLegalOpen(false)}>
+          <div className="password-prompt-card credits-card" onClick={(event) => event.stopPropagation()}>
+            <h2>Terms &amp; Privacy</h2>
+
+            <h3>Disclaimer</h3>
+            <p className="status-text">
+              CYDI is provided as-is for entertainment purposes only. We do our best to keep the game available and
+              working properly, but we do not guarantee uninterrupted availability, error-free operation, permanent
+              data storage, or specific results. Scores, progress, challenges, rewards, and game mechanics may
+              change, reset, or be discontinued at any time.
+            </p>
+
+            <h3>Terms of Use</h3>
+            <ul className="status-text legal-list">
+              <li>CYDI is intended for entertainment purposes only.</li>
+              <li>Bots, hacking, score manipulation, harassment, or abuse of sharing features are not allowed.</li>
+              <li>We may change, update, restrict, or discontinue the game or any part of it at any time.</li>
+              <li>Our liability is limited to the extent permitted by law.</li>
+            </ul>
+
+            <h3>Privacy Policy</h3>
+            <ul className="status-text legal-list">
+              <li>
+                <strong>Stored on your device:</strong> your game progress, scores, achievements, unlocked shapes,
+                difficulty setting, sound preference, and an anonymous, randomly generated player ID and display
+                name, all saved in your browser's local storage.
+              </li>
+              <li>
+                <strong>Stored on our server (Cloudflare):</strong> if you play the Daily Challenge or use sharing
+                features, we store your anonymous player ID, display name, score, and the relevant challenge/shape
+                ID - nothing more. If you set a display name, it appears on the public Daily Challenge leaderboard
+                together with your score, visible to other players.
+              </li>
+              <li>No real name is ever required. The display name is optional and can be anything you choose.</li>
+              <li>We do not intentionally collect sensitive personal information.</li>
+              <li>
+                As with any website, Cloudflare (our hosting provider) processes basic connection data such as IP
+                address at the network level to deliver requests. CYDI itself does not read, log, or store this
+                information.
+              </li>
+              <li>
+                CYDI does not currently use analytics or tracking tools. If that changes, this policy will be
+                updated first.
+              </li>
+            </ul>
+
+            <h3>Children</h3>
+            <p className="status-text">
+              CYDI does not ask children, or any player, to provide personal information. The default display name
+              is "Anonymous Player," and choosing a different name is entirely optional.
+            </p>
+            <p className="status-text">
+              If ads, user accounts, or in-app purchases are added in the future, this policy will be updated before
+              release.
+            </p>
+
+            <h3>Contact</h3>
+            <p className="status-text">
+              Privacy questions: <a href="mailto:privacy@playcydi.com">privacy@playcydi.com</a>
+            </p>
+
+            <Button onClick={() => setLegalOpen(false)}>Close</Button>
           </div>
         </div>
       )}

@@ -667,6 +667,19 @@ body {
   overflow-y: auto;
 }
 
+.credits-card h3 {
+  margin: var(--space-3) 0 0;
+  font-size: 15px;
+}
+
+.legal-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;

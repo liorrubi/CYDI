@@ -144,7 +144,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Painted as real pixels (not left to a CSS background) so that
+    // Android/WebView "force dark" heuristics - which rewrite CSS
+    // background-color but can't touch already-rasterized canvas content -
+    // can't turn this dark and swallow the (dark-colored) pen strokes.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     if (showGhost && ghostPath) {
       drawSegmentedStroke(ctx, ghostPath.points, ghostPath.breaks ?? [], GHOST_STROKE_COLOR, GHOST_STROKE_OPTIONS);

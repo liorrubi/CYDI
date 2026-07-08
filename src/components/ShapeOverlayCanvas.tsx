@@ -27,7 +27,9 @@ export default function ShapeOverlayCanvas({
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // See DrawingCanvas.redraw() for why this is a real pixel fill, not a CSS background.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     drawSegmentedStroke(ctx, target.points, target.breaks ?? [], "#2563eb", { lineWidth: 6, dash: [12, 8] });
     drawSegmentedUserStroke(ctx, attempt.points, attempt.breaks ?? [], attemptColor);
   }, [target, attempt, attemptColor, width, height]);

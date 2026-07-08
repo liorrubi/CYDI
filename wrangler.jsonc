@@ -12,5 +12,19 @@
       "binding": "SHARE_KV",
       "id": "27ae6995fdef4040ac555ee8f1830bee"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DAILY_CHALLENGE_DO",
+        "class_name": "DailyChallengeDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DailyChallengeDO"]
+    }
   ]
 }

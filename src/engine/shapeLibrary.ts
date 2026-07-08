@@ -6936,3 +6936,7 @@ export const SHAPE_LIBRARY: ShapeDefinition[] = [
 export function shapesForCategory(category: CategoryId): ShapeDefinition[] {
   return SHAPE_LIBRARY.filter((s) => s.category === category);
 }
+
+export function getShapeById(id: string): ShapeDefinition | undefined {
+  return SHAPE_LIBRARY.find((s) => s.id === id);
+}

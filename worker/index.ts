@@ -1,6 +1,11 @@
+import { DailyChallengeDO } from "./dailyChallengeDO";
+
+export { DailyChallengeDO };
+
 export interface Env {
   SHARE_KV: KVNamespace;
   ASSETS: Fetcher;
+  DAILY_CHALLENGE_DO: DurableObjectNamespace;
 }
 
 // Excludes 0/O and 1/I to avoid ids that are ambiguous when read aloud or copied by hand.
@@ -50,14 +55,36 @@ async function handleGet(id: string, env: Env): Promise<Response> {
   return new Response(value, { headers: { "content-type": "application/json" } });
 }
 
+// Every /api/daily/* request is forwarded to the single global DailyChallengeDO
+// instance, which processes requests one at a time (see dailyChallengeDO.ts).
+function forwardToDailyDO(request: Request, env: Env, path: string): Promise<Response> {
+  const id = env.DAILY_CHALLENGE_DO.idFromName("global");
+  const stub = env.DAILY_CHALLENGE_DO.get(id);
+  const url = new URL(request.url);
+  const target = new URL(path + url.search, "https://daily-challenge.internal");
+  return stub.fetch(target.toString(), {
+    method: request.method,
+    headers: request.headers,
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/share" && request.method === "POST") return handleCreate(request, env);
 
-    const match = url.pathname.match(/^\/api\/share\/([A-Za-z0-9]{4,12})$/);
-    if (match && request.method === "GET") return handleGet(match[1], env);
+    const shareMatch = url.pathname.match(/^\/api\/share\/([A-Za-z0-9]{4,12})$/);
+    if (shareMatch && request.method === "GET") return handleGet(shareMatch[1], env);
+
+    if (url.pathname === "/api/daily/current" && request.method === "GET") return forwardToDailyDO(request, env, "/current");
+    if (url.pathname === "/api/daily/submit" && request.method === "POST") return forwardToDailyDO(request, env, "/submit");
+    if (url.pathname === "/api/daily/claim-prizes" && request.method === "POST") return forwardToDailyDO(request, env, "/claim-prizes");
+    if (url.pathname === "/api/daily/history" && request.method === "GET") return forwardToDailyDO(request, env, "/history");
+
+    const episodeMatch = url.pathname.match(/^\/api\/daily\/episode\/(\d+)$/);
+    if (episodeMatch && request.method === "GET") return forwardToDailyDO(request, env, `/episode/${episodeMatch[1]}`);
 
     return env.ASSETS.fetch(request);
   },

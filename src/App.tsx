@@ -9,17 +9,20 @@ import CreateChallengeScreen from "./screens/CreateChallengeScreen";
 import MyChallengesScreen from "./screens/MyChallengesScreen";
 import PlayChallengeScreen from "./screens/PlayChallengeScreen";
 import ShapeChallengeScreen from "./screens/ShapeChallengeScreen";
+import DailyChallengeScreen from "./screens/DailyChallengeScreen";
+import DailyChallengeHistoryScreen from "./screens/DailyChallengeHistoryScreen";
 import ShopScreen from "./screens/ShopScreen";
 import AchievementsScreen from "./screens/AchievementsScreen";
 import InstructionsScreen from "./screens/InstructionsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import SharedResultScreen from "./screens/SharedResultScreen";
-import { toAchievements, toPlay, toSharedResult } from "./app/routes";
+import { toAchievements, toDailyChallenge, toPlay, toSharedResult } from "./app/routes";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { markAchievementsTutorialShown, onRoundCompleted, shouldShowAchievementsTutorial } from "./services/tutorialStore";
 import { getChallenge, updateChallenge } from "./services/challengeStorage";
 import { decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
 import { fetchSharedById } from "./services/shareApi";
+import { isDailyChallengeSharePath } from "./services/dailyChallengeShare";
 import type { Screen } from "./types/GameMode";
 
 /** Imports a shared challenge idempotently, keeping the recipient's own progress if they've already opened this link before - only `name`/`target` ever sync from the payload, never `createdAt`/`personalBest`/`attempts`. */
@@ -72,8 +75,15 @@ async function importSharedScreenFromShortId(id: string): Promise<Screen | null>
 export default function App() {
   const [screen, setScreen] = useState<Screen>(() => {
     const shared = importSharedScreenFromHash();
-    if (shared) history.replaceState(null, "", location.pathname + location.search);
-    return shared ?? { name: "home" };
+    if (shared) {
+      history.replaceState(null, "", location.pathname + location.search);
+      return shared;
+    }
+    if (isDailyChallengeSharePath(location.pathname)) {
+      history.replaceState(null, "", "/" + location.search);
+      return toDailyChallenge();
+    }
+    return { name: "home" };
   });
   const [showAchievementsTutorial, setShowAchievementsTutorial] = useState(() => shouldShowAchievementsTutorial());
 
@@ -145,6 +155,12 @@ export default function App() {
             return <PlayChallengeScreen challengeId={screen.challengeId} onNavigate={setScreen} />;
           case "shapeChallenge":
             return <ShapeChallengeScreen onNavigate={setScreen} />;
+          case "dailyChallenge":
+            return <DailyChallengeScreen onNavigate={setScreen} />;
+          case "dailyChallengeHistory":
+            return <DailyChallengeHistoryScreen onNavigate={setScreen} />;
+          case "dailyChallengeReplay":
+            return <DailyChallengeScreen onNavigate={setScreen} replay={screen.entry} />;
           case "settings":
             return <SettingsScreen onNavigate={setScreen} />;
           case "shop":

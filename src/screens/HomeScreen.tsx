@@ -1,6 +1,16 @@
 import AppHeader from "../components/AppHeader";
 import { APP_NAME, APP_TAGLINE } from "../app/constants";
-import { toAchievements, toCreate, toHome, toInstructions, toList, toSettings, toShapeChallenge, toShop } from "../app/routes";
+import {
+  toAchievements,
+  toCreate,
+  toDailyChallenge,
+  toHome,
+  toInstructions,
+  toList,
+  toSettings,
+  toShapeChallenge,
+  toShop,
+} from "../app/routes";
 import { playSelectSound } from "../engine/soundEngine";
 import type { Screen } from "../types/GameMode";
 
@@ -45,10 +55,14 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           <h2>Shape Challenge</h2>
           <p>Draw what the game shows you</p>
         </button>
-        <div className="card home-card disabled home-card-accent-orange" aria-disabled="true">
+        <button
+          type="button"
+          className="card home-card home-card-accent-orange"
+          onClick={() => handleSelect(toDailyChallenge())}
+        >
           <h2>Daily Challenge</h2>
-          <p>Coming soon</p>
-        </div>
+          <p>Draw from memory, race for the top score</p>
+        </button>
         <button
           type="button"
           className="card home-card home-card-accent-gold"

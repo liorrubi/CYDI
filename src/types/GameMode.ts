@@ -1,4 +1,5 @@
 import type { DecodedSharedResult } from "../services/shareLink";
+import type { DailyHistoryEntry } from "../services/dailyChallengeApi";
 
 export type Screen =
   | { name: "home" }
@@ -10,4 +11,7 @@ export type Screen =
   | { name: "shop"; from: Screen }
   | { name: "achievements"; from: Screen }
   | { name: "instructions"; from: Screen }
-  | { name: "sharedResult"; data: DecodedSharedResult };
+  | { name: "sharedResult"; data: DecodedSharedResult }
+  | { name: "dailyChallenge" }
+  | { name: "dailyChallengeHistory" }
+  | { name: "dailyChallengeReplay"; entry: DailyHistoryEntry };

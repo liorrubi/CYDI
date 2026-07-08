@@ -1550,3 +1550,61 @@ body {
   color: var(--color-text-muted);
   font-size: 14px;
 }
+
+.daily-leaderboard-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.daily-leaderboard-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.daily-leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.daily-leaderboard-table th {
+  text-align: left;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.daily-leaderboard-table td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.daily-leaderboard-table tr:last-child td {
+  border-bottom: none;
+}
+
+.daily-leaderboard-table th:last-child,
+.daily-leaderboard-table td:last-child {
+  text-align: right;
+}
+
+.daily-leaderboard-row-self {
+  background: rgba(91, 91, 247, 0.08);
+  font-weight: 700;
+}
+
+.daily-history-prizes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}

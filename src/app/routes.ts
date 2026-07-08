@@ -1,5 +1,6 @@
 import type { Screen } from "../types/GameMode";
 import type { DecodedSharedResult } from "../services/shareLink";
+import type { DailyHistoryEntry } from "../services/dailyChallengeApi";
 
 export type { Screen };
 
@@ -41,4 +42,16 @@ export function toInstructions(from: Screen): Screen {
 
 export function toSharedResult(data: DecodedSharedResult): Screen {
   return { name: "sharedResult", data };
+}
+
+export function toDailyChallenge(): Screen {
+  return { name: "dailyChallenge" };
+}
+
+export function toDailyChallengeHistory(): Screen {
+  return { name: "dailyChallengeHistory" };
+}
+
+export function toDailyChallengeReplay(entry: DailyHistoryEntry): Screen {
+  return { name: "dailyChallengeReplay", entry };
 }

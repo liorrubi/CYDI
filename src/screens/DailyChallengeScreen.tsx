@@ -61,6 +61,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const [yourBest, setYourBest] = useState<number | null>(null);
   const [isNewBest, setIsNewBest] = useState(false);
   const [nameDraft, setNameDraft] = useState(() => getPlayerName());
+  const [isEditingName, setIsEditingName] = useState(false);
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
   const [result, setResult] = useState<ScoreBreakdown | null>(null);
   const [submission, setSubmission] = useState<DailySubmitResult | null>(null);
@@ -278,15 +279,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
     <div className="screen">
       <AppHeader
         title={replay ? `Challenge from ${episode.dateKey}` : "Daily Challenge"}
-        subtitle={
-          isLive
-            ? leader
-              ? `Top score: ${leader.score}% by ${leader.playerName}`
-              : "Be the first to set a score today!"
-            : leader
-              ? `Winner: ${leader.playerName} (${leader.score}%)`
-              : "No winner - challenge expired"
-        }
+        subtitle={!isLive ? (leader ? `Winner: ${leader.playerName} (${leader.score}%)` : "No winner - challenge expired") : undefined}
         onBack={goBack}
         onNavigateToAchievements={goToAchievements}
         onNavigateToInstructions={goToInstructions}
@@ -294,10 +287,37 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
         onNavigateToHome={goToHome}
         onNavigateToSettings={goToSettings}
       />
-      <div className="journey-stats">
+      <div className="daily-status-line">
         <span>Your best: {yourBest === null ? "—" : `${yourBest}%`}</span>
-        {isLive && <span>Playing as: {nameDraft.trim() || ANONYMOUS_PLAYER_NAME}</span>}
+        {isLive && (
+          <>
+            <span className="daily-status-dot" aria-hidden="true">
+              •
+            </span>
+            <span>{leader ? `Top score: ${leader.score}% by ${leader.playerName}` : "Be the first to set a score today!"}</span>
+          </>
+        )}
       </div>
+      {isLive && (
+        <div className="daily-name-row">
+          {isEditingName ? (
+            <input
+              autoFocus
+              className="daily-name-input"
+              placeholder="Your name (optional)"
+              value={nameDraft}
+              maxLength={24}
+              onChange={(e) => handleNameChange(e.target.value)}
+              onBlur={() => setIsEditingName(false)}
+              onKeyDown={(e) => e.key === "Enter" && setIsEditingName(false)}
+            />
+          ) : (
+            <button type="button" className="daily-name-display" onClick={() => setIsEditingName(true)}>
+              Playing as: <strong>{nameDraft.trim() || ANONYMOUS_PLAYER_NAME}</strong> <span aria-hidden="true">✏️</span>
+            </button>
+          )}
+        </div>
+      )}
       {isLive && prizeMessages.length > 0 && (
         <div className="celebration-banner prize-banner">
           <div className="prize-banner-messages">
@@ -308,23 +328,6 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
           <button type="button" className="prize-banner-dismiss" onClick={() => setPrizeMessages([])} aria-label="Dismiss">
             ✕
           </button>
-        </div>
-      )}
-      <DailyLeaderboardTable entries={episode.topEntries} highlightPlayerId={playerId} />
-      {isLive && (
-        <div className="name-form">
-          <input placeholder="Your name (optional)" value={nameDraft} maxLength={24} onChange={(e) => handleNameChange(e.target.value)} />
-        </div>
-      )}
-      {isLive && shareFeedback && <p className="status-text">{shareFeedback}</p>}
-      {isLive && (
-        <div className="button-row">
-          <Button variant="secondary" onClick={handleShare}>
-            Share
-          </Button>
-          <Button variant="secondary" onClick={() => onNavigate(toDailyChallengeHistory())}>
-            Previous Challenges
-          </Button>
         </div>
       )}
       <p className="status-text">
@@ -356,6 +359,18 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
           </div>
         </>
       )}
+      {isLive && (
+        <div className="daily-secondary-actions">
+          <Button variant="secondary" className="btn-compact" onClick={handleShare}>
+            Share
+          </Button>
+          <Button variant="secondary" className="btn-compact" onClick={() => onNavigate(toDailyChallengeHistory())}>
+            Previous Challenges
+          </Button>
+        </div>
+      )}
+      {isLive && shareFeedback && <p className="status-text">{shareFeedback}</p>}
+      <DailyLeaderboardTable entries={episode.topEntries} highlightPlayerId={playerId} />
     </div>
   );
 }

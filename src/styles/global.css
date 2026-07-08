@@ -530,6 +530,72 @@ body {
   font-size: 16px;
 }
 
+.daily-status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 420px;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.daily-status-dot {
+  opacity: 0.5;
+}
+
+.daily-name-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  max-width: 420px;
+}
+
+.daily-name-display {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.daily-name-input {
+  width: 100%;
+  max-width: 260px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  font-size: 14px;
+  text-align: center;
+}
+
+.daily-secondary-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 320px;
+}
+
+.daily-secondary-actions .btn {
+  flex: 1;
+}
+
+.btn-compact {
+  min-height: 36px;
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+}
+
 .password-prompt-overlay {
   position: fixed;
   inset: 0;

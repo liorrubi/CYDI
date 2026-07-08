@@ -25,6 +25,8 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __APP_BUILD__: JSON.stringify(resolveAppBuild()),
+    // ISO timestamp of this build - shown in Settings as "Last updated", never edited by hand.
+    __APP_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   // Keep the dep-optimizer cache outside the Dropbox-synced folder —
   // Dropbox locks files mid-sync and breaks Vite's cache directory rename (EBUSY).

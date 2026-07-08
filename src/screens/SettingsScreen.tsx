@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
-import { APP_BUILD, APP_VERSION, DIFFICULTY_LEVELS, passScoreForDifficulty } from "../app/constants";
+import { APP_BUILD, APP_BUILD_TIME, APP_VERSION, DIFFICULTY_LEVELS, passScoreForDifficulty } from "../app/constants";
 import { playChipSound } from "../engine/soundEngine";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive, setUnlockEverything } from "../services/unlockOverrideStore";
@@ -11,6 +11,15 @@ import { toAchievements, toHome, toInstructions, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 const LOCK_MANAGEMENT_PASSWORD = "1111";
+
+function formatBuildTime(iso: string): string {
+  const date = new Date(iso);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = date.toLocaleString("en-US", { month: "short" });
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${day} ${month} ${date.getFullYear()}, ${hours}:${minutes}`;
+}
 
 type SettingsScreenProps = {
   onNavigate: (screen: Screen) => void;
@@ -179,9 +188,9 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         <br />
         Can You Draw It?
         <br />
-        Version {APP_VERSION}
+        Version {APP_VERSION} / Build {APP_BUILD}
         <br />
-        Build {APP_BUILD}
+        Last updated: {formatBuildTime(APP_BUILD_TIME)}
       </p>
 
       {creditsOpen && (

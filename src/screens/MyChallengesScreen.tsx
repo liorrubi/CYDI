@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import AppHeader from "../components/AppHeader";
+import Button from "../components/Button";
 import ChallengeCard from "../components/ChallengeCard";
 import EmptyState from "../components/EmptyState";
 import { deleteChallenge, getChallenges } from "../services/challengeStorage";
 import { encodeChallengeLink } from "../services/shareLink";
 import { createShortChallengeLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
+import { markMyChallengesTutorialShown, shouldShowMyChallengesTutorial } from "../services/tutorialStore";
 import { toAchievements, toCreate, toHome, toInstructions, toList, toPlay, toSettings, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { Challenge } from "../types/Challenge";
@@ -17,10 +19,16 @@ type MyChallengesScreenProps = {
 export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenProps) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const [showTutorial, setShowTutorial] = useState(() => shouldShowMyChallengesTutorial());
 
   useEffect(() => {
     setChallenges(getChallenges());
   }, []);
+
+  function handleDismissTutorial() {
+    markMyChallengesTutorialShown();
+    setShowTutorial(false);
+  }
 
   function handleDelete(id: string) {
     deleteChallenge(id);
@@ -53,6 +61,19 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />
+      {showTutorial && (
+        <div className="myc-tutorial-overlay" onClick={handleDismissTutorial}>
+          <div className="password-prompt-card" onClick={(event) => event.stopPropagation()}>
+            <h2>My Challenges</h2>
+            <p className="status-text">Choose how you want to play:</p>
+            <ol className="instructions-tip-list">
+              <li>Tap Play to challenge a friend on this device.</li>
+              <li>Tap Share to send the challenge to a friend on their own device.</li>
+            </ol>
+            <Button onClick={handleDismissTutorial}>Got it</Button>
+          </div>
+        </div>
+      )}
       {shareFeedback && <p className="status-text">{shareFeedback}</p>}
       {challenges.length === 0 ? (
         <EmptyState message="No challenges yet" actionLabel="Create one" onAction={() => onNavigate(toCreate())} />

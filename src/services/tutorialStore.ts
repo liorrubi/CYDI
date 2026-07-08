@@ -34,3 +34,13 @@ export function markAchievementsTutorialShown(): void {
 export function shouldShowAchievementsTutorial(): boolean {
   return !hasShownAchievementsTutorial() && getCompletedRoundCount() >= ACHIEVEMENTS_TUTORIAL_ROUND_THRESHOLD;
 }
+
+export function shouldShowMyChallengesTutorial(): boolean {
+  return !getSaveData().progress.myChallengesTutorialShown;
+}
+
+export function markMyChallengesTutorialShown(): void {
+  updateSaveData((data) => {
+    data.progress.myChallengesTutorialShown = true;
+  });
+}

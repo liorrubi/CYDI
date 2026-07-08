@@ -22,6 +22,7 @@ export type SaveData = {
     };
     completedRounds: number;
     achievementsTutorialShown: boolean;
+    myChallengesTutorialShown: boolean;
     challenges: Challenge[];
   };
   settings: {
@@ -44,6 +45,7 @@ export function createDefaultSaveData(): SaveData {
       dailyStreak: { lastVisitDate: "", currentStreak: 0, longestStreak: 0 },
       completedRounds: 0,
       achievementsTutorialShown: false,
+      myChallengesTutorialShown: false,
       challenges: [],
     },
     settings: {

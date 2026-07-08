@@ -6,6 +6,8 @@ export const APP_TAGLINE = "Quick drawing challenges";
 export const APP_VERSION = "0.2.0";
 // Short git commit hash (or a build timestamp fallback), set automatically at build time.
 export const APP_BUILD = __APP_BUILD__;
+// ISO timestamp of when this build was produced, set automatically at build time - not schemaVersion (save file format) or APP_VERSION (hand-bumped product version).
+export const APP_BUILD_TIME = __APP_BUILD_TIME__;
 
 export const STORAGE_KEY = "cydi.challenges.v1";
 export const SHAPE_CHALLENGE_STORAGE_KEY = "cydi.shapeChallenge.progress.v1";

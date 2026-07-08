@@ -1,4 +1,4 @@
-export const APP_NAME = "CYDI";
+export const APP_NAME = "CYDI - Can You Draw It?";
 export const APP_TAGLINE = "Quick drawing challenges";
 
 export const STORAGE_KEY = "cydi.challenges.v1";

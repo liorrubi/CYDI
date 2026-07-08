@@ -433,6 +433,40 @@ function lissajousShape(a: number, b: number): ShapeDefinition {
   };
 }
 
+function diamondShape(size: number): DrawingPath {
+  const center = { x: size / 2, y: size / 2 };
+  const halfW = size * 0.28;
+  const halfH = size * 0.4;
+  const vertices: Vec2[] = [
+    { x: center.x, y: center.y - halfH },
+    { x: center.x + halfW, y: center.y },
+    { x: center.x, y: center.y + halfH },
+    { x: center.x - halfW, y: center.y },
+  ];
+  return toPath(polygonEdges(vertices, 12), size);
+}
+
+function plusShape(size: number): DrawingPath {
+  const center = { x: size / 2, y: size / 2 };
+  const arm = size * 0.4; // half-length of the cross from center to tip
+  const half = size * 0.14; // half-thickness of each arm
+  const vertices: Vec2[] = [
+    { x: center.x - half, y: center.y - arm },
+    { x: center.x + half, y: center.y - arm },
+    { x: center.x + half, y: center.y - half },
+    { x: center.x + arm, y: center.y - half },
+    { x: center.x + arm, y: center.y + half },
+    { x: center.x + half, y: center.y + half },
+    { x: center.x + half, y: center.y + arm },
+    { x: center.x - half, y: center.y + arm },
+    { x: center.x - half, y: center.y + half },
+    { x: center.x - arm, y: center.y + half },
+    { x: center.x - arm, y: center.y - half },
+    { x: center.x - half, y: center.y - half },
+  ];
+  return toPath(polygonEdges(vertices, 6), size);
+}
+
 const LISSAJOUS_PAIRS: [number, number][] = [
   [1, 3],
   [2, 3],
@@ -457,8 +491,10 @@ const GEOMETRIC_SHAPES: ShapeDefinition[] = [
   ...[3, 4, 5, 6, 7, 8, 9, 10].map(roseShape),
   ...[3, 4, 5].map(zigzagShape),
   ...[1, 2, 3].map(waveShape),
-  ...[1, 2, 3, 4, 5].map(spiralShape),
-  ...[6, 8, 10, 12].map(gearShape),
+  ...[1, 2, 3, 4].map(spiralShape),
+  ...[6, 8, 10].map(gearShape),
+  standalone("diamond", "Diamond", "geometric", diamondShape),
+  standalone("plus", "Plus", "geometric", plusShape),
   ...LISSAJOUS_PAIRS.map(([a, b]) => lissajousShape(a, b)),
 ];
 
@@ -1875,13 +1911,14 @@ function horseShape(size: number): DrawingPath {
   // and belly; the four legs and the tail are separate parts, plus an eye.
   const body = smoothClosedPath(
     fracPoints(size, [
-      [0.2, 0.12], // ear tip / top of head
-      [0.15, 0.22], // forehead
-      [0.11, 0.32], // face
-      [0.1, 0.4], // muzzle tip
-      [0.14, 0.44], // mouth
-      [0.2, 0.44], // chin / jaw
-      [0.26, 0.5], // throat (front of neck)
+      [0.2, 0.14], // crown (top of skull, between the ears)
+      [0.16, 0.2], // forehead
+      [0.12, 0.29], // nasal bridge / face
+      [0.1, 0.37], // muzzle top
+      [0.11, 0.43], // nose tip (blunt)
+      [0.16, 0.46], // mouth / lower lip
+      [0.22, 0.46], // chin
+      [0.28, 0.49], // jowl (rounded cheek) into throat
       [0.34, 0.62], // lower neck
       [0.37, 0.68], // brisket / chest
       [0.5, 0.7], // belly
@@ -1893,9 +1930,26 @@ function horseShape(size: number): DrawingPath {
       [0.46, 0.44], // withers
       [0.34, 0.38], // crest (back of neck)
       [0.28, 0.28],
-      [0.24, 0.18], // poll
+      [0.25, 0.2], // poll (back of head)
     ]),
     9,
+  );
+  // Two pointed ears rising from the top of the head, each its own part.
+  const earFront = polygonEdges(
+    fracPoints(size, [
+      [0.17, 0.18],
+      [0.14, 0.08],
+      [0.21, 0.16],
+    ]),
+    4,
+  );
+  const earBack = polygonEdges(
+    fracPoints(size, [
+      [0.22, 0.17],
+      [0.27, 0.09],
+      [0.27, 0.18],
+    ]),
+    4,
   );
   const leg = (x0: number, x1: number, top: number, bottom: number) =>
     polygonEdges(
@@ -1924,8 +1978,8 @@ function horseShape(size: number): DrawingPath {
     8,
   );
   const eye: Vec2[] = [];
-  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.17, y: size * 0.3 }, size * 0.018, (i / 12) * 360));
-  return toPathFromParts([body, frontFar, frontNear, hindFar, hindNear, tail, eye], size);
+  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.18, y: size * 0.28 }, size * 0.018, (i / 12) * 360));
+  return toPathFromParts([body, earFront, earBack, frontFar, frontNear, hindFar, hindNear, tail, eye], size);
 }
 
 const ANIMAL_SHAPES: ShapeDefinition[] = [
@@ -5877,16 +5931,23 @@ function unicornShape(size: number): DrawingPath {
     ]),
     9,
   );
+  // Long tapering horn rising from the forehead to a fine tip.
   const horn = polygonEdges(
     fracPoints(size, [
-      [0.42, 0.16],
-      [0.56, 0.02],
-      [0.48, 0.19],
+      [0.4, 0.185],
+      [0.61, 0.01],
+      [0.47, 0.165],
     ]),
-    5,
+    6,
   );
-  // Spiral ticks across the horn.
+  // Spiral ridges: evenly spaced bands running across the tapering horn.
   const tick = (from: [number, number], to: [number, number]) => openPolyline(fracPoints(size, [from, to]), 3);
+  const ridges = [
+    tick([0.442, 0.15], [0.498, 0.134]),
+    tick([0.484, 0.115], [0.526, 0.103]),
+    tick([0.526, 0.08], [0.554, 0.072]),
+    tick([0.568, 0.045], [0.582, 0.041]),
+  ];
   const ear = polygonEdges(
     fracPoints(size, [
       [0.36, 0.18],
@@ -5907,10 +5968,10 @@ function unicornShape(size: number): DrawingPath {
   );
   const eye: Vec2[] = [];
   for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.5, y: size * 0.34 }, size * 0.02, (i / 12) * 360));
-  return toPathFromParts(
-    [head, horn, tick([0.475, 0.115], [0.5, 0.133]), tick([0.505, 0.073], [0.528, 0.091]), ear, mane, eye],
-    size,
-  );
+  // Nostril near the muzzle tip.
+  const nostril: Vec2[] = [];
+  for (let i = 0; i <= 10; i++) nostril.push(polar({ x: size * 0.6, y: size * 0.6 }, size * 0.016, (i / 10) * 360));
+  return toPathFromParts([head, horn, ...ridges, ear, mane, eye, nostril], size);
 }
 
 function wandShape(size: number): DrawingPath {
@@ -6447,13 +6508,15 @@ function mermaidTailShape(size: number): DrawingPath {
     openPolyline(
       fracPoints(size, [
         [x0, fy],
-        [(x0 + x1) / 2, fy + 0.05],
+        [(x0 + x1) / 2, fy + 0.035],
         [x1, fy],
       ]),
       5,
     );
+  // Scale rows sit in the wide upper (thigh) zone and taper inward as the tail
+  // narrows toward the ankle, so they stay safely inside the outline.
   return toPathFromParts(
-    [outline, scaleArc(0.41, 0.59, 0.24), scaleArc(0.42, 0.58, 0.35), scaleArc(0.44, 0.56, 0.46)],
+    [outline, scaleArc(0.44, 0.56, 0.22), scaleArc(0.45, 0.55, 0.3), scaleArc(0.47, 0.53, 0.38)],
     size,
   );
 }

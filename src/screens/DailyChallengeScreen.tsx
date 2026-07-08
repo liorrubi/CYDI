@@ -6,7 +6,6 @@ import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCa
 import PenColorMenu from "../components/PenColorMenu";
 import ScoreCard from "../components/ScoreCard";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
-import StarRating from "../components/StarRating";
 import {
   ANALYZING_MAX_MS,
   ANALYZING_MIN_MS,
@@ -242,11 +241,10 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
         )}
         {!submission?.youWon && newChallengeAvailable && <div className="encourage-banner">A new day's challenge has started.</div>}
         {!submission?.youWon && feedbackMessage && <div className="encourage-banner">💪 {feedbackMessage}</div>}
-        <ScoreCard score={result} isNewBest={isNewBest} />
-        <StarRating score={result.total} size={44} />
+        <ScoreCard score={result} isNewBest={isNewBest} showPercentSign />
         {yourBest !== null && (
           <p className="best-summary">
-            Your best for this shape: <strong>{yourBest}%</strong> <StarRating score={yourBest} size={44} />
+            Your best for this shape: <strong>{yourBest}%</strong>
           </p>
         )}
         <div className="canvas-wrapper">

@@ -69,19 +69,15 @@ export default function AppHeader({
         </div>
       )}
       <div className="app-header-actions">
-        {onNavigateToInstructions && (
-          <button
-            type="button"
-            className="info-shortcut"
-            onClick={() => {
-              playInfoPeekSound();
-              onNavigateToInstructions();
-            }}
-            aria-label="How to play"
-          >
-            i
-          </button>
-        )}
+        <CoinIndicator
+          onClick={
+            onNavigateToShop &&
+            (() => {
+              playCoinsPeekSound();
+              onNavigateToShop();
+            })
+          }
+        />
         {onNavigateToAchievements && (
           <button
             type="button"
@@ -95,16 +91,20 @@ export default function AppHeader({
             🏆
           </button>
         )}
-        <CoinIndicator
-          onClick={
-            onNavigateToShop &&
-            (() => {
-              playCoinsPeekSound();
-              onNavigateToShop();
-            })
-          }
-        />
         <SoundToggleButton />
+        {onNavigateToInstructions && (
+          <button
+            type="button"
+            className="info-shortcut"
+            onClick={() => {
+              playInfoPeekSound();
+              onNavigateToInstructions();
+            }}
+            aria-label="How to play"
+          >
+            i
+          </button>
+        )}
         {onNavigateToSettings && (
           <button
             type="button"

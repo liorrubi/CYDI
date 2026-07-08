@@ -19,6 +19,7 @@ import { recordDailyVisit } from "./services/dailyStreakStore";
 import { markAchievementsTutorialShown, onRoundCompleted, shouldShowAchievementsTutorial } from "./services/tutorialStore";
 import { getChallenge, updateChallenge } from "./services/challengeStorage";
 import { decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
+import { fetchSharedById } from "./services/shareApi";
 import type { Screen } from "./types/GameMode";
 
 /** Imports a shared challenge idempotently, keeping the recipient's own progress if they've already opened this link before - only `name`/`target` ever sync from the payload, never `createdAt`/`personalBest`/`attempts`. */
@@ -51,6 +52,23 @@ function importSharedScreenFromHash(): Screen | null {
   return null;
 }
 
+function shortLinkIdFromPath(): string | null {
+  const match = location.pathname.match(/^\/c\/([A-Za-z0-9]{4,12})$/);
+  return match ? match[1] : null;
+}
+
+/** Resolves a short server-backed link (`/c/<id>`) - the async counterpart to `importSharedScreenFromHash`, needed because this path requires a network round-trip instead of decoding data already present in the URL. */
+async function importSharedScreenFromShortId(id: string): Promise<Screen | null> {
+  const shared = await fetchSharedById(id);
+  if (!shared) return null;
+
+  if (shared.kind === "challenge") {
+    importSharedChallenge(shared.data);
+    return toPlay(shared.data.id);
+  }
+  return toSharedResult(shared.data);
+}
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>(() => {
     const shared = importSharedScreenFromHash();
@@ -75,6 +93,23 @@ export default function App() {
     }
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  // Resolves a short /c/<id> link on load. Runs after the hash-based sync
+  // check above, so it only applies when the URL has no hash payload of its
+  // own (the two schemes never coexist in the same link).
+  useEffect(() => {
+    const id = shortLinkIdFromPath();
+    if (!id) return;
+    let cancelled = false;
+    importSharedScreenFromShortId(id).then((shared) => {
+      if (cancelled || !shared) return;
+      history.replaceState(null, "", "/" + location.search);
+      setScreen(shared);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(

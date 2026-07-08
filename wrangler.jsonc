@@ -1,8 +1,16 @@
 {
   "name": "cydi",
   "compatibility_date": "2026-07-07",
+  "main": "worker/index.ts",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
-  }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SHARE_KV",
+      "id": "27ae6995fdef4040ac555ee8f1830bee"
+    }
+  ]
 }

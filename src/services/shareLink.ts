@@ -72,27 +72,34 @@ function shareBaseUrl(): string {
   return `${location.origin}${location.pathname}`;
 }
 
-type SharedChallengePayload = { i: string; n: string; t: SharePath };
+export type SharedChallengePayload = { i: string; n: string; t: SharePath };
 
 export type DecodedSharedChallenge = { id: string; name: string; target: DrawingPath };
 
+export function buildChallengePayload(challenge: Challenge): SharedChallengePayload {
+  return { i: challenge.id, n: challenge.name, t: toSharePath(challenge.target) };
+}
+
+export function parseChallengePayload(raw: unknown): DecodedSharedChallenge | null {
+  const value = raw as Partial<SharedChallengePayload> | null;
+  if (!value || typeof value.i !== "string" || typeof value.n !== "string" || !isSharePath(value.t)) return null;
+  return { id: value.i, name: value.n, target: fromSharePath(value.t) };
+}
+
 export function encodeChallengeLink(challenge: Challenge): string {
-  const payload: SharedChallengePayload = { i: challenge.id, n: challenge.name, t: toSharePath(challenge.target) };
-  return `${shareBaseUrl()}#c.${encode(payload)}`;
+  return `${shareBaseUrl()}#c.${encode(buildChallengePayload(challenge))}`;
 }
 
 export function decodeChallengeHash(hash: string): DecodedSharedChallenge | null {
   if (!hash.startsWith("c.")) return null;
   try {
-    const raw = decode(hash.slice(2)) as Partial<SharedChallengePayload>;
-    if (typeof raw.i !== "string" || typeof raw.n !== "string" || !isSharePath(raw.t)) return null;
-    return { id: raw.i, name: raw.n, target: fromSharePath(raw.t) };
+    return parseChallengePayload(decode(hash.slice(2)));
   } catch {
     return null;
   }
 }
 
-type SharedResultPayload = { i: string; n: string; s: ScoreBreakdown; t: SharePath; a: SharePath };
+export type SharedResultPayload = { i: string; n: string; s: ScoreBreakdown; t: SharePath; a: SharePath };
 
 export type DecodedSharedResult = {
   challengeId: string;
@@ -115,6 +122,43 @@ function isScoreBreakdown(value: unknown): value is ScoreBreakdown {
   );
 }
 
+export function buildResultPayload(args: {
+  challengeId: string;
+  challengeName: string;
+  score: ScoreBreakdown;
+  target: DrawingPath;
+  attempt: DrawingPath;
+}): SharedResultPayload {
+  return {
+    i: args.challengeId,
+    n: args.challengeName,
+    s: args.score,
+    t: toSharePath(args.target),
+    a: toSharePath(args.attempt),
+  };
+}
+
+export function parseResultPayload(raw: unknown): DecodedSharedResult | null {
+  const value = raw as Partial<SharedResultPayload> | null;
+  if (
+    !value ||
+    typeof value.i !== "string" ||
+    typeof value.n !== "string" ||
+    !isScoreBreakdown(value.s) ||
+    !isSharePath(value.t) ||
+    !isSharePath(value.a)
+  ) {
+    return null;
+  }
+  return {
+    challengeId: value.i,
+    challengeName: value.n,
+    score: value.s,
+    target: fromSharePath(value.t),
+    attempt: fromSharePath(value.a),
+  };
+}
+
 export function encodeResultLink(args: {
   challengeId: string;
   challengeName: string;
@@ -122,36 +166,13 @@ export function encodeResultLink(args: {
   target: DrawingPath;
   attempt: DrawingPath;
 }): string {
-  const payload: SharedResultPayload = {
-    i: args.challengeId,
-    n: args.challengeName,
-    s: args.score,
-    t: toSharePath(args.target),
-    a: toSharePath(args.attempt),
-  };
-  return `${shareBaseUrl()}#r.${encode(payload)}`;
+  return `${shareBaseUrl()}#r.${encode(buildResultPayload(args))}`;
 }
 
 export function decodeResultHash(hash: string): DecodedSharedResult | null {
   if (!hash.startsWith("r.")) return null;
   try {
-    const raw = decode(hash.slice(2)) as Partial<SharedResultPayload>;
-    if (
-      typeof raw.i !== "string" ||
-      typeof raw.n !== "string" ||
-      !isScoreBreakdown(raw.s) ||
-      !isSharePath(raw.t) ||
-      !isSharePath(raw.a)
-    ) {
-      return null;
-    }
-    return {
-      challengeId: raw.i,
-      challengeName: raw.n,
-      score: raw.s,
-      target: fromSharePath(raw.t),
-      attempt: fromSharePath(raw.a),
-    };
+    return parseResultPayload(decode(hash.slice(2)));
   } catch {
     return null;
   }

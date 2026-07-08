@@ -8,6 +8,7 @@ import { ANALYZING_MAX_MS, ANALYZING_MIN_MS, CANVAS_SIZE, PREVIEW_DURATION_MS, t
 import { getChallenge, updateChallenge } from "../services/challengeStorage";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { encodeResultLink } from "../services/shareLink";
+import { createShortResultLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
 import { scoreAttempt } from "../engine/scoring";
 import { toAchievements, toHome, toInstructions, toList, toPlay, toSettings, toShop } from "../app/routes";
@@ -87,13 +88,14 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
 
   async function handleShareResult() {
     if (!result || !attemptPath || !challenge) return;
-    const url = encodeResultLink({
+    const resultArgs = {
       challengeId: challenge.id,
       challengeName: challenge.name,
       score: result,
       target: challenge.target,
       attempt: attemptPath,
-    });
+    };
+    const url = (await createShortResultLink(resultArgs)) ?? encodeResultLink(resultArgs);
     const outcome = await shareOrCopy({
       title: `CYDI Result: ${challenge.name}`,
       text: `I scored ${result.total}% on "${challenge.name}"! Think you can beat it?`,

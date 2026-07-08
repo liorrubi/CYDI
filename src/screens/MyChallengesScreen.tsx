@@ -4,6 +4,7 @@ import ChallengeCard from "../components/ChallengeCard";
 import EmptyState from "../components/EmptyState";
 import { deleteChallenge, getChallenges } from "../services/challengeStorage";
 import { encodeChallengeLink } from "../services/shareLink";
+import { createShortChallengeLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
 import { toAchievements, toCreate, toHome, toInstructions, toList, toPlay, toSettings, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
@@ -27,7 +28,7 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
   }
 
   async function handleShare(challenge: Challenge) {
-    const url = encodeChallengeLink(challenge);
+    const url = (await createShortChallengeLink(challenge)) ?? encodeChallengeLink(challenge);
     const outcome = await shareOrCopy({
       title: `CYDI Challenge: ${challenge.name}`,
       text: `Can you draw "${challenge.name}"? Try my CYDI challenge!`,

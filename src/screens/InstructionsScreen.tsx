@@ -71,11 +71,11 @@ export default function InstructionsScreen({ from, onNavigate }: InstructionsScr
       </div>
 
       <div className="card instructions-card">
-        <h2>A Few Tips</h2>
-        <ul className="instructions-tip-list">
-          <li>You can lift your finger or release the mouse mid-drawing and keep going without starting over.</li>
-          <li>Some shapes need a line drawn twice, or crossing lines like an X - that's expected and won't lower your score.</li>
-        </ul>
+        <h2>Move Your Progress to a New Device</h2>
+        <p className="status-text">
+          You can move your progress between devices using Backup &amp; Transfer in Settings. Export a backup code
+          on one device, then use "Restore from Code" on another to continue with the same progress.
+        </p>
       </div>
     </div>
   );

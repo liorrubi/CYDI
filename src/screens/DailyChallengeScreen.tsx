@@ -41,6 +41,11 @@ import type { ScoreBreakdown } from "../types/Score";
 
 type Phase = "loading" | "error" | "preview" | "drawing" | "analyzing" | "result";
 
+/** Shared wording for every coin-prize notification, so a queued 2nd-place claim and an instant 1st-place win read the same way. */
+function formatDailyPrizeMessage(coins: number): string {
+  return `🏆 You won ${coins} coins in the Daily Challenge!`;
+}
+
 export type DailyReplayTarget = { id: number };
 
 type DailyChallengeScreenProps = {
@@ -61,7 +66,8 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const [submission, setSubmission] = useState<DailySubmitResult | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
-  const [prizeBanner, setPrizeBanner] = useState<string | null>(null);
+  /** One line per unclaimed prize (never summed) - a player who was away for several episodes could have more than one queued at once. */
+  const [prizeMessages, setPrizeMessages] = useState<string[]>([]);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
 
@@ -104,8 +110,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
     if (replay) return;
     claimPrizes().then((claimed) => {
       if (claimed.length === 0) return;
-      const totalCoins = claimed.reduce((sum, prize) => sum + prize.coins, 0);
-      setPrizeBanner(`🏆 You collected a Daily Challenge prize: +${totalCoins} coins!`);
+      setPrizeMessages((prev) => [...prev, ...claimed.map((prize) => formatDailyPrizeMessage(prize.coins))]);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -293,7 +298,18 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
         <span>Your best: {yourBest === null ? "—" : `${yourBest}%`}</span>
         {isLive && <span>Playing as: {nameDraft.trim() || ANONYMOUS_PLAYER_NAME}</span>}
       </div>
-      {isLive && prizeBanner && <div className="celebration-banner">{prizeBanner}</div>}
+      {isLive && prizeMessages.length > 0 && (
+        <div className="celebration-banner prize-banner">
+          <div className="prize-banner-messages">
+            {prizeMessages.map((message, index) => (
+              <p key={index}>{message}</p>
+            ))}
+          </div>
+          <button type="button" className="prize-banner-dismiss" onClick={() => setPrizeMessages([])} aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
       <DailyLeaderboardTable entries={episode.topEntries} highlightPlayerId={playerId} />
       {isLive && (
         <div className="name-form">

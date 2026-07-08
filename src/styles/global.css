@@ -217,6 +217,41 @@ body {
   animation: banner-pop 400ms ease;
 }
 
+.prize-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  text-align: start;
+}
+
+.prize-banner-messages {
+  flex: 1;
+}
+
+.prize-banner-messages p {
+  margin: 0;
+}
+
+.prize-banner-messages p + p {
+  margin-top: var(--space-1);
+}
+
+.prize-banner-dismiss {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.8;
+  padding: var(--space-1);
+}
+
+.prize-banner-dismiss:hover {
+  opacity: 1;
+}
+
 .encourage-banner {
   background: rgba(91, 91, 247, 0.12);
   color: var(--color-primary-dark);

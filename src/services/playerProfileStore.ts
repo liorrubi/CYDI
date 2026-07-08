@@ -46,7 +46,12 @@ export function setPlayerName(name: string): void {
   }
 }
 
-/** The name to submit/display for the current player - falls back to the anonymous label whenever no name has been set. */
+/**
+ * The name to submit/display for the current player - falls back to the anonymous
+ * label whenever no name has been set. Same forward-compatibility note as
+ * getPlayerId(): once login exists, the registered username takes over as the
+ * source here, but every caller keeps working unchanged.
+ */
 export function getDisplayName(): string {
   return getPlayerName() || ANONYMOUS_PLAYER_NAME;
 }

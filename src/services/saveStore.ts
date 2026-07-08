@@ -2,6 +2,7 @@ import { importLegacySaveData } from "./legacyImport";
 import { SAVE_SCHEMA_VERSION, type SaveData } from "./saveData";
 
 const SAVE_KEY = "cydi.save.v1";
+const PRE_IMPORT_BACKUP_KEY = "cydi.save.preImportBackup.v1";
 const SAVE_UPDATED_EVENT = "cydi:save-updated";
 
 let cache: SaveData | null = null;
@@ -62,6 +63,23 @@ export function updateSaveData(mutator: (data: SaveData) => void): SaveData {
   persist(next);
   window.dispatchEvent(new Event(SAVE_UPDATED_EVENT));
   return next;
+}
+
+/**
+ * Snapshots the current save data to a separate rescue key, before a destructive
+ * replace (e.g. `importSaveCode`). Deliberately does NOT swallow errors like
+ * `persist` does - callers must treat a failed backup as a reason to abort the
+ * replace, since a failed backup plus a completed overwrite would leave the
+ * player with no way back.
+ */
+export function backupCurrentSaveData(): void {
+  localStorage.setItem(PRE_IMPORT_BACKUP_KEY, JSON.stringify(load()));
+}
+
+/** Replaces the entire save data wholesale, e.g. restoring from an exported backup code. Unlike `updateSaveData`, this discards whatever was on the device beforehand - callers are responsible for confirming that with the player first, and for backing up via `backupCurrentSaveData` beforehand. */
+export function replaceSaveData(data: SaveData): void {
+  persist({ ...data, schemaVersion: SAVE_SCHEMA_VERSION, updatedAt: Date.now() });
+  window.dispatchEvent(new Event(SAVE_UPDATED_EVENT));
 }
 
 export function onSaveDataChanged(listener: () => void): () => void {

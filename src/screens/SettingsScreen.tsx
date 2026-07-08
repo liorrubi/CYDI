@@ -6,6 +6,7 @@ import { DIFFICULTY_LEVELS, passScoreForDifficulty } from "../app/constants";
 import { playChipSound } from "../engine/soundEngine";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive, setUnlockEverything } from "../services/unlockOverrideStore";
+import { exportSaveCode, importSaveCode } from "../services/saveTransfer";
 import { toAchievements, toHome, toInstructions, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
@@ -22,6 +23,13 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [creditsOpen, setCreditsOpen] = useState(false);
+  const [transferMode, setTransferMode] = useState<"export" | "import" | null>(null);
+  const [exportCode, setExportCode] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
+  const [importDone, setImportDone] = useState(false);
 
   function handleSelectDifficulty(level: (typeof DIFFICULTY_LEVELS)[number]["id"]) {
     playChipSound();
@@ -50,6 +58,54 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
     setAllUnlockedState(next);
     playChipSound();
     setPasswordPromptOpen(false);
+  }
+
+  function handleOpenExport() {
+    setExportCode(exportSaveCode());
+    setCopyFeedback(null);
+    setTransferMode("export");
+  }
+
+  async function handleCopyExportCode() {
+    try {
+      await navigator.clipboard.writeText(exportCode);
+      setCopyFeedback("Copied!");
+    } catch {
+      setCopyFeedback("Couldn't copy automatically - select the text above and copy it manually.");
+    }
+    window.setTimeout(() => setCopyFeedback(null), 2500);
+  }
+
+  function handleOpenImport() {
+    setImportText("");
+    setImportError(null);
+    setImportConfirmOpen(false);
+    setImportDone(false);
+    setTransferMode("import");
+  }
+
+  function handleRequestImport() {
+    if (!importText.trim()) {
+      setImportError("Paste a backup code first.");
+      return;
+    }
+    setImportError(null);
+    setImportConfirmOpen(true);
+  }
+
+  function handleConfirmImport() {
+    const result = importSaveCode(importText);
+    if (!result.ok) {
+      setImportConfirmOpen(false);
+      setImportError(result.error);
+      return;
+    }
+    setImportDone(true);
+    window.setTimeout(() => window.location.reload(), 1200);
+  }
+
+  function handleCloseTransfer() {
+    setTransferMode(null);
   }
 
   return (
@@ -92,6 +148,19 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
       </div>
 
       <div className="card instructions-card">
+        <h2>Backup &amp; Transfer</h2>
+        <p className="status-text">Move your progress to another phone, computer, or browser using a backup code.</p>
+        <div className="button-row">
+          <Button variant="secondary" onClick={handleOpenExport}>
+            📤 Export Backup Code
+          </Button>
+          <Button variant="secondary" onClick={handleOpenImport}>
+            📥 Restore from Code
+          </Button>
+        </div>
+      </div>
+
+      <div className="card instructions-card">
         <h2>Legal / Credits</h2>
         <p className="status-text">
           © 2026 Lior Rubinovich. All rights reserved.
@@ -125,6 +194,74 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
               respective owners and are used according to their applicable licenses.
             </p>
             <Button onClick={() => setCreditsOpen(false)}>Close</Button>
+          </div>
+        </div>
+      )}
+
+      {transferMode === "export" && (
+        <div className="password-prompt-overlay" onClick={handleCloseTransfer}>
+          <div className="password-prompt-card credits-card" onClick={(event) => event.stopPropagation()}>
+            <h2>Your Backup Code</h2>
+            <p className="status-text">Copy this code, then paste it into Settings → Restore from Code on your other device.</p>
+            <textarea
+              readOnly
+              className="password-prompt-input backup-code-textarea"
+              value={exportCode}
+              rows={6}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            {copyFeedback && <p className="status-text">{copyFeedback}</p>}
+            <div className="button-row">
+              <Button variant="secondary" onClick={handleCloseTransfer}>
+                Close
+              </Button>
+              <Button onClick={handleCopyExportCode}>Copy to Clipboard</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {transferMode === "import" && (
+        <div className="password-prompt-overlay" onClick={handleCloseTransfer}>
+          <div className="password-prompt-card credits-card" onClick={(event) => event.stopPropagation()}>
+            <h2>Restore from Code</h2>
+            {importDone ? (
+              <p className="status-text">Progress restored! Reloading…</p>
+            ) : importConfirmOpen ? (
+              <div className="reset-confirm">
+                <p>This will replace all progress on this device with the backup. This cannot be undone. Continue?</p>
+                <div className="button-row">
+                  <Button variant="secondary" onClick={() => setImportConfirmOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button variant="danger" onClick={handleConfirmImport}>
+                    Restore
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="status-text">Paste the backup code from your other device.</p>
+                <textarea
+                  autoFocus
+                  className="password-prompt-input backup-code-textarea"
+                  placeholder="Paste backup code here"
+                  value={importText}
+                  rows={6}
+                  onChange={(event) => {
+                    setImportText(event.target.value);
+                    setImportError(null);
+                  }}
+                />
+                {importError && <p className="form-error">{importError}</p>}
+                <div className="button-row">
+                  <Button variant="secondary" onClick={handleCloseTransfer}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleRequestImport}>Restore</Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

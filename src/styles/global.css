@@ -528,6 +528,14 @@ body {
   font-size: 16px;
 }
 
+.backup-code-textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
 .credits-card {
   max-width: 480px;
   max-height: 80vh;

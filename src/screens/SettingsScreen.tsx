@@ -175,6 +175,10 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
       </div>
 
       <p className="settings-version-footer">
+        <span className="settings-version-footer-brand">CYDI</span>
+        <br />
+        Can You Draw It?
+        <br />
         Version {APP_VERSION}
         <br />
         Build {APP_BUILD}

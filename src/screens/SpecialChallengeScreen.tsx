@@ -94,7 +94,10 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
 
       const passed = scoreResult.total >= SPECIAL_CHALLENGE_MIN_SCORE;
       const reward = passed ? coinsForSpecialChallengeScore(scoreResult.total) : 0;
-      if (reward > 0) setDoubleOfferAmount(reward);
+      if (reward > 0) {
+        addCoins(reward);
+        setDoubleOfferAmount(reward);
+      }
 
       setResult(scoreResult);
       setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
@@ -104,8 +107,11 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
     }, delay);
   }
 
+  /** The base reward is already credited above - only the extra half of a successful double is new (mirrors ChestRewardOverlay), so navigating away before resolving the offer can never forfeit the coins already earned. */
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
-    addCoins(finalAmount);
+    if (doubleOfferAmount !== null && finalAmount > doubleOfferAmount) {
+      addCoins(finalAmount - doubleOfferAmount);
+    }
     triggerCoinFlight(anchorEl);
     setDoubleOfferAmount(null);
   }
@@ -174,6 +180,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
     return (
       <div className="screen">
         <AppHeader
+          onBack={() => setPhase("intro")}
           onNavigateToHome={goToHome}
           onNavigateToAchievements={goToAchievements}
           onNavigateToInstructions={goToInstructions}

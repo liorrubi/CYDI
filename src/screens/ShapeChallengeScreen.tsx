@@ -574,8 +574,11 @@ function ShapePlay({
     return () => window.clearTimeout(timeoutId);
   }, [phase]);
 
+  /** The base reward is already credited where `doubleOfferAmount` is set below - only the extra half of a successful double is new (mirrors ChestRewardOverlay), so navigating away before resolving the offer can never forfeit the coins already earned. */
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
-    addCoins(finalAmount);
+    if (doubleOfferAmount !== null && finalAmount > doubleOfferAmount) {
+      addCoins(finalAmount - doubleOfferAmount);
+    }
     triggerCoinFlight(anchorEl ?? document.querySelector(".score-total"));
     setDoubleOfferAmount(null);
   }
@@ -616,7 +619,10 @@ function ShapePlay({
       const previousStars = bestScore !== undefined ? starRatingForScore(bestScore) : -1;
       const newStars = starRatingForScore(scoreResult.total);
       const starCoins = coinsForStars(newStars) - coinsForStars(previousStars);
-      if (starCoins > 0) setDoubleOfferAmount(starCoins);
+      if (starCoins > 0) {
+        addCoins(starCoins);
+        setDoubleOfferAmount(starCoins);
+      }
 
       setResult(scoreResult);
       setIsNewBest(beatBest);
@@ -648,6 +654,7 @@ function ShapePlay({
     return (
       <div className="screen">
         <AppHeader
+          onBack={onBackToMap}
           onNavigateToHome={onNavigateToHome}
           onNavigateToInstructions={onNavigateToInstructions}
           onNavigateToAchievements={onNavigateToAchievements}

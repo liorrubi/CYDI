@@ -185,8 +185,8 @@ export class DailyChallengeDO {
   private async handleSubmit(body: unknown): Promise<Response> {
     const b = body as Record<string, unknown> | null;
     const playerId = typeof b?.playerId === "string" && b.playerId ? b.playerId : null;
-    const episodeId = typeof b?.episodeId === "number" ? b.episodeId : null;
-    const scoreRaw = typeof b?.score === "number" ? b.score : null;
+    const episodeId = typeof b?.episodeId === "number" && Number.isFinite(b.episodeId) ? b.episodeId : null;
+    const scoreRaw = typeof b?.score === "number" && Number.isFinite(b.score) ? b.score : null;
     if (!playerId || episodeId === null || scoreRaw === null) return json({ error: "invalid payload" }, 400);
 
     const playerName = sanitizeName(b?.playerName) || "Anonymous Player";

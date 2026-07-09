@@ -47,7 +47,8 @@ function isSharePath(value: unknown): value is SharePath {
     Array.isArray(v.p) &&
     v.p.every((pt) => Array.isArray(pt) && pt.length === 2 && pt.every((n) => typeof n === "number")) &&
     typeof v.w === "number" &&
-    typeof v.h === "number"
+    typeof v.h === "number" &&
+    (v.b === undefined || (Array.isArray(v.b) && v.b.every((n) => typeof n === "number")))
   );
 }
 

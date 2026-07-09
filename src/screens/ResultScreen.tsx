@@ -24,8 +24,10 @@ type ResultScreenProps = {
   onNavigateToInstructions?: () => void;
   onNavigateToShop?: () => void;
   onNavigateToSpecialChallenge?: () => void;
+  onNavigateToShapeChallenge?: () => void;
   onNavigateToHome?: () => void;
   onNavigateToSettings?: () => void;
+  onNavigateToCreate?: () => void;
 };
 
 export default function ResultScreen({
@@ -44,8 +46,10 @@ export default function ResultScreen({
   onNavigateToInstructions,
   onNavigateToShop,
   onNavigateToSpecialChallenge,
+  onNavigateToShapeChallenge,
   onNavigateToHome,
   onNavigateToSettings,
+  onNavigateToCreate,
 }: ResultScreenProps) {
   return (
     <div className="screen">
@@ -55,6 +59,7 @@ export default function ResultScreen({
         onNavigateToAchievements={onNavigateToAchievements}
         onNavigateToShop={onNavigateToShop}
         onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
+        onNavigateToShapeChallenge={onNavigateToShapeChallenge}
         onNavigateToSettings={onNavigateToSettings}
       />
       <ScoreCard score={score} isNewBest={isNewBest} />
@@ -91,6 +96,23 @@ export default function ResultScreen({
         )}
         <Button onClick={onRetry}>Retry</Button>
       </div>
+      {(onNavigateToShapeChallenge || onNavigateToCreate) && (
+        <div className="card keep-playing-card">
+          <h2>Keep playing CYDI</h2>
+          <div className="button-row">
+            {onNavigateToShapeChallenge && (
+              <Button variant="secondary" onClick={onNavigateToShapeChallenge}>
+                Play Shape Challenge
+              </Button>
+            )}
+            {onNavigateToCreate && (
+              <Button variant="secondary" onClick={onNavigateToCreate}>
+                Create your own challenge
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

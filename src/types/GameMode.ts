@@ -6,6 +6,7 @@ export type Screen =
   | { name: "create" }
   | { name: "list" }
   | { name: "play"; challengeId: string }
+  | { name: "friendChallengeIntro"; challengeId: string }
   | { name: "shapeChallenge" }
   | { name: "settings" }
   | { name: "shop"; from: Screen }

@@ -5,7 +5,7 @@ import ChestRewardOverlay from "../components/ChestRewardOverlay";
 import { PEN_COLORS, DEFAULT_PEN_COLOR, CHEST_TIERS, rollChestReward, type ChestTier } from "../app/constants";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
-import { toAchievements, toHome, toInstructions, toSettings, toShop, toSpecialChallenge } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShapeChallenge, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type ShopScreenProps = {
@@ -46,6 +46,7 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
         onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
+        onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
       />
       <div className="card shop-balance">
         <p className="shop-balance-label">Your balance</p>
@@ -113,6 +114,7 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
           amount={pendingChestReveal.amount}
           rewardMin={pendingChestReveal.tier.rewardMin}
           rewardMax={pendingChestReveal.tier.rewardMax}
+          isPaidChest={true}
           onDismissed={() => setPendingChestReveal(null)}
         />
       )}

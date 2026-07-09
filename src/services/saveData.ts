@@ -26,6 +26,10 @@ export type SaveData = {
     specialChallenge: {
       lastFreeDate: string;
     };
+    paidChestDoubles: {
+      date: string;
+      count: number;
+    };
     successfulDrawings: number;
     completedRounds: number;
     achievementsTutorialShown: boolean;
@@ -53,6 +57,7 @@ export function createDefaultSaveData(): SaveData {
       dailyStreak: { lastVisitDate: "", currentStreak: 0, longestStreak: 0 },
       dailyChest: { lastOpenedDate: "" },
       specialChallenge: { lastFreeDate: "" },
+      paidChestDoubles: { date: "", count: 0 },
       successfulDrawings: 0,
       completedRounds: 0,
       achievementsTutorialShown: false,

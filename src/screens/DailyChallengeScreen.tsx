@@ -33,7 +33,16 @@ import {
   type DailySubmitResult,
 } from "../services/dailyChallengeApi";
 import { ANONYMOUS_PLAYER_NAME, getDisplayName, getPlayerId, getPlayerName, setPlayerName } from "../services/playerProfileStore";
-import { toAchievements, toDailyChallengeHistory, toHome, toInstructions, toSettings, toShop, toSpecialChallenge } from "../app/routes";
+import {
+  toAchievements,
+  toDailyChallengeHistory,
+  toHome,
+  toInstructions,
+  toSettings,
+  toShapeChallenge,
+  toShop,
+  toSpecialChallenge,
+} from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -197,6 +206,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const goToInstructions = () => onNavigate(toInstructions(toHome()));
   const goToShop = () => onNavigate(toShop(toHome()));
   const goToSpecialChallenge = () => onNavigate(toSpecialChallenge());
+  const goToShapeChallenge = () => onNavigate(toShapeChallenge());
   const goToHome = () => onNavigate(toHome());
   const goToSettings = () => onNavigate(toSettings());
   const goBack = replay ? () => onNavigate(toDailyChallengeHistory()) : goToHome;
@@ -204,7 +214,13 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   if (phase === "loading") {
     return (
       <div className="screen">
-        <AppHeader title="Daily Challenge" onBack={goBack} onNavigateToHome={goToHome} onNavigateToSettings={goToSettings} />
+        <AppHeader
+          title="Daily Challenge"
+          onBack={goBack}
+          onNavigateToHome={goToHome}
+          onNavigateToSettings={goToSettings}
+          onNavigateToShapeChallenge={goToShapeChallenge}
+        />
         <p className="status-text">Loading today's challenge...</p>
       </div>
     );
@@ -213,7 +229,13 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   if (phase === "error" || !episode || !shape || !target) {
     return (
       <div className="screen">
-        <AppHeader title="Daily Challenge" onBack={goBack} onNavigateToHome={goToHome} onNavigateToSettings={goToSettings} />
+        <AppHeader
+          title="Daily Challenge"
+          onBack={goBack}
+          onNavigateToHome={goToHome}
+          onNavigateToSettings={goToSettings}
+          onNavigateToShapeChallenge={goToShapeChallenge}
+        />
         <p className="form-error">Couldn't reach the daily challenge. Check your connection and try again.</p>
         <Button onClick={load}>Retry</Button>
       </div>
@@ -236,6 +258,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
           onNavigateToAchievements={goToAchievements}
           onNavigateToShop={goToShop}
           onNavigateToSpecialChallenge={goToSpecialChallenge}
+          onNavigateToShapeChallenge={goToShapeChallenge}
           onNavigateToSettings={goToSettings}
         />
         {submission?.youWon && (
@@ -285,6 +308,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
         onNavigateToInstructions={goToInstructions}
         onNavigateToShop={goToShop}
         onNavigateToSpecialChallenge={goToSpecialChallenge}
+        onNavigateToShapeChallenge={goToShapeChallenge}
         onNavigateToHome={goToHome}
         onNavigateToSettings={goToSettings}
       />
@@ -336,7 +360,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
           </button>
         </div>
       )}
-      <p className="status-text">
+      <p className="status-text canvas-instruction-text">
         {phase === "preview" && "Study the shape - you'll draw it from memory"}
         {phase === "drawing" && "Now draw it from memory"}
         {phase === "analyzing" && "Analyzing..."}

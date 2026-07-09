@@ -28,7 +28,7 @@ import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engi
 import { addCoins, getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { canPlaySpecialChallengeFree, markSpecialChallengeFreeUsed } from "../services/specialChallengeStore";
-import { toAchievements, toHome, toInstructions, toSettings, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -130,6 +130,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
   const goToAchievements = () => onNavigate(toAchievements(toHome()));
   const goToInstructions = () => onNavigate(toInstructions(toHome()));
   const goToShop = () => onNavigate(toShop(toHome()));
+  const goToShapeChallenge = () => onNavigate(toShapeChallenge());
   const goToHome = () => onNavigate(toHome());
   const goToSettings = () => onNavigate(toSettings());
 
@@ -144,6 +145,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
           onNavigateToAchievements={goToAchievements}
           onNavigateToInstructions={goToInstructions}
           onNavigateToShop={goToShop}
+          onNavigateToShapeChallenge={goToShapeChallenge}
           onNavigateToSettings={goToSettings}
         />
         <div className="card instructions-card">
@@ -185,6 +187,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
           onNavigateToAchievements={goToAchievements}
           onNavigateToInstructions={goToInstructions}
           onNavigateToShop={goToShop}
+          onNavigateToShapeChallenge={goToShapeChallenge}
           onNavigateToSettings={goToSettings}
         />
         {feedbackMessage && (
@@ -224,9 +227,10 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
         onNavigateToAchievements={goToAchievements}
         onNavigateToInstructions={goToInstructions}
         onNavigateToShop={goToShop}
+        onNavigateToShapeChallenge={goToShapeChallenge}
         onNavigateToSettings={goToSettings}
       />
-      <p className="status-text">
+      <p className="status-text canvas-instruction-text">
         {phase === "preview" && "Study the shape"}
         {phase === "drawing" && "Now draw it as accurately as you can"}
         {phase === "analyzing" && "Analyzing..."}

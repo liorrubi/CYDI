@@ -142,6 +142,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
   const goToInstructions = () => onNavigate(toInstructions(toShapeChallenge()));
   const goToShop = () => onNavigate(toShop(toShapeChallenge()));
   const goToSpecialChallenge = () => onNavigate(toSpecialChallenge());
+  const goToShapeChallenge = () => onNavigate(toShapeChallenge());
   const goToHome = () => onNavigate(toHome());
   const goToSettings = () => onNavigate(toSettings());
 
@@ -166,6 +167,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
           onNavigateToInstructions={goToInstructions}
           onNavigateToShop={goToShop}
           onNavigateToSpecialChallenge={goToSpecialChallenge}
+          onNavigateToShapeChallenge={goToShapeChallenge}
           onNavigateToHome={goToHome}
           onNavigateToSettings={goToSettings}
         />
@@ -188,6 +190,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
           onNavigateToInstructions={goToInstructions}
           onNavigateToShop={goToShop}
           onNavigateToSpecialChallenge={goToSpecialChallenge}
+          onNavigateToShapeChallenge={goToShapeChallenge}
           onNavigateToHome={goToHome}
           onNavigateToSettings={goToSettings}
         />
@@ -210,6 +213,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
         onNavigateToInstructions={goToInstructions}
         onNavigateToShop={() => onNavigate(toShop(toShapeChallenge()))}
         onNavigateToSpecialChallenge={goToSpecialChallenge}
+        onNavigateToShapeChallenge={goToShapeChallenge}
         onNavigateToHome={goToHome}
         onNavigateToSettings={goToSettings}
       />
@@ -226,6 +230,7 @@ type CategoryListScreenProps = {
   onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
   onNavigateToSpecialChallenge: () => void;
+  onNavigateToShapeChallenge: () => void;
   onNavigateToHome: () => void;
   onNavigateToSettings: () => void;
 };
@@ -239,6 +244,7 @@ function CategoryListScreen({
   onNavigateToInstructions,
   onNavigateToShop,
   onNavigateToSpecialChallenge,
+  onNavigateToShapeChallenge,
   onNavigateToHome,
   onNavigateToSettings,
 }: CategoryListScreenProps) {
@@ -293,6 +299,7 @@ function CategoryListScreen({
         onNavigateToInstructions={onNavigateToInstructions}
         onNavigateToShop={onNavigateToShop}
         onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
+        onNavigateToShapeChallenge={onNavigateToShapeChallenge}
         onNavigateToHome={onNavigateToHome}
         onNavigateToSettings={onNavigateToSettings}
       />
@@ -419,6 +426,7 @@ type ShapeMapProps = {
   onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
   onNavigateToSpecialChallenge: () => void;
+  onNavigateToShapeChallenge: () => void;
   onNavigateToHome: () => void;
   onNavigateToSettings: () => void;
 };
@@ -434,6 +442,7 @@ function ShapeMap({
   onNavigateToInstructions,
   onNavigateToShop,
   onNavigateToSpecialChallenge,
+  onNavigateToShapeChallenge,
   onNavigateToHome,
   onNavigateToSettings,
 }: ShapeMapProps) {
@@ -464,6 +473,7 @@ function ShapeMap({
         onNavigateToInstructions={onNavigateToInstructions}
         onNavigateToShop={onNavigateToShop}
         onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
+        onNavigateToShapeChallenge={onNavigateToShapeChallenge}
         onNavigateToHome={onNavigateToHome}
         onNavigateToSettings={onNavigateToSettings}
       />
@@ -523,6 +533,7 @@ type ShapePlayProps = {
   onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
   onNavigateToSpecialChallenge: () => void;
+  onNavigateToShapeChallenge: () => void;
   onNavigateToHome: () => void;
   onNavigateToSettings: () => void;
 };
@@ -538,6 +549,7 @@ function ShapePlay({
   onNavigateToInstructions,
   onNavigateToShop,
   onNavigateToSpecialChallenge,
+  onNavigateToShapeChallenge,
   onNavigateToHome,
   onNavigateToSettings,
 }: ShapePlayProps) {
@@ -660,6 +672,7 @@ function ShapePlay({
           onNavigateToAchievements={onNavigateToAchievements}
           onNavigateToShop={onNavigateToShop}
           onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
+          onNavigateToShapeChallenge={onNavigateToShapeChallenge}
           onNavigateToSettings={onNavigateToSettings}
         />
         {!canGoToNextShape && nextIndex < shapes.length && (
@@ -714,10 +727,11 @@ function ShapePlay({
         onNavigateToInstructions={onNavigateToInstructions}
         onNavigateToShop={onNavigateToShop}
         onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
+        onNavigateToShapeChallenge={onNavigateToShapeChallenge}
         onNavigateToHome={onNavigateToHome}
         onNavigateToSettings={onNavigateToSettings}
       />
-      <p className="status-text">
+      <p className="status-text canvas-instruction-text">
         {phase === "preview" && "Study the shape"}
         {phase === "drawing" && "Now draw it"}
         {phase === "analyzing" && "Analyzing..."}

@@ -34,6 +34,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         onNavigateToInstructions={() => handleSelect(toInstructions(toHome()))}
         onNavigateToShop={() => handleSelect(toShop(toHome()))}
         onNavigateToSpecialChallenge={() => handleSelect(toSpecialChallenge())}
+        onNavigateToShapeChallenge={() => handleSelect(toShapeChallenge())}
         onNavigateToSettings={() => handleSelect(toSettings())}
       />
       <div className="home-cards">

@@ -7,7 +7,17 @@ import PenColorMenu from "../components/PenColorMenu";
 import { CANVAS_SIZE, MIN_POINTS_TO_SAVE, type PenColorId } from "../app/constants";
 import { saveChallenge } from "../services/challengeStorage";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
-import { toAchievements, toCreate, toHome, toInstructions, toList, toSettings, toShop, toSpecialChallenge } from "../app/routes";
+import {
+  toAchievements,
+  toCreate,
+  toHome,
+  toInstructions,
+  toList,
+  toSettings,
+  toShapeChallenge,
+  toShop,
+  toSpecialChallenge,
+} from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 
@@ -77,10 +87,11 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
         onNavigateToInstructions={() => onNavigate(toInstructions(toCreate()))}
         onNavigateToShop={() => onNavigate(toShop(toCreate()))}
         onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
+        onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />
-      <p className="status-text">Draw any shape</p>
+      <p className="status-text canvas-instruction-text">Draw any shape</p>
       <div className="canvas-wrapper">
         <DrawingCanvas
           ref={canvasRef}

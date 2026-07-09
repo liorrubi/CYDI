@@ -1,6 +1,6 @@
 import AppHeader from "../components/AppHeader";
 import { SCORE_PARAMETERS, SCORE_WEIGHTS, STAR_RATING_THRESHOLDS } from "../app/constants";
-import { toAchievements, toHome, toInstructions, toSettings, toShop, toSpecialChallenge } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShapeChallenge, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type InstructionsScreenProps = {
@@ -26,6 +26,7 @@ export default function InstructionsScreen({ from, onNavigate }: InstructionsScr
         onNavigateToInstructions={() => onNavigate(toInstructions(from))}
         onNavigateToShop={() => onNavigate(toShop(from))}
         onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
+        onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />

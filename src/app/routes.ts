@@ -20,6 +20,10 @@ export function toPlay(challengeId: string): Screen {
   return { name: "play", challengeId };
 }
 
+export function toFriendChallengeIntro(challengeId: string): Screen {
+  return { name: "friendChallengeIntro", challengeId };
+}
+
 export function toShapeChallenge(): Screen {
   return { name: "shapeChallenge" };
 }

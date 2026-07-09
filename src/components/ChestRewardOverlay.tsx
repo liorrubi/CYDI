@@ -3,6 +3,7 @@ import { rollChestReward } from "../app/constants";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playAchievementUnlockedSound } from "../engine/soundEngine";
 import { addCoins } from "../services/coinsStore";
+import { getPaidChestDoublesRemaining, recordPaidChestDoubleUsed } from "../services/chestDoubleLimitStore";
 import DoubleCoinsOffer from "./DoubleCoinsOffer";
 
 type ChestRewardOverlayProps = {
@@ -15,6 +16,8 @@ type ChestRewardOverlayProps = {
   /** The tier's full reward range, used only to make the spin animation cycle through plausible-looking numbers. */
   rewardMin: number;
   rewardMax: number;
+  /** Whether this chest was bought via the shop rather than the once-a-day free Daily Chest - paid chests are subject to the daily double-reward cap, the free chest is not. */
+  isPaidChest: boolean;
   /** Called once the whole reveal (including any double-or-nothing decision) is done - coins are already credited by then. */
   onDismissed: () => void;
 };
@@ -39,10 +42,12 @@ export default function ChestRewardOverlay({
   amount,
   rewardMin,
   rewardMax,
+  isPaidChest,
   onDismissed,
 }: ChestRewardOverlayProps) {
   const [phase, setPhase] = useState<Phase>("opening");
   const [spinAmount, setSpinAmount] = useState(amount);
+  const [remainingDoubles] = useState(() => (isPaidChest ? getPaidChestDoublesRemaining() : undefined));
   const amountRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
@@ -100,7 +105,14 @@ export default function ChestRewardOverlay({
             🪙 +{phase === "spinning" ? spinAmount : amount}
           </span>
         )}
-        {phase === "revealed" && <DoubleCoinsOffer amount={amount} onResolved={handleDoubleResolved} />}
+        {phase === "revealed" && (
+          <DoubleCoinsOffer
+            amount={amount}
+            onResolved={handleDoubleResolved}
+            remainingDoubles={remainingDoubles}
+            onDoubleAttempted={isPaidChest ? recordPaidChestDoubleUsed : undefined}
+          />
+        )}
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ import { playChipSound } from "../engine/soundEngine";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive, setUnlockEverything } from "../services/unlockOverrideStore";
 import { exportSaveCode, importSaveCode } from "../services/saveTransfer";
-import { toAchievements, toHome, toInstructions, toShop, toSpecialChallenge } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toShapeChallenge, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 const LOCK_MANAGEMENT_PASSWORD = "1111";
@@ -136,6 +136,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         onNavigateToInstructions={() => onNavigate(toInstructions(toHome()))}
         onNavigateToShop={() => onNavigate(toShop(toHome()))}
         onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
+        onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
       />
 

@@ -8,6 +8,7 @@ import {
 import AppLogo from "./AppLogo";
 import CoinIndicator from "./CoinIndicator";
 import DailyChestButton from "./DailyChestButton";
+import ShareGameButton from "./ShareGameButton";
 import SoundToggleButton from "./SoundToggleButton";
 import SpecialChallengeButton from "./SpecialChallengeButton";
 
@@ -19,6 +20,7 @@ type AppHeaderProps = {
   onNavigateToInstructions?: () => void;
   onNavigateToShop?: () => void;
   onNavigateToSpecialChallenge?: () => void;
+  onNavigateToShapeChallenge?: () => void;
   onNavigateToHome?: () => void;
   onNavigateToSettings?: () => void;
 };
@@ -31,6 +33,7 @@ export default function AppHeader({
   onNavigateToInstructions,
   onNavigateToShop,
   onNavigateToSpecialChallenge,
+  onNavigateToShapeChallenge,
   onNavigateToHome,
   onNavigateToSettings,
 }: AppHeaderProps) {
@@ -82,8 +85,11 @@ export default function AppHeader({
             })
           }
         />
-        <DailyChestButton onNavigateToShop={onNavigateToShop} />
-        <SpecialChallengeButton onNavigateToSpecialChallenge={onNavigateToSpecialChallenge} />
+        <DailyChestButton onNavigateToShop={onNavigateToShop} onNavigateToShapeChallenge={onNavigateToShapeChallenge} />
+        <SpecialChallengeButton
+          onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
+          onNavigateToShapeChallenge={onNavigateToShapeChallenge}
+        />
         {onNavigateToAchievements && (
           <button
             type="button"
@@ -97,6 +103,7 @@ export default function AppHeader({
             🏆
           </button>
         )}
+        <ShareGameButton />
         <SoundToggleButton />
         {onNavigateToInstructions && (
           <button

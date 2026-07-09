@@ -8,6 +8,7 @@ import HomeScreen from "./screens/HomeScreen";
 import CreateChallengeScreen from "./screens/CreateChallengeScreen";
 import MyChallengesScreen from "./screens/MyChallengesScreen";
 import PlayChallengeScreen from "./screens/PlayChallengeScreen";
+import FriendChallengeIntroScreen from "./screens/FriendChallengeIntroScreen";
 import ShapeChallengeScreen from "./screens/ShapeChallengeScreen";
 import DailyChallengeScreen from "./screens/DailyChallengeScreen";
 import DailyChallengeHistoryScreen from "./screens/DailyChallengeHistoryScreen";
@@ -17,7 +18,7 @@ import InstructionsScreen from "./screens/InstructionsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import SharedResultScreen from "./screens/SharedResultScreen";
 import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
-import { toAchievements, toDailyChallenge, toPlay, toSharedResult } from "./app/routes";
+import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toSharedResult } from "./app/routes";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { markAchievementsTutorialShown, onRoundCompleted, shouldShowAchievementsTutorial } from "./services/tutorialStore";
 import { getChallenge, updateChallenge } from "./services/challengeStorage";
@@ -47,7 +48,7 @@ function importSharedScreenFromHash(): Screen | null {
   const challenge = decodeChallengeHash(hash);
   if (challenge) {
     importSharedChallenge(challenge);
-    return toPlay(challenge.id);
+    return toFriendChallengeIntro(challenge.id);
   }
 
   const result = decodeResultHash(hash);
@@ -68,7 +69,7 @@ async function importSharedScreenFromShortId(id: string): Promise<Screen | null>
 
   if (shared.kind === "challenge") {
     importSharedChallenge(shared.data);
-    return toPlay(shared.data.id);
+    return toFriendChallengeIntro(shared.data.id);
   }
   return toSharedResult(shared.data);
 }
@@ -154,6 +155,8 @@ export default function App() {
             return <MyChallengesScreen onNavigate={setScreen} />;
           case "play":
             return <PlayChallengeScreen challengeId={screen.challengeId} onNavigate={setScreen} />;
+          case "friendChallengeIntro":
+            return <FriendChallengeIntroScreen challengeId={screen.challengeId} onNavigate={setScreen} />;
           case "shapeChallenge":
             return <ShapeChallengeScreen onNavigate={setScreen} />;
           case "dailyChallenge":

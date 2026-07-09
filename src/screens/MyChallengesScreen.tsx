@@ -10,7 +10,18 @@ import { createShortChallengeLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
 import { recordChallengeShared } from "../services/sharedChallengesStore";
 import { markMyChallengesTutorialShown, shouldShowMyChallengesTutorial } from "../services/tutorialStore";
-import { toAchievements, toCreate, toHome, toInstructions, toList, toPlay, toSettings, toShop, toSpecialChallenge } from "../app/routes";
+import {
+  toAchievements,
+  toCreate,
+  toHome,
+  toInstructions,
+  toList,
+  toPlay,
+  toSettings,
+  toShapeChallenge,
+  toShop,
+  toSpecialChallenge,
+} from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { Challenge } from "../types/Challenge";
 
@@ -66,6 +77,7 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
         onNavigateToInstructions={() => onNavigate(toInstructions(toList()))}
         onNavigateToShop={() => onNavigate(toShop(toList()))}
         onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
+        onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />

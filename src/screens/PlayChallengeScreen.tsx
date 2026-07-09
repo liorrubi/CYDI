@@ -11,7 +11,18 @@ import { encodeResultLink } from "../services/shareLink";
 import { createShortResultLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
 import { scoreAttempt } from "../engine/scoring";
-import { toAchievements, toHome, toInstructions, toList, toPlay, toSettings, toShop, toSpecialChallenge } from "../app/routes";
+import {
+  toAchievements,
+  toCreate,
+  toHome,
+  toInstructions,
+  toList,
+  toPlay,
+  toSettings,
+  toShapeChallenge,
+  toShop,
+  toSpecialChallenge,
+} from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { Challenge, DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -118,7 +129,8 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
           onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
           onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
           onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
-        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
+          onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
+          onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
           onNavigateToHome={() => onNavigate(toHome())}
           onNavigateToSettings={() => onNavigate(toSettings())}
         />
@@ -145,8 +157,10 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
         onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
         onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
         onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
+        onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
+        onNavigateToCreate={() => onNavigate(toCreate())}
       />
     );
   }
@@ -160,10 +174,11 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
         onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
         onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
         onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
+        onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />
-      <p className="status-text">
+      <p className="status-text canvas-instruction-text">
         {phase === "preview" && "Study the shape"}
         {phase === "drawing" && "Now draw it"}
         {phase === "analyzing" && "Analyzing..."}

@@ -193,7 +193,8 @@ body {
 .info-shortcut,
 .settings-shortcut,
 .daily-chest-shortcut,
-.special-challenge-shortcut {
+.special-challenge-shortcut,
+.share-game-shortcut {
   border: none;
   background: var(--color-card);
   border-radius: var(--radius-sm);
@@ -205,6 +206,24 @@ body {
   box-shadow: 0 1px 2px rgba(30, 32, 46, 0.08);
 }
 
+.share-game-toast {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 31;
+  width: max-content;
+  max-width: 220px;
+  background: var(--color-card);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 10px 24px rgba(30, 32, 46, 0.2);
+  padding: var(--space-2) var(--space-3);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: center;
+  animation: banner-pop 200ms ease;
+}
+
 .info-shortcut {
   font-style: italic;
   font-weight: 700;
@@ -212,15 +231,75 @@ body {
   color: var(--color-primary);
 }
 
-.daily-chest-shortcut,
-.special-challenge-shortcut {
+.header-icon-anchor {
   position: relative;
+  display: inline-flex;
 }
 
-.daily-chest-shortcut:disabled,
-.special-challenge-shortcut:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.locked-feature-hint-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+.locked-feature-hint {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 31;
+  width: 220px;
+  max-width: 70vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-card);
+  border: none;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 24px rgba(30, 32, 46, 0.2);
+  padding: var(--space-3);
+  text-align: center;
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-text);
+  animation: banner-pop 200ms ease;
+}
+
+.locked-feature-hint::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 16px;
+  width: 12px;
+  height: 12px;
+  background: var(--color-card);
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+.locked-feature-hint-message {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.locked-feature-hint-cta {
+  display: inline-block;
+  background: var(--color-primary);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.locked-feature-hint:hover .locked-feature-hint-cta {
+  background: var(--color-primary-dark);
 }
 
 .daily-chest-badge-free,
@@ -824,6 +903,13 @@ body {
   text-align: center;
 }
 
+/** Bigger, bolder variant of .status-text for the phase prompt shown just above a drawing canvas ("Study the shape" / "Now draw it" / "Analyzing...") - these are read at a glance mid-gesture, so they get extra emphasis beyond the default status text used for lower-stakes messaging elsewhere. */
+.canvas-instruction-text {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
 .score-card {
   text-align: center;
 }
@@ -1137,6 +1223,12 @@ body {
   font-weight: 700;
   font-size: 16px;
   margin-bottom: var(--space-3);
+}
+
+.double-offer-limit-note {
+  font-size: 13px;
+  opacity: 0.85;
+  margin: calc(var(--space-3) * -1) 0 var(--space-3);
 }
 
 .double-offer-buttons {
@@ -1718,6 +1810,7 @@ body {
   .settings-shortcut,
   .daily-chest-shortcut,
   .special-challenge-shortcut,
+  .share-game-shortcut,
   .pen-color-trigger {
     width: 48px;
     height: 48px;
@@ -1813,6 +1906,36 @@ body {
 
 .instructions-card {
   text-align: left;
+}
+
+.friend-challenge-intro-card {
+  text-align: center;
+}
+
+.friend-challenge-intro-card h1 {
+  margin: 0 0 var(--space-3);
+  font-size: 24px;
+}
+
+.friend-challenge-intro-card p {
+  margin: 0 0 var(--space-3);
+}
+
+.friend-challenge-intro-card p:last-child {
+  margin-bottom: 0;
+}
+
+.keep-playing-card {
+  text-align: center;
+}
+
+.keep-playing-card h2 {
+  margin: 0 0 var(--space-3);
+  font-size: 16px;
+}
+
+.keep-playing-card .button-row {
+  margin: 0;
 }
 
 .instructions-card h2 {

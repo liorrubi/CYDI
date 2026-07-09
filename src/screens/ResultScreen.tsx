@@ -23,6 +23,7 @@ type ResultScreenProps = {
   onNavigateToAchievements?: () => void;
   onNavigateToInstructions?: () => void;
   onNavigateToShop?: () => void;
+  onNavigateToSpecialChallenge?: () => void;
   onNavigateToHome?: () => void;
   onNavigateToSettings?: () => void;
 };
@@ -42,6 +43,7 @@ export default function ResultScreen({
   onNavigateToAchievements,
   onNavigateToInstructions,
   onNavigateToShop,
+  onNavigateToSpecialChallenge,
   onNavigateToHome,
   onNavigateToSettings,
 }: ResultScreenProps) {
@@ -52,6 +54,7 @@ export default function ResultScreen({
         onNavigateToInstructions={onNavigateToInstructions}
         onNavigateToAchievements={onNavigateToAchievements}
         onNavigateToShop={onNavigateToShop}
+        onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
         onNavigateToSettings={onNavigateToSettings}
       />
       <ScoreCard score={score} isNewBest={isNewBest} />

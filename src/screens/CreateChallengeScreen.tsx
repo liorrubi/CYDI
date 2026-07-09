@@ -7,7 +7,7 @@ import PenColorMenu from "../components/PenColorMenu";
 import { CANVAS_SIZE, MIN_POINTS_TO_SAVE, type PenColorId } from "../app/constants";
 import { saveChallenge } from "../services/challengeStorage";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
-import { toAchievements, toCreate, toHome, toInstructions, toList, toSettings, toShop } from "../app/routes";
+import { toAchievements, toCreate, toHome, toInstructions, toList, toSettings, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 
@@ -76,6 +76,7 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
         onNavigateToAchievements={() => onNavigate(toAchievements(toCreate()))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toCreate()))}
         onNavigateToShop={() => onNavigate(toShop(toCreate()))}
+        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />

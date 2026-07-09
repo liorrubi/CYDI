@@ -10,6 +10,7 @@ import {
   toSettings,
   toShapeChallenge,
   toShop,
+  toSpecialChallenge,
 } from "../app/routes";
 import { playSelectSound } from "../engine/soundEngine";
 import type { Screen } from "../types/GameMode";
@@ -32,6 +33,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         onNavigateToAchievements={() => handleSelect(toAchievements(toHome()))}
         onNavigateToInstructions={() => handleSelect(toInstructions(toHome()))}
         onNavigateToShop={() => handleSelect(toShop(toHome()))}
+        onNavigateToSpecialChallenge={() => handleSelect(toSpecialChallenge())}
         onNavigateToSettings={() => handleSelect(toSettings())}
       />
       <div className="home-cards">

@@ -14,4 +14,5 @@ export type Screen =
   | { name: "sharedResult"; data: DecodedSharedResult }
   | { name: "dailyChallenge" }
   | { name: "dailyChallengeHistory" }
-  | { name: "dailyChallengeReplay"; entry: DailyHistoryEntry };
+  | { name: "dailyChallengeReplay"; entry: DailyHistoryEntry }
+  | { name: "specialChallenge" };

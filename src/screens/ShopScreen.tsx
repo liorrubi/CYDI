@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
-import { PEN_COLORS, DEFAULT_PEN_COLOR } from "../app/constants";
+import ChestRewardOverlay from "../components/ChestRewardOverlay";
+import { PEN_COLORS, DEFAULT_PEN_COLOR, CHEST_TIERS, rollChestReward, type ChestTier } from "../app/constants";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
-import { toAchievements, toHome, toInstructions, toSettings, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type ShopScreenProps = {
@@ -17,6 +18,7 @@ const PEN_COLOR_PRODUCTS = PEN_COLORS.filter((color) => color.id !== DEFAULT_PEN
 export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
   const [coins, setCoins] = useState(() => getCoins());
   const [unlocked, setUnlocked] = useState(() => getUnlockedColors());
+  const [pendingChestReveal, setPendingChestReveal] = useState<{ tier: ChestTier; amount: number } | null>(null);
 
   useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
 
@@ -28,6 +30,12 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
     setUnlocked(getUnlockedColors());
   }
 
+  function handleBuyKey(tier: ChestTier) {
+    if (coins < tier.price) return;
+    spendCoins(tier.price);
+    setPendingChestReveal({ tier, amount: rollChestReward(tier.rewardMin, tier.rewardMax) });
+  }
+
   return (
     <div className="screen">
       <AppHeader
@@ -37,11 +45,35 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
         onNavigateToInstructions={() => onNavigate(toInstructions(toShop(from)))}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
+        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
       />
       <div className="card shop-balance">
         <p className="shop-balance-label">Your balance</p>
         <p className="shop-balance-amount">🪙 {coins}</p>
       </div>
+      <h2>Chest Keys</h2>
+      <div className="shop-product-list">
+        {CHEST_TIERS.map((tier) => {
+          const canAfford = coins >= tier.price;
+          return (
+            <div key={tier.id} className="card shop-product">
+              <span className={`chest-tier-icon chest-tier-icon-${tier.id}`} aria-hidden="true">
+                {tier.icon}
+              </span>
+              <div className="shop-product-info">
+                <h3>{tier.name}</h3>
+                <p className="status-text">
+                  Reward range: 🪙 {tier.rewardMin}–{tier.rewardMax}
+                </p>
+              </div>
+              <Button disabled={!canAfford} onClick={() => handleBuyKey(tier)}>
+                🪙 {tier.price}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+      <h2>Ink Colors</h2>
       <div className="shop-product-list">
         {PEN_COLOR_PRODUCTS.map((color) => {
           const owned = unlocked.includes(color.id);
@@ -73,6 +105,17 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
       <Button variant="secondary" onClick={() => onNavigate(toAchievements(toShop(from)))}>
         View Achievements
       </Button>
+      {pendingChestReveal && (
+        <ChestRewardOverlay
+          chestName={pendingChestReveal.tier.name}
+          chestIcon={pendingChestReveal.tier.icon}
+          tierClassName={`chest-reward-card-${pendingChestReveal.tier.id}`}
+          amount={pendingChestReveal.amount}
+          rewardMin={pendingChestReveal.tier.rewardMin}
+          rewardMax={pendingChestReveal.tier.rewardMax}
+          onDismissed={() => setPendingChestReveal(null)}
+        />
+      )}
     </div>
   );
 }

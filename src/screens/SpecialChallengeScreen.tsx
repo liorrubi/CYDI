@@ -1,0 +1,253 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import AppHeader from "../components/AppHeader";
+import Button from "../components/Button";
+import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
+import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
+import PenColorMenu from "../components/PenColorMenu";
+import ScoreCard from "../components/ScoreCard";
+import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
+import {
+  ANALYZING_MAX_MS,
+  ANALYZING_MIN_MS,
+  CANVAS_SIZE,
+  PREVIEW_DURATION_MS,
+  SPECIAL_CHALLENGE_COIN_BANDS,
+  SPECIAL_CHALLENGE_MIN_SCORE,
+  SPECIAL_CHALLENGE_RETRY_COST,
+  SPECIAL_CHALLENGE_SHAPE_ID,
+  coinsForSpecialChallengeScore,
+  penColorCssBackground,
+  randomCelebrationMessage,
+  randomEncouragementMessage,
+  type PenColorId,
+} from "../app/constants";
+import { getShapeById } from "../engine/shapeLibrary";
+import { scoreAttempt } from "../engine/scoring";
+import { triggerCoinFlight } from "../engine/coinFlight";
+import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
+import { addCoins, getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
+import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { canPlaySpecialChallengeFree, markSpecialChallengeFreeUsed } from "../services/specialChallengeStore";
+import { toAchievements, toHome, toInstructions, toSettings, toShop } from "../app/routes";
+import type { Screen } from "../types/GameMode";
+import type { DrawingPath } from "../types/Challenge";
+import type { ScoreBreakdown } from "../types/Score";
+
+type Phase = "intro" | "preview" | "drawing" | "analyzing" | "result";
+
+type SpecialChallengeScreenProps = {
+  onNavigate: (screen: Screen) => void;
+};
+
+/** Fixed daily shape - a single hand-picked, deliberately intricate target rather than a rotating pool, since this is meant to be one recognizable "special" drawing rather than a random pull from Shape Challenge's own library. */
+const SHAPE = getShapeById(SPECIAL_CHALLENGE_SHAPE_ID)!;
+
+/** Compact score-to-coins table for the intro card, listed low to high (SPECIAL_CHALLENGE_COIN_BANDS itself is ordered high to low for the lookup in coinsForSpecialChallengeScore). */
+const REWARD_ROWS = [...SPECIAL_CHALLENGE_COIN_BANDS].reverse();
+
+export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeScreenProps) {
+  const [phase, setPhase] = useState<Phase>("intro");
+  // Whether the attempt currently in progress is the day's free one - only true once, for
+  // whichever attempt happens to be the first completed today; every attempt after that
+  // (including retries within this same visit) costs coins, checked at completion time.
+  const isFreeAttemptRef = useRef(canPlaySpecialChallengeFree());
+  const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
+  const [result, setResult] = useState<ScoreBreakdown | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
+  const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const [coins, setCoins] = useState(() => getCoins());
+  const canvasRef = useRef<DrawingCanvasHandle | null>(null);
+
+  useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
+
+  const target = useMemo(() => SHAPE.generate(CANVAS_SIZE), []);
+  const showTargetGhost = phase === "preview";
+
+  useEffect(() => {
+    if (phase !== "preview") return;
+    const timeoutId = window.setTimeout(() => setPhase("drawing"), PREVIEW_DURATION_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [phase]);
+
+  function handleSelectPenColor(id: PenColorId) {
+    setSelectedColor(id);
+    setPenColor(id);
+  }
+
+  function handleUndo() {
+    canvasRef.current?.undoLastStroke();
+  }
+
+  function handleDone() {
+    if (!attemptPath) return;
+    primeAudioContext();
+    setPhase("analyzing");
+
+    const delay = ANALYZING_MIN_MS + Math.random() * (ANALYZING_MAX_MS - ANALYZING_MIN_MS);
+    window.setTimeout(() => {
+      const scoreResult = scoreAttempt(target, attemptPath);
+      if (isFreeAttemptRef.current) {
+        markSpecialChallengeFreeUsed();
+        isFreeAttemptRef.current = false;
+      }
+
+      const passed = scoreResult.total >= SPECIAL_CHALLENGE_MIN_SCORE;
+      const reward = passed ? coinsForSpecialChallengeScore(scoreResult.total) : 0;
+      if (reward > 0) setDoubleOfferAmount(reward);
+
+      setResult(scoreResult);
+      setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
+      if (passed) playSuccessSound();
+      else playEncourageSound();
+      setPhase("result");
+    }, delay);
+  }
+
+  function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
+    addCoins(finalAmount);
+    triggerCoinFlight(anchorEl);
+    setDoubleOfferAmount(null);
+  }
+
+  /** Starts a fresh attempt, charging the retry cost first - used both from the intro card and from the result screen, since by the time either is reachable the day's free attempt is already spent. */
+  function handlePaidRetry() {
+    if (coins < SPECIAL_CHALLENGE_RETRY_COST) return;
+    spendCoins(SPECIAL_CHALLENGE_RETRY_COST);
+    setAttemptPath(null);
+    setResult(null);
+    setFeedbackMessage(null);
+    setDoubleOfferAmount(null);
+    setPhase("preview");
+  }
+
+  const goToAchievements = () => onNavigate(toAchievements(toHome()));
+  const goToInstructions = () => onNavigate(toInstructions(toHome()));
+  const goToShop = () => onNavigate(toShop(toHome()));
+  const goToHome = () => onNavigate(toHome());
+  const goToSettings = () => onNavigate(toSettings());
+
+  if (phase === "intro") {
+    const freeAvailable = isFreeAttemptRef.current;
+    return (
+      <div className="screen">
+        <AppHeader
+          title="Special Challenge"
+          onBack={goToHome}
+          onNavigateToHome={goToHome}
+          onNavigateToAchievements={goToAchievements}
+          onNavigateToInstructions={goToInstructions}
+          onNavigateToShop={goToShop}
+          onNavigateToSettings={goToSettings}
+        />
+        <div className="card instructions-card">
+          <h2>👑 Special Challenge</h2>
+          <p className="status-text">
+            Study the shape, then draw it as accurately as you can. Your score is based on how precise your
+            drawing is, and a passing score earns you a coin reward.
+          </p>
+          <div className="instructions-star-list">
+            {REWARD_ROWS.map((band) => (
+              <div key={band.minScore} className="instructions-star-row">
+                <span>Score {band.minScore}+</span>
+                <span>🪙 {band.coins}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {freeAvailable ? (
+          <Button onClick={() => setPhase("preview")}>Start Challenge</Button>
+        ) : (
+          <div className="card">
+            <p className="status-text">You've already played today's Special Challenge for free. Come back tomorrow, or try again now.</p>
+            <Button disabled={coins < SPECIAL_CHALLENGE_RETRY_COST} onClick={handlePaidRetry}>
+              Try Again for 🪙 {SPECIAL_CHALLENGE_RETRY_COST}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (phase === "result" && result && attemptPath) {
+    const passed = result.total >= SPECIAL_CHALLENGE_MIN_SCORE;
+    return (
+      <div className="screen">
+        <AppHeader
+          onNavigateToHome={goToHome}
+          onNavigateToAchievements={goToAchievements}
+          onNavigateToInstructions={goToInstructions}
+          onNavigateToShop={goToShop}
+          onNavigateToSettings={goToSettings}
+        />
+        {feedbackMessage && (
+          <div className={passed ? "celebration-banner" : "encourage-banner"}>
+            {passed ? "🎉 " : "💪 "}
+            {feedbackMessage}
+          </div>
+        )}
+        <ScoreCard score={result} showPercentSign />
+        {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
+        <div className="canvas-wrapper">
+          <ShapeOverlayCanvas target={target} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
+        </div>
+        <p className="overlay-legend">
+          <span className="overlay-legend-swatch overlay-legend-target" /> Target shape
+          <span
+            className="overlay-legend-swatch"
+            style={{ background: penColorCssBackground(penColor), marginLeft: "var(--space-3)" }}
+          />{" "}
+          Your drawing
+        </p>
+        {doubleOfferAmount === null && (
+          <Button variant="secondary" disabled={coins < SPECIAL_CHALLENGE_RETRY_COST} onClick={handlePaidRetry}>
+            Try Again for 🪙 {SPECIAL_CHALLENGE_RETRY_COST}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="screen">
+      <AppHeader
+        title="Special Challenge"
+        onBack={goToHome}
+        onNavigateToHome={goToHome}
+        onNavigateToAchievements={goToAchievements}
+        onNavigateToInstructions={goToInstructions}
+        onNavigateToShop={goToShop}
+        onNavigateToSettings={goToSettings}
+      />
+      <p className="status-text">
+        {phase === "preview" && "Study the shape"}
+        {phase === "drawing" && "Now draw it as accurately as you can"}
+        {phase === "analyzing" && "Analyzing..."}
+      </p>
+      <div className="canvas-wrapper">
+        <DrawingCanvas
+          ref={canvasRef}
+          width={CANVAS_SIZE}
+          height={CANVAS_SIZE}
+          disabled={phase !== "drawing"}
+          ghostPath={showTargetGhost ? target : undefined}
+          showGhost={showTargetGhost}
+          strokeColor={penColor}
+          onChange={setAttemptPath}
+          onComplete={setAttemptPath}
+        />
+      </div>
+      {phase === "drawing" && (
+        <>
+          <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+          <div className="button-row">
+            <Button variant="secondary" onClick={handleUndo} disabled={!attemptPath || attemptPath.points.length === 0}>
+              Undo
+            </Button>
+            <Button onClick={handleDone}>Done</Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

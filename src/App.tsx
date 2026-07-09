@@ -16,6 +16,7 @@ import AchievementsScreen from "./screens/AchievementsScreen";
 import InstructionsScreen from "./screens/InstructionsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import SharedResultScreen from "./screens/SharedResultScreen";
+import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import { toAchievements, toDailyChallenge, toPlay, toSharedResult } from "./app/routes";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { markAchievementsTutorialShown, onRoundCompleted, shouldShowAchievementsTutorial } from "./services/tutorialStore";
@@ -171,6 +172,8 @@ export default function App() {
             return <InstructionsScreen from={screen.from} onNavigate={setScreen} />;
           case "sharedResult":
             return <SharedResultScreen data={screen.data} onNavigate={setScreen} />;
+          case "specialChallenge":
+            return <SpecialChallengeScreen onNavigate={setScreen} />;
         }
       })()}
       {showAchievementsTutorial && (

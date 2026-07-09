@@ -6,7 +6,7 @@ import StarRating from "../components/StarRating";
 import { CANVAS_SIZE } from "../app/constants";
 import { getChallenge, updateChallenge } from "../services/challengeStorage";
 import type { DecodedSharedResult } from "../services/shareLink";
-import { toAchievements, toHome, toInstructions, toPlay, toSettings, toShop, toSharedResult } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toPlay, toSettings, toShop, toSharedResult, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type SharedResultScreenProps = {
@@ -40,6 +40,7 @@ export default function SharedResultScreen({ data, onNavigate }: SharedResultScr
         onNavigateToAchievements={() => onNavigate(toAchievements(from))}
         onNavigateToInstructions={() => onNavigate(toInstructions(from))}
         onNavigateToShop={() => onNavigate(toShop(from))}
+        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />

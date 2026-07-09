@@ -17,6 +17,7 @@ import {
   toInstructions,
   toSettings,
   toShop,
+  toSpecialChallenge,
 } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
@@ -72,6 +73,7 @@ export default function DailyChallengeHistoryScreen({ onNavigate }: DailyChallen
         onNavigateToAchievements={() => onNavigate(toAchievements(toDailyChallengeHistory()))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toDailyChallengeHistory()))}
         onNavigateToShop={() => onNavigate(toShop(toDailyChallengeHistory()))}
+        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />

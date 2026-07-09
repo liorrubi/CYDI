@@ -42,6 +42,7 @@ import { getDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive } from "../services/unlockOverrideStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { recordRoundCompleted, shouldShowAchievementsTutorial } from "../services/tutorialStore";
+import { recordSuccessfulDrawing } from "../services/successfulDrawingsStore";
 import {
   clearProgress,
   getCategoryLevelIndex,
@@ -49,7 +50,7 @@ import {
   saveProgress,
   type ShapeChallengeProgress,
 } from "../services/shapeChallengeProgress";
-import { toAchievements, toHome, toInstructions, toSettings, toShapeChallenge, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShapeChallenge, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -140,6 +141,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
   const goToAchievements = () => onNavigate(toAchievements(toShapeChallenge()));
   const goToInstructions = () => onNavigate(toInstructions(toShapeChallenge()));
   const goToShop = () => onNavigate(toShop(toShapeChallenge()));
+  const goToSpecialChallenge = () => onNavigate(toSpecialChallenge());
   const goToHome = () => onNavigate(toHome());
   const goToSettings = () => onNavigate(toSettings());
 
@@ -163,6 +165,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
           onNavigateToAchievements={goToAchievements}
           onNavigateToInstructions={goToInstructions}
           onNavigateToShop={goToShop}
+          onNavigateToSpecialChallenge={goToSpecialChallenge}
           onNavigateToHome={goToHome}
           onNavigateToSettings={goToSettings}
         />
@@ -184,6 +187,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
           onNavigateToAchievements={goToAchievements}
           onNavigateToInstructions={goToInstructions}
           onNavigateToShop={goToShop}
+          onNavigateToSpecialChallenge={goToSpecialChallenge}
           onNavigateToHome={goToHome}
           onNavigateToSettings={goToSettings}
         />
@@ -205,6 +209,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
         onNavigateToAchievements={goToAchievements}
         onNavigateToInstructions={goToInstructions}
         onNavigateToShop={() => onNavigate(toShop(toShapeChallenge()))}
+        onNavigateToSpecialChallenge={goToSpecialChallenge}
         onNavigateToHome={goToHome}
         onNavigateToSettings={goToSettings}
       />
@@ -220,6 +225,7 @@ type CategoryListScreenProps = {
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
+  onNavigateToSpecialChallenge: () => void;
   onNavigateToHome: () => void;
   onNavigateToSettings: () => void;
 };
@@ -232,6 +238,7 @@ function CategoryListScreen({
   onNavigateToAchievements,
   onNavigateToInstructions,
   onNavigateToShop,
+  onNavigateToSpecialChallenge,
   onNavigateToHome,
   onNavigateToSettings,
 }: CategoryListScreenProps) {
@@ -285,6 +292,7 @@ function CategoryListScreen({
         onNavigateToAchievements={onNavigateToAchievements}
         onNavigateToInstructions={onNavigateToInstructions}
         onNavigateToShop={onNavigateToShop}
+        onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
         onNavigateToHome={onNavigateToHome}
         onNavigateToSettings={onNavigateToSettings}
       />
@@ -410,6 +418,7 @@ type ShapeMapProps = {
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
+  onNavigateToSpecialChallenge: () => void;
   onNavigateToHome: () => void;
   onNavigateToSettings: () => void;
 };
@@ -424,6 +433,7 @@ function ShapeMap({
   onNavigateToAchievements,
   onNavigateToInstructions,
   onNavigateToShop,
+  onNavigateToSpecialChallenge,
   onNavigateToHome,
   onNavigateToSettings,
 }: ShapeMapProps) {
@@ -453,6 +463,7 @@ function ShapeMap({
         onNavigateToAchievements={onNavigateToAchievements}
         onNavigateToInstructions={onNavigateToInstructions}
         onNavigateToShop={onNavigateToShop}
+        onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
         onNavigateToHome={onNavigateToHome}
         onNavigateToSettings={onNavigateToSettings}
       />
@@ -511,6 +522,7 @@ type ShapePlayProps = {
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
+  onNavigateToSpecialChallenge: () => void;
   onNavigateToHome: () => void;
   onNavigateToSettings: () => void;
 };
@@ -525,6 +537,7 @@ function ShapePlay({
   onNavigateToAchievements,
   onNavigateToInstructions,
   onNavigateToShop,
+  onNavigateToSpecialChallenge,
   onNavigateToHome,
   onNavigateToSettings,
 }: ShapePlayProps) {
@@ -593,6 +606,7 @@ function ShapePlay({
       // "First Steps" banner in favor of the achievements tutorial) already
       // sees this round counted.
       recordRoundCompleted();
+      if (passedNow) recordSuccessfulDrawing();
       onProgressChange(updatedProgress);
       // Pay out only the improvement over the shape's previous best - not the full
       // reward for the new star tier every time. Otherwise climbing 3 stars, then
@@ -638,6 +652,7 @@ function ShapePlay({
           onNavigateToInstructions={onNavigateToInstructions}
           onNavigateToAchievements={onNavigateToAchievements}
           onNavigateToShop={onNavigateToShop}
+          onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
           onNavigateToSettings={onNavigateToSettings}
         />
         {!canGoToNextShape && nextIndex < shapes.length && (
@@ -691,6 +706,7 @@ function ShapePlay({
         onNavigateToAchievements={onNavigateToAchievements}
         onNavigateToInstructions={onNavigateToInstructions}
         onNavigateToShop={onNavigateToShop}
+        onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
         onNavigateToHome={onNavigateToHome}
         onNavigateToSettings={onNavigateToSettings}
       />

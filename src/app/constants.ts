@@ -231,3 +231,51 @@ export function penColorCssBackground(id: PenColorId): string {
   if (id === "rainbow") return "linear-gradient(90deg, #f43f5e, #f59e0b, #22c55e, #3b82f6, #a855f7)";
   return penColorById(id).hex ?? "#1e202e";
 }
+
+export type ChestTierId = "iron" | "copper" | "silver" | "gold" | "platinum";
+
+export type ChestTier = {
+  id: ChestTierId;
+  name: string;
+  icon: string;
+  price: number;
+  rewardMin: number;
+  rewardMax: number;
+};
+
+export const DAILY_CHEST = { name: "Daily Chest", icon: "📦", rewardMin: 50, rewardMax: 150 };
+
+export const CHEST_TIERS: ChestTier[] = [
+  { id: "iron", name: "Iron Chest", icon: "📦", price: 200, rewardMin: 100, rewardMax: 300 },
+  { id: "copper", name: "Copper Chest", icon: "📦", price: 500, rewardMin: 250, rewardMax: 750 },
+  { id: "silver", name: "Silver Chest", icon: "📦", price: 1000, rewardMin: 500, rewardMax: 1500 },
+  { id: "gold", name: "Gold Chest", icon: "📦", price: 2500, rewardMin: 1250, rewardMax: 3750 },
+  { id: "platinum", name: "Platinum Chest", icon: "📦", price: 5000, rewardMin: 2500, rewardMax: 7500 },
+];
+
+/** Random integer reward in [min, max], inclusive - used for both the daily free chest and purchased chest keys. */
+export function rollChestReward(min: number, max: number): number {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+/** How many passed Shape Challenge attempts (score >= passScore) unlock the daily chest / Special Challenge header icons for a new player. */
+export const DAILY_CHEST_UNLOCK_COUNT = 5;
+export const SPECIAL_CHALLENGE_UNLOCK_COUNT = 20;
+
+export const SPECIAL_CHALLENGE_SHAPE_ID = "fant-dragon";
+export const SPECIAL_CHALLENGE_MIN_SCORE = 60;
+export const SPECIAL_CHALLENGE_RETRY_COST = 100;
+
+export const SPECIAL_CHALLENGE_COIN_BANDS: { minScore: number; coins: number }[] = [
+  { minScore: 95, coins: 1000 },
+  { minScore: 90, coins: 700 },
+  { minScore: 80, coins: 400 },
+  { minScore: 70, coins: 200 },
+  { minScore: 60, coins: 100 },
+];
+
+/** Coin reward for a Special Challenge score (0 below the minimum qualifying band). */
+export function coinsForSpecialChallengeScore(score: number): number {
+  for (const band of SPECIAL_CHALLENGE_COIN_BANDS) if (score >= band.minScore) return band.coins;
+  return 0;
+}

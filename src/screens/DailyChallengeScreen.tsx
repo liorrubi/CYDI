@@ -33,7 +33,7 @@ import {
   type DailySubmitResult,
 } from "../services/dailyChallengeApi";
 import { ANONYMOUS_PLAYER_NAME, getDisplayName, getPlayerId, getPlayerName, setPlayerName } from "../services/playerProfileStore";
-import { toAchievements, toDailyChallengeHistory, toHome, toInstructions, toSettings, toShop } from "../app/routes";
+import { toAchievements, toDailyChallengeHistory, toHome, toInstructions, toSettings, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -196,6 +196,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const goToAchievements = () => onNavigate(toAchievements(toHome()));
   const goToInstructions = () => onNavigate(toInstructions(toHome()));
   const goToShop = () => onNavigate(toShop(toHome()));
+  const goToSpecialChallenge = () => onNavigate(toSpecialChallenge());
   const goToHome = () => onNavigate(toHome());
   const goToSettings = () => onNavigate(toSettings());
   const goBack = replay ? () => onNavigate(toDailyChallengeHistory()) : goToHome;
@@ -234,6 +235,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
           onNavigateToInstructions={goToInstructions}
           onNavigateToAchievements={goToAchievements}
           onNavigateToShop={goToShop}
+          onNavigateToSpecialChallenge={goToSpecialChallenge}
           onNavigateToSettings={goToSettings}
         />
         {submission?.youWon && (
@@ -282,6 +284,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
         onNavigateToAchievements={goToAchievements}
         onNavigateToInstructions={goToInstructions}
         onNavigateToShop={goToShop}
+        onNavigateToSpecialChallenge={goToSpecialChallenge}
         onNavigateToHome={goToHome}
         onNavigateToSettings={goToSettings}
       />

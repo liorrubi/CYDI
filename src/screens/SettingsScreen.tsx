@@ -8,7 +8,7 @@ import { playChipSound } from "../engine/soundEngine";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive, setUnlockEverything } from "../services/unlockOverrideStore";
 import { exportSaveCode, importSaveCode } from "../services/saveTransfer";
-import { toAchievements, toHome, toInstructions, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 const LOCK_MANAGEMENT_PASSWORD = "1111";
@@ -135,6 +135,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         onNavigateToAchievements={() => onNavigate(toAchievements(toHome()))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toHome()))}
         onNavigateToShop={() => onNavigate(toShop(toHome()))}
+        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
       />
 
@@ -186,6 +187,11 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         <p className="status-text">
           Questions, bug reports, or feedback? Contact us at{" "}
           <a href="mailto:support@playcydi.com">support@playcydi.com</a>
+        </p>
+        <p className="status-text">
+          <strong>Progress &amp; coins are saved locally on this device/browser only.</strong> Clearing browser
+          data, switching devices, private browsing, technical issues, or game updates may cause progress or
+          coins to be lost. CYDI Coins are virtual game points only and have no real-money value.
         </p>
       </div>
 
@@ -303,6 +309,20 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
               <li>
                 CYDI does not currently use analytics or tracking tools. If that changes, this policy will be
                 updated first.
+              </li>
+            </ul>
+
+            <h3>Development Status &amp; Virtual Coins</h3>
+            <ul className="status-text legal-list">
+              <li>CYDI is still in active development, and features, balancing, and content may change.</li>
+              <li>
+                CYDI Coins are virtual in-game points only. They have no real-world monetary value and cannot be
+                exchanged, redeemed, or converted into real money or any other form of currency.
+              </li>
+              <li>
+                Progress and coins are saved locally on your device/browser only. At this stage, we make no
+                commitment to restore progress or coins lost due to clearing local data, switching devices,
+                technical issues, or game/version updates.
               </li>
             </ul>
 

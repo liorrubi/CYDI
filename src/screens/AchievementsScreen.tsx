@@ -9,7 +9,7 @@ import {
 } from "../app/achievements";
 import { getUnlockedAchievementIds } from "../services/achievementsStore";
 import { getProgress } from "../services/shapeChallengeProgress";
-import { toAchievements, toHome, toInstructions, toSettings, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toSettings, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type AchievementsScreenProps = {
@@ -30,6 +30,7 @@ export default function AchievementsScreen({ from, onNavigate }: AchievementsScr
         onNavigateToAchievements={() => onNavigate(toAchievements(from))}
         onNavigateToInstructions={() => onNavigate(toInstructions(from))}
         onNavigateToShop={() => onNavigate(toShop(from))}
+        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />

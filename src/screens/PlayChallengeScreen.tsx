@@ -11,7 +11,7 @@ import { encodeResultLink } from "../services/shareLink";
 import { createShortResultLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
 import { scoreAttempt } from "../engine/scoring";
-import { toAchievements, toHome, toInstructions, toList, toPlay, toSettings, toShop } from "../app/routes";
+import { toAchievements, toHome, toInstructions, toList, toPlay, toSettings, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { Challenge, DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -118,6 +118,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
           onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
           onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
           onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
+        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
           onNavigateToHome={() => onNavigate(toHome())}
           onNavigateToSettings={() => onNavigate(toSettings())}
         />
@@ -143,6 +144,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
         onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
         onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
+        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />
@@ -157,6 +159,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
         onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
         onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
         onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
+        onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />

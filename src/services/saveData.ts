@@ -20,6 +20,13 @@ export type SaveData = {
       currentStreak: number;
       longestStreak: number;
     };
+    dailyChest: {
+      lastOpenedDate: string;
+    };
+    specialChallenge: {
+      lastFreeDate: string;
+    };
+    successfulDrawings: number;
     completedRounds: number;
     achievementsTutorialShown: boolean;
     myChallengesTutorialShown: boolean;
@@ -43,6 +50,9 @@ export function createDefaultSaveData(): SaveData {
       unlockedCategories: [],
       unlockedPenColors: [],
       dailyStreak: { lastVisitDate: "", currentStreak: 0, longestStreak: 0 },
+      dailyChest: { lastOpenedDate: "" },
+      specialChallenge: { lastFreeDate: "" },
+      successfulDrawings: 0,
       completedRounds: 0,
       achievementsTutorialShown: false,
       myChallengesTutorialShown: false,

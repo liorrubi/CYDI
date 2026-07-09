@@ -7,7 +7,9 @@ import {
 } from "../engine/soundEngine";
 import AppLogo from "./AppLogo";
 import CoinIndicator from "./CoinIndicator";
+import DailyChestButton from "./DailyChestButton";
 import SoundToggleButton from "./SoundToggleButton";
+import SpecialChallengeButton from "./SpecialChallengeButton";
 
 type AppHeaderProps = {
   title?: string;
@@ -16,6 +18,7 @@ type AppHeaderProps = {
   onNavigateToAchievements?: () => void;
   onNavigateToInstructions?: () => void;
   onNavigateToShop?: () => void;
+  onNavigateToSpecialChallenge?: () => void;
   onNavigateToHome?: () => void;
   onNavigateToSettings?: () => void;
 };
@@ -27,6 +30,7 @@ export default function AppHeader({
   onNavigateToAchievements,
   onNavigateToInstructions,
   onNavigateToShop,
+  onNavigateToSpecialChallenge,
   onNavigateToHome,
   onNavigateToSettings,
 }: AppHeaderProps) {
@@ -78,6 +82,8 @@ export default function AppHeader({
             })
           }
         />
+        <DailyChestButton onNavigateToShop={onNavigateToShop} />
+        <SpecialChallengeButton onNavigateToSpecialChallenge={onNavigateToSpecialChallenge} />
         {onNavigateToAchievements && (
           <button
             type="button"

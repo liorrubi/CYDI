@@ -55,3 +55,7 @@ export function toDailyChallengeHistory(): Screen {
 export function toDailyChallengeReplay(entry: DailyHistoryEntry): Screen {
   return { name: "dailyChallengeReplay", entry };
 }
+
+export function toSpecialChallenge(): Screen {
+  return { name: "specialChallenge" };
+}

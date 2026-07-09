@@ -1,4 +1,5 @@
 import { DailyChallengeDO } from "./dailyChallengeDO";
+import { parseShareRecord, renderShareImage, shareTitleAndDescription } from "./shareImage";
 
 export { DailyChallengeDO };
 
@@ -55,6 +56,82 @@ async function handleGet(id: string, env: Env): Promise<Response> {
   return new Response(value, { headers: { "content-type": "application/json" } });
 }
 
+async function handleShareImage(id: string, env: Env): Promise<Response> {
+  const value = await env.SHARE_KV.get(id);
+  const record = value === null ? null : parseShareRecord(value);
+  const png = record ? await renderShareImage(record) : null;
+  if (!png) return new Response("Not found", { status: 404 });
+  return new Response(png, {
+    headers: {
+      "content-type": "image/png",
+      // Share payloads are immutable once created (see handleCreate) - safe to cache hard.
+      "cache-control": "public, max-age=604800, immutable",
+    },
+  });
+}
+
+// Rewrites the SPA shell's generic Open Graph/Twitter tags with the specific
+// challenge/result being shared, so chat apps that unfurl the link (WhatsApp,
+// iMessage, Slack, ...) show the player's actual drawing instead of a bare link.
+// Real visitors get the exact same HTML/JS bundle underneath - only the <head>
+// metadata differs, so the SPA behaves identically once it mounts.
+async function handleShareLinkPage(id: string, request: Request, env: Env): Promise<Response | null> {
+  const value = await env.SHARE_KV.get(id);
+  if (value === null) return null;
+  const record = parseShareRecord(value);
+  if (!record) return null;
+  const copy = shareTitleAndDescription(record);
+  if (!copy) return null;
+
+  const pageResponse = await env.ASSETS.fetch(request);
+  if (!pageResponse.ok) return null;
+
+  const imageUrl = new URL(`/api/share/${id}/image.png`, request.url).toString();
+  const shareUrl = new URL(request.url).toString();
+
+  return new HTMLRewriter()
+    .on("title", {
+      element(el) {
+        el.setInnerContent(copy.title);
+      },
+    })
+    .on('meta[property="og:title"]', {
+      element(el) {
+        el.setAttribute("content", copy.title);
+      },
+    })
+    .on('meta[property="og:description"]', {
+      element(el) {
+        el.setAttribute("content", copy.description);
+      },
+    })
+    .on('meta[name="twitter:title"]', {
+      element(el) {
+        el.setAttribute("content", copy.title);
+      },
+    })
+    .on('meta[name="twitter:description"]', {
+      element(el) {
+        el.setAttribute("content", copy.description);
+      },
+    })
+    .on('meta[name="twitter:card"]', {
+      element(el) {
+        el.setAttribute("content", "summary_large_image");
+      },
+    })
+    .on("head", {
+      element(el) {
+        el.append(`<meta property="og:image" content="${imageUrl}">`, { html: true });
+        el.append(`<meta property="og:image:width" content="640">`, { html: true });
+        el.append(`<meta property="og:image:height" content="640">`, { html: true });
+        el.append(`<meta property="og:url" content="${shareUrl}">`, { html: true });
+        el.append(`<meta name="twitter:image" content="${imageUrl}">`, { html: true });
+      },
+    })
+    .transform(pageResponse);
+}
+
 // Every /api/daily/* request is forwarded to the single global DailyChallengeDO
 // instance, which processes requests one at a time (see dailyChallengeDO.ts).
 function forwardToDailyDO(request: Request, env: Env, path: string): Promise<Response> {
@@ -78,6 +155,9 @@ export default {
     const shareMatch = url.pathname.match(/^\/api\/share\/([A-Za-z0-9]{4,12})$/);
     if (shareMatch && request.method === "GET") return handleGet(shareMatch[1], env);
 
+    const shareImageMatch = url.pathname.match(/^\/api\/share\/([A-Za-z0-9]{4,12})\/image\.png$/);
+    if (shareImageMatch && request.method === "GET") return handleShareImage(shareImageMatch[1], env);
+
     if (url.pathname === "/api/daily/current" && request.method === "GET") return forwardToDailyDO(request, env, "/current");
     if (url.pathname === "/api/daily/submit" && request.method === "POST") return forwardToDailyDO(request, env, "/submit");
     if (url.pathname === "/api/daily/claim-prizes" && request.method === "POST") return forwardToDailyDO(request, env, "/claim-prizes");
@@ -85,6 +165,12 @@ export default {
 
     const episodeMatch = url.pathname.match(/^\/api\/daily\/episode\/(\d+)$/);
     if (episodeMatch && request.method === "GET") return forwardToDailyDO(request, env, `/episode/${episodeMatch[1]}`);
+
+    const shareLinkMatch = url.pathname.match(/^\/c\/([A-Za-z0-9]{4,12})$/);
+    if (shareLinkMatch && request.method === "GET") {
+      const rewritten = await handleShareLinkPage(shareLinkMatch[1], request, env);
+      if (rewritten) return rewritten;
+    }
 
     return env.ASSETS.fetch(request);
   },

@@ -191,7 +191,9 @@ body {
 .sound-toggle,
 .achievements-shortcut,
 .info-shortcut,
-.settings-shortcut {
+.settings-shortcut,
+.daily-chest-shortcut,
+.special-challenge-shortcut {
   border: none;
   background: var(--color-card);
   border-radius: var(--radius-sm);
@@ -208,6 +210,58 @@ body {
   font-weight: 700;
   font-family: Georgia, "Times New Roman", serif;
   color: var(--color-primary);
+}
+
+.daily-chest-shortcut,
+.special-challenge-shortcut {
+  position: relative;
+}
+
+.daily-chest-shortcut:disabled,
+.special-challenge-shortcut:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.daily-chest-badge-free,
+.daily-chest-badge-shop,
+.daily-chest-badge-locked,
+.special-challenge-badge-free,
+.special-challenge-badge-retry,
+.special-challenge-badge-locked {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  border: 2px solid var(--color-card);
+  border-radius: 8px;
+  line-height: 1;
+  white-space: nowrap;
+  animation: coin-alert-pop 300ms ease;
+}
+
+.daily-chest-badge-free,
+.special-challenge-badge-free {
+  background: var(--color-success);
+  color: white;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 2px 4px;
+}
+
+.daily-chest-badge-shop,
+.special-challenge-badge-retry {
+  background: var(--color-primary);
+  font-size: 10px;
+  padding: 1px 3px;
+}
+
+.daily-chest-badge-locked,
+.special-challenge-badge-locked {
+  background: var(--color-text-muted);
+  color: white;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 2px 4px;
 }
 
 .celebration-banner {
@@ -941,6 +995,114 @@ body {
   }
 }
 
+.chest-reward-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(20, 12, 0, 0.55);
+  backdrop-filter: blur(2px);
+  animation: achievement-overlay-in 400ms ease;
+}
+
+.chest-reward-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 380px;
+  padding: var(--space-6) var(--space-5);
+  color: white;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  animation: achievement-card-in 450ms cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.chest-reward-card-wood {
+  background: linear-gradient(160deg, #c88b4a, #8a5a26);
+}
+
+.chest-reward-card-iron {
+  background: linear-gradient(160deg, #c3c7d1, #6b6f7a);
+}
+
+.chest-reward-card-copper {
+  background: linear-gradient(160deg, #e08a4d, #8f4a17);
+}
+
+.chest-reward-card-silver {
+  background: linear-gradient(160deg, #eef0f4, #aab0bd);
+  color: var(--color-text);
+}
+
+.chest-reward-card-gold {
+  background: linear-gradient(160deg, #ffcf40, #f5b400 45%, #f97316);
+}
+
+.chest-reward-card-platinum {
+  background: linear-gradient(160deg, #e8fbff, #7fd9e0);
+  color: var(--color-text);
+}
+
+.chest-reward-icon {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.chest-reward-headline {
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.chest-reward-amount {
+  margin-top: var(--space-2);
+  font-weight: 800;
+  font-size: 28px;
+  white-space: nowrap;
+}
+
+.chest-reward-icon-opening {
+  animation: chest-shake-open 500ms ease;
+}
+
+.chest-reward-amount-spinning {
+  animation: chest-spin-pulse 150ms ease-in-out infinite;
+}
+
+@keyframes chest-shake-open {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  20% {
+    transform: scale(1.05) rotate(-8deg);
+  }
+  40% {
+    transform: scale(1.05) rotate(8deg);
+  }
+  60% {
+    transform: scale(1.12) rotate(-6deg);
+  }
+  80% {
+    transform: scale(1.18) rotate(6deg);
+  }
+}
+
+@keyframes chest-spin-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
 @keyframes banner-pop {
   0% {
     transform: scale(0.85);
@@ -1415,6 +1577,37 @@ body {
   flex-shrink: 0;
 }
 
+.chest-tier-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.chest-tier-icon-iron {
+  background: linear-gradient(160deg, #c3c7d1, #8a8f98);
+}
+
+.chest-tier-icon-copper {
+  background: linear-gradient(160deg, #e08a4d, #a15a24);
+}
+
+.chest-tier-icon-silver {
+  background: linear-gradient(160deg, #f1f3f7, #b7bcc7);
+}
+
+.chest-tier-icon-gold {
+  background: linear-gradient(160deg, #ffcf40, #f5b400);
+}
+
+.chest-tier-icon-platinum {
+  background: linear-gradient(160deg, #e8fbff, #9fd8e0);
+}
+
 .shop-product-info {
   flex: 1;
   min-width: 0;
@@ -1523,6 +1716,8 @@ body {
   .achievements-shortcut,
   .info-shortcut,
   .settings-shortcut,
+  .daily-chest-shortcut,
+  .special-challenge-shortcut,
   .pen-color-trigger {
     width: 48px;
     height: 48px;

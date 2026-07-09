@@ -8,6 +8,7 @@ import { useDialogA11y } from "../hooks/useDialogA11y";
 import { encodeChallengeLink } from "../services/shareLink";
 import { createShortChallengeLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
+import { recordChallengeShared } from "../services/sharedChallengesStore";
 import { markMyChallengesTutorialShown, shouldShowMyChallengesTutorial } from "../services/tutorialStore";
 import { toAchievements, toCreate, toHome, toInstructions, toList, toPlay, toSettings, toShop, toSpecialChallenge } from "../app/routes";
 import type { Screen } from "../types/GameMode";
@@ -44,6 +45,10 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
       text: `Can you draw "${challenge.name}"? Try my CYDI challenge!`,
       url,
     });
+    // Only "shared"/"copied" mean the link actually left the device - "cancelled"
+    // (backed out of the share sheet) and "failed" never reached a friend, so
+    // they shouldn't count toward the sharing achievements.
+    if (outcome === "shared" || outcome === "copied") recordChallengeShared(challenge.id);
     if (outcome === "copied") {
       setShareFeedback("Link copied!");
       window.setTimeout(() => setShareFeedback(null), 2500);

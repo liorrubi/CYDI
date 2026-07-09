@@ -31,6 +31,7 @@ export type SaveData = {
     achievementsTutorialShown: boolean;
     myChallengesTutorialShown: boolean;
     challenges: Challenge[];
+    sharedChallengeIds: string[];
   };
   settings: {
     selectedPenColor: PenColorId;
@@ -57,6 +58,7 @@ export function createDefaultSaveData(): SaveData {
       achievementsTutorialShown: false,
       myChallengesTutorialShown: false,
       challenges: [],
+      sharedChallengeIds: [],
     },
     settings: {
       selectedPenColor: DEFAULT_PEN_COLOR,

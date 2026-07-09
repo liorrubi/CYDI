@@ -1,6 +1,7 @@
 import { starRatingForScore } from "./constants";
 import { SHAPE_LIBRARY } from "../engine/shapeLibrary";
 import { getLongestStreak } from "../services/dailyStreakStore";
+import { getSharedChallengesCount } from "../services/sharedChallengesStore";
 import type { ShapeChallengeProgress } from "../services/shapeChallengeProgress";
 
 export type AchievementStats = {
@@ -11,6 +12,7 @@ export type AchievementStats = {
   totalShapesCount: number;
   hasCompletedFirst: boolean;
   longestDailyStreak: number;
+  sharedChallengesCount: number;
 };
 
 export type Achievement = {
@@ -34,6 +36,7 @@ export function computeAchievementStats(progress: ShapeChallengeProgress): Achie
     totalShapesCount: SHAPE_LIBRARY.length,
     hasCompletedFirst: unlockedShapesCount >= 1,
     longestDailyStreak: getLongestStreak(),
+    sharedChallengesCount: getSharedChallengesCount(),
   };
 }
 
@@ -222,6 +225,51 @@ export const ACHIEVEMENTS: Achievement[] = [
     coinReward: 5000,
     target: 100,
     currentValue: (s) => s.longestDailyStreak,
+  },
+  {
+    id: "share-1",
+    icon: "🤝",
+    name: "First Invite",
+    description: "Share 1 challenge with a friend",
+    coinReward: 100,
+    target: 1,
+    currentValue: (s) => s.sharedChallengesCount,
+  },
+  {
+    id: "share-3",
+    icon: "🤝",
+    name: "Challenge Sender",
+    description: "Share 3 challenges with friends",
+    coinReward: 300,
+    target: 3,
+    currentValue: (s) => s.sharedChallengesCount,
+  },
+  {
+    id: "share-10",
+    icon: "🤝",
+    name: "Friendly Challenger",
+    description: "Share 10 challenges with friends",
+    coinReward: 500,
+    target: 10,
+    currentValue: (s) => s.sharedChallengesCount,
+  },
+  {
+    id: "share-25",
+    icon: "🤝",
+    name: "Viral Player",
+    description: "Share 25 challenges with friends",
+    coinReward: 1000,
+    target: 25,
+    currentValue: (s) => s.sharedChallengesCount,
+  },
+  {
+    id: "share-50",
+    icon: "🤝",
+    name: "CYDI Ambassador",
+    description: "Share 50 challenges with friends",
+    coinReward: 2500,
+    target: 50,
+    currentValue: (s) => s.sharedChallengesCount,
   },
 ];
 

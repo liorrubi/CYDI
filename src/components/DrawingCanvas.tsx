@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { DrawingPath } from "../types/Challenge";
 import type { Point } from "../types/Point";
-import { CANVAS_SIZE, DEFAULT_PEN_COLOR, PEN_COLORS, type PenColorId } from "../app/constants";
+import { CANVAS_SIZE, DEFAULT_PEN_COLOR, PEN_COLORS, penColorById, type PenColorId } from "../app/constants";
 
 export type DrawingCanvasHandle = {
   clear: () => void;
@@ -107,6 +107,30 @@ export function drawSegmentedStroke(
 const GHOST_STROKE_COLOR = "#2563eb";
 const GHOST_STROKE_OPTIONS: StrokeOptions = { lineWidth: 6, dash: [12, 8] };
 
+// Cosmetic drawing-pen overlay ----------------------------------------------
+// A small pen icon that follows the pointer while drawing. Purely visual: it
+// lives in an overlay layer with pointer-events:none and never touches the
+// points/scoring. Positioned by writing transform directly to the DOM node
+// (no React re-render per move), with a short CSS transition doing the smooth
+// "follow" for free — cheap enough for mobile.
+
+// Where the nib tip sits inside the 66x66 pen box (the SVG below keeps its
+// 44-unit viewBox but is rendered at 66px, i.e. 1.5x — so tip coords scale too).
+const PEN_TIP_X = 50.25;
+const PEN_TIP_Y = 53.25;
+// Keep the nib a hair up-left of the actual contact point so the dot the
+// player is drawing stays visible. Touch devices get a bigger lift so a
+// fingertip doesn't sit on top of the pen.
+const PEN_GAP = 3;
+const PEN_TOUCH_LIFT = 14;
+
+function penInkColor(color: PenColorId): string {
+  // "rainbow" has no single hex — use a cheerful magenta so the nib still reads
+  // as "colored ink" rather than defaulting to black.
+  if (color === "rainbow") return "#a855f7";
+  return penColorById(color).hex ?? "#1e202e";
+}
+
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(function DrawingCanvas(
   {
     width = CANVAS_SIZE,
@@ -121,11 +145,45 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const penRef = useRef<HTMLDivElement | null>(null);
   const pointsRef = useRef<Point[]>([]);
   const segmentBreaksRef = useRef<number[]>([]);
   const isDrawingRef = useRef(false);
   const strokeStartRef = useRef(0);
   const wasDisabledRef = useRef(disabled);
+  const touchLiftRef = useRef(0);
+
+  // Detect coarse (touch) pointers once so the pen can lift a bit higher above
+  // a fingertip than beside a mouse cursor.
+  useEffect(() => {
+    touchLiftRef.current =
+      typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches ? PEN_TOUCH_LIFT : 0;
+  }, []);
+
+  /** Moves the cosmetic pen so its nib points just off the contact point. `animate=false` snaps instantly (used on pointer-down so it doesn't slide in from the corner). */
+  function movePen(x: number, y: number, animate: boolean) {
+    const pen = penRef.current;
+    if (!pen) return;
+    const left = x - PEN_TIP_X - PEN_GAP;
+    const top = y - PEN_TIP_Y - PEN_GAP - touchLiftRef.current;
+    if (!animate) {
+      pen.style.transition = "none";
+      pen.style.transform = `translate(${left}px, ${top}px)`;
+      void pen.offsetWidth; // flush so the next move animates from here
+      pen.style.transition = "";
+    } else {
+      pen.style.transform = `translate(${left}px, ${top}px)`;
+    }
+  }
+
+  function showPen(x: number, y: number) {
+    movePen(x, y, false);
+    penRef.current?.classList.add("is-active");
+  }
+
+  function hidePen() {
+    penRef.current?.classList.remove("is-active");
+  }
 
   // Becoming interactive again (e.g. "Try Again" / a new shape) starts a fresh
   // stroke; simply lifting the pointer mid-drawing must not clear it.
@@ -135,6 +193,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
       segmentBreaksRef.current = [];
       redraw();
     }
+    // A phase switch can disable the canvas while the pointer is still down and
+    // no pointerup ever reaches us — make sure the cosmetic pen doesn't linger.
+    if (disabled) hidePen();
     wasDisabledRef.current = disabled;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disabled]);
@@ -198,6 +259,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
   function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (disabled) return;
     const { x, y } = getRelativePoint(event);
+    showPen(x, y);
     isDrawingRef.current = true;
     if (pointsRef.current.length === 0) {
       strokeStartRef.current = performance.now();
@@ -215,29 +277,52 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
   function handlePointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (disabled || !isDrawingRef.current) return;
     const { x, y } = getRelativePoint(event);
+    movePen(x, y, true);
     pointsRef.current = [...pointsRef.current, { x, y, t: performance.now() - strokeStartRef.current }];
     redraw();
     onChange?.({ points: pointsRef.current, canvasWidth: width, canvasHeight: height, breaks: segmentBreaksRef.current });
   }
 
   function handlePointerUp() {
+    hidePen();
     if (disabled || !isDrawingRef.current) return;
     isDrawingRef.current = false;
     onComplete?.({ points: pointsRef.current, canvasWidth: width, canvasHeight: height, breaks: segmentBreaksRef.current });
   }
 
+  const inkColor = penInkColor(strokeColor);
+
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      className={disabled ? "drawing-canvas drawing-canvas-disabled" : "drawing-canvas"}
-      style={{ touchAction: "none" }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-    />
+    <div className="drawing-canvas-shell">
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+        className={disabled ? "drawing-canvas drawing-canvas-disabled" : "drawing-canvas"}
+        style={{ touchAction: "none" }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+      />
+      {/* Cosmetic pen overlay — never receives pointer events, never affects scoring. */}
+      <div ref={penRef} className="drawing-pen" aria-hidden="true">
+        <svg width="66" height="66" viewBox="0 0 44 44" fill="none">
+          <g transform="rotate(-40 22 22)">
+            {/* barrel */}
+            <rect x="16" y="7" width="12" height="21" rx="3" fill="#3b3f52" />
+            {/* highlight stripe */}
+            <rect x="18.5" y="8" width="2.4" height="19" rx="1.2" fill="rgba(255,255,255,0.35)" />
+            {/* top cap */}
+            <rect x="16" y="3.5" width="12" height="5" rx="2.5" fill="#2a2d3c" />
+            {/* metal collar */}
+            <rect x="16.5" y="27" width="11" height="4" rx="1.5" fill="#c7ccd8" />
+            {/* nib — colored to match the ink */}
+            <path d="M17.5 31 H26.5 L22 40 Z" fill={inkColor} />
+          </g>
+        </svg>
+      </div>
+    </div>
   );
 });
 

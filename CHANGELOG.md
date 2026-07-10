@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.0 - 2026-07-10
+
+Added a cosmetic drawing-pen overlay (`DrawingCanvas.tsx` / `global.css`): a
+small pen icon now appears next to the touch/cursor point while the player is
+drawing, follows the pointer with a smooth trailing animation, and fades out
+when they lift off. It's purely visual - `pointer-events: none`, driven by
+writing `transform` straight to the DOM (no React re-render per move) plus a
+short CSS transition, so it stays light on mobile and never touches the
+points, accuracy, difficulty, or scoring. The nib is tinted to match the
+selected pen ink color. Positioned just off the contact point (lifted higher
+on touch devices) so it never hides where the player is drawing, and it
+respects `prefers-reduced-motion`. Groundwork for future purchasable pen skins.
+
 ## 0.11.3 - 2026-07-10
 
 Fixed the "double your reward" multiplication quiz (`DoubleCoinsOffer.tsx`)

@@ -618,6 +618,48 @@ body {
   cursor: default;
 }
 
+/* Wraps the canvas so the cosmetic drawing-pen overlay can be positioned over it. */
+.drawing-canvas-shell {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1 / 1;
+  line-height: 0;
+}
+
+.drawing-canvas-shell .drawing-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Cosmetic pen that follows the pointer while drawing. Purely visual:
+   pointer-events:none so it never intercepts touches, and its transform is
+   driven straight from the DOM (see DrawingCanvas) for a cheap, smooth follow. */
+.drawing-pen {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 66px;
+  height: 66px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-160px, -160px);
+  transition: transform 90ms linear, opacity 220ms ease-out;
+  will-change: transform, opacity;
+  z-index: 4;
+  filter: drop-shadow(0 2px 3px rgba(30, 32, 46, 0.25));
+}
+
+.drawing-pen.is-active {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawing-pen {
+    transition: opacity 140ms linear;
+  }
+}
+
 .pen-color-menu {
   position: relative;
   display: flex;

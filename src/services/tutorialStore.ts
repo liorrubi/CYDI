@@ -35,6 +35,22 @@ export function shouldShowAchievementsTutorial(): boolean {
   return !hasShownAchievementsTutorial() && getCompletedRoundCount() >= ACHIEVEMENTS_TUTORIAL_ROUND_THRESHOLD;
 }
 
+/**
+ * The onboarding tutorial targets genuinely new players: never shown once dismissed, and the
+ * `completedRounds === 0` guard keeps it from popping up for veterans whose older saves
+ * predate the `onboardingTutorialShown` field.
+ */
+export function shouldShowOnboardingTutorial(): boolean {
+  const progress = getSaveData().progress;
+  return !progress.onboardingTutorialShown && progress.completedRounds === 0;
+}
+
+export function markOnboardingTutorialShown(): void {
+  updateSaveData((data) => {
+    data.progress.onboardingTutorialShown = true;
+  });
+}
+
 export function shouldShowMyChallengesTutorial(): boolean {
   return !getSaveData().progress.myChallengesTutorialShown;
 }

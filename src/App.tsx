@@ -4,6 +4,7 @@
  */
 import { useEffect, useState } from "react";
 import AchievementsTutorialOverlay from "./components/AchievementsTutorialOverlay";
+import OnboardingTutorialOverlay from "./components/OnboardingTutorialOverlay";
 import HomeScreen from "./screens/HomeScreen";
 import CreateChallengeScreen from "./screens/CreateChallengeScreen";
 import MyChallengesScreen from "./screens/MyChallengesScreen";
@@ -21,7 +22,13 @@ import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toSharedResult } from "./app/routes";
 import { recordDailyVisit } from "./services/dailyStreakStore";
-import { markAchievementsTutorialShown, onRoundCompleted, shouldShowAchievementsTutorial } from "./services/tutorialStore";
+import {
+  markAchievementsTutorialShown,
+  markOnboardingTutorialShown,
+  onRoundCompleted,
+  shouldShowAchievementsTutorial,
+  shouldShowOnboardingTutorial,
+} from "./services/tutorialStore";
 import { getChallenge, updateChallenge } from "./services/challengeStorage";
 import { decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
 import { fetchSharedById } from "./services/shareApi";
@@ -89,6 +96,7 @@ export default function App() {
     return { name: "home" };
   });
   const [showAchievementsTutorial, setShowAchievementsTutorial] = useState(() => shouldShowAchievementsTutorial());
+  const [showOnboardingTutorial, setShowOnboardingTutorial] = useState(() => shouldShowOnboardingTutorial());
 
   useEffect(() => {
     recordDailyVisit();
@@ -133,6 +141,11 @@ export default function App() {
     [],
   );
 
+  function dismissOnboardingTutorial() {
+    markOnboardingTutorialShown();
+    setShowOnboardingTutorial(false);
+  }
+
   function dismissAchievementsTutorial() {
     markAchievementsTutorialShown();
     setShowAchievementsTutorial(false);
@@ -173,7 +186,13 @@ export default function App() {
           case "achievements":
             return <AchievementsScreen from={screen.from} onNavigate={setScreen} />;
           case "instructions":
-            return <InstructionsScreen from={screen.from} onNavigate={setScreen} />;
+            return (
+              <InstructionsScreen
+                from={screen.from}
+                onNavigate={setScreen}
+                onStartTutorial={() => setShowOnboardingTutorial(true)}
+              />
+            );
           case "sharedResult":
             return <SharedResultScreen data={screen.data} onNavigate={setScreen} />;
           case "specialChallenge":
@@ -182,7 +201,8 @@ export default function App() {
             return <MegaChallengeScreen onNavigate={setScreen} />;
         }
       })()}
-      {showAchievementsTutorial && (
+      {showOnboardingTutorial && <OnboardingTutorialOverlay onDismiss={dismissOnboardingTutorial} />}
+      {showAchievementsTutorial && !showOnboardingTutorial && (
         <AchievementsTutorialOverlay
           onNavigateToAchievements={handleTutorialNavigateToAchievements}
           onDismiss={dismissAchievementsTutorial}

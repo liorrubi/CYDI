@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.0 - 2026-07-10
+
+Added an onboarding tutorial for new players: a short 5-step intro modal
+(`OnboardingTutorialOverlay`) that walks through the main game modes -
+welcome/scoring, Shape Challenge, Daily Challenge, Create & Share, and
+Coins & Shop.
+
+- Shows automatically on a player's first visit only; a new
+  `onboardingTutorialShown` save flag plus a `completedRounds === 0` guard
+  keeps it from popping up for existing players whose saves predate the
+  flag.
+- Each step has a big icon, a colored title matching the home-card accent
+  of that game mode, a short description, progress dots, and Next / Start
+  Playing navigation; Back (hidden on the first step) returns to the
+  previous step and Skip dismisses at any time. Fully keyboard-accessible
+  (focus trap, Escape closes).
+- The How to Play screen (`InstructionsScreen`) gained a "Start Tutorial"
+  button that replays the tutorial on demand.
+
 ## 0.8.0 - 2026-07-10
 
 Added the Mega Challenge: a long-term collectible card album of 12 premium

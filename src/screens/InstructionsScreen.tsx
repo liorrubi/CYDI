@@ -6,6 +6,7 @@ import type { Screen } from "../types/GameMode";
 type InstructionsScreenProps = {
   from: Screen;
   onNavigate: (screen: Screen) => void;
+  onStartTutorial: () => void;
 };
 
 function starRangeLabel(index: number): string {
@@ -14,7 +15,7 @@ function starRangeLabel(index: number): string {
   return `${lower}–${upper}`;
 }
 
-export default function InstructionsScreen({ from, onNavigate }: InstructionsScreenProps) {
+export default function InstructionsScreen({ from, onNavigate, onStartTutorial }: InstructionsScreenProps) {
   const zeroStarUpper = STAR_RATING_THRESHOLDS[STAR_RATING_THRESHOLDS.length - 1].minScore - 1;
 
   return (
@@ -36,6 +37,9 @@ export default function InstructionsScreen({ from, onNavigate }: InstructionsScr
           CYDI shows you a shape. Study it, then draw it as accurately as you can. When you're done, you'll get a
           score out of 100 and a star rating.
         </p>
+        <button type="button" className="btn btn-primary instructions-tutorial-btn" onClick={onStartTutorial}>
+          Start Tutorial
+        </button>
       </div>
 
       <div className="card instructions-card">

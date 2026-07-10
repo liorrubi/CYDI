@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.13.0 - 2026-07-10
+
+Lowered the one-time Mega Challenge unlock cost from 20,000 to 10,000 coins
+(`constants.ts`), making the feature reachable much sooner.
+
+Reworked the shop's Mega Cards section for players who haven't unlocked the
+Mega Challenge yet (`ShopScreen.tsx` / `global.css`). Instead of loading a lock
+message into every card, there's now a single prominent "Open Mega Challenge
+first" call-to-action below the album progress bar that takes the player
+straight to the Shape Challenge screen where the feature is unlocked. The pack
+cards stay visible but their price buttons read "🔒 1500/2000/3500/6000" and are
+inert - tapping one shows a brief toast and never spends coins, pulls a card, or
+opens a random pack. Once the Mega Challenge is unlocked the CTA disappears and
+the packs return to normal.
+
 ## 0.12.0 - 2026-07-10
 
 Added a cosmetic drawing-pen overlay (`DrawingCanvas.tsx` / `global.css`): a

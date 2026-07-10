@@ -17,7 +17,7 @@ import {
 } from "../app/constants";
 import { MEGA_ALBUM_SIZE, MEGA_CARDS, type MegaCardDefinition } from "../engine/megaShapeLibrary";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
-import { collectedMegaCardCount, getMegaProgress, unlockMegaCard } from "../services/megaChallengeStore";
+import { collectedMegaCardCount, getMegaProgress, isMegaChallengeUnlocked, unlockMegaCard } from "../services/megaChallengeStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
 import { playSuccessSound } from "../engine/soundEngine";
 import {
@@ -74,6 +74,9 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
   const [revealedMegaCard, setRevealedMegaCard] = useState<MegaCardDefinition | null>(null);
   // Bumped after each pack purchase so the "left in pool" counts re-render.
   const [megaPurchaseCount, setMegaPurchaseCount] = useState(0);
+  const [megaUnlocked] = useState(() => isMegaChallengeUnlocked());
+  // Transient toast shown when a locked Mega price button is tapped before the feature is unlocked.
+  const [megaLockToast, setMegaLockToast] = useState(false);
   const megaCollected = collectedMegaCardCount();
   const megaProgressPercent = Math.round((megaCollected / MEGA_ALBUM_SIZE) * 100);
 
@@ -94,6 +97,14 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
   }
 
   function handleBuyMegaPack(product: MegaPackProduct) {
+    // Mega Challenge feature must be unlocked (in Shape Challenge) before any
+    // Mega card can be bought. Tapping a locked pack shows a toast instead of
+    // charging coins or pulling a card.
+    if (!megaUnlocked) {
+      setMegaLockToast(true);
+      window.setTimeout(() => setMegaLockToast(false), 2500);
+      return;
+    }
     const pool = lockedMegaCards(product.rarity);
     if (coins < product.price || pool.length === 0) return;
     spendCoins(product.price);
@@ -161,6 +172,11 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
           <div className="progress-bar-fill" style={{ width: `${megaProgressPercent}%` }} />
         </div>
       </div>
+      {!megaUnlocked && (
+        <button type="button" className="shop-mega-cta" onClick={() => onNavigate(toShapeChallenge())}>
+          🔒 Open Mega Challenge first ›
+        </button>
+      )}
       {revealedMegaCard && (
         <div className={`card mega-reveal mega-card-${revealedMegaCard.rarity}`}>
           <span className="mega-reveal-preview">
@@ -187,7 +203,10 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
           const soldOut = pool.length === 0;
           const canAfford = coins >= product.price;
           return (
-            <div key={product.id} className={`card shop-product shop-mega-pack shop-mega-pack-${tier}`}>
+            <div
+              key={product.id}
+              className={`card shop-product shop-mega-pack shop-mega-pack-${tier}${megaUnlocked ? "" : " shop-mega-pack-locked"}`}
+            >
               <span className={`shop-mega-pack-icon shop-mega-pack-icon-${tier}`} aria-hidden="true">
                 {product.icon}
               </span>
@@ -199,13 +218,19 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
                 <p className="status-text">
                   {soldOut ? "All cards of this kind are collected!" : "Unlocks a random Mega Album drawing"}
                 </p>
-                {!soldOut && (
+                {megaUnlocked && !soldOut && (
                   <span className="shop-mega-left-badge">
                     {pool.length} card{pool.length === 1 ? "" : "s"} left
                   </span>
                 )}
               </div>
-              {soldOut ? (
+              {!megaUnlocked ? (
+                <div className="shop-mega-pack-action">
+                  <Button className="btn-locked" aria-disabled="true" onClick={() => handleBuyMegaPack(product)}>
+                    🔒 {product.price}
+                  </Button>
+                </div>
+              ) : soldOut ? (
                 <span className="shop-product-owned">✓ Collected</span>
               ) : (
                 <div className="shop-mega-pack-action">
@@ -218,6 +243,7 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
           );
         })}
       </div>
+      {megaLockToast && <div className="shop-mega-toast" role="status">Open Mega Challenge first</div>}
       <h2>Ink Colors</h2>
       <div className="shop-product-list">
         {PEN_COLOR_PRODUCTS.map((color) => {

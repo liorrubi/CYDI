@@ -3,7 +3,7 @@ export const APP_TAGLINE = "Quick drawing challenges";
 
 // Bumped by hand only when a new product version ships - unrelated to SaveData's
 // internal schemaVersion, which tracks the save file format, not the game itself.
-export const APP_VERSION = "0.7.0";
+export const APP_VERSION = "0.8.0";
 // Short git commit hash (or a build timestamp fallback), set automatically at build time.
 export const APP_BUILD = __APP_BUILD__;
 // ISO timestamp of when this build was produced, set automatically at build time - not schemaVersion (save file format) or APP_VERSION (hand-bumped product version).
@@ -285,7 +285,7 @@ export const MEGA_SPECIFIC_UNLOCK_COST: Record<MegaRarity, number> = {
 };
 
 /** One-time coin cost to unlock the whole Mega Challenge feature. Until it's paid, the album is locked and the first card comes free with the unlock. */
-export const MEGA_CHALLENGE_UNLOCK_COST = 20000;
+export const MEGA_CHALLENGE_UNLOCK_COST = 10000;
 
 /** Shop price for a random locked Mega card of any rarity. */
 export const MEGA_RANDOM_CARD_COST = 1500;

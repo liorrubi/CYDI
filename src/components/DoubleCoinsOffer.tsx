@@ -99,11 +99,12 @@ export default function DoubleCoinsOffer({ amount, onResolved, remainingDoubles,
           </p>
           <div className="double-offer-quiz-row">
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]*"
               autoFocus
               value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
+              onChange={(e) => setAnswer(e.target.value.replace(/[^0-9]/g, ""))}
               className="double-offer-input"
               aria-label="Your answer"
             />

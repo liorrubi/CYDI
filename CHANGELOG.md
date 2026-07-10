@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.3 - 2026-07-10
+
+Fixed the "double your reward" multiplication quiz (`DoubleCoinsOffer.tsx`)
+sometimes rejecting keystrokes in its answer field on mobile/tablet devices,
+especially Android tablets - `type="number"` inputs are known to be unreliable
+on some of those keyboards. Switched to `type="text"` with `inputMode="numeric"`
+and a digits-only filter on input, which keeps the numeric keypad but avoids
+the native number-input bug.
+
 ## 0.11.2 - 2026-07-10
 
 Mobile-only readability pass, two screens:

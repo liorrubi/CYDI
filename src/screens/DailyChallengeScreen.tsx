@@ -204,7 +204,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
 
   const goToAchievements = () => onNavigate(toAchievements(toHome()));
   const goToInstructions = () => onNavigate(toInstructions(toHome()));
-  const goToShop = () => onNavigate(toShop(toHome()));
+  const goToShop = (highlightPenColorId?: PenColorId) => onNavigate(toShop(toHome(), highlightPenColorId));
   const goToSpecialChallenge = () => onNavigate(toSpecialChallenge());
   const goToShapeChallenge = () => onNavigate(toShapeChallenge());
   const goToHome = () => onNavigate(toHome());

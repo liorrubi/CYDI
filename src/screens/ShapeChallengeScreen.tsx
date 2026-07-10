@@ -224,7 +224,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
         onBackToMap={() => setSelectedIndex(null)}
         onNavigateToAchievements={goToAchievements}
         onNavigateToInstructions={goToInstructions}
-        onNavigateToShop={() => onNavigate(toShop(toShapeChallenge()))}
+        onNavigateToShop={(highlightPenColorId) => onNavigate(toShop(toShapeChallenge(), highlightPenColorId))}
         onNavigateToSpecialChallenge={goToSpecialChallenge}
         onNavigateToShapeChallenge={goToShapeChallenge}
         onNavigateToHome={goToHome}
@@ -638,7 +638,7 @@ type ShapePlayProps = {
   onBackToMap: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
-  onNavigateToShop: () => void;
+  onNavigateToShop: (highlightPenColorId?: PenColorId) => void;
   onNavigateToSpecialChallenge: () => void;
   onNavigateToShapeChallenge: () => void;
   onNavigateToHome: () => void;

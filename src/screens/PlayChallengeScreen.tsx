@@ -50,8 +50,8 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
     setPenColor(id);
   }
 
-  function handleLockedColorClick() {
-    onNavigate(toShop(toPlay(challengeId)));
+  function handleLockedColorClick(id: PenColorId) {
+    onNavigate(toShop(toPlay(challengeId), id));
   }
 
   function handleUndo() {

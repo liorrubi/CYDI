@@ -38,8 +38,8 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
     setPenColor(id);
   }
 
-  function handleLockedColorClick() {
-    onNavigate(toShop(toCreate()));
+  function handleLockedColorClick(id: PenColorId) {
+    onNavigate(toShop(toCreate(), id));
   }
 
   function handleClear() {

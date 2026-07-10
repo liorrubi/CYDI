@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import ChestIcon from "../components/ChestIcon";
@@ -14,6 +14,7 @@ import {
   rollChestReward,
   type ChestTier,
   type MegaRarity,
+  type PenColorId,
 } from "../app/constants";
 import { MEGA_ALBUM_SIZE, MEGA_CARDS, type MegaCardDefinition } from "../engine/megaShapeLibrary";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
@@ -34,8 +35,13 @@ import type { Screen } from "../types/GameMode";
 
 type ShopScreenProps = {
   from: Screen;
+  /** Pen color to scroll to and briefly highlight in the Ink Colors section - set when the player tapped a locked color in the pen menu. */
+  highlightPenColorId?: PenColorId;
   onNavigate: (screen: Screen) => void;
 };
+
+// How long the tapped-from-pen-menu color card stays visually highlighted.
+const HIGHLIGHT_DURATION_MS = 1800;
 
 const PEN_COLOR_PRODUCTS = PEN_COLORS.filter((color) => color.id !== DEFAULT_PEN_COLOR);
 
@@ -67,7 +73,7 @@ function lockedMegaCards(rarity?: MegaRarity): MegaCardDefinition[] {
   return MEGA_CARDS.filter((card) => !unlockedIds.includes(card.id) && (rarity === undefined || card.rarity === rarity));
 }
 
-export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
+export default function ShopScreen({ from, highlightPenColorId, onNavigate }: ShopScreenProps) {
   const [coins, setCoins] = useState(() => getCoins());
   const [unlocked, setUnlocked] = useState(() => getUnlockedColors());
   const [pendingChestReveal, setPendingChestReveal] = useState<{ tier: ChestTier; amount: number } | null>(null);
@@ -77,10 +83,25 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
   const [megaUnlocked] = useState(() => isMegaChallengeUnlocked());
   // Transient toast shown when a locked Mega price button is tapped before the feature is unlocked.
   const [megaLockToast, setMegaLockToast] = useState(false);
+  // Briefly highlights the ink color the player tapped from the (locked) pen menu.
+  const [highlightedColor, setHighlightedColor] = useState<PenColorId | null>(highlightPenColorId ?? null);
+  const colorCardRefs = useRef(new Map<PenColorId, HTMLDivElement>());
   const megaCollected = collectedMegaCardCount();
   const megaProgressPercent = Math.round((megaCollected / MEGA_ALBUM_SIZE) * 100);
 
   useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
+
+  // Deep-link from the pen menu: jump straight to the Ink Colors section and
+  // flash the specific color the player tried to pick, instead of just
+  // dropping them on the shop's home screen.
+  useEffect(() => {
+    if (!highlightPenColorId) return;
+    colorCardRefs.current.get(highlightPenColorId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = window.setTimeout(() => setHighlightedColor(null), HIGHLIGHT_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+    // Runs once on mount for the color this screen instance was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handlePurchase(id: (typeof PEN_COLOR_PRODUCTS)[number]["id"], price: number) {
     if (coins < price || unlocked.includes(id)) return;
@@ -251,7 +272,14 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
           const price = color.price ?? 0;
           const canAfford = coins >= price;
           return (
-            <div key={color.id} className="card shop-product">
+            <div
+              key={color.id}
+              ref={(el) => {
+                if (el) colorCardRefs.current.set(color.id, el);
+                else colorCardRefs.current.delete(color.id);
+              }}
+              className={`card shop-product${highlightedColor === color.id ? " shop-product-highlight" : ""}`}
+            >
               <span className="shop-product-icon" aria-hidden="true">
                 {color.icon}
               </span>

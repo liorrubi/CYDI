@@ -122,7 +122,7 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
 
   const goToAchievements = () => onNavigate(toAchievements(toMegaChallenge()));
   const goToInstructions = () => onNavigate(toInstructions(toMegaChallenge()));
-  const goToShop = () => onNavigate(toShop(toMegaChallenge()));
+  const goToShop = (highlightPenColorId?: PenColorId) => onNavigate(toShop(toMegaChallenge(), highlightPenColorId));
   const goToShapeChallenge = () => onNavigate(toShapeChallenge());
   const goToHome = () => onNavigate(toHome());
   const goToSettings = () => onNavigate(toSettings());
@@ -362,7 +362,7 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
 
   const goToAchievements = () => onNavigate(toAchievements(toMegaChallenge()));
   const goToInstructions = () => onNavigate(toInstructions(toMegaChallenge()));
-  const goToShop = () => onNavigate(toShop(toMegaChallenge()));
+  const goToShop = (highlightPenColorId?: PenColorId) => onNavigate(toShop(toMegaChallenge(), highlightPenColorId));
   const goToShapeChallenge = () => onNavigate(toShapeChallenge());
   const goToHome = () => onNavigate(toHome());
   const goToSettings = () => onNavigate(toSettings());

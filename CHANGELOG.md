@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.14.0 - 2026-07-10
+
+Added a persistent, twinkling glitter effect to the Diamond Blue pen
+(`DrawingCanvas.tsx` / `global.css`): tiny star-shaped sparkles pop in along
+the stroke as the player draws with it, then settle into their own slow,
+randomly-timed infinite shimmer instead of fading away, so a finished Diamond
+Blue drawing stays glinting. Purely cosmetic - the sparkle layer sits above
+the canvas with `pointer-events: none` and never touches stroke points or
+scoring - and stays cheap on mobile via compositor-only opacity/transform
+animation, a throttled spawn rate, and a concurrency cap; sparkles are only
+cleared on Clear/Undo/switching shapes, and the effect respects
+`prefers-reduced-motion`.
+
+Tapping a locked ink color from the pen menu (🖊️) now deep-links straight into
+the shop's Ink Colors section instead of dropping the player on the shop's
+front page (`ShopScreen.tsx`, `routes.ts`, `GameMode.ts`, and every screen that
+hosts the pen menu). The shop auto-scrolls to the specific color's card and
+briefly flashes it with a highlight ring so it's obvious what they were sent
+there for. No pricing or purchase logic changed - once bought, the color is
+selectable from the pen menu as usual.
+
 ## 0.13.0 - 2026-07-10
 
 Lowered the one-time Mega Challenge unlock cost from 20,000 to 10,000 coins

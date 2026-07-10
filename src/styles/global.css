@@ -660,6 +660,74 @@ body {
   }
 }
 
+/* Diamond ink glitter layer — sits above the strokes, below the cosmetic pen.
+   Each .sparkle is a tiny 4-point star that pops in, then settles into its own
+   slow, randomly-timed infinite twinkle (opacity/transform only, GPU-composited
+   in DrawingCanvas.tsx via the animationend handoff) — it stays on the drawing
+   and keeps catching the light instead of fading away. */
+.sparkle-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  z-index: 3;
+}
+
+.sparkle {
+  position: absolute;
+  transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(1);
+  background: radial-gradient(circle at 50% 50%, #ffffff 0%, #7cc9ff 42%, #2f97e6 100%);
+  clip-path: polygon(50% 0%, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0% 50%, 42% 42%);
+  animation: sparkle-in 420ms ease-out both;
+  will-change: transform, opacity;
+}
+
+/* Pops in with a gentle overshoot, then holds — no fade-out (persists with the drawing). */
+@keyframes sparkle-in {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Ongoing shimmer once a sparkle has settled — swapped in from JS with a
+   randomized duration/delay per sparkle so a stroke's worth of glitter
+   twinkles out of sync rather than pulsing all together. */
+@keyframes sparkle-twinkle {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(0.8);
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sparkle {
+    animation: sparkle-appear 240ms ease-out both;
+  }
+  @keyframes sparkle-appear {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+}
+
 .pen-color-menu {
   position: relative;
   display: flex;
@@ -1873,6 +1941,27 @@ body {
 .shop-product-icon {
   font-size: 32px;
   flex-shrink: 0;
+}
+
+/* Briefly flashed on the ink color card the player tapped from the (locked)
+   pen color menu, so it's obvious which product they were sent here for. */
+.shop-product-highlight {
+  animation: shop-product-highlight-ring 1.8s ease-out;
+}
+
+@keyframes shop-product-highlight-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(91, 91, 247, 0.5);
+    background-color: rgba(91, 91, 247, 0.1);
+  }
+  65% {
+    box-shadow: 0 0 0 10px rgba(91, 91, 247, 0);
+    background-color: rgba(91, 91, 247, 0.1);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(91, 91, 247, 0);
+    background-color: transparent;
+  }
 }
 
 .chest-tier-icon {

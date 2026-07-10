@@ -157,7 +157,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
 
   const goToAchievements = () => onNavigate(toAchievements(toHome()));
   const goToInstructions = () => onNavigate(toInstructions(toHome()));
-  const goToShop = () => onNavigate(toShop(toHome()));
+  const goToShop = (highlightPenColorId?: PenColorId) => onNavigate(toShop(toHome(), highlightPenColorId));
   const goToShapeChallenge = () => onNavigate(toShapeChallenge());
   const goToHome = () => onNavigate(toHome());
   const goToSettings = () => onNavigate(toSettings());

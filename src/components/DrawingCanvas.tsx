@@ -107,6 +107,28 @@ export function drawSegmentedStroke(
 const GHOST_STROKE_COLOR = "#2563eb";
 const GHOST_STROKE_OPTIONS: StrokeOptions = { lineWidth: 6, dash: [12, 8] };
 
+// Diamond ink glitter --------------------------------------------------------
+// Only the Diamond Blue pen sprinkles sparkles as it draws. They live in a
+// separate overlay layer (pointer-events:none) as tiny DOM nodes: each pops in
+// with a short CSS animation, then settles into its own slow, randomly-timed
+// infinite twinkle (opacity + a light scale pulse) so the glitter keeps
+// catching the light instead of freezing solid. They never fade away or get
+// removed after the stroke — only an explicit reset (clear / undo / a new
+// shape) clears them. Purely visual (pointer-events:none, compositor-only
+// opacity/transform animation, no per-frame JS), throttled and capped, and
+// never touching the stroke points or scoring.
+const DIAMOND_INK_ID: PenColorId = "diamondBlue";
+const SPARKLE_MIN_INTERVAL_MS = 40;
+// Safety ceiling for a very long scribble rather than a per-moment concurrency
+// limit — each sparkle keeps a lightweight infinite twinkle running for as
+// long as it's on screen, so this stays conservative for low-end phones.
+const SPARKLE_MAX_ALIVE = 220;
+const SPARKLE_SCATTER = 12;
+// Twinkle animation is randomized per-sparkle within these ranges so a whole
+// stroke's worth of glitter doesn't pulse in lockstep.
+const SPARKLE_TWINKLE_MIN_MS = 1400;
+const SPARKLE_TWINKLE_MAX_MS = 2600;
+
 // Cosmetic drawing-pen overlay ----------------------------------------------
 // A small pen icon that follows the pointer while drawing. Purely visual: it
 // lives in an overlay layer with pointer-events:none and never touches the
@@ -146,6 +168,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const penRef = useRef<HTMLDivElement | null>(null);
+  const sparkleLayerRef = useRef<HTMLDivElement | null>(null);
+  const lastSparkleRef = useRef(0);
   const pointsRef = useRef<Point[]>([]);
   const segmentBreaksRef = useRef<number[]>([]);
   const isDrawingRef = useRef(false);
@@ -185,16 +209,59 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     penRef.current?.classList.remove("is-active");
   }
 
+  /** Drops one glitter particle near (x, y). It pops in, then hands off into its own randomly-timed infinite twinkle loop — it stays on screen and keeps catching the light rather than freezing solid. */
+  function spawnSparkle(x: number, y: number) {
+    const layer = sparkleLayerRef.current;
+    if (!layer || layer.childElementCount >= SPARKLE_MAX_ALIVE) return;
+    const sparkle = document.createElement("span");
+    sparkle.className = "sparkle";
+    const size = 6 + Math.random() * 7;
+    sparkle.style.width = `${size}px`;
+    sparkle.style.height = `${size}px`;
+    sparkle.style.left = `${x + (Math.random() - 0.5) * SPARKLE_SCATTER}px`;
+    sparkle.style.top = `${y + (Math.random() - 0.5) * SPARKLE_SCATTER}px`;
+    sparkle.style.setProperty("--rot", `${Math.random() * 90}deg`);
+    sparkle.addEventListener(
+      "animationend",
+      () => {
+        // Respect the reduced-motion preference: let the sparkle stay put once
+        // it has appeared instead of pulsing forever.
+        if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+        const duration = SPARKLE_TWINKLE_MIN_MS + Math.random() * (SPARKLE_TWINKLE_MAX_MS - SPARKLE_TWINKLE_MIN_MS);
+        const delay = Math.random() * SPARKLE_TWINKLE_MAX_MS;
+        sparkle.style.animation = `sparkle-twinkle ${duration}ms ease-in-out ${delay}ms infinite`;
+      },
+      { once: true },
+    );
+    layer.appendChild(sparkle);
+  }
+
+  /** Diamond ink only: time-throttled sparkle emission so fast pointer moves don't flood the layer. */
+  function maybeSparkle(x: number, y: number) {
+    if (strokeColor !== DIAMOND_INK_ID) return;
+    const now = performance.now();
+    if (now - lastSparkleRef.current < SPARKLE_MIN_INTERVAL_MS) return;
+    lastSparkleRef.current = now;
+    spawnSparkle(x, y);
+    if (Math.random() < 0.4) spawnSparkle(x, y);
+  }
+
+  function clearSparkles() {
+    sparkleLayerRef.current?.replaceChildren();
+  }
+
   // Becoming interactive again (e.g. "Try Again" / a new shape) starts a fresh
   // stroke; simply lifting the pointer mid-drawing must not clear it.
   useEffect(() => {
     if (wasDisabledRef.current && !disabled) {
       pointsRef.current = [];
       segmentBreaksRef.current = [];
+      clearSparkles();
       redraw();
     }
     // A phase switch can disable the canvas while the pointer is still down and
     // no pointerup ever reaches us — make sure the cosmetic pen doesn't linger.
+    // The sparkles deliberately stay: the finished drawing keeps its glitter.
     if (disabled) hidePen();
     wasDisabledRef.current = disabled;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,6 +296,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     clear() {
       pointsRef.current = [];
       segmentBreaksRef.current = [];
+      clearSparkles();
       redraw();
       onChange?.({ points: [], canvasWidth: width, canvasHeight: height, breaks: [] });
     },
@@ -245,6 +313,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
         pointsRef.current = [];
         segmentBreaksRef.current = [];
       }
+      // Sparkles aren't tracked per segment, so undo clears them all rather
+      // than leave glitter orphaned over an erased stroke.
+      clearSparkles();
       redraw();
       onChange?.({ points: pointsRef.current, canvasWidth: width, canvasHeight: height, breaks: segmentBreaksRef.current });
     },
@@ -260,6 +331,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     if (disabled) return;
     const { x, y } = getRelativePoint(event);
     showPen(x, y);
+    maybeSparkle(x, y);
     isDrawingRef.current = true;
     if (pointsRef.current.length === 0) {
       strokeStartRef.current = performance.now();
@@ -278,6 +350,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     if (disabled || !isDrawingRef.current) return;
     const { x, y } = getRelativePoint(event);
     movePen(x, y, true);
+    maybeSparkle(x, y);
     pointsRef.current = [...pointsRef.current, { x, y, t: performance.now() - strokeStartRef.current }];
     redraw();
     onChange?.({ points: pointsRef.current, canvasWidth: width, canvasHeight: height, breaks: segmentBreaksRef.current });
@@ -305,6 +378,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
+      {/* Diamond ink glitter — transient sparkles, pointer-events:none, never affects scoring. */}
+      <div ref={sparkleLayerRef} className="sparkle-layer" aria-hidden="true" />
       {/* Cosmetic pen overlay — never receives pointer events, never affects scoring. */}
       <div ref={penRef} className="drawing-pen" aria-hidden="true">
         <svg width="66" height="66" viewBox="0 0 44 44" fill="none">

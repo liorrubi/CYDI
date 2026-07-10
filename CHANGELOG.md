@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.1 - 2026-07-10
+
+Hotfix: existing players' saves (from before per-shape best-score
+tracking shipped) have no `specialChallenge.bestScores` field, which
+crashed Special Challenge with an uncaught error the moment a drawing
+finished scoring, leaving the screen stuck on "Analyzing..." forever.
+`getSpecialChallengeBestScore` / `recordSpecialChallengeScore` in
+`specialChallengeStore.ts` now fall back to `{}` when the field is
+missing, matching the normalization pattern already used for Mega
+Challenge saves.
+
 ## 0.11.0 - 2026-07-10
 
 Redesigned the Shop's Mega Cards section to feel more game-like and

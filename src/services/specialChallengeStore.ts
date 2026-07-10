@@ -15,18 +15,19 @@ export function markSpecialChallengeFreeUsed(): void {
   });
 }
 
-/** Highest score ever recorded for a given Special Challenge shape id (undefined if never played). */
+/** Saves written before per-shape best-score tracking shipped have no `specialChallenge.bestScores` field at all (loading doesn't merge in new defaults), so every read/write normalizes with a fallback. */
 export function getSpecialChallengeBestScore(shapeId: string): number | undefined {
-  return getSaveData().progress.specialChallenge.bestScores[shapeId];
+  return (getSaveData().progress.specialChallenge.bestScores ?? {})[shapeId];
 }
 
 /** Records `score` as the new best for `shapeId` if it beats the stored best - a no-op otherwise. */
 export function recordSpecialChallengeScore(shapeId: string, score: number): void {
   updateSaveData((data) => {
-    const bestScores = data.progress.specialChallenge.bestScores;
+    const bestScores = data.progress.specialChallenge.bestScores ?? {};
     if (bestScores[shapeId] === undefined || score > bestScores[shapeId]) {
       bestScores[shapeId] = score;
     }
+    data.progress.specialChallenge.bestScores = bestScores;
   });
 }
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.11.0 - 2026-07-10
+
+Redesigned the Shop's Mega Cards section to feel more game-like and
+rewarding: an intro line explaining the packs, a "Mega Album: X / 12
+collected" progress bar, bigger card-framed pack icons with a clear
+rarity ladder (plain Random, subtle Rare border, glowing gold Epic,
+premium cyan-glow Legendary), a "X cards left" badge per pack, and a
+clickable "Mega Cards" heading that jumps straight to the Mega Challenge
+Album. No changes to purchase logic or pack prices.
+
+- Special Challenge now rotates its featured shape daily instead of
+  staying fixed on one shape: the target is deterministically picked
+  from the Fantasy category by calendar date, so every player sees the
+  same shape on a given day and it changes at local midnight. An intro
+  card timer shows "New shape in HH:MM" until the next rotation.
+- Special Challenge rewards now pay only the improvement over that
+  shape's previous best score (tracked per shape) rather than the full
+  tier reward on every replay, matching Shape Challenge's existing
+  best-score economy.
+
 ## 0.10.0 - 2026-07-10
 
 Reordered the Home screen so Shape Challenge leads and is visually

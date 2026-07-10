@@ -14,20 +14,26 @@ import {
   SPECIAL_CHALLENGE_COIN_BANDS,
   SPECIAL_CHALLENGE_MIN_SCORE,
   SPECIAL_CHALLENGE_RETRY_COST,
-  SPECIAL_CHALLENGE_SHAPE_ID,
   coinsForSpecialChallengeScore,
   penColorCssBackground,
   randomCelebrationMessage,
   randomEncouragementMessage,
   type PenColorId,
 } from "../app/constants";
-import { getShapeById } from "../engine/shapeLibrary";
+import { getShapeById, shapesForCategory } from "../engine/shapeLibrary";
 import { scoreAttempt } from "../engine/scoring";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins, getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
-import { canPlaySpecialChallengeFree, markSpecialChallengeFreeUsed } from "../services/specialChallengeStore";
+import {
+  canPlaySpecialChallengeFree,
+  getSpecialChallengeBestScore,
+  markSpecialChallengeFreeUsed,
+  msUntilNextLocalMidnight,
+  pickDailyShapeId,
+  recordSpecialChallengeScore,
+} from "../services/specialChallengeStore";
 import { toAchievements, toHome, toInstructions, toSettings, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
@@ -39,11 +45,27 @@ type SpecialChallengeScreenProps = {
   onNavigate: (screen: Screen) => void;
 };
 
-/** Fixed daily shape - a single hand-picked, deliberately intricate target rather than a rotating pool, since this is meant to be one recognizable "special" drawing rather than a random pull from Shape Challenge's own library. */
-const SHAPE = getShapeById(SPECIAL_CHALLENGE_SHAPE_ID)!;
+/** Daily-rotating target - deterministically picked from the Fantasy category by calendar date, so every player sees the same "special" shape on a given day and it changes at local midnight. */
+const SPECIAL_CHALLENGE_SHAPE_POOL = shapesForCategory("fantasy").map((s) => s.id);
+const SHAPE = getShapeById(pickDailyShapeId(SPECIAL_CHALLENGE_SHAPE_POOL))!;
 
 /** Compact score-to-coins table for the intro card, listed low to high (SPECIAL_CHALLENGE_COIN_BANDS itself is ordered high to low for the lookup in coinsForSpecialChallengeScore). */
 const REWARD_ROWS = [...SPECIAL_CHALLENGE_COIN_BANDS].reverse();
+
+/** "New shape in HH:MM" ticking down to the next local midnight, refreshed every 30s (minute-granularity display doesn't need finer resolution). */
+function useTimeUntilNextShape(): string {
+  const [remainingMs, setRemainingMs] = useState(msUntilNextLocalMidnight);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setRemainingMs(msUntilNextLocalMidnight()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const totalMinutes = Math.max(0, Math.floor(remainingMs / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
 
 export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeScreenProps) {
   const [phase, setPhase] = useState<Phase>("intro");
@@ -58,6 +80,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [coins, setCoins] = useState(() => getCoins());
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
+  const timeUntilNextShape = useTimeUntilNextShape();
 
   useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
 
@@ -93,7 +116,12 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
       }
 
       const passed = scoreResult.total >= SPECIAL_CHALLENGE_MIN_SCORE;
-      const reward = passed ? coinsForSpecialChallengeScore(scoreResult.total) : 0;
+      // Pay out only the improvement over this shape's previous best score - not the
+      // full tier reward every time - same economy as Shape Challenge's per-shape
+      // best-score delta, so replaying at the same or a lower score earns nothing.
+      const previousBest = getSpecialChallengeBestScore(SHAPE.id);
+      const reward = coinsForSpecialChallengeScore(scoreResult.total) - coinsForSpecialChallengeScore(previousBest ?? 0);
+      recordSpecialChallengeScore(SHAPE.id, scoreResult.total);
       if (reward > 0) {
         addCoins(reward);
         setDoubleOfferAmount(reward);
@@ -150,6 +178,8 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
         />
         <div className="card instructions-card">
           <h2>👑 Special Challenge</h2>
+          <p className="status-text special-challenge-subtitle">Daily special shape — changes every day</p>
+          <p className="status-text special-challenge-timer">⏱ New shape in {timeUntilNextShape}</p>
           <p className="status-text">
             Study the shape, then draw it as accurately as you can. Your score is based on how precise your
             drawing is, and a passing score earns you a coin reward.
@@ -214,6 +244,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
             Try Again for 🪙 {SPECIAL_CHALLENGE_RETRY_COST}
           </Button>
         )}
+        <p className="status-text special-challenge-timer">Come back tomorrow for a new shape.</p>
       </div>
     );
   }

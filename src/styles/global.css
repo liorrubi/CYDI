@@ -945,6 +945,17 @@ body {
   text-align: center;
 }
 
+.special-challenge-subtitle {
+  margin-top: -8px;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.special-challenge-timer {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /** Bigger, bolder variant of .status-text for the phase prompt shown just above a drawing canvas ("Study the shape" / "Now draw it" / "Analyzing...") - these are read at a glance mid-gesture, so they get extra emphasis beyond the default status text used for lower-stakes messaging elsewhere. */
 .canvas-instruction-text {
   font-size: 19px;
@@ -1919,6 +1930,143 @@ body {
   font-weight: 700;
   color: var(--color-success);
   white-space: nowrap;
+}
+
+/* Mega Cards section: clickable heading linking to the album, intro copy, and progress bar. */
+.shop-section-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.shop-section-heading h2 {
+  margin: 0;
+}
+
+.shop-section-heading-arrow {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-primary);
+  transition: transform 160ms ease;
+}
+
+.shop-section-heading:hover .shop-section-heading-arrow {
+  transform: translateX(3px);
+}
+
+.shop-section-subtitle {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.shop-mega-progress-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+
+/* Pack icons: bigger, framed like a mini card so packs read as collectible items. */
+.shop-mega-pack-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  font-size: 28px;
+  flex-shrink: 0;
+  background: rgba(91, 91, 247, 0.07);
+  box-shadow: inset 0 0 0 2px var(--color-border);
+}
+
+.shop-mega-pack-icon-rare {
+  background: rgba(122, 131, 148, 0.14);
+  box-shadow: inset 0 0 0 2px #b3bccb;
+}
+
+.shop-mega-pack-icon-epic {
+  background: rgba(242, 179, 7, 0.16);
+  box-shadow: inset 0 0 0 2px #f2b307, 0 0 10px rgba(242, 179, 7, 0.28);
+}
+
+.shop-mega-pack-icon-legendary {
+  background: linear-gradient(135deg, rgba(127, 217, 224, 0.28), rgba(182, 236, 247, 0.14));
+  box-shadow: inset 0 0 0 2px #7fd9e0, 0 0 14px rgba(127, 217, 224, 0.4);
+}
+
+/* Rarity ladder for pack cards themselves, mirroring the chest tier treatment. */
+.shop-mega-pack-rare {
+  border-left: 4px solid #b3bccb;
+}
+
+.shop-mega-pack-epic {
+  border-left: 4px solid #f2b307;
+  box-shadow: 0 0 0 1px rgba(242, 179, 7, 0.18), 0 2px 12px rgba(242, 179, 7, 0.18);
+}
+
+.shop-mega-pack-legendary {
+  border-left: 4px solid #7fd9e0;
+  box-shadow: 0 0 0 1px rgba(127, 217, 224, 0.3), 0 2px 16px rgba(127, 217, 224, 0.28);
+}
+
+.shop-tier-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.shop-tier-badge-random {
+  background: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.shop-tier-badge-rare {
+  background: #7a8394;
+  color: #f4f6fa;
+}
+
+.shop-tier-badge-epic {
+  background: #d99400;
+  color: #4a3200;
+}
+
+.shop-tier-badge-legendary {
+  background: linear-gradient(120deg, #7fd9e0, #b6ecf7);
+  color: #2f6572;
+}
+
+.shop-mega-left-badge {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  background: rgba(91, 91, 247, 0.1);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.shop-mega-pack-action {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 .achievement-list {

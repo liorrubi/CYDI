@@ -15,9 +15,9 @@ import {
   type ChestTier,
   type MegaRarity,
 } from "../app/constants";
-import { MEGA_CARDS, type MegaCardDefinition } from "../engine/megaShapeLibrary";
+import { MEGA_ALBUM_SIZE, MEGA_CARDS, type MegaCardDefinition } from "../engine/megaShapeLibrary";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
-import { getMegaProgress, unlockMegaCard } from "../services/megaChallengeStore";
+import { collectedMegaCardCount, getMegaProgress, unlockMegaCard } from "../services/megaChallengeStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
 import { playSuccessSound } from "../engine/soundEngine";
 import {
@@ -55,6 +55,13 @@ const MEGA_PACK_PRODUCTS: MegaPackProduct[] = [
   { id: "mega-random-legendary", name: "Legendary Mega Card", icon: "🎴", rarity: "legendary", price: MEGA_RANDOM_TIER_COST.legendary },
 ];
 
+const TIER_LABELS: Record<"random" | MegaRarity, string> = {
+  random: "Random",
+  rare: MEGA_RARITY_LABELS.rare,
+  epic: MEGA_RARITY_LABELS.epic,
+  legendary: MEGA_RARITY_LABELS.legendary,
+};
+
 function lockedMegaCards(rarity?: MegaRarity): MegaCardDefinition[] {
   const unlockedIds = getMegaProgress().unlockedCardIds;
   return MEGA_CARDS.filter((card) => !unlockedIds.includes(card.id) && (rarity === undefined || card.rarity === rarity));
@@ -67,6 +74,8 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
   const [revealedMegaCard, setRevealedMegaCard] = useState<MegaCardDefinition | null>(null);
   // Bumped after each pack purchase so the "left in pool" counts re-render.
   const [megaPurchaseCount, setMegaPurchaseCount] = useState(0);
+  const megaCollected = collectedMegaCardCount();
+  const megaProgressPercent = Math.round((megaCollected / MEGA_ALBUM_SIZE) * 100);
 
   useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
 
@@ -136,7 +145,22 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
           );
         })}
       </div>
-      <h2>Mega Cards</h2>
+      <button type="button" className="shop-section-heading" onClick={() => onNavigate(toMegaChallenge())}>
+        <h2>Mega Cards</h2>
+        <span className="shop-section-heading-arrow" aria-hidden="true">›</span>
+      </button>
+      <p className="shop-section-subtitle">Complete your Mega Album with random card packs.</p>
+      <div className="card shop-mega-progress">
+        <div className="shop-mega-progress-row">
+          <span>
+            Mega Album: {megaCollected} / {MEGA_ALBUM_SIZE} collected
+          </span>
+          <span>{megaProgressPercent}%</span>
+        </div>
+        <div className="progress-bar-track">
+          <div className="progress-bar-fill" style={{ width: `${megaProgressPercent}%` }} />
+        </div>
+      </div>
       {revealedMegaCard && (
         <div className={`card mega-reveal mega-card-${revealedMegaCard.rarity}`}>
           <span className="mega-reveal-preview">
@@ -158,35 +182,37 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
       )}
       <div className="shop-product-list" key={megaPurchaseCount}>
         {MEGA_PACK_PRODUCTS.map((product) => {
+          const tier = product.rarity ?? "random";
           const pool = lockedMegaCards(product.rarity);
           const soldOut = pool.length === 0;
           const canAfford = coins >= product.price;
           return (
-            <div key={product.id} className="card shop-product">
-              <span className="shop-product-icon" aria-hidden="true">
+            <div key={product.id} className={`card shop-product shop-mega-pack shop-mega-pack-${tier}`}>
+              <span className={`shop-mega-pack-icon shop-mega-pack-icon-${tier}`} aria-hidden="true">
                 {product.icon}
               </span>
               <div className="shop-product-info">
                 <div className="shop-chest-title">
                   <h3>{product.name}</h3>
-                  {product.rarity && (
-                    <span className={`mega-rarity-badge mega-rarity-${product.rarity}`}>
-                      {MEGA_RARITY_LABELS[product.rarity]}
-                    </span>
-                  )}
+                  <span className={`shop-tier-badge shop-tier-badge-${tier}`}>{TIER_LABELS[tier]}</span>
                 </div>
                 <p className="status-text">
-                  {soldOut
-                    ? "All cards of this kind are collected!"
-                    : `Unlocks a random Mega Album drawing (${pool.length} left)`}
+                  {soldOut ? "All cards of this kind are collected!" : "Unlocks a random Mega Album drawing"}
                 </p>
+                {!soldOut && (
+                  <span className="shop-mega-left-badge">
+                    {pool.length} card{pool.length === 1 ? "" : "s"} left
+                  </span>
+                )}
               </div>
               {soldOut ? (
                 <span className="shop-product-owned">✓ Collected</span>
               ) : (
-                <Button disabled={!canAfford} onClick={() => handleBuyMegaPack(product)}>
-                  🪙 {product.price}
-                </Button>
+                <div className="shop-mega-pack-action">
+                  <Button disabled={!canAfford} onClick={() => handleBuyMegaPack(product)}>
+                    🪙 {product.price}
+                  </Button>
+                </div>
               )}
             </div>
           );

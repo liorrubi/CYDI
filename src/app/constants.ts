@@ -3,7 +3,7 @@ export const APP_TAGLINE = "Quick drawing challenges";
 
 // Bumped by hand only when a new product version ships - unrelated to SaveData's
 // internal schemaVersion, which tracks the save file format, not the game itself.
-export const APP_VERSION = "0.5.0";
+export const APP_VERSION = "0.6.0";
 // Short git commit hash (or a build timestamp fallback), set automatically at build time.
 export const APP_BUILD = __APP_BUILD__;
 // ISO timestamp of when this build was produced, set automatically at build time - not schemaVersion (save file format) or APP_VERSION (hand-bumped product version).
@@ -264,7 +264,6 @@ export function rollChestReward(min: number, max: number): number {
 export const DAILY_CHEST_UNLOCK_COUNT = 5;
 export const SPECIAL_CHALLENGE_UNLOCK_COUNT = 20;
 
-export const SPECIAL_CHALLENGE_SHAPE_ID = "fant-castle";
 export const SPECIAL_CHALLENGE_MIN_SCORE = 60;
 export const SPECIAL_CHALLENGE_RETRY_COST = 100;
 

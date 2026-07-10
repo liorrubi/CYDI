@@ -25,6 +25,7 @@ export type SaveData = {
     };
     specialChallenge: {
       lastFreeDate: string;
+      bestScores: Record<string, number>;
     };
     megaChallenge: {
       unlocked: boolean;
@@ -65,7 +66,7 @@ export function createDefaultSaveData(): SaveData {
       unlockedPenColors: [],
       dailyStreak: { lastVisitDate: "", currentStreak: 0, longestStreak: 0 },
       dailyChest: { lastOpenedDate: "" },
-      specialChallenge: { lastFreeDate: "" },
+      specialChallenge: { lastFreeDate: "", bestScores: {} },
       megaChallenge: {
         unlocked: false,
         unlockedCardIds: [],

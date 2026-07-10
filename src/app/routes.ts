@@ -63,3 +63,7 @@ export function toDailyChallengeReplay(entry: DailyHistoryEntry): Screen {
 export function toSpecialChallenge(): Screen {
   return { name: "specialChallenge" };
 }
+
+export function toMegaChallenge(): Screen {
+  return { name: "megaChallenge" };
+}

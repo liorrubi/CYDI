@@ -5,6 +5,7 @@ import {
   playLogoPeekSound,
 } from "../engine/soundEngine";
 import AppLogo from "./AppLogo";
+import ChampionBadge from "./ChampionBadge";
 import CoinIndicator from "./CoinIndicator";
 import DailyChestButton from "./DailyChestButton";
 import ShareGameButton from "./ShareGameButton";
@@ -73,6 +74,7 @@ export default function AppHeader({
         </div>
       )}
       <div className="app-header-actions">
+        <ChampionBadge />
         <CoinIndicator
           onClick={
             onNavigateToShop &&

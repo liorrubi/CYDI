@@ -18,6 +18,7 @@ import InstructionsScreen from "./screens/InstructionsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import SharedResultScreen from "./screens/SharedResultScreen";
 import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
+import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toSharedResult } from "./app/routes";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { markAchievementsTutorialShown, onRoundCompleted, shouldShowAchievementsTutorial } from "./services/tutorialStore";
@@ -177,6 +178,8 @@ export default function App() {
             return <SharedResultScreen data={screen.data} onNavigate={setScreen} />;
           case "specialChallenge":
             return <SpecialChallengeScreen onNavigate={setScreen} />;
+          case "megaChallenge":
+            return <MegaChallengeScreen onNavigate={setScreen} />;
         }
       })()}
       {showAchievementsTutorial && (

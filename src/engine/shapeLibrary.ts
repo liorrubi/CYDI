@@ -38,10 +38,10 @@ export type ShapeDefinition = {
   generate: (size: number) => DrawingPath;
 };
 
-type Vec2 = { x: number; y: number };
+export type Vec2 = { x: number; y: number };
 
 /** `breaks` marks indices where a new visual segment starts - used to jump between two unconnected parts of a shape (e.g. a donut's outer ring and inner ring) without ever drawing a straight connector line between them, in the ghost guide, the result overlay, or the score comparison. */
-function toPath(points: Vec2[], size: number, breaks?: number[]): DrawingPath {
+export function toPath(points: Vec2[], size: number, breaks?: number[]): DrawingPath {
   return {
     points: points.map((p, i) => ({ x: p.x, y: p.y, t: i })),
     canvasWidth: size,
@@ -50,12 +50,12 @@ function toPath(points: Vec2[], size: number, breaks?: number[]): DrawingPath {
   };
 }
 
-function fracPoints(size: number, fractions: [number, number][]): Vec2[] {
+export function fracPoints(size: number, fractions: [number, number][]): Vec2[] {
   return fractions.map(([fx, fy]) => ({ x: fx * size, y: fy * size }));
 }
 
 /** Connects vertices with straight edges and closes the loop back to the start. */
-function polygonEdges(vertices: Vec2[], pointsPerEdge: number): Vec2[] {
+export function polygonEdges(vertices: Vec2[], pointsPerEdge: number): Vec2[] {
   const result: Vec2[] = [];
   for (let i = 0; i < vertices.length; i++) {
     const a = vertices[i];
@@ -70,7 +70,7 @@ function polygonEdges(vertices: Vec2[], pointsPerEdge: number): Vec2[] {
 }
 
 /** Connects vertices with straight edges without closing the loop. */
-function openPolyline(vertices: Vec2[], pointsPerEdge: number): Vec2[] {
+export function openPolyline(vertices: Vec2[], pointsPerEdge: number): Vec2[] {
   const result: Vec2[] = [];
   for (let i = 0; i < vertices.length - 1; i++) {
     const a = vertices[i];
@@ -84,7 +84,7 @@ function openPolyline(vertices: Vec2[], pointsPerEdge: number): Vec2[] {
   return result;
 }
 
-function polar(center: Vec2, radius: number, angleDeg: number): Vec2 {
+export function polar(center: Vec2, radius: number, angleDeg: number): Vec2 {
   const rad = (angleDeg * Math.PI) / 180;
   return { x: center.x + radius * Math.cos(rad), y: center.y + radius * Math.sin(rad) };
 }
@@ -108,7 +108,7 @@ function catmullRomPoint(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: number): Vec
 }
 
 /** Smooth closed loop through key points, via Catmull-Rom splines - good for organic silhouettes. */
-function smoothClosedPath(keyPoints: Vec2[], pointsPerSegment = 12): Vec2[] {
+export function smoothClosedPath(keyPoints: Vec2[], pointsPerSegment = 12): Vec2[] {
   const n = keyPoints.length;
   const result: Vec2[] = [];
   for (let i = 0; i < n; i++) {
@@ -127,7 +127,7 @@ function smoothClosedPath(keyPoints: Vec2[], pointsPerSegment = 12): Vec2[] {
 type PathWithBreaks = { points: Vec2[]; breaks: number[] };
 
 /** Concatenates multiple disconnected path segments into one shape, marking a break at every segment boundary so no connecting line is ever drawn between them (e.g. a donut's outer/inner rings, or a floating eye/dot next to a body outline). */
-function toPathFromParts(parts: Vec2[][], size: number): DrawingPath {
+export function toPathFromParts(parts: Vec2[][], size: number): DrawingPath {
   const points: Vec2[] = [];
   const breaks: number[] = [];
   for (const part of parts) {

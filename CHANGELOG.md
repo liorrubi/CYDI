@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.8.0 - 2026-07-10
+
+Added the Mega Challenge: a long-term collectible card album of 12 premium
+drawings (Rare / Epic / Legendary), reached from a festive entry card on the
+Shape Challenge screen.
+
+- The feature itself starts locked and opens permanently for a one-time
+  20,000-coin payment (celebratory unlock animation, first card granted
+  free). Without enough coins a short "Need 20,000 coins..." message shows.
+- New album screen (`MegaChallengeScreen`): hero card with collection
+  progress, responsive card grid (2/3/4 columns), open cards with rarity
+  frames and best scores, locked cards as mystery cards with a patterned
+  card back and an unlock button.
+- Cards unlock either through existing achievements (one condition = one
+  achievement, no duplicates) or with coins - specific unlocks from the
+  album (2,500/4,500/8,000 by rarity) and random card packs in the Shop
+  (1,500-6,000).
+- Each card is playable as a drawing challenge with the standard
+  preview/draw/score flow; first passing score pays a one-time rarity-based
+  completion reward (300/600/1,200), and 90+ marks the card ✨ Perfect.
+- Completing the whole album awards the permanent "Challenge Champion"
+  title: a celebration screen with sharing, plus a 👑 badge in the app
+  header on every screen.
+- The 12 drawings live in a separate `megaShapeLibrary.ts` (kept out of
+  `SHAPE_LIBRARY` so journey/achievement counts stay honest), built
+  geometrically in a structural style: crown, trophy, sword, rocket, robot,
+  castle, wizard hat, treasure chest, pirate galleon, legendary key,
+  phoenix, thunder hammer.
+- The Settings "Unlock Everything" test toggle now also force-opens the
+  Mega Challenge and all its cards, without writing to real progress - and
+  never fakes the permanent Champion title.
+
 ## 0.7.1 - 2026-07-05
 
 - Fixed "Next Shape": clicking it from the result screen previously reused

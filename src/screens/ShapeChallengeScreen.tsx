@@ -50,7 +50,19 @@ import {
   saveProgress,
   type ShapeChallengeProgress,
 } from "../services/shapeChallengeProgress";
-import { toAchievements, toHome, toInstructions, toSettings, toShapeChallenge, toShop, toSpecialChallenge } from "../app/routes";
+import { collectedMegaCardCount, isMegaChallengeUnlocked, unlockMegaChallenge } from "../services/megaChallengeStore";
+import { MEGA_ALBUM_SIZE } from "../engine/megaShapeLibrary";
+import { MEGA_CHALLENGE_UNLOCK_COST } from "../app/constants";
+import {
+  toAchievements,
+  toHome,
+  toInstructions,
+  toMegaChallenge,
+  toSettings,
+  toShapeChallenge,
+  toShop,
+  toSpecialChallenge,
+} from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
@@ -163,6 +175,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
           onSelectCategory={setSelectedCategory}
           onBack={() => onNavigate(toHome())}
           onResetProgress={handleResetProgress}
+          onNavigateToMegaChallenge={() => onNavigate(toMegaChallenge())}
           onNavigateToAchievements={goToAchievements}
           onNavigateToInstructions={goToInstructions}
           onNavigateToShop={goToShop}
@@ -226,6 +239,7 @@ type CategoryListScreenProps = {
   onSelectCategory: (category: CategoryId) => void;
   onBack: () => void;
   onResetProgress: () => void;
+  onNavigateToMegaChallenge: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
@@ -240,6 +254,7 @@ function CategoryListScreen({
   onSelectCategory,
   onBack,
   onResetProgress,
+  onNavigateToMegaChallenge,
   onNavigateToAchievements,
   onNavigateToInstructions,
   onNavigateToShop,
@@ -256,8 +271,43 @@ function CategoryListScreen({
   // (progress bar etc.) so the player sees the lock pop open first.
   const [unlockingCategory, setUnlockingCategory] = useState<CategoryId | null>(null);
   const [showUnlockBanner, setShowUnlockBanner] = useState(false);
+  const [megaUnlocked, setMegaUnlocked] = useState(() => isMegaChallengeUnlocked());
+  // Shown briefly when the player taps the locked Mega card without enough coins.
+  const [showMegaLockMsg, setShowMegaLockMsg] = useState(false);
+  // Drives the celebratory unlock overlay; while true the player sees the
+  // animation, then we navigate them straight into the album.
+  const [megaUnlockCelebrating, setMegaUnlockCelebrating] = useState(false);
 
   useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
+
+  function handleMegaCardClick() {
+    if (megaUnlocked) {
+      playSelectSound();
+      onNavigateToMegaChallenge();
+      return;
+    }
+    if (coins < MEGA_CHALLENGE_UNLOCK_COST) {
+      playEncourageSound();
+      setShowMegaLockMsg(true);
+      window.setTimeout(() => setShowMegaLockMsg(false), 2600);
+      return;
+    }
+    // Spend only after unlockMegaChallenge() confirms it actually flipped the
+    // flag - it returns false if already unlocked, so the charge can never be
+    // applied twice.
+    if (!unlockMegaChallenge()) {
+      setMegaUnlocked(true);
+      return;
+    }
+    spendCoins(MEGA_CHALLENGE_UNLOCK_COST);
+    playAchievementUnlockedSound();
+    setMegaUnlocked(true);
+    setMegaUnlockCelebrating(true);
+    window.setTimeout(() => {
+      setMegaUnlockCelebrating(false);
+      onNavigateToMegaChallenge();
+    }, 1900);
+  }
 
   function handleConfirmReset() {
     onResetProgress();
@@ -289,6 +339,8 @@ function CategoryListScreen({
   const totalShapes = SHAPE_LIBRARY.length;
   const overallPercent = Math.round((totalUnlocked / totalShapes) * 100);
   const rank = journeyRankForPercent(overallPercent);
+  const megaCollected = collectedMegaCardCount();
+  const megaPercent = Math.round((megaCollected / MEGA_ALBUM_SIZE) * 100);
 
   return (
     <div className="screen">
@@ -317,6 +369,61 @@ function CategoryListScreen({
       </div>
 
       {showUnlockBanner && <div className="celebration-banner">🔓 New Category Unlocked!</div>}
+
+      <button
+        type="button"
+        className={megaUnlocked ? "mega-entry-card" : "mega-entry-card mega-entry-card-locked"}
+        onClick={handleMegaCardClick}
+        aria-label={
+          megaUnlocked
+            ? `Mega Challenge, ${megaCollected} of ${MEGA_ALBUM_SIZE} legendary shapes collected`
+            : `Mega Challenge, locked. Unlock for ${MEGA_CHALLENGE_UNLOCK_COST.toLocaleString("en-US")} coins`
+        }
+      >
+        <span className="mega-entry-icon" aria-hidden="true">
+          {megaUnlocked ? "🃏" : "🔒"}
+        </span>
+        <span className="mega-entry-body">
+          <span className="mega-entry-header">
+            <span className="mega-entry-title">Mega Challenge</span>
+            {megaUnlocked ? (
+              <span className="mega-entry-count">
+                {megaCollected}/{MEGA_ALBUM_SIZE}
+              </span>
+            ) : (
+              <span className="mega-entry-cost">🪙 {MEGA_CHALLENGE_UNLOCK_COST.toLocaleString("en-US")}</span>
+            )}
+          </span>
+          <span className="mega-entry-subtitle">Collect legendary shapes in your album</span>
+          {megaUnlocked ? (
+            <span className="mega-entry-progress-track">
+              <span className="mega-entry-progress-fill" style={{ width: `${megaPercent}%` }} />
+            </span>
+          ) : (
+            <span className="mega-entry-unlock-hint">Tap to unlock this special album</span>
+          )}
+        </span>
+        <span className="mega-entry-arrow" aria-hidden="true">
+          {megaUnlocked ? "→" : "🔓"}
+        </span>
+      </button>
+      {showMegaLockMsg && (
+        <p className="mega-lock-msg" role="alert">
+          Need {MEGA_CHALLENGE_UNLOCK_COST.toLocaleString("en-US")} coins to unlock Mega Challenge
+        </p>
+      )}
+
+      {megaUnlockCelebrating && (
+        <div className="mega-unlock-overlay" role="dialog" aria-label="Mega Challenge unlocked">
+          <div className="mega-unlock-dialog">
+            <span className="mega-unlock-burst" aria-hidden="true">
+              🃏
+            </span>
+            <h2>Mega Challenge Unlocked!</h2>
+            <p>The legendary album is yours. Your first card is ready to draw.</p>
+          </div>
+        </div>
+      )}
 
       <div className="category-grid">
         {CATEGORIES.map((category, index) => {

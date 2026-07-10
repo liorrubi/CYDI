@@ -26,6 +26,14 @@ export type SaveData = {
     specialChallenge: {
       lastFreeDate: string;
     };
+    megaChallenge: {
+      unlocked: boolean;
+      unlockedCardIds: string[];
+      bestScores: Record<string, number>;
+      completionRewardClaimedIds: string[];
+      perfectCardIds: string[];
+      championCelebrated: boolean;
+    };
     paidChestDoubles: {
       date: string;
       count: number;
@@ -57,6 +65,14 @@ export function createDefaultSaveData(): SaveData {
       dailyStreak: { lastVisitDate: "", currentStreak: 0, longestStreak: 0 },
       dailyChest: { lastOpenedDate: "" },
       specialChallenge: { lastFreeDate: "" },
+      megaChallenge: {
+        unlocked: false,
+        unlockedCardIds: [],
+        bestScores: {},
+        completionRewardClaimedIds: [],
+        perfectCardIds: [],
+        championCelebrated: false,
+      },
       paidChestDoubles: { date: "", count: 0 },
       successfulDrawings: 0,
       completedRounds: 0,

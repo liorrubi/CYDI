@@ -3,7 +3,7 @@ export const APP_TAGLINE = "Quick drawing challenges";
 
 // Bumped by hand only when a new product version ships - unrelated to SaveData's
 // internal schemaVersion, which tracks the save file format, not the game itself.
-export const APP_VERSION = "0.2.0";
+export const APP_VERSION = "0.3.0";
 // Short git commit hash (or a build timestamp fallback), set automatically at build time.
 export const APP_BUILD = __APP_BUILD__;
 // ISO timestamp of when this build was produced, set automatically at build time - not schemaVersion (save file format) or APP_VERSION (hand-bumped product version).
@@ -267,6 +267,51 @@ export const SPECIAL_CHALLENGE_UNLOCK_COUNT = 20;
 export const SPECIAL_CHALLENGE_SHAPE_ID = "fant-dragon";
 export const SPECIAL_CHALLENGE_MIN_SCORE = 60;
 export const SPECIAL_CHALLENGE_RETRY_COST = 100;
+
+// ==================== MEGA CHALLENGE ====================
+
+export type MegaRarity = "rare" | "epic" | "legendary";
+
+export const MEGA_RARITY_LABELS: Record<MegaRarity, string> = {
+  rare: "Rare",
+  epic: "Epic",
+  legendary: "Legendary",
+};
+
+/** Coin cost to directly unlock a specific Mega card from the album, by rarity. Deliberately pricier than the same-tier random pull in the shop - choosing exactly the card you want is the premium option. */
+export const MEGA_SPECIFIC_UNLOCK_COST: Record<MegaRarity, number> = {
+  rare: 2500,
+  epic: 4500,
+  legendary: 8000,
+};
+
+/** One-time coin cost to unlock the whole Mega Challenge feature. Until it's paid, the album is locked and the first card comes free with the unlock. */
+export const MEGA_CHALLENGE_UNLOCK_COST = 20000;
+
+/** Shop price for a random locked Mega card of any rarity. */
+export const MEGA_RANDOM_CARD_COST = 1500;
+
+/** Shop price for a random locked Mega card of a specific rarity. */
+export const MEGA_RANDOM_TIER_COST: Record<MegaRarity, number> = {
+  rare: 2000,
+  epic: 3500,
+  legendary: 6000,
+};
+
+/** One-time coin reward for the first passing score on a Mega card, by rarity. */
+export const MEGA_COMPLETION_REWARD: Record<MegaRarity, number> = {
+  rare: 300,
+  epic: 600,
+  legendary: 1200,
+};
+
+/** A Mega card counts as "Perfect" at the 5-star threshold - same bar as a 5-star rating anywhere else in the game. */
+export const MEGA_PERFECT_SCORE = STAR_RATING_THRESHOLDS[0].minScore;
+
+export const CHAMPION_TITLE = "Challenge Champion";
+
+export const CHAMPION_SHARE_TEXT =
+  "I completed the full Mega Challenge Album in CYDI and became a Challenge Champion! 👑🏆 Can you complete it too?";
 
 export const SPECIAL_CHALLENGE_COIN_BANDS: { minScore: number; coins: number }[] = [
   { minScore: 95, coins: 1000 },

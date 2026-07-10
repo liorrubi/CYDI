@@ -16,4 +16,5 @@ export type Screen =
   | { name: "dailyChallenge" }
   | { name: "dailyChallengeHistory" }
   | { name: "dailyChallengeReplay"; entry: DailyHistoryEntry }
-  | { name: "specialChallenge" };
+  | { name: "specialChallenge" }
+  | { name: "megaChallenge" };

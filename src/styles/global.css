@@ -2322,3 +2322,599 @@ body {
   color: var(--color-text-muted);
   font-size: 14px;
 }
+
+/* ==================== MEGA CHALLENGE ==================== */
+
+/* Prominent entry card on the Shape Challenge category screen - matches the
+   520px content width of the journey bar / category grid so it reads as part
+   of the screen rather than a full-bleed banner. */
+.mega-entry-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 520px;
+  border: 1px solid rgba(242, 179, 7, 0.5);
+  cursor: pointer;
+  text-align: left;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #2b2350 0%, #4a2d7a 55%, #7a4d1f 100%);
+  color: #fff;
+  box-shadow: 0 0 22px rgba(242, 179, 7, 0.22), 0 6px 20px rgba(43, 35, 80, 0.5);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.mega-entry-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(242, 179, 7, 0.35), 0 10px 26px rgba(43, 35, 80, 0.55);
+}
+
+.mega-entry-card:active {
+  transform: translateY(0);
+}
+
+.mega-entry-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  font-size: 32px;
+  line-height: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgba(255, 233, 168, 0.28), rgba(242, 179, 7, 0.08) 70%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 233, 168, 0.55), 0 0 14px rgba(242, 179, 7, 0.3);
+}
+
+.mega-entry-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.mega-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.mega-entry-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: linear-gradient(90deg, #fff4d4, #f2b307);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mega-entry-subtitle {
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.mega-entry-count {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(242, 179, 7, 0.22);
+  color: #ffe9a8;
+  box-shadow: inset 0 0 0 1px rgba(255, 233, 168, 0.35);
+}
+
+.mega-entry-progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.mega-entry-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f2b307, #ffdf7e);
+}
+
+.mega-entry-arrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 50%;
+  color: #2b2350;
+  background: linear-gradient(135deg, #ffe9a8, #f2b307);
+  box-shadow: 0 2px 8px rgba(242, 179, 7, 0.45);
+}
+
+/* Locked state: still festive, but reads clearly as "pay to unlock". */
+.mega-entry-card-locked .mega-entry-icon {
+  font-size: 26px;
+  background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04) 70%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 233, 168, 0.4);
+}
+
+.mega-entry-cost {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ffe9a8, #f2b307);
+  color: #3a2a05;
+  box-shadow: 0 2px 8px rgba(242, 179, 7, 0.4);
+}
+
+.mega-entry-unlock-hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 233, 168, 0.95);
+  letter-spacing: 0.01em;
+}
+
+.mega-lock-msg {
+  width: 100%;
+  max-width: 520px;
+  margin: calc(var(--space-3) * -1) 0 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-danger);
+  animation: banner-pop 200ms ease;
+}
+
+/* Celebratory unlock animation, shown briefly before entering the album. */
+.mega-unlock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: radial-gradient(circle at 50% 45%, rgba(74, 45, 122, 0.9), rgba(30, 32, 46, 0.92));
+  animation: banner-pop 220ms ease;
+}
+
+.mega-unlock-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 320px;
+  text-align: center;
+  color: #fff;
+}
+
+.mega-unlock-dialog h2 {
+  margin: 0;
+  font-size: 24px;
+  background: linear-gradient(90deg, #fff4d4, #f2b307);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mega-unlock-dialog p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mega-unlock-burst {
+  font-size: 76px;
+  line-height: 1;
+  filter: drop-shadow(0 0 18px rgba(242, 179, 7, 0.7));
+  animation: mega-unlock-pop 900ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+@keyframes mega-unlock-pop {
+  0% {
+    transform: scale(0.2) rotate(-25deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.15) rotate(8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* ===== Album screen: premium card-collection layout ===== */
+
+.mega-progress-fill {
+  background: linear-gradient(90deg, #f2b307, #ffdf7e);
+}
+
+/* Single centered content column shared by the hero and the card grid, so
+   nothing stretches edge-to-edge on wide screens. */
+.mega-album-content {
+  width: 100%;
+  max-width: 1080px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Hero card */
+
+.mega-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  color: #fff;
+  background: linear-gradient(135deg, #2b2350 0%, #4a2d7a 55%, #7a4d1f 100%);
+  border: 1px solid rgba(242, 179, 7, 0.5);
+  box-shadow: 0 0 22px rgba(242, 179, 7, 0.18), 0 6px 20px rgba(43, 35, 80, 0.45);
+}
+
+.mega-hero-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mega-hero-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  font-size: 30px;
+  line-height: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgba(255, 233, 168, 0.28), rgba(242, 179, 7, 0.08) 70%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 233, 168, 0.55);
+}
+
+.mega-hero-titles h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  background: linear-gradient(90deg, #fff4d4, #f2b307);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mega-hero-titles p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mega-hero-progress-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mega-hero .progress-bar-track {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.mega-hero-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 233, 168, 0.9);
+}
+
+/* Card grid: real card tiles, 2 cols on mobile up to 4 on desktop. */
+
+.mega-album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+  width: 100%;
+}
+
+@media (min-width: 560px) {
+  .mega-album-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+@media (min-width: 860px) {
+  .mega-album-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.mega-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  position: relative;
+  padding: var(--space-4) var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  background: var(--color-card);
+  color: var(--color-text);
+  text-align: center;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(30, 32, 46, 0.1);
+}
+
+.mega-card-open {
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.mega-card-open:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(30, 32, 46, 0.16);
+}
+
+.mega-card-open:active {
+  transform: translateY(-1px);
+}
+
+/* Rarity: frame colour + escalating glow (legendary strongest, but restrained). */
+.mega-card-rare {
+  border-color: #b3bccb;
+}
+
+.mega-card-epic {
+  border-color: #f2b307;
+  box-shadow: 0 2px 10px rgba(242, 179, 7, 0.22);
+}
+
+.mega-card-legendary {
+  border-color: #7fd9e0;
+  box-shadow: 0 0 16px rgba(127, 217, 224, 0.3), 0 2px 10px rgba(30, 32, 46, 0.12);
+}
+
+.mega-rarity-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  line-height: 1.4;
+  z-index: 2;
+}
+
+.mega-rarity-rare {
+  background: #7a8394;
+  color: #f4f6fa;
+}
+
+.mega-rarity-epic {
+  background: #d99400;
+  color: #4a3200;
+}
+
+.mega-rarity-legendary {
+  background: linear-gradient(120deg, #7fd9e0, #b6ecf7);
+  color: #2f6572;
+}
+
+/* "Collected" tick, top-right corner of open cards. */
+.mega-card-collected {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 900;
+  color: #fff;
+  background: var(--color-success);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+.mega-card-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100px;
+  height: 100px;
+  margin-top: var(--space-3);
+  border-radius: 50%;
+  background: rgba(91, 91, 247, 0.07);
+  color: var(--color-text);
+}
+
+.mega-card-name {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.mega-card-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-top: auto;
+}
+
+.mega-card-difficulty {
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.mega-card-state {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.mega-card-legendary .mega-card-state,
+.mega-card-epic .mega-card-state {
+  color: #b7860b;
+}
+
+/* Locked "mystery" cards: patterned card back, not an empty cell. */
+.mega-card-locked {
+  cursor: default;
+  background: linear-gradient(160deg, #efe7ff, #e3ecf7);
+}
+
+.mega-card-back {
+  position: relative;
+  background:
+    repeating-linear-gradient(45deg, rgba(91, 91, 247, 0.1) 0 6px, rgba(91, 91, 247, 0.04) 6px 12px),
+    radial-gradient(circle at 50% 45%, #fff, #e7ecf6);
+  box-shadow: inset 0 0 0 2px rgba(91, 91, 247, 0.12);
+}
+
+.mega-card-qmark {
+  font-size: 44px;
+  font-weight: 900;
+  color: rgba(74, 45, 122, 0.35);
+  line-height: 1;
+}
+
+.mega-card-lock {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  font-size: 15px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+}
+
+.mega-card-name-locked {
+  color: var(--color-text-muted);
+}
+
+.mega-card-unlock-btn {
+  font-size: 12px;
+  padding: 6px 10px;
+  margin-top: auto;
+  width: 100%;
+}
+
+/* Permanent champion crown in the app header */
+
+.champion-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #fff3cf, #ffe08a);
+  box-shadow: 0 0 0 1px rgba(217, 148, 0, 0.55), 0 2px 10px rgba(242, 179, 7, 0.45);
+}
+
+/* Album-complete celebration */
+
+.mega-champion-card {
+  text-align: center;
+  box-shadow: 0 0 0 1.5px #f2b307, 0 2px 16px rgba(242, 179, 7, 0.3);
+}
+
+.mega-champion-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #d99400;
+}
+
+.mega-champion-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: rgba(30, 32, 46, 0.65);
+}
+
+.mega-champion-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 340px;
+  width: 100%;
+  background: var(--color-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+  box-shadow: 0 0 0 2px #f2b307, 0 12px 40px rgba(30, 32, 46, 0.4);
+  animation: banner-pop 260ms ease;
+}
+
+.mega-champion-crown {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.mega-champion-dialog h2 {
+  margin: 0;
+  font-size: 24px;
+  background: linear-gradient(90deg, #d99400, #f2b307);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mega-champion-dialog p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Shop: freshly pulled Mega card reveal */
+
+.mega-reveal {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  animation: banner-pop 260ms ease;
+}
+
+.mega-reveal-preview {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(91, 91, 247, 0.07);
+}

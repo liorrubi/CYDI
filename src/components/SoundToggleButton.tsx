@@ -15,12 +15,12 @@ export default function SoundToggleButton() {
   return (
     <button
       type="button"
-      className="sound-toggle"
+      className={enabled ? "settings-sound-toggle is-on" : "settings-sound-toggle"}
       onClick={toggle}
       aria-label={enabled ? "Mute sound" : "Unmute sound"}
       aria-pressed={!enabled}
     >
-      {enabled ? "🔊" : "🔇"}
+      <span className="settings-sound-toggle-knob">{enabled ? "🔊" : "🔇"}</span>
     </button>
   );
 }

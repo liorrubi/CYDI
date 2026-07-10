@@ -200,7 +200,7 @@ export function passScoreForDifficulty(level: DifficultyLevel): number {
   return DIFFICULTY_LEVELS.find((d) => d.id === level)?.passScore ?? SHAPE_CHALLENGE_PASS_SCORE;
 }
 
-export type PenColorId = "black" | "purple" | "green" | "orange" | "rainbow";
+export type PenColorId = "black" | "purple" | "green" | "orange" | "rainbow" | "diamondBlue";
 
 export type PenColorOption = {
   id: PenColorId;
@@ -220,6 +220,7 @@ export const PEN_COLORS: PenColorOption[] = [
   { id: "green", name: "Green Pen", icon: "🟢", hex: "#16a34a", price: 1000 },
   { id: "orange", name: "Orange Pen", icon: "🟠", hex: "#f97316", price: 1000 },
   { id: "rainbow", name: "Rainbow Pen", icon: "🌈", price: 10000 },
+  { id: "diamondBlue", name: "Diamond Blue", icon: "💎", hex: "#4fb6ff", price: 15000 },
 ];
 
 export function penColorById(id: PenColorId): PenColorOption {

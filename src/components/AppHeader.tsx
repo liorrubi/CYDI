@@ -2,14 +2,12 @@ import {
   playAchievementsPeekSound,
   playBackSound,
   playCoinsPeekSound,
-  playInfoPeekSound,
   playLogoPeekSound,
 } from "../engine/soundEngine";
 import AppLogo from "./AppLogo";
 import CoinIndicator from "./CoinIndicator";
 import DailyChestButton from "./DailyChestButton";
 import ShareGameButton from "./ShareGameButton";
-import SoundToggleButton from "./SoundToggleButton";
 import SpecialChallengeButton from "./SpecialChallengeButton";
 
 type AppHeaderProps = {
@@ -30,7 +28,6 @@ export default function AppHeader({
   subtitle,
   onBack,
   onNavigateToAchievements,
-  onNavigateToInstructions,
   onNavigateToShop,
   onNavigateToSpecialChallenge,
   onNavigateToShapeChallenge,
@@ -104,20 +101,6 @@ export default function AppHeader({
           </button>
         )}
         <ShareGameButton />
-        <SoundToggleButton />
-        {onNavigateToInstructions && (
-          <button
-            type="button"
-            className="info-shortcut"
-            onClick={() => {
-              playInfoPeekSound();
-              onNavigateToInstructions();
-            }}
-            aria-label="How to play"
-          >
-            i
-          </button>
-        )}
         {onNavigateToSettings && (
           <button
             type="button"

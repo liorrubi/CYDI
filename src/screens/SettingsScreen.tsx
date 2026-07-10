@@ -2,13 +2,22 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
+import SoundToggleButton from "../components/SoundToggleButton";
 import { APP_BUILD, APP_BUILD_TIME, APP_VERSION, DIFFICULTY_LEVELS, passScoreForDifficulty } from "../app/constants";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { playChipSound } from "../engine/soundEngine";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive, setUnlockEverything } from "../services/unlockOverrideStore";
 import { exportSaveCode, importSaveCode } from "../services/saveTransfer";
-import { toAchievements, toHome, toInstructions, toShapeChallenge, toShop, toSpecialChallenge } from "../app/routes";
+import {
+  toAchievements,
+  toHome,
+  toInstructions,
+  toSettings,
+  toShapeChallenge,
+  toShop,
+  toSpecialChallenge,
+} from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 const LOCK_MANAGEMENT_PASSWORD = "1111";
@@ -127,8 +136,10 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
     setTransferMode(null);
   }
 
+  const currentDifficulty = DIFFICULTY_LEVELS.find((level) => level.id === difficulty);
+
   return (
-    <div className="screen">
+    <div className="screen settings-screen">
       <AppHeader
         title="Settings"
         onBack={() => onNavigate(toHome())}
@@ -140,9 +151,44 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         onNavigateToHome={() => onNavigate(toHome())}
       />
 
-      <div className="card instructions-card">
+      <div className="card instructions-card settings-card">
+        <div className="settings-row">
+          <div className="settings-row-text">
+            <h2>Sound effects</h2>
+            <p className="status-text">Turn game sound effects on or off.</p>
+          </div>
+          <SoundToggleButton />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="card instructions-card settings-card settings-clickable-card"
+        onClick={() => {
+          playChipSound();
+          onNavigate(toInstructions(toSettings()));
+        }}
+      >
+        <div className="settings-row">
+          <div className="settings-row-text">
+            <h2>How to Play</h2>
+            <p className="status-text">Review the rules and tips for drawing shapes.</p>
+          </div>
+          <span className="settings-clickable-card-arrow" aria-hidden="true">
+            ›
+          </span>
+        </div>
+      </button>
+
+      <div className="card instructions-card settings-card">
         <h2>Difficulty Level</h2>
         <p className="status-text">Choose how accurately you need to draw to pass a shape.</p>
+        <div className="difficulty-current">
+          <p className="difficulty-current-level">
+            Current level: <strong>{currentDifficulty?.name}</strong>
+          </p>
+          <p className="difficulty-current-score">Pass score: {passScoreForDifficulty(difficulty)}+</p>
+        </div>
         <div className="difficulty-picker-options">
           {DIFFICULTY_LEVELS.map((level) => (
             <button
@@ -157,10 +203,9 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
             </button>
           ))}
         </div>
-        <p className="difficulty-picker-hint">Pass score: {passScoreForDifficulty(difficulty)}+</p>
       </div>
 
-      <div className="card instructions-card">
+      <div className="card instructions-card settings-card">
         <h2>Lock Management</h2>
         <p className="status-text">
           {allUnlocked ? "All categories and shapes are unlocked." : "Categories and shapes are locked as normal."}
@@ -170,7 +215,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         </Button>
       </div>
 
-      <div className="card instructions-card">
+      <div className="card instructions-card settings-card">
         <h2>Backup &amp; Transfer</h2>
         <p className="status-text">Move your progress to another phone, computer, or browser using a backup code.</p>
         <div className="button-row">
@@ -183,7 +228,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         </div>
       </div>
 
-      <div className="card instructions-card">
+      <div className="card instructions-card settings-card">
         <h2>Help &amp; Support</h2>
         <p className="status-text">
           Questions, bug reports, or feedback? Contact us at{" "}
@@ -196,7 +241,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         </p>
       </div>
 
-      <div className="card instructions-card">
+      <div className="card instructions-card settings-card">
         <h2>Legal / Credits</h2>
         <p className="status-text">
           © 2026 Lior Rubinovich. All rights reserved.

@@ -188,7 +188,6 @@ body {
   will-change: transform, opacity;
 }
 
-.sound-toggle,
 .achievements-shortcut,
 .info-shortcut,
 .settings-shortcut,
@@ -204,6 +203,43 @@ body {
   line-height: 1;
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(30, 32, 46, 0.08);
+}
+
+.settings-sound-toggle {
+  flex-shrink: 0;
+  border: none;
+  background: var(--color-border);
+  border-radius: 999px;
+  width: 68px;
+  height: 38px;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.settings-sound-toggle.is-on {
+  background: var(--color-primary);
+}
+
+.settings-sound-toggle-knob {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(30, 32, 46, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+.settings-sound-toggle.is-on .settings-sound-toggle-knob {
+  transform: translateX(30px);
 }
 
 .share-game-toast {
@@ -1378,18 +1414,22 @@ body {
 .difficulty-picker-options {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-2);
 }
 
 .difficulty-chip {
+  flex: 1 1 100px;
   border: 1px solid var(--color-border);
   background: var(--color-card);
   color: var(--color-text);
-  border-radius: 999px;
-  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-2);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .difficulty-chip-selected {
@@ -1804,7 +1844,6 @@ body {
     aspect-ratio: 1 / 1;
   }
 
-  .sound-toggle,
   .achievements-shortcut,
   .info-shortcut,
   .settings-shortcut,
@@ -1906,6 +1945,72 @@ body {
 
 .instructions-card {
   text-align: left;
+}
+
+.settings-screen {
+  gap: var(--space-3);
+}
+
+.settings-card {
+  padding: var(--space-4);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.settings-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row-text h2 {
+  margin: 0 0 2px;
+  font-size: 15px;
+}
+
+.settings-row-text .status-text {
+  margin: 0;
+  text-align: left;
+  font-size: 13px;
+}
+
+.settings-clickable-card {
+  display: block;
+  width: 100%;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+}
+
+.settings-clickable-card .settings-row {
+  cursor: pointer;
+}
+
+.settings-clickable-card-arrow {
+  flex-shrink: 0;
+  font-size: 20px;
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+.difficulty-current {
+  margin: 0 0 var(--space-3);
+}
+
+.difficulty-current-level {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.difficulty-current-score {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 
 .friend-challenge-intro-card {

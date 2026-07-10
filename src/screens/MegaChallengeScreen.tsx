@@ -213,12 +213,13 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
                   {card.icon} {card.name}
                 </span>
                 <span className="mega-card-footer">
-                  <span className="mega-card-difficulty" aria-label={`Difficulty ${card.difficulty} of 5`}>
-                    {"🔥".repeat(card.difficulty)}
-                  </span>
-                  <span className="mega-card-state">
-                    {isPerfect ? "✨ Perfect" : bestScore !== undefined ? `Best ${bestScore}%` : "Play ▸"}
-                  </span>
+                  {isPerfect ? (
+                    <span className="mega-card-state">✨ Perfect</span>
+                  ) : bestScore !== undefined ? (
+                    <span className="mega-card-cta mega-card-cta-replay">Best score: {bestScore}%</span>
+                  ) : (
+                    <span className="mega-card-cta">Start Challenge</span>
+                  )}
                 </span>
               </button>
             ) : (

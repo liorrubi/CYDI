@@ -119,6 +119,11 @@ body {
   align-self: flex-end;
 }
 
+/* No-op on desktop; forces a wrap point in the mobile media query below. */
+.app-header-actions-break {
+  display: none;
+}
+
 .coin-indicator {
   display: inline-flex;
   align-items: center;
@@ -2144,6 +2149,152 @@ body {
   white-space: nowrap;
 }
 
+/* Mobile-only responsive pass for Shape Challenge (and the shared header it
+   uses everywhere) - desktop keeps the rules above untouched. */
+@media (max-width: 768px) {
+  .screen {
+    padding: var(--space-4) var(--space-3) var(--space-5);
+    gap: var(--space-3);
+    padding-bottom: max(var(--space-5), env(safe-area-inset-bottom, 0px));
+  }
+
+  .app-header {
+    gap: var(--space-2);
+  }
+
+  .app-header-back {
+    width: 44px;
+    height: 44px;
+    font-size: 26px;
+  }
+
+  .app-logo-button svg,
+  .app-logo-static svg {
+    width: 34px;
+    height: 34px;
+  }
+
+  .app-header-text h1 {
+    font-size: 19px;
+  }
+
+  .app-header-text p {
+    font-size: 12px;
+  }
+
+  /* Force the icon row onto its own full-width line, evenly centered, so it
+     wraps as balanced rows instead of stranding a lone icon (e.g. Settings)
+     off to one side. */
+  .app-header-actions {
+    flex-basis: 100%;
+    justify-content: center;
+    margin-left: 0;
+    align-self: stretch;
+    row-gap: var(--space-2);
+  }
+
+  .app-header-actions-break {
+    display: block;
+    flex-basis: 100%;
+    width: 0;
+    height: 0;
+  }
+
+  .journey-progress {
+    gap: var(--space-1);
+  }
+
+  .journey-rank {
+    font-size: 14px;
+  }
+
+  .journey-stats {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .progress-bar-track {
+    height: 12px;
+  }
+
+  /* Mega Challenge card: lighter, tighter, and always light-on-dark. */
+  .mega-entry-card {
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .mega-entry-icon {
+    width: 46px;
+    height: 46px;
+    font-size: 24px;
+  }
+
+  .mega-entry-body {
+    gap: var(--space-1);
+  }
+
+  .mega-entry-title {
+    font-size: 16px;
+    background: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
+    color: #ffffff;
+  }
+
+  .mega-entry-subtitle {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+  }
+
+  .mega-entry-count {
+    background: rgba(0, 0, 0, 0.32);
+    color: #ffe9a8;
+    box-shadow: inset 0 0 0 1px rgba(255, 233, 168, 0.5);
+  }
+
+  .mega-entry-count,
+  .mega-entry-cost {
+    font-size: 12px;
+    padding: 3px 9px;
+  }
+
+  .mega-entry-progress-track {
+    height: 8px;
+    background: rgba(0, 0, 0, 0.28);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  }
+
+  .mega-entry-arrow {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  /* Category cards: keep the 2-column grid guaranteed, improve contrast. */
+  .category-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-2);
+  }
+
+  .category-card {
+    box-shadow: 0 1px 4px rgba(30, 32, 46, 0.1), inset 0 0 0 1px rgba(30, 32, 46, 0.06);
+  }
+
+  .category-card-progress {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: rgba(30, 32, 46, 0.72);
+  }
+
+  .category-card-progress-track {
+    height: 6px;
+  }
+
+  .category-card-unlock-btn {
+    min-height: 44px;
+  }
+}
+
 @media (max-width: 480px) {
   .drawing-canvas {
     width: 100%;
@@ -2165,6 +2316,28 @@ body {
 
   .coin-indicator {
     height: 48px;
+  }
+
+  .app-header-actions {
+    gap: var(--space-2);
+  }
+
+  .screen {
+    padding: var(--space-3) var(--space-3) var(--space-5);
+    gap: var(--space-2);
+  }
+
+  .app-header-text h1 {
+    font-size: 18px;
+  }
+
+  .mega-entry-card {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .mega-entry-title {
+    font-size: 15px;
   }
 }
 
@@ -3106,15 +3279,38 @@ body {
   margin-top: auto;
 }
 
-.mega-card-difficulty {
-  font-size: 11px;
-  letter-spacing: 1px;
-}
-
 .mega-card-state {
   font-size: 12px;
   font-weight: 700;
   color: var(--color-text-muted);
+}
+
+.mega-card-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 6px rgba(91, 91, 247, 0.35);
+}
+
+/* Already-played cards: same pill shape/weight as Start Challenge, but an
+   outlined "replay" look so it reads as distinct from a fresh attempt. */
+.mega-card-cta-replay {
+  background: var(--color-card);
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1.5px var(--color-primary);
+}
+
+.mega-card-legendary .mega-card-cta-replay,
+.mega-card-epic .mega-card-cta-replay {
+  color: #b7860b;
+  box-shadow: inset 0 0 0 1.5px #b7860b;
 }
 
 .mega-card-legendary .mega-card-state,

@@ -89,6 +89,7 @@ export default function AppHeader({
           onNavigateToSpecialChallenge={onNavigateToSpecialChallenge}
           onNavigateToShapeChallenge={onNavigateToShapeChallenge}
         />
+        <span className="app-header-actions-break" aria-hidden="true" />
         {onNavigateToAchievements && (
           <button
             type="button"

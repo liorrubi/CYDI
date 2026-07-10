@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.11.2 - 2026-07-10
+
+Mobile-only readability pass, two screens:
+
+- Shape Challenge (`ShapeChallengeScreen.tsx` / `global.css`, `AppHeader.tsx`):
+  fixed dark-on-dark text in the Mega Challenge entry card on narrow screens
+  (title now solid white, subtitle/badge/progress bar all readable against
+  the gradient), fixed the header icon row stranding a lone "Settings" icon
+  on its own line by forcing a balanced wrap point, tightened top spacing so
+  content starts higher, guaranteed the category grid stays 2 columns down
+  to 320px, and raised contrast on category card progress text. All changes
+  are scoped to `max-width: 768px` / `480px` media queries - desktop is
+  unchanged.
+- Mega Challenge Album (`MegaChallengeScreen.tsx` / `global.css`): removed
+  the small difficulty fire-icon row under each card name, replaced the
+  tiny "Play ▸" label with a clear "Start Challenge" pill button, and
+  reworded/re-styled the played state as a matching outlined "Best score:
+  X%" pill instead of plain muted text.
+
 ## 0.11.1 - 2026-07-10
 
 Hotfix: existing players' saves (from before per-shape best-score

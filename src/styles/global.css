@@ -508,6 +508,12 @@ body {
   color: #5b3fa6;
 }
 
+.home-card.home-card-featured {
+  border-top-width: 5px;
+  box-shadow: 0 0 0 2px var(--accent-purple), 0 10px 24px rgba(91, 63, 166, 0.28);
+  transform: scale(1.02);
+}
+
 .home-card.home-card-accent-green {
   border-top-color: var(--accent-green);
 }

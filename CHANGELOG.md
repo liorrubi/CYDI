@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.10.0 - 2026-07-10
+
+Reordered the Home screen so Shape Challenge leads and is visually
+highlighted (thicker accent border, purple glow ring, slight scale-up),
+with Daily Challenge right after it, then Create Challenge, My Challenges,
+and Shop.
+
+- Reworked several shape drawings for better geometric construction and
+  detail: turtle, butterfly, horse, lollipop, hockey stick, crown, kite
+  shield, gem, treasure chest, at-sign symbol, and bluetooth symbol.
+- Swapped the Special Challenge's featured shape from the dragon to the
+  castle.
+
 ## 0.9.0 - 2026-07-10
 
 Added an onboarding tutorial for new players: a short 5-step intro modal

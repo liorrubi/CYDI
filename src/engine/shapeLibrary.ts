@@ -1454,49 +1454,56 @@ function turtleShape(size: number): DrawingPath {
 }
 
 function sheepShape(size: number): DrawingPath {
-  // Side-view sheep: a fluffy wool body drawn as a ring of bumps, a small dark
-  // head at the front, two ears, and four straight legs.
+  // Side-view sheep: a wool-cloud body as a cosine-bump ring whose bumps fade
+  // out along the bottom (so it reads as fleece, not a flower), a head poking
+  // out of the wool at the front with one droopy ear, an eye, and four closed
+  // tapering legs.
   const woolCenter = { x: size * 0.44, y: size * 0.46 };
   const bumps = 11;
   const wool: Vec2[] = [];
   const steps = 160;
   for (let i = 0; i <= steps; i++) {
     const t = (i / steps) * Math.PI * 2;
-    const r = size * (0.26 + 0.035 * Math.cos(bumps * t));
+    // Bumps shrink toward the underside (sin(t) > 0 is down in screen space).
+    const amp = 0.035 * (1 - 0.7 * Math.max(0, Math.sin(t)));
+    const r = size * (0.26 + amp * Math.cos(bumps * t));
     wool.push({ x: woolCenter.x + r * 1.1 * Math.cos(t), y: woolCenter.y + r * Math.sin(t) });
   }
-  // Head at the front (right side).
+  // Head clearly protruding from the wool at the front (right side).
   const head = smoothClosedPath(
     fracPoints(size, [
-      [0.72, 0.42],
-      [0.82, 0.46],
-      [0.84, 0.56],
-      [0.76, 0.62],
-      [0.68, 0.58],
-      [0.66, 0.48],
+      [0.72, 0.4],
+      [0.83, 0.44],
+      [0.86, 0.54],
+      [0.78, 0.62],
+      [0.7, 0.58],
+      [0.68, 0.46],
     ]),
     8,
   );
-  const ear = (fy: number) =>
-    smoothClosedPath(
+  // Droopy ear hanging back from the top of the head.
+  const ear = smoothClosedPath(
+    fracPoints(size, [
+      [0.71, 0.41],
+      [0.63, 0.4],
+      [0.6, 0.46],
+      [0.67, 0.47],
+    ]),
+    6,
+  );
+  const eye: Vec2[] = [];
+  for (let i = 0; i <= 10; i++) eye.push(polar({ x: size * 0.79, y: size * 0.5 }, size * 0.018, (i / 10) * 360));
+  const leg = (fx: number) =>
+    polygonEdges(
       fracPoints(size, [
-        [0.7, fy],
-        [0.62, fy + 0.02],
-        [0.66, fy + 0.06],
+        [fx - 0.014, 0.64],
+        [fx + 0.014, 0.64],
+        [fx + 0.01, 0.85],
+        [fx - 0.01, 0.85],
       ]),
       5,
     );
-  const eye: Vec2[] = [];
-  for (let i = 0; i <= 10; i++) eye.push(polar({ x: size * 0.78, y: size * 0.5 }, size * 0.016, (i / 10) * 360));
-  const leg = (fx: number) =>
-    openPolyline(
-      fracPoints(size, [
-        [fx, 0.66],
-        [fx, 0.84],
-      ]),
-      4,
-    );
-  return toPathFromParts([wool, head, ear(0.44), eye, leg(0.32), leg(0.44), leg(0.54), leg(0.64)], size);
+  return toPathFromParts([wool, head, ear, eye, leg(0.32), leg(0.42), leg(0.52), leg(0.62)], size);
 }
 
 function foxShape(size: number): DrawingPath {
@@ -1726,65 +1733,80 @@ function butterflyShape(size: number): DrawingPath {
 }
 
 function elephantShape(size: number): DrawingPath {
-  // Side-view elephant: rounded body and head in one outline, a big floppy ear,
-  // a curled trunk, a tusk, an eye and four sturdy legs.
+  // Side-view elephant facing left. The trunk is integrated into the body
+  // outline with real width (forehead down the outer edge, curled tip, inner
+  // edge back up to the jaw), plus a big floating ear, a closed pointed tusk,
+  // an eye and four columnar closed legs.
   const body = smoothClosedPath(
     fracPoints(size, [
-      [0.4, 0.28],
-      [0.6, 0.24],
-      [0.78, 0.3],
-      [0.84, 0.46],
-      [0.82, 0.62],
-      [0.72, 0.66],
-      [0.5, 0.66],
-      [0.34, 0.64],
-      [0.28, 0.5],
-      [0.3, 0.36],
+      [0.34, 0.18], // top of head dome
+      [0.24, 0.22], // forehead
+      [0.17, 0.32], // trunk outer edge, upper
+      [0.13, 0.46],
+      [0.12, 0.6],
+      [0.15, 0.72], // outer curl
+      [0.22, 0.75], // trunk tip
+      [0.19, 0.66], // inner edge, curling back up
+      [0.2, 0.54],
+      [0.24, 0.42],
+      [0.31, 0.42], // jaw
+      [0.34, 0.5], // chin / throat
+      [0.38, 0.58], // chest
+      [0.52, 0.62], // belly
+      [0.68, 0.6], // rear belly
+      [0.82, 0.52], // rump
+      [0.8, 0.34], // back
+      [0.6, 0.24], // shoulder
     ]),
     9,
   );
-  const ear: Vec2[] = smoothClosedPath(
+  // Big floating ear over the shoulder - the elephant's second signature.
+  const ear = smoothClosedPath(
     fracPoints(size, [
-      [0.42, 0.34],
-      [0.52, 0.32],
-      [0.56, 0.44],
-      [0.5, 0.54],
+      [0.4, 0.26],
+      [0.5, 0.28],
+      [0.55, 0.4],
+      [0.49, 0.5],
       [0.4, 0.5],
-      [0.38, 0.4],
+      [0.35, 0.38],
     ]),
     8,
   );
-  // Trunk curling down and back up from the front of the head.
-  const trunk = openPolyline(
+  // Pointed tusk as a closed angular sliver under the jaw.
+  const tusk = polygonEdges(
     fracPoints(size, [
-      [0.3, 0.42],
-      [0.2, 0.5],
-      [0.16, 0.64],
-      [0.2, 0.76],
-      [0.3, 0.78],
-      [0.32, 0.7],
+      [0.3, 0.5],
+      [0.24, 0.66],
+      [0.27, 0.67],
+      [0.33, 0.53],
     ]),
-    8,
-  );
-  const tusk = openPolyline(
-    fracPoints(size, [
-      [0.32, 0.56],
-      [0.26, 0.66],
-      [0.28, 0.72],
-    ]),
-    5,
+    4,
   );
   const eye: Vec2[] = [];
-  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.36, y: size * 0.4 }, size * 0.018, (i / 12) * 360));
-  const leg = (fx: number) =>
-    openPolyline(
+  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.28, y: size * 0.3 }, size * 0.02, (i / 12) * 360));
+  const leg = (x0: number, x1: number, top: number, bottom: number) =>
+    polygonEdges(
       fracPoints(size, [
-        [fx, 0.65],
-        [fx, 0.86],
+        [x0, top],
+        [x1, top],
+        [x1, bottom],
+        [x0, bottom],
       ]),
-      4,
+      5,
     );
-  return toPathFromParts([body, ear, trunk, tusk, eye, leg(0.4), leg(0.52), leg(0.66), leg(0.76)], size);
+  return toPathFromParts(
+    [
+      body,
+      ear,
+      tusk,
+      eye,
+      leg(0.34, 0.43, 0.58, 0.86),
+      leg(0.46, 0.53, 0.6, 0.84),
+      leg(0.6, 0.67, 0.6, 0.84),
+      leg(0.7, 0.79, 0.58, 0.86),
+    ],
+    size,
+  );
 }
 
 function lionShape(size: number): DrawingPath {
@@ -1928,26 +1950,27 @@ function horseShape(size: number): DrawingPath {
       [0.82, 0.42], // croup (top of rump)
       [0.64, 0.42], // back
       [0.46, 0.44], // withers
-      [0.34, 0.38], // crest (back of neck)
-      [0.28, 0.28],
+      // Mane: three tufts bulging off the crest line (withers -> poll),
+      // alternating with pinch points back on the baseline so the bumps read
+      // as hair against the plain face/back sections.
+      [0.452, 0.362], // tuft
+      [0.386, 0.356], // pinch on crest
+      [0.389, 0.29], // tuft
+      [0.324, 0.284], // pinch on crest
+      [0.326, 0.218], // tuft
       [0.25, 0.2], // poll (back of head)
     ]),
     9,
   );
-  // Two pointed ears rising from the top of the head, each its own part.
-  const earFront = polygonEdges(
+  // Both pointed ears as one M-shaped part sitting on top of the head.
+  const ears = polygonEdges(
     fracPoints(size, [
-      [0.17, 0.18],
-      [0.14, 0.08],
-      [0.21, 0.16],
-    ]),
-    4,
-  );
-  const earBack = polygonEdges(
-    fracPoints(size, [
-      [0.22, 0.17],
-      [0.27, 0.09],
-      [0.27, 0.18],
+      [0.15, 0.19],
+      [0.13, 0.08],
+      [0.2, 0.16],
+      [0.22, 0.16],
+      [0.27, 0.08],
+      [0.28, 0.18],
     ]),
     4,
   );
@@ -1978,8 +2001,8 @@ function horseShape(size: number): DrawingPath {
     8,
   );
   const eye: Vec2[] = [];
-  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.18, y: size * 0.28 }, size * 0.018, (i / 12) * 360));
-  return toPathFromParts([body, earFront, earBack, frontFar, frontNear, hindFar, hindNear, tail, eye], size);
+  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.18, y: size * 0.28 }, size * 0.02, (i / 12) * 360));
+  return toPathFromParts([body, ears, frontFar, frontNear, hindFar, hindNear, tail, eye], size);
 }
 
 const ANIMAL_SHAPES: ShapeDefinition[] = [
@@ -3178,22 +3201,36 @@ function lollipopShape(size: number): DrawingPath {
 }
 
 function cheeseWedgeShape(size: number): DrawingPath {
-  const vertices = fracPoints(size, [
-    [0.2, 0.3],
-    [0.65, 0.2],
-    [0.85, 0.75],
-    [0.2, 0.75],
-  ]);
-  const body = polygonEdges(vertices, 14);
-  // Insert the later (higher-index) hole first, so its anchor position is still
-  // valid against the original body - otherwise the second insertion below
-  // would land inside the first hole's own loop instead of the intended spot.
-  const holeB = withDetourLoop(body, 14 * 3, { x: size * 0.65, y: size * 0.6 }, size * 0.04);
-  const holeA = withDetourLoop(holeB.points, 14 * 2, { x: size * 0.5, y: size * 0.5 }, size * 0.05);
-  const insertedLength = holeA.points.length - holeB.points.length;
-  const shiftedHoleBBreaks = holeB.breaks.map((b) => (b > 14 * 2 ? b + insertedLength : b));
-  const breaks = [...shiftedHoleBBreaks, ...holeA.breaks].sort((a, b) => a - b);
-  return toPath(holeA.points, size, breaks);
+  // A cheese wedge is a sector cut from a round wheel: a sharp apex (the cut
+  // centre) on the left, two straight cut edges fanning out, and the curved
+  // rind on the right. A slim parallelogram along the top edge gives it 3D
+  // depth, and three round holes on the front face sell it as cheese.
+  const apex = { x: size * 0.14, y: size * 0.56 };
+  const R = size * 0.62;
+  const aTop = -22;
+  const aBot = 30;
+  const topCorner = polar(apex, R, aTop);
+  const botCorner = polar(apex, R, aBot);
+  const rind: Vec2[] = [];
+  const steps = 24;
+  for (let i = 0; i <= steps; i++) rind.push(polar(apex, R, aTop + (i / steps) * (aBot - aTop)));
+  // Front face: interpolate the two straight cut edges so the scoring engine
+  // has sample points along them, joined by the arc.
+  const topEdge = openPolyline([apex, topCorner], 8);
+  const botEdge = openPolyline([botCorner, apex], 8);
+  const front = [...topEdge, ...rind.slice(1), ...botEdge.slice(1)];
+  // 3D top face: the top cut edge lifted up-and-back into a closed band.
+  const off = { x: size * 0.03, y: -size * 0.13 };
+  const topFace = polygonEdges(
+    [apex, topCorner, { x: topCorner.x + off.x, y: topCorner.y + off.y }, { x: apex.x + off.x, y: apex.y + off.y }],
+    8,
+  );
+  const hole = (fx: number, fy: number, rf: number) => {
+    const loop: Vec2[] = [];
+    for (let i = 0; i <= 16; i++) loop.push(polar({ x: size * fx, y: size * fy }, size * rf, (i / 16) * 360));
+    return loop;
+  };
+  return toPathFromParts([front, topFace, hole(0.4, 0.55, 0.05), hole(0.55, 0.45, 0.04), hole(0.52, 0.66, 0.045)], size);
 }
 
 function coffeeCupShape(size: number): DrawingPath {
@@ -3705,52 +3742,50 @@ function hockeyStickShape(size: number): DrawingPath {
 }
 
 function finishFlagShape(size: number): DrawingPath {
-  const pole = openPolyline(
+  // Checkered finish flag: a real-width pole, a rectangular flag border, and a
+  // 4x2 checkerboard where the alternating "filled" cells are drawn as their
+  // own closed squares - the strongest signal that this is a finish flag.
+  const pole = polygonEdges(
     fracPoints(size, [
-      [0.3, 0.88],
-      [0.3, 0.12],
+      [0.26, 0.1],
+      [0.3, 0.1],
+      [0.3, 0.9],
+      [0.26, 0.9],
     ]),
-    20,
+    6,
   );
-  const squares: [number, number][][] = [
-    [
-      [0.3, 0.12],
-      [0.45, 0.12],
-      [0.45, 0.2],
-      [0.3, 0.2],
-    ],
-    [
-      [0.45, 0.2],
-      [0.6, 0.2],
-      [0.6, 0.28],
-      [0.45, 0.28],
-    ],
-    [
-      [0.3, 0.28],
-      [0.45, 0.28],
-      [0.45, 0.36],
-      [0.3, 0.36],
-    ],
-    [
-      [0.45, 0.12],
-      [0.6, 0.12],
-      [0.6, 0.2],
-      [0.45, 0.2],
-    ],
-  ];
-  const flagPts = fracPoints(size, [
-    [0.3, 0.12],
-    [0.6, 0.12],
-    [0.6, 0.36],
-    [0.3, 0.36],
-  ]);
-  const border = polygonEdges(flagPts, 8);
-  const checker = squares.flatMap(([a, , c]) => {
-    const p1 = fracPoints(size, [a]);
-    const p2 = fracPoints(size, [c]);
-    return openPolyline([p1[0], p2[0]], 4);
-  });
-  return toPath([...pole, ...border, ...checker], size);
+  const fx0 = 0.3;
+  const fy0 = 0.14;
+  const cols = 4;
+  const rows = 2;
+  const cw = 0.12;
+  const ch = 0.15;
+  const border = polygonEdges(
+    fracPoints(size, [
+      [fx0, fy0],
+      [fx0 + cols * cw, fy0],
+      [fx0 + cols * cw, fy0 + rows * ch],
+      [fx0, fy0 + rows * ch],
+    ]),
+    6,
+  );
+  const cell = (c: number, r: number) =>
+    polygonEdges(
+      fracPoints(size, [
+        [fx0 + c * cw, fy0 + r * ch],
+        [fx0 + (c + 1) * cw, fy0 + r * ch],
+        [fx0 + (c + 1) * cw, fy0 + (r + 1) * ch],
+        [fx0 + c * cw, fy0 + (r + 1) * ch],
+      ]),
+      3,
+    );
+  const filled: Vec2[][] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if ((r + c) % 2 === 0) filled.push(cell(c, r));
+    }
+  }
+  return toPathFromParts([pole, border, ...filled], size);
 }
 
 function jumpRopeShape(size: number): DrawingPath {
@@ -5772,50 +5807,42 @@ function crownShape(size: number): DrawingPath {
   );
 }
 
-function dragonShape(size: number): DrawingPath {
-  // Angular dragon head in profile facing left: long snout, jaw, two swept-back
-  // horns, a mouth line, an eye and a nostril - reads instantly as a dragon.
-  const head = polygonEdges(
+function magicKeyShape(size: number): DrawingPath {
+  // Skeleton key: a ring bow (outer circle + inner hole), a straight shaft
+  // ending in two square teeth cut battlement-style, and a collar line where
+  // the shaft meets the bow.
+  const bowCenter = { x: size * 0.5, y: size * 0.24 };
+  const ring = (r: number) => {
+    const loop: Vec2[] = [];
+    for (let i = 0; i <= 28; i++) loop.push(polar(bowCenter, size * r, (i / 28) * 360));
+    return loop;
+  };
+  // Shaft and bit as one angular closed outline, teeth pointing right.
+  const shaft = polygonEdges(
     fracPoints(size, [
-      [0.1, 0.48],
-      [0.24, 0.4],
-      [0.38, 0.36],
-      [0.52, 0.38],
-      [0.62, 0.46],
-      [0.66, 0.6],
-      [0.6, 0.74],
-      [0.46, 0.78],
-      [0.36, 0.72],
-      [0.3, 0.6],
-      [0.18, 0.56],
-      [0.1, 0.56],
+      [0.474, 0.365],
+      [0.526, 0.365],
+      [0.526, 0.62],
+      [0.64, 0.62],
+      [0.64, 0.68],
+      [0.526, 0.68],
+      [0.526, 0.72],
+      [0.64, 0.72],
+      [0.64, 0.8],
+      [0.526, 0.8],
+      [0.526, 0.88],
+      [0.474, 0.88],
     ]),
-    6,
+    4,
   );
-  const mouth = openPolyline(
+  const collar = openPolyline(
     fracPoints(size, [
-      [0.11, 0.52],
-      [0.3, 0.55],
+      [0.44, 0.42],
+      [0.56, 0.42],
     ]),
-    6,
+    4,
   );
-  const horn = (base: [number, number], tip: [number, number], back: [number, number]) =>
-    polygonEdges(fracPoints(size, [base, tip, back]), 5);
-  const eye: Vec2[] = [];
-  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.45, y: size * 0.47 }, size * 0.025, (i / 12) * 360));
-  const nostril: Vec2[] = [];
-  for (let i = 0; i <= 8; i++) nostril.push(polar({ x: size * 0.16, y: size * 0.5 }, size * 0.014, (i / 8) * 360));
-  return toPathFromParts(
-    [
-      head,
-      mouth,
-      horn([0.46, 0.38], [0.6, 0.2], [0.54, 0.41]),
-      horn([0.56, 0.43], [0.72, 0.28], [0.64, 0.49]),
-      eye,
-      nostril,
-    ],
-    size,
-  );
+  return toPathFromParts([ring(0.13), ring(0.065), shaft, collar], size);
 }
 
 function swordShape(size: number): DrawingPath {
@@ -5907,71 +5934,34 @@ function kiteShieldShape(size: number): DrawingPath {
   return toPathFromParts([outline, innerBorder, vertical, horizontal, boss], size);
 }
 
-function unicornShape(size: number): DrawingPath {
-  // Horse head-and-neck profile with the unicorn's signature spiral horn
-  // (a slender triangle with cross ticks), an ear, a flowing mane and an eye.
-  const head = smoothClosedPath(
-    fracPoints(size, [
-      [0.44, 0.14],
-      [0.52, 0.2],
-      [0.58, 0.36],
-      [0.66, 0.54],
-      [0.66, 0.66],
-      [0.58, 0.72],
-      [0.5, 0.68],
-      [0.46, 0.54],
-      [0.36, 0.5],
-      [0.28, 0.62],
-      [0.24, 0.82],
-      [0.36, 0.84],
-      [0.4, 0.62],
-      [0.5, 0.5],
-      [0.44, 0.34],
-      [0.38, 0.2],
-    ]),
-    9,
-  );
-  // Long tapering horn rising from the forehead to a fine tip.
-  const horn = polygonEdges(
-    fracPoints(size, [
-      [0.4, 0.185],
-      [0.61, 0.01],
-      [0.47, 0.165],
-    ]),
-    6,
-  );
-  // Spiral ridges: evenly spaced bands running across the tapering horn.
-  const tick = (from: [number, number], to: [number, number]) => openPolyline(fracPoints(size, [from, to]), 3);
-  const ridges = [
-    tick([0.442, 0.15], [0.498, 0.134]),
-    tick([0.484, 0.115], [0.526, 0.103]),
-    tick([0.526, 0.08], [0.554, 0.072]),
-    tick([0.568, 0.045], [0.582, 0.041]),
-  ];
-  const ear = polygonEdges(
-    fracPoints(size, [
-      [0.36, 0.18],
-      [0.33, 0.07],
-      [0.42, 0.16],
-    ]),
-    4,
-  );
-  const mane = openPolyline(
-    fracPoints(size, [
-      [0.4, 0.18],
-      [0.34, 0.3],
-      [0.32, 0.45],
-      [0.27, 0.6],
-      [0.24, 0.78],
-    ]),
+function crystalBallShape(size: number): DrawingPath {
+  // Glass orb resting in a cradle base whose top edge follows the orb's curve
+  // (so no line ever crosses the glass), plus a crescent highlight and a
+  // four-point sparkle inside the orb.
+  const c = { x: size * 0.5, y: size * 0.42 };
+  const R = 0.3;
+  const orb: Vec2[] = [];
+  for (let i = 0; i <= 40; i++) orb.push(polar(c, size * R, (i / 40) * 360));
+  // Cradle: an arc hugging the orb's underside from 140° to 40°, flaring out
+  // to a flat foot.
+  const arc: Vec2[] = [];
+  for (let i = 0; i <= 18; i++) arc.push(polar(c, size * R * 1.05, 140 - (i / 18) * 100));
+  const foot = openPolyline(
+    [arc[arc.length - 1], { x: size * 0.8, y: size * 0.9 }, { x: size * 0.2, y: size * 0.9 }, arc[0]],
     7,
   );
-  const eye: Vec2[] = [];
-  for (let i = 0; i <= 12; i++) eye.push(polar({ x: size * 0.5, y: size * 0.34 }, size * 0.02, (i / 12) * 360));
-  // Nostril near the muzzle tip.
-  const nostril: Vec2[] = [];
-  for (let i = 0; i <= 10; i++) nostril.push(polar({ x: size * 0.6, y: size * 0.6 }, size * 0.016, (i / 10) * 360));
-  return toPathFromParts([head, horn, ...ridges, ear, mane, eye, nostril], size);
+  const cradle = [...arc, ...foot.slice(1)];
+  // Crescent highlight along the upper-left inner edge of the glass.
+  const highlight: Vec2[] = [];
+  for (let i = 0; i <= 12; i++) highlight.push(polar(c, size * R * 0.72, 190 + (i / 12) * 60));
+  // Small four-point sparkle in the upper-right of the orb.
+  const sparkleCenter = { x: size * 0.6, y: size * 0.33 };
+  const sparkle: Vec2[] = [];
+  for (let i = 0; i < 8; i++) {
+    sparkle.push(polar(sparkleCenter, i % 2 === 0 ? size * 0.05 : size * 0.018, i * 45 - 90));
+  }
+  sparkle.push(sparkle[0]);
+  return toPathFromParts([orb, cradle, highlight, sparkle], size);
 }
 
 function wandShape(size: number): DrawingPath {
@@ -6059,45 +6049,63 @@ function gemShape(size: number): DrawingPath {
 }
 
 function scrollShape(size: number): DrawingPath {
-  // Parchment sheet with a rolled cylinder at the top and bottom (each shown as
-  // an ellipse with a spiral curl at one end), and lines of writing between.
-  const sheet = polygonEdges(
-    fracPoints(size, [
-      [0.3, 0.26],
-      [0.7, 0.26],
-      [0.7, 0.74],
-      [0.3, 0.74],
-    ]),
-    8,
-  );
+  // Parchment with a rolled cylinder at top and bottom: each roll is a closed
+  // capsule (semicircular caps + straight edges) sticking out past the sheet,
+  // with a spiral end-curl on one exposed end face. The sheet hangs between
+  // the rolls as two vertical edges, with writing lines inside.
+  const rollR = 0.06;
   const roll = (cy: number) => {
-    const loop: Vec2[] = [];
-    for (let i = 0; i <= 28; i++) {
-      const t = (i / 28) * Math.PI * 2;
-      loop.push({ x: size * (0.5 + 0.22 * Math.cos(t)), y: size * (cy + 0.06 * Math.sin(t)) });
-    }
-    return loop;
+    const capL = { x: size * 0.3, y: size * cy };
+    const capR = { x: size * 0.7, y: size * cy };
+    const pts: Vec2[] = [];
+    // Left cap: bottom around to top.
+    for (let i = 0; i <= 12; i++) pts.push(polar(capL, size * rollR, 90 + (i / 12) * 180));
+    // Top edge left to right.
+    pts.push(...openPolyline([polar(capL, size * rollR, 270), polar(capR, size * rollR, 270)], 8).slice(1));
+    // Right cap: top around to bottom.
+    for (let i = 1; i <= 12; i++) pts.push(polar(capR, size * rollR, 270 + (i / 12) * 180));
+    // Bottom edge back to start.
+    pts.push(...openPolyline([polar(capR, size * rollR, 90), polar(capL, size * rollR, 90)], 8).slice(1));
+    return pts;
   };
+  // Spiral end-curl on an exposed cap face (rolled-up cross section).
   const curl = (fx: number, cy: number) => {
     const c = { x: size * fx, y: size * cy };
     const spiral: Vec2[] = [];
-    const steps = 30;
+    const steps = 24;
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      spiral.push(polar(c, size * (0.055 - 0.045 * t), -90 + t * 1.6 * 360));
+      spiral.push(polar(c, size * (0.042 - 0.034 * t), -90 + t * 1.5 * 360));
     }
     return spiral;
   };
+  const sheetEdge = (fx: number) =>
+    openPolyline(
+      fracPoints(size, [
+        [fx, 0.26],
+        [fx, 0.74],
+      ]),
+      10,
+    );
   const textLine = (fy: number) =>
     openPolyline(
       fracPoints(size, [
-        [0.36, fy],
-        [0.64, fy],
+        [0.41, fy],
+        [0.59, fy],
       ]),
       6,
     );
   return toPathFromParts(
-    [sheet, roll(0.24), roll(0.76), curl(0.3, 0.24), curl(0.7, 0.76), textLine(0.4), textLine(0.5), textLine(0.6)],
+    [
+      roll(0.2),
+      roll(0.8),
+      curl(0.7, 0.2),
+      curl(0.3, 0.8),
+      sheetEdge(0.35),
+      sheetEdge(0.65),
+      textLine(0.44),
+      textLine(0.56),
+    ],
     size,
   );
 }
@@ -6312,40 +6320,39 @@ function treasureChestShape(size: number): DrawingPath {
 }
 
 function witchsBroomShape(size: number): DrawingPath {
-  // Thin diagonal handle, a binding band, and a fanned bundle of bristles
-  // drawn as a closed shape with a couple of straw lines inside.
-  const handle = polygonEdges(
-    fracPoints(size, [
-      [0.68, 0.1],
-      [0.72, 0.13],
-      [0.46, 0.66],
-      [0.42, 0.63],
-    ]),
-    6,
-  );
-  const binding = openPolyline(
-    fracPoints(size, [
-      [0.38, 0.6],
-      [0.5, 0.66],
-    ]),
+  // Built along one diagonal axis (top-right to bottom-left): a long handle
+  // with real width, a wide wrapped collar band, and a fanned bristle head
+  // ending in ragged battlement-style straw tips, with straw lines inside.
+  const top = { x: 0.76, y: 0.06 };
+  const axis = { x: -0.54, y: 0.84 };
+  const len = Math.hypot(axis.x, axis.y);
+  const dir = { x: axis.x / len, y: axis.y / len };
+  const nrm = { x: -dir.y, y: dir.x };
+  // Point at distance t along the axis, offset w to the side.
+  const p = (t: number, w: number): Vec2 => ({
+    x: size * (top.x + dir.x * t + nrm.x * w),
+    y: size * (top.y + dir.y * t + nrm.y * w),
+  });
+  const handle = polygonEdges([p(0, 0.022), p(0, -0.022), p(0.52, -0.022), p(0.52, 0.022)], 8);
+  const collar = polygonEdges([p(0.52, 0.055), p(0.52, -0.055), p(0.62, -0.055), p(0.62, 0.055)], 5);
+  const wrapLine = openPolyline([p(0.57, 0.055), p(0.57, -0.055)], 4);
+  // Fan spreading from the collar to a zigzag of straw tips at the end.
+  const bristles = polygonEdges(
+    [
+      p(0.62, 0.055),
+      p(0.62, -0.055),
+      p(0.9, -0.16),
+      p(0.99, -0.11),
+      p(0.91, -0.055),
+      p(0.99, 0),
+      p(0.91, 0.055),
+      p(0.99, 0.11),
+      p(0.9, 0.16),
+    ],
     5,
   );
-  const bristles = smoothClosedPath(
-    fracPoints(size, [
-      [0.46, 0.66],
-      [0.52, 0.72],
-      [0.4, 0.92],
-      [0.22, 0.94],
-      [0.16, 0.86],
-      [0.36, 0.68],
-    ]),
-    7,
-  );
-  const straw = (from: [number, number], to: [number, number]) => openPolyline(fracPoints(size, [from, to]), 5);
-  return toPathFromParts(
-    [handle, binding, bristles, straw([0.4, 0.7], [0.24, 0.9]), straw([0.44, 0.72], [0.34, 0.92])],
-    size,
-  );
+  const straw = (w0: number, w1: number) => openPolyline([p(0.66, w0), p(0.95, w1)], 6);
+  return toPathFromParts([handle, collar, wrapLine, bristles, straw(0.025, 0.085), straw(-0.025, -0.085)], size);
 }
 
 function castleShape(size: number): DrawingPath {
@@ -6580,9 +6587,9 @@ const FANTASY_SHAPES: ShapeDefinition[] = [
   standalone("fant-cauldron", "Cauldron", "fantasy", cauldronShape),
   standalone("fant-treasurechest", "Treasure Chest", "fantasy", treasureChestShape),
   standalone("fant-castle", "Castle", "fantasy", castleShape),
-  standalone("fant-unicorn", "Unicorn", "fantasy", unicornShape),
+  standalone("fant-crystalball", "Crystal Ball", "fantasy", crystalBallShape),
   standalone("fant-mermaidtail", "Mermaid Tail", "fantasy", mermaidTailShape),
-  standalone("fant-dragon", "Dragon", "fantasy", dragonShape),
+  standalone("fant-key", "Magic Key", "fantasy", magicKeyShape),
   standalone("fant-phoenix", "Phoenix", "fantasy", phoenixShape),
 ];
 
@@ -6706,21 +6713,28 @@ function atSignSymbol(size: number): DrawingPath {
 }
 
 function yinYangSymbol(size: number): DrawingPath {
+  // Outer circle plus one continuous S-curve built from two half-circles of
+  // radius R/2 — the top half bulges right, the bottom half bulges left, and
+  // they meet exactly at the center — with the two classical dots (R/6) on
+  // the vertical axis.
   const center = { x: size / 2, y: size / 2 };
-  const R = size * 0.32;
+  const R = size * 0.36;
   const steps = 60;
   const outer: Vec2[] = [];
   for (let i = 0; i <= steps; i++) outer.push(polar(center, R, (i / steps) * 360 - 90));
   const topCenter = { x: center.x, y: center.y - R / 2 };
   const botCenter = { x: center.x, y: center.y + R / 2 };
   const sCurve: Vec2[] = [];
+  // Top of the outer circle down to the center, bulging right (through 0°).
   for (let i = 0; i <= steps / 2; i++) sCurve.push(polar(topCenter, R / 2, -90 + (i / (steps / 2)) * 180));
-  for (let i = 0; i <= steps / 2; i++) sCurve.push(polar(botCenter, R / 2, 90 + (i / (steps / 2)) * 180));
-  const dot1: Vec2[] = [];
-  for (let i = 0; i <= 16; i++) dot1.push(polar(topCenter, size * 0.04, (i / 16) * 360));
-  const dot2: Vec2[] = [];
-  for (let i = 0; i <= 16; i++) dot2.push(polar(botCenter, size * 0.04, (i / 16) * 360));
-  return toPathFromParts([outer, sCurve, dot1, dot2], size);
+  // Center down to the bottom of the outer circle, bulging left (through 180°).
+  for (let i = 1; i <= steps / 2; i++) sCurve.push(polar(botCenter, R / 2, 270 - (i / (steps / 2)) * 180));
+  const dot = (c: Vec2) => {
+    const loop: Vec2[] = [];
+    for (let i = 0; i <= 16; i++) loop.push(polar(c, R / 6, (i / 16) * 360));
+    return loop;
+  };
+  return toPathFromParts([outer, sCurve, dot(topCenter), dot(botCenter)], size);
 }
 
 function globeSymbol(size: number): DrawingPath {
@@ -6784,22 +6798,28 @@ function bluetoothSymbol(size: number): DrawingPath {
 }
 
 function radioactiveSymbol(size: number): DrawingPath {
+  // ISO 361 trefoil proportions: a central disc of radius r, three closed
+  // 60° annular-sector blades running from 1.5r to 5r, separated by 60° gaps
+  // so the blades never touch the core.
   const center = { x: size / 2, y: size / 2 };
-  const innerR = size * 0.06;
-  const outerR = size * 0.32;
-  const steps = 20;
-  const blades: Vec2[][] = [];
-  for (const rot of [-90, 30, 150]) {
-    const startA = rot - 30;
-    const endA = rot + 30;
-    const blade: Vec2[] = [polar(center, innerR, startA)];
-    for (let i = 0; i <= steps; i++) blade.push(polar(center, outerR, startA + (i / steps) * 60));
-    blade.push(polar(center, innerR, endA), center);
-    blades.push(blade);
-  }
-  const coreRing: Vec2[] = [];
-  for (let i = 0; i <= 24; i++) coreRing.push(polar(center, innerR, (i / 24) * 360));
-  return toPathFromParts([...blades, coreRing], size);
+  const coreR = size * 0.066;
+  const bladeInner = coreR * 1.5;
+  const bladeOuter = coreR * 5;
+  const steps = 16;
+  const blade = (rot: number) => {
+    const a0 = rot - 30;
+    const a1 = rot + 30;
+    const pts: Vec2[] = [];
+    // Outer arc, radial edge in, inner arc back, radial edge out (closed).
+    for (let i = 0; i <= steps; i++) pts.push(polar(center, bladeOuter, a0 + (i / steps) * 60));
+    pts.push(...openPolyline([polar(center, bladeOuter, a1), polar(center, bladeInner, a1)], 5).slice(1));
+    for (let i = 1; i <= steps; i++) pts.push(polar(center, bladeInner, a1 - (i / steps) * 60));
+    pts.push(...openPolyline([polar(center, bladeInner, a0), polar(center, bladeOuter, a0)], 5).slice(1));
+    return pts;
+  };
+  const core: Vec2[] = [];
+  for (let i = 0; i <= 24; i++) core.push(polar(center, coreR, (i / 24) * 360));
+  return toPathFromParts([blade(-90), blade(30), blade(150), core], size);
 }
 
 function fingerprintSymbol(size: number): DrawingPath {

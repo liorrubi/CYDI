@@ -40,19 +40,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       <div className="home-cards">
         <button
           type="button"
-          className="card home-card home-card-accent-green"
-          onClick={() => handleSelect(toCreate())}
-        >
-          <h2>Create Challenge</h2>
-          <p>Make a shape to play</p>
-        </button>
-        <button type="button" className="card home-card home-card-accent-blue" onClick={() => handleSelect(toList())}>
-          <h2>My Challenges</h2>
-          <p>Play saved challenges</p>
-        </button>
-        <button
-          type="button"
-          className="card home-card home-card-accent-purple"
+          className="card home-card home-card-accent-purple home-card-featured"
           onClick={() => handleSelect(toShapeChallenge())}
         >
           <h2>Shape Challenge</h2>
@@ -65,6 +53,18 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         >
           <h2>Daily Challenge</h2>
           <p>Draw from memory, race for the top score</p>
+        </button>
+        <button
+          type="button"
+          className="card home-card home-card-accent-green"
+          onClick={() => handleSelect(toCreate())}
+        >
+          <h2>Create Challenge</h2>
+          <p>Make a shape to play</p>
+        </button>
+        <button type="button" className="card home-card home-card-accent-blue" onClick={() => handleSelect(toList())}>
+          <h2>My Challenges</h2>
+          <p>Play saved challenges</p>
         </button>
         <button
           type="button"

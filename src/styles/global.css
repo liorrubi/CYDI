@@ -1172,8 +1172,110 @@ body {
 }
 
 .chest-reward-icon {
-  font-size: 64px;
   line-height: 1;
+}
+
+.chest-icon {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Premium tiers get a soft glow so opening them feels more special. */
+.chest-icon-gold {
+  filter: drop-shadow(0 0 5px rgba(245, 180, 0, 0.5));
+}
+
+.chest-icon-platinum {
+  animation: chest-platinum-glow 2.6s ease-in-out infinite;
+}
+
+@keyframes chest-platinum-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px rgba(127, 217, 224, 0.6));
+  }
+  50% {
+    filter: drop-shadow(0 0 11px rgba(150, 235, 245, 0.95));
+  }
+}
+
+/* Pulsing halo behind the crowning gem. */
+.chest-gem-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chest-gem-halo 2.6s ease-in-out infinite;
+}
+
+@keyframes chest-gem-halo {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.15);
+  }
+}
+
+/* Bright glint sweeping across the gem's crown facet. */
+.chest-gem-glint {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chest-gem-glint 2.6s ease-in-out infinite;
+}
+
+@keyframes chest-gem-glint {
+  0%,
+  60%,
+  100% {
+    opacity: 0;
+  }
+  75% {
+    opacity: 0.9;
+  }
+}
+
+/* Diagonal light streak sweeping across the gold / platinum lids. */
+.chest-icon-shine {
+  animation: chest-icon-shine 3s ease-in-out infinite;
+}
+
+@keyframes chest-icon-shine {
+  0%,
+  55% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  65% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateX(68px);
+    opacity: 0;
+  }
+}
+
+.chest-icon-sparkle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chest-icon-sparkle 1.9s ease-in-out infinite;
+}
+
+.chest-icon-sparkle-delayed {
+  animation-delay: 0.95s;
+}
+
+@keyframes chest-icon-sparkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
 }
 
 .chest-reward-headline {
@@ -1713,31 +1815,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  font-size: 22px;
+  width: 60px;
+  height: 60px;
   flex-shrink: 0;
-}
-
-.chest-tier-icon-iron {
-  background: linear-gradient(160deg, #c3c7d1, #8a8f98);
-}
-
-.chest-tier-icon-copper {
-  background: linear-gradient(160deg, #e08a4d, #a15a24);
-}
-
-.chest-tier-icon-silver {
-  background: linear-gradient(160deg, #f1f3f7, #b7bcc7);
-}
-
-.chest-tier-icon-gold {
-  background: linear-gradient(160deg, #ffcf40, #f5b400);
-}
-
-.chest-tier-icon-platinum {
-  background: linear-gradient(160deg, #e8fbff, #9fd8e0);
 }
 
 .shop-product-info {
@@ -1752,6 +1832,80 @@ body {
 
 .shop-product-info p {
   margin: 2px 0 0;
+}
+
+/* Per-tier chest cards: a tinted surface + colored left edge builds the rarity ladder at a glance. */
+.shop-chest {
+  border-left: 4px solid transparent;
+}
+
+.shop-chest-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.shop-chest-reward {
+  white-space: nowrap;
+}
+
+.chest-rarity-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.shop-chest-iron {
+  background: linear-gradient(120deg, rgba(86, 91, 102, 0.14), transparent 60%);
+  border-left-color: #565b66;
+}
+.chest-rarity-badge-iron {
+  background: #565b66;
+  color: #eef0f4;
+}
+
+.shop-chest-copper {
+  background: linear-gradient(120deg, rgba(201, 106, 47, 0.16), transparent 60%);
+  border-left-color: #c96a2f;
+}
+.chest-rarity-badge-copper {
+  background: #c96a2f;
+  color: #fff2e6;
+}
+
+.shop-chest-silver {
+  background: linear-gradient(120deg, rgba(150, 160, 178, 0.18), transparent 60%);
+  border-left-color: #97a1b2;
+}
+.chest-rarity-badge-silver {
+  background: #7a8394;
+  color: #f4f6fa;
+}
+
+.shop-chest-gold {
+  background: linear-gradient(120deg, rgba(242, 179, 7, 0.2), transparent 60%);
+  border-left-color: #f2b307;
+  box-shadow: 0 0 0 1px rgba(242, 179, 7, 0.25), 0 2px 14px rgba(242, 179, 7, 0.22);
+}
+.chest-rarity-badge-gold {
+  background: #d99400;
+  color: #4a3200;
+}
+
+.shop-chest-platinum {
+  background: linear-gradient(120deg, rgba(127, 200, 224, 0.22), rgba(180, 236, 247, 0.1) 55%, transparent);
+  border-left-color: #7fd9e0;
+  box-shadow: 0 0 0 1px rgba(127, 217, 224, 0.35), 0 2px 16px rgba(127, 217, 224, 0.3);
+}
+.chest-rarity-badge-platinum {
+  background: linear-gradient(120deg, #7fd9e0, #b6ecf7);
+  color: #2f6572;
 }
 
 .shop-product-owned {

@@ -4,13 +4,13 @@ import { triggerCoinFlight } from "../engine/coinFlight";
 import { playAchievementUnlockedSound } from "../engine/soundEngine";
 import { addCoins } from "../services/coinsStore";
 import { getPaidChestDoublesRemaining, recordPaidChestDoubleUsed } from "../services/chestDoubleLimitStore";
+import ChestIcon, { type ChestIconTier } from "./ChestIcon";
 import DoubleCoinsOffer from "./DoubleCoinsOffer";
 
 type ChestRewardOverlayProps = {
   chestName: string;
-  chestIcon: string;
-  /** e.g. "chest-reward-card-wood" | "chest-reward-card-iron" | ... - picks the tier's color gradient. */
-  tierClassName: string;
+  /** Picks both the tier's chest artwork and the card's color gradient ("wood" is the free daily chest). */
+  tier: ChestIconTier;
   /** The reward already rolled for this chest - revealed at the end of the spin animation below. */
   amount: number;
   /** The tier's full reward range, used only to make the spin animation cycle through plausible-looking numbers. */
@@ -37,8 +37,7 @@ const SPIN_MAX_INTERVAL_MS = 220;
  */
 export default function ChestRewardOverlay({
   chestName,
-  chestIcon,
-  tierClassName,
+  tier,
   amount,
   rewardMin,
   rewardMax,
@@ -95,9 +94,9 @@ export default function ChestRewardOverlay({
 
   return (
     <div className="chest-reward-overlay">
-      <div className={`chest-reward-card ${tierClassName}`}>
+      <div className={`chest-reward-card chest-reward-card-${tier}`}>
         <span className={phase === "opening" ? "chest-reward-icon chest-reward-icon-opening" : "chest-reward-icon"} aria-hidden="true">
-          {chestIcon}
+          <ChestIcon tier={tier} size={96} />
         </span>
         <span className="chest-reward-headline">{phase === "opening" ? "Opening..." : `${chestName} opened!`}</span>
         {phase !== "opening" && (

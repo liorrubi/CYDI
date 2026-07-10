@@ -238,20 +238,21 @@ export type ChestTierId = "iron" | "copper" | "silver" | "gold" | "platinum";
 export type ChestTier = {
   id: ChestTierId;
   name: string;
-  icon: string;
+  /** Rarity label shown as a small badge on the shop card, escalating with the tier. */
+  rarity: string;
   price: number;
   rewardMin: number;
   rewardMax: number;
 };
 
-export const DAILY_CHEST = { name: "Daily Chest", icon: "📦", rewardMin: 50, rewardMax: 150 };
+export const DAILY_CHEST = { name: "Daily Chest", rewardMin: 50, rewardMax: 150 };
 
 export const CHEST_TIERS: ChestTier[] = [
-  { id: "iron", name: "Iron Chest", icon: "📦", price: 200, rewardMin: 100, rewardMax: 300 },
-  { id: "copper", name: "Copper Chest", icon: "📦", price: 500, rewardMin: 250, rewardMax: 750 },
-  { id: "silver", name: "Silver Chest", icon: "📦", price: 1000, rewardMin: 500, rewardMax: 1500 },
-  { id: "gold", name: "Gold Chest", icon: "📦", price: 2500, rewardMin: 1250, rewardMax: 3750 },
-  { id: "platinum", name: "Platinum Chest", icon: "📦", price: 5000, rewardMin: 2500, rewardMax: 7500 },
+  { id: "iron", name: "Iron Chest", rarity: "Basic", price: 200, rewardMin: 100, rewardMax: 300 },
+  { id: "copper", name: "Copper Chest", rarity: "Common", price: 500, rewardMin: 250, rewardMax: 750 },
+  { id: "silver", name: "Silver Chest", rarity: "Rare", price: 1000, rewardMin: 500, rewardMax: 1500 },
+  { id: "gold", name: "Gold Chest", rarity: "Epic", price: 2500, rewardMin: 1250, rewardMax: 3750 },
+  { id: "platinum", name: "Platinum Chest", rarity: "Legendary", price: 5000, rewardMin: 2500, rewardMax: 7500 },
 ];
 
 /** Random integer reward in [min, max], inclusive - used for both the daily free chest and purchased chest keys. */

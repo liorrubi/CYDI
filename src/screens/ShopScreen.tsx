@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
+import ChestIcon from "../components/ChestIcon";
 import ChestRewardOverlay from "../components/ChestRewardOverlay";
 import { PEN_COLORS, DEFAULT_PEN_COLOR, CHEST_TIERS, rollChestReward, type ChestTier } from "../app/constants";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
@@ -57,14 +58,17 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
         {CHEST_TIERS.map((tier) => {
           const canAfford = coins >= tier.price;
           return (
-            <div key={tier.id} className="card shop-product">
-              <span className={`chest-tier-icon chest-tier-icon-${tier.id}`} aria-hidden="true">
-                {tier.icon}
+            <div key={tier.id} className={`card shop-product shop-chest shop-chest-${tier.id}`}>
+              <span className="chest-tier-icon" aria-hidden="true">
+                <ChestIcon tier={tier.id} size={58} />
               </span>
               <div className="shop-product-info">
-                <h3>{tier.name}</h3>
-                <p className="status-text">
-                  Reward range: 🪙 {tier.rewardMin}–{tier.rewardMax}
+                <div className="shop-chest-title">
+                  <h3>{tier.name}</h3>
+                  <span className={`chest-rarity-badge chest-rarity-badge-${tier.id}`}>{tier.rarity}</span>
+                </div>
+                <p className="status-text shop-chest-reward">
+                  Win: 🪙 {tier.rewardMin}–{tier.rewardMax}
                 </p>
               </div>
               <Button disabled={!canAfford} onClick={() => handleBuyKey(tier)}>
@@ -109,8 +113,7 @@ export default function ShopScreen({ from, onNavigate }: ShopScreenProps) {
       {pendingChestReveal && (
         <ChestRewardOverlay
           chestName={pendingChestReveal.tier.name}
-          chestIcon={pendingChestReveal.tier.icon}
-          tierClassName={`chest-reward-card-${pendingChestReveal.tier.id}`}
+          tier={pendingChestReveal.tier.id}
           amount={pendingChestReveal.amount}
           rewardMin={pendingChestReveal.tier.rewardMin}
           rewardMax={pendingChestReveal.tier.rewardMax}

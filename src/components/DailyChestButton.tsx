@@ -4,6 +4,7 @@ import { canOpenDailyChest, openDailyChest } from "../services/dailyChestStore";
 import { onSaveDataChanged } from "../services/saveStore";
 import { getSuccessfulDrawingsCount } from "../services/successfulDrawingsStore";
 import { isUnlockEverythingActive } from "../services/unlockOverrideStore";
+import ChestIcon from "./ChestIcon";
 import ChestRewardOverlay from "./ChestRewardOverlay";
 import LockedFeatureHint from "./LockedFeatureHint";
 
@@ -65,7 +66,7 @@ export default function DailyChestButton({ onNavigateToShop, onNavigateToShapeCh
         aria-label={label}
         title={locked ? label : undefined}
       >
-        {DAILY_CHEST.icon}
+        <ChestIcon tier="wood" size={26} />
         {locked ? (
           <span className="daily-chest-badge-locked" aria-hidden="true">
             {successfulDrawings}/{DAILY_CHEST_UNLOCK_COUNT}
@@ -90,8 +91,7 @@ export default function DailyChestButton({ onNavigateToShop, onNavigateToShapeCh
       {pendingAmount !== null && (
         <ChestRewardOverlay
           chestName={DAILY_CHEST.name}
-          chestIcon={DAILY_CHEST.icon}
-          tierClassName="chest-reward-card-wood"
+          tier="wood"
           amount={pendingAmount}
           rewardMin={DAILY_CHEST.rewardMin}
           rewardMax={DAILY_CHEST.rewardMax}

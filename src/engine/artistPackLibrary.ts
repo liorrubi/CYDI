@@ -20,8 +20,14 @@ import { toPathFromParts, type CategoryId, type ShapeDefinition } from "./shapeL
 export type ArtistProfile = {
   id: string;
   name: string;
-  /** Styled emoji/icon (the game ships no raster images); admin-set. */
+  /** Styled emoji/icon fallback, shown when no `avatarImageUrl` is set; admin-set. */
   avatarIcon: string;
+  /** Optional admin-set photo (a static asset under `public/`), shown instead of
+   * `avatarIcon`. Displayed square/circular via CSS `object-fit: cover` — never
+   * distorted. Requires `avatarImageAlt`. */
+  avatarImageUrl?: string;
+  /** Accessible alt text for `avatarImageUrl`. */
+  avatarImageAlt?: string;
   bio: string;
   /** Canonical site/store link, opened via the leave-game confirmation. */
   externalUrl: string;
@@ -158,6 +164,8 @@ const nimcoPack: ArtistPackDefinition = {
     id: "nimrod-cohen",
     name: "Nimrod Cohen",
     avatarIcon: "🎨",
+    avatarImageUrl: "/images/artists/nimco-design-avatar.png",
+    avatarImageAlt: "Nimco Design",
     bio: "Impact Through Design",
     externalUrl: "https://nimco.co.il/",
     // affiliateUrl / affiliateLinkId intentionally omitted until configured.

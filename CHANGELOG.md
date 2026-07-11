@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.1 - 2026-07-11
+
+"Nimco Design" now shows a real profile photo instead of the generic 🎨 emoji,
+on both its Artist Packs card and its pack page. The photo is a square/circular
+crop (cropped, never stretched) served from `public/images/artists/`, sharp on
+retina/mobile, with accessible alt text "Nimco Design". `ArtistProfile` gained
+optional `avatarImageUrl` / `avatarImageAlt` fields (falling back to
+`avatarIcon` when unset), used by `ArtistPackCard.tsx` and `ArtistPackScreen.tsx`.
+
 ## 0.17.0 - 2026-07-11
 
 Shop chest keys now have a **per-tier purchase cooldown**: buying a chest tier

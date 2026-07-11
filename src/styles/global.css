@@ -3725,8 +3725,16 @@ body {
   font-size: 32px;
   line-height: 1;
   border-radius: 50%;
+  overflow: hidden;
   background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06) 70%);
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.45);
+}
+
+.artist-pack-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .artist-pack-body {
@@ -3826,7 +3834,15 @@ body {
   font-size: 36px;
   line-height: 1;
   border-radius: 50%;
+  overflow: hidden;
   background: linear-gradient(135deg, #1f6b6b, #2e8b8b);
+}
+
+.artist-profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .artist-profile-text {

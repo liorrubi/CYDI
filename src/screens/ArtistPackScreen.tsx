@@ -129,9 +129,19 @@ export default function ArtistPackScreen({ packId, from, onNavigate }: ArtistPac
       {header}
 
       <section className="artist-profile-card">
-        <span className="artist-profile-avatar" aria-hidden="true">
-          {pack.artist.avatarIcon}
-        </span>
+        {pack.artist.avatarImageUrl ? (
+          <span className="artist-profile-avatar">
+            <img
+              className="artist-profile-avatar-img"
+              src={pack.artist.avatarImageUrl}
+              alt={pack.artist.avatarImageAlt}
+            />
+          </span>
+        ) : (
+          <span className="artist-profile-avatar" aria-hidden="true">
+            {pack.artist.avatarIcon}
+          </span>
+        )}
         <div className="artist-profile-text">
           <h2 className="artist-profile-name">{pack.artist.name}</h2>
           <p className="artist-profile-bio">{pack.artist.bio}</p>

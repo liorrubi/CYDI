@@ -32,9 +32,19 @@ export default function ArtistPackCard({ pack, completedCount, onClick }: Artist
           : `${pack.name} by ${pack.artist.name}, ${completedCount} of ${total} artworks completed`
       }
     >
-      <span className="artist-pack-avatar" aria-hidden="true">
-        {pack.artist.avatarIcon}
-      </span>
+      {pack.artist.avatarImageUrl ? (
+        <span className="artist-pack-avatar">
+          <img
+            className="artist-pack-avatar-img"
+            src={pack.artist.avatarImageUrl}
+            alt={pack.artist.avatarImageAlt}
+          />
+        </span>
+      ) : (
+        <span className="artist-pack-avatar" aria-hidden="true">
+          {pack.artist.avatarIcon}
+        </span>
+      )}
       <span className="artist-pack-body">
         <span className="artist-pack-header">
           <span className="artist-pack-title">{pack.name}</span>

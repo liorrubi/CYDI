@@ -35,6 +35,9 @@ export type SaveData = {
       perfectCardIds: string[];
       championCelebrated: boolean;
     };
+    artistPacks: {
+      bestScores: Record<string, number>;
+    };
     paidChestDoubles: {
       date: string;
       count: number;
@@ -74,6 +77,9 @@ export function createDefaultSaveData(): SaveData {
         completionRewardClaimedIds: [],
         perfectCardIds: [],
         championCelebrated: false,
+      },
+      artistPacks: {
+        bestScores: {},
       },
       paidChestDoubles: { date: "", count: 0 },
       successfulDrawings: 0,

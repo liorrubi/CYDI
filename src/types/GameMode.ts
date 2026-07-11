@@ -18,4 +18,5 @@ export type Screen =
   | { name: "dailyChallengeHistory" }
   | { name: "dailyChallengeReplay"; entry: DailyHistoryEntry }
   | { name: "specialChallenge" }
-  | { name: "megaChallenge" };
+  | { name: "megaChallenge" }
+  | { name: "artistPack"; packId: string; from: Screen };

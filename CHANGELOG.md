@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.16.0 - 2026-07-11
+
+Introduced **Artist Packs** - themed drawing-challenge packs built around a real
+artist, shown in their own section beneath the normal categories on the Shape
+Challenge screen (not as a regular category or a separate game mode). Each pack
+has an artist profile (name, avatar, short bio, external website link) and its
+artworks each carry a visible credit line. New files: `src/engine/artistPackLibrary.ts`
+(pack/artwork data + filtering helpers), `src/services/artistPackStore.ts`
+(per-artwork best scores), `src/screens/ArtistPackScreen.tsx` (pack detail + draw
+flow), and `src/components/ArtistPackCard.tsx` (entry card), wired through a new
+`artistPack` route (`routes.ts`, `GameMode.ts`, `App.tsx`) and section in
+`ShapeChallengeScreen.tsx`. Packs are always free - there is no unlock cost,
+purchase, or coin charge.
+
+Owner-controlled publishing is built in: every artwork has an explicit
+`draft` / `approved` / `published` status, and **only `published` artwork is ever
+shown to or opened by players**. Unpublished artwork is excluded from the
+production bundle entirely (tree-shaken via a dev-only guard) and is visible only
+in development for review; a pack with no published artwork stays hidden from
+players. There is intentionally no in-app upload, runtime image conversion, admin
+panel, or automatic publishing - artwork is authored offline and added as data.
+
+On an Artist Pack result screen, players can now **Share** their score (challenge
+name, score, pack name, and artist credit, via CYDI's existing share sheet), and
+during drawing they can toggle **Show Guide** to keep the target outline visible
+as a non-interactive overlay (it never becomes part of the drawing; scoring is
+unchanged). The first pack, "Nimco Design" (Nimrod Cohen), ships with no published
+artwork yet, so it is not player-facing.
+
+The data model reserves optional per-artist affiliate fields (`affiliateUrl`,
+`affiliateLinkId`) and emits an `artist_pack_link_clicked` analytics event, so an
+affiliate program can be switched on later with no structural or UI change; the
+outbound link uses the configured affiliate URL verbatim, otherwise the artist's
+website.
+
 ## 0.15.0 - 2026-07-10
 
 Added a provider-agnostic analytics foundation, designed so a future Android/Google

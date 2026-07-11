@@ -3627,3 +3627,256 @@ body {
   border-radius: 50%;
   background: rgba(91, 91, 247, 0.07);
 }
+
+/* ==================== Artist Packs ==================== */
+
+/* Entry section in Shape Challenge, deliberately set apart from the category
+   grid above it (its own heading + a subtle top divider). */
+.artist-packs-section {
+  width: 100%;
+  max-width: 520px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.artist-packs-heading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.artist-packs-subtitle {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  color: var(--color-text-muted, #6b6b7b);
+}
+
+.artist-packs-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.artist-pack-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  border: 1px solid rgba(43, 92, 122, 0.4);
+  cursor: pointer;
+  text-align: left;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #123047 0%, #1f6b6b 60%, #2e8b8b 100%);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(18, 48, 71, 0.4);
+  font: inherit;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.artist-pack-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(18, 48, 71, 0.5);
+}
+
+.artist-pack-card:active {
+  transform: translateY(0);
+}
+
+.artist-pack-avatar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  font-size: 32px;
+  line-height: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06) 70%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.45);
+}
+
+.artist-pack-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.artist-pack-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.artist-pack-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.artist-pack-artist {
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.artist-pack-count,
+.artist-pack-cost {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #eafcff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.artist-pack-progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.artist-pack-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7ff0e0, #eafcff);
+}
+
+.artist-pack-unlock-hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(234, 252, 255, 0.95);
+}
+
+.artist-pack-arrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 50%;
+  color: #123047;
+  background: linear-gradient(135deg, #eafcff, #7ff0e0);
+  box-shadow: 0 2px 8px rgba(46, 139, 139, 0.45);
+}
+
+/* Pack detail page: artist profile block */
+.artist-profile-card {
+  display: flex;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 520px;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  box-shadow: 0 2px 10px rgba(30, 32, 46, 0.1);
+}
+
+.artist-profile-avatar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  font-size: 36px;
+  line-height: 1;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1f6b6b, #2e8b8b);
+}
+
+.artist-profile-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.artist-profile-name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.artist-profile-bio {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-muted, #6b6b7b);
+}
+
+.artist-profile-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  color: #1f6b6b;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.artist-pack-lock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 520px;
+}
+
+.artist-artwork-grid {
+  margin-top: var(--space-2);
+}
+
+/* Clear per-artwork attribution, required on every artwork. */
+.artist-artwork-credit {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--color-text-muted, #6b6b7b);
+  text-align: center;
+}
+
+.artist-artwork-credit-result {
+  font-size: 13px;
+  margin-top: var(--space-2);
+}
+
+/* Dev-only marker on unpublished (draft/approved) artwork tiles; never shown in production. */
+.artist-artwork-status-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(242, 179, 7, 0.9);
+  color: #3a2a05;
+}
+
+.artist-pack-passhint {
+  margin-top: var(--space-2);
+  font-size: 12px;
+}

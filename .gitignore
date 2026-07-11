@@ -17,6 +17,10 @@ dist-ssr
 .env.*
 !.env.example
 
+# Artist Pack source materials — originals, drafts, and private artist files.
+# Never commit or deploy these; only approved game DATA belongs in src/.
+artist-source-files/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -68,3 +68,7 @@ export function toSpecialChallenge(): Screen {
 export function toMegaChallenge(): Screen {
   return { name: "megaChallenge" };
 }
+
+export function toArtistPack(packId: string, from: Screen = { name: "shapeChallenge" }): Screen {
+  return { name: "artistPack", packId, from };
+}

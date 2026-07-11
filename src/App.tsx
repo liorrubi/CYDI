@@ -20,6 +20,7 @@ import SettingsScreen from "./screens/SettingsScreen";
 import SharedResultScreen from "./screens/SharedResultScreen";
 import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
+import ArtistPackScreen from "./screens/ArtistPackScreen";
 import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toSharedResult } from "./app/routes";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
@@ -204,6 +205,8 @@ export default function App() {
             return <SpecialChallengeScreen onNavigate={setScreen} />;
           case "megaChallenge":
             return <MegaChallengeScreen onNavigate={setScreen} />;
+          case "artistPack":
+            return <ArtistPackScreen packId={screen.packId} from={screen.from} onNavigate={setScreen} />;
         }
       })()}
       {showOnboardingTutorial && <OnboardingTutorialOverlay onDismiss={dismissOnboardingTutorial} />}

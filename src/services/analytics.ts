@@ -9,7 +9,12 @@
 // unrelated to this file - it's a beacon script loaded in index.html that Cloudflare
 // auto-tracks on its own, with no custom-event API to plug into.
 
-export type AnalyticsEventName = "app_open" | "shape_completed" | "purchase_completed" | "mega_card_unlocked";
+export type AnalyticsEventName =
+  | "app_open"
+  | "shape_completed"
+  | "purchase_completed"
+  | "mega_card_unlocked"
+  | "artist_pack_link_clicked";
 
 export type AnalyticsParams = Record<string, string | number | boolean>;
 

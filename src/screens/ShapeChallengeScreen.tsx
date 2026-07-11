@@ -54,8 +54,12 @@ import {
 import { collectedMegaCardCount, isMegaChallengeUnlocked, unlockMegaChallenge } from "../services/megaChallengeStore";
 import { MEGA_ALBUM_SIZE } from "../engine/megaShapeLibrary";
 import { MEGA_CHALLENGE_UNLOCK_COST } from "../app/constants";
+import ArtistPackCard from "../components/ArtistPackCard";
+import { getPlayerFacingPacks } from "../engine/artistPackLibrary";
+import { getArtistPackCompletedCount } from "../services/artistPackStore";
 import {
   toAchievements,
+  toArtistPack,
   toHome,
   toInstructions,
   toMegaChallenge,
@@ -177,6 +181,7 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
           onBack={() => onNavigate(toHome())}
           onResetProgress={handleResetProgress}
           onNavigateToMegaChallenge={() => onNavigate(toMegaChallenge())}
+          onNavigateToArtistPack={(packId) => onNavigate(toArtistPack(packId, toShapeChallenge()))}
           onNavigateToAchievements={goToAchievements}
           onNavigateToInstructions={goToInstructions}
           onNavigateToShop={goToShop}
@@ -241,6 +246,7 @@ type CategoryListScreenProps = {
   onBack: () => void;
   onResetProgress: () => void;
   onNavigateToMegaChallenge: () => void;
+  onNavigateToArtistPack: (packId: string) => void;
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
   onNavigateToShop: () => void;
@@ -256,6 +262,7 @@ function CategoryListScreen({
   onBack,
   onResetProgress,
   onNavigateToMegaChallenge,
+  onNavigateToArtistPack,
   onNavigateToAchievements,
   onNavigateToInstructions,
   onNavigateToShop,
@@ -487,6 +494,28 @@ function CategoryListScreen({
           );
         })}
       </div>
+
+      {getPlayerFacingPacks().length > 0 && (
+        <section className="artist-packs-section" aria-labelledby="artist-packs-heading">
+          <h2 id="artist-packs-heading" className="artist-packs-heading">
+            🎨 Artist Packs
+          </h2>
+          <p className="artist-packs-subtitle">Draw challenges inspired by real artists.</p>
+          <div className="artist-packs-grid">
+            {getPlayerFacingPacks().map((pack) => (
+              <ArtistPackCard
+                key={pack.id}
+                pack={pack}
+                completedCount={getArtistPackCompletedCount(pack)}
+                onClick={() => {
+                  playSelectSound();
+                  onNavigateToArtistPack(pack.id);
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {resetStep === 0 && (
         <Button variant="danger" onClick={() => setResetStep(1)}>

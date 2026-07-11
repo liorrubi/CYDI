@@ -142,7 +142,10 @@ export default function ArtistPackScreen({ packId, from, onNavigate }: ArtistPac
       </section>
 
       {visibleArtworks.length === 0 ? (
-        <p className="status-text">No artworks are available in this pack yet.</p>
+        <div className="artist-pack-lock">
+          <p className="artist-pack-coming-soon-title">Coming Soon</p>
+          <p className="status-text">New artworks from {pack.artist.name} are on the way.</p>
+        </div>
       ) : (
         <div className="shape-grid artist-artwork-grid">
           {visibleArtworks.map((artwork) => {

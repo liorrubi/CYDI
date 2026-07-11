@@ -3678,13 +3678,41 @@ body {
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
-.artist-pack-card:hover {
+.artist-pack-card:not(:disabled):hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 26px rgba(18, 48, 71, 0.5);
 }
 
-.artist-pack-card:active {
+.artist-pack-card:not(:disabled):active {
   transform: translateY(0);
+}
+
+/* Coming Soon: visible but not an actionable card. */
+.artist-pack-card-coming-soon {
+  opacity: 0.7;
+}
+
+.artist-pack-card:disabled {
+  cursor: default;
+}
+
+.artist-pack-coming-soon-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #eafcff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.artist-pack-coming-soon-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
 }
 
 .artist-pack-avatar {

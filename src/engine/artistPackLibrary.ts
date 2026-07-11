@@ -196,18 +196,20 @@ export function getVisibleArtworks(pack: ArtistPackDefinition): ArtistArtworkDef
 }
 
 /**
- * Packs a player may see: a pack only appears once it has at least one published
- * artwork (dev-only packs are additionally dropped in production). Inclusion in
- * the source array never publishes anything — status must be explicitly
- * `"published"`, so there is no automatic publishing. In a development build,
- * packs with any artwork are shown so unpublished work stays reviewable.
+ * Packs shown as cards in the Artist Packs section. Every pack appears (dev-only
+ * packs are dropped in production), INCLUDING packs with no published artwork —
+ * those render as a disabled "Coming Soon" card. Appearing here does not expose
+ * any artwork: the card and pack screen only ever surface `"published"` artwork
+ * to players, and unpublished artwork isn't even in the production bundle.
  */
 export function getPlayerFacingPacks(): ArtistPackDefinition[] {
-  return ALL_ARTIST_PACKS.filter((pack) => {
-    if (pack.devOnly && import.meta.env.PROD) return false;
-    if (import.meta.env.DEV) return pack.artworks.length > 0;
-    return getPublishedArtworks(pack).length > 0;
-  });
+  return ALL_ARTIST_PACKS.filter((pack) => !(pack.devOnly && import.meta.env.PROD));
+}
+
+/** Whether a pack has any published artwork. A pack with none is "Coming Soon":
+ * shown but non-openable by players. */
+export function packHasPublishedArtwork(pack: ArtistPackDefinition): boolean {
+  return getPublishedArtworks(pack).length > 0;
 }
 
 /** The outbound link for an artist: the complete configured affiliate URL used

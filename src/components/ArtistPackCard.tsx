@@ -1,4 +1,4 @@
-import { getVisibleArtworks, type ArtistPackDefinition } from "../engine/artistPackLibrary";
+import { getVisibleArtworks, packHasPublishedArtwork, type ArtistPackDefinition } from "../engine/artistPackLibrary";
 
 type ArtistPackCardProps = {
   pack: ArtistPackDefinition;
@@ -8,20 +8,29 @@ type ArtistPackCardProps = {
 };
 
 /**
- * Entry card for one artist pack, shown in the "Artist Packs" section of the
- * Shape Challenge screen. Artist Packs are always free, so there is no lock or
- * cost UI — the card always opens the pack detail page.
+ * Entry card for one artist pack in the Artist Packs section. Artist Packs are
+ * always free, so there is no lock or cost UI. A pack with no published artwork
+ * shows as a "Coming Soon" card that is non-clickable in production (in a dev
+ * build it stays openable so the owner can review draft/approved artwork).
  */
 export default function ArtistPackCard({ pack, completedCount, onClick }: ArtistPackCardProps) {
   const total = getVisibleArtworks(pack).length;
   const percent = total > 0 ? Math.round((completedCount / total) * 100) : 0;
+  const comingSoon = !packHasPublishedArtwork(pack);
+  // Coming-soon packs never open for players; kept openable in dev for review.
+  const disabled = comingSoon && import.meta.env.PROD;
 
   return (
     <button
       type="button"
-      className="artist-pack-card"
+      className={comingSoon ? "artist-pack-card artist-pack-card-coming-soon" : "artist-pack-card"}
       onClick={onClick}
-      aria-label={`${pack.name} by ${pack.artist.name}, ${completedCount} of ${total} artworks completed`}
+      disabled={disabled}
+      aria-label={
+        comingSoon
+          ? `${pack.name} by ${pack.artist.name}, coming soon`
+          : `${pack.name} by ${pack.artist.name}, ${completedCount} of ${total} artworks completed`
+      }
     >
       <span className="artist-pack-avatar" aria-hidden="true">
         {pack.artist.avatarIcon}
@@ -29,18 +38,28 @@ export default function ArtistPackCard({ pack, completedCount, onClick }: Artist
       <span className="artist-pack-body">
         <span className="artist-pack-header">
           <span className="artist-pack-title">{pack.name}</span>
-          <span className="artist-pack-count">
-            {completedCount}/{total}
-          </span>
+          {comingSoon ? (
+            <span className="artist-pack-coming-soon-badge">Coming Soon</span>
+          ) : (
+            <span className="artist-pack-count">
+              {completedCount}/{total}
+            </span>
+          )}
         </span>
         <span className="artist-pack-artist">{pack.artist.name}</span>
-        <span className="artist-pack-progress-track">
-          <span className="artist-pack-progress-fill" style={{ width: `${percent}%` }} />
+        {comingSoon ? (
+          <span className="artist-pack-unlock-hint">New artworks on the way</span>
+        ) : (
+          <span className="artist-pack-progress-track">
+            <span className="artist-pack-progress-fill" style={{ width: `${percent}%` }} />
+          </span>
+        )}
+      </span>
+      {!comingSoon && (
+        <span className="artist-pack-arrow" aria-hidden="true">
+          →
         </span>
-      </span>
-      <span className="artist-pack-arrow" aria-hidden="true">
-        →
-      </span>
+      )}
     </button>
   );
 }

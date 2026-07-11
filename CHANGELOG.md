@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16.1 - 2026-07-11
+
+Artist Packs visibility tweak: the Artist Packs section and each pack card now
+always show in production, even before a pack has any published artwork. A pack
+with nothing published renders as a disabled **"Coming Soon"** card (no arrow, no
+progress bar) that players cannot open. The published-only guarantees are
+unchanged and still enforced: only `published` artwork can ever be displayed,
+opened, shared, drawn, scored, or reached by direct navigation; unpublished
+artwork stays out of the production bundle. In development the Coming Soon card
+remains openable so the owner can still review drafts. "Nimco Design" therefore
+now appears as a Coming Soon card (its portrait stays `draft`, unpublished).
+
 ## 0.16.0 - 2026-07-11
 
 Introduced **Artist Packs** - themed drawing-challenge packs built around a real

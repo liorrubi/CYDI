@@ -22,6 +22,7 @@ import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toSharedResult } from "./app/routes";
 import { recordDailyVisit } from "./services/dailyStreakStore";
+import { trackEvent } from "./services/analytics";
 import {
   markAchievementsTutorialShown,
   markOnboardingTutorialShown,
@@ -100,6 +101,10 @@ export default function App() {
 
   useEffect(() => {
     recordDailyVisit();
+  }, []);
+
+  useEffect(() => {
+    trackEvent("app_open");
   }, []);
 
   // Covers opening a share link in a tab that already has CYDI loaded (a

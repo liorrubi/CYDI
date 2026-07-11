@@ -13,6 +13,23 @@
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="CYDI - Can You Draw It?" />
     <meta name="twitter:description" content="Quick drawing challenges - can you draw it?" />
+    <script>
+      (function () {
+        // Cloudflare Web Analytics beacon - general site metrics only (visits,
+        // referrers, performance), entirely separate from src/services/analytics.ts.
+        // Only loads on the real production hosts, and only when a real token was
+        // supplied at build time via the VITE_CF_WEB_ANALYTICS_TOKEN env var (see
+        // .env.example) - never with a hardcoded placeholder.
+        var token = "%VITE_CF_WEB_ANALYTICS_TOKEN%";
+        var isProdHost = /(^|\.)playcydi\.com$|\.workers\.dev$/.test(location.hostname);
+        if (!isProdHost || !token || token.indexOf("%") !== -1) return;
+        var beacon = document.createElement("script");
+        beacon.defer = true;
+        beacon.src = "https://static.cloudflare-analytics.com/beacon.min.js";
+        beacon.setAttribute("data-cf-beacon", JSON.stringify({ token: token }));
+        document.head.appendChild(beacon);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -353,8 +353,10 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
                 information.
               </li>
               <li>
-                CYDI does not currently use analytics or tracking tools. If that changes, this policy will be
-                updated first.
+                CYDI uses Cloudflare Web Analytics for aggregate site metrics (visits, referrers, performance) and a
+                small set of anonymous in-game events (e.g. completing a shape, making a purchase). These events
+                never include your name, email address, player ID, or other information that directly identifies
+                you.
               </li>
             </ul>
 

@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.15.0 - 2026-07-10
+
+Added a provider-agnostic analytics foundation, designed so a future Android/Google
+Play build can plug in Firebase Analytics or GA4 without touching any game code.
+All game code now calls one function, `trackEvent(eventName, params)` in the new
+`src/services/analytics.ts`, instead of ever calling a provider SDK directly. Today
+it ships with no real backend registered (there's no GA4/Firebase project yet), so
+every call is a safe no-op until a provider is registered later via
+`registerAnalyticsProvider(...)` - zero call-site rewrites when that day comes.
+
+A handful of representative, fully anonymous events are wired in as a starting set:
+`app_open` (`App.tsx`), `shape_completed` (`ShapeChallengeScreen.tsx`),
+`purchase_completed` (`ShopScreen.tsx`), and `mega_card_unlocked`
+(`megaChallengeStore.ts`). Privacy is enforced inside `trackEvent` itself, not just
+by caller discipline: event names are restricted to a fixed, typed list, and a
+case-insensitive key denylist strips anything resembling a name, email, or player/
+user/device ID from every event's params before it ever reaches a provider.
+Analytics is automatically off during local development (`npm run dev`) unless a
+developer explicitly flips `localStorage["cydi.analyticsDebug.v1"] = "1"`, in which
+case events are logged to the console instead for testing. Every provider call is
+wrapped in try/catch and never awaited, so a slow, broken, or blocked analytics
+provider can never affect gameplay.
+
+Separately, Cloudflare Web Analytics (`index.html`) now provides general site
+metrics - visits, referrers, performance - independent of the code above. It only
+loads on the real production hosts, and only when a real beacon token is supplied
+at build time via the `VITE_CF_WEB_ANALYTICS_TOKEN` env var (see `.env.example`) -
+never a hardcoded placeholder, and it fails silently if blocked or unset.
+
+The Settings privacy policy (`SettingsScreen.tsx`) is updated to accurately
+describe this: aggregate Cloudflare metrics plus a small set of anonymous in-game
+events that never include a name, email address, player ID, or other directly
+identifying information.
+
 ## 0.14.0 - 2026-07-10
 
 Added a persistent, twinkling glitter effect to the Diamond Blue pen

@@ -43,6 +43,7 @@ import { isUnlockEverythingActive } from "../services/unlockOverrideStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { recordRoundCompleted, shouldShowAchievementsTutorial } from "../services/tutorialStore";
 import { recordSuccessfulDrawing } from "../services/successfulDrawingsStore";
+import { trackEvent } from "../services/analytics";
 import {
   clearProgress,
   getCategoryLevelIndex,
@@ -742,6 +743,8 @@ function ShapePlay({
         addCoins(starCoins);
         setDoubleOfferAmount(starCoins);
       }
+
+      trackEvent("shape_completed", { category, starRating: newStars, passed: passedNow, isNewBest: beatBest });
 
       setResult(scoreResult);
       setIsNewBest(beatBest);

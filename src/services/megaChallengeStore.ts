@@ -3,6 +3,7 @@ import { MEGA_CARDS, getMegaCardById, type MegaCardDefinition } from "../engine/
 import { getUnlockedAchievementIds } from "./achievementsStore";
 import { getSaveData, updateSaveData } from "./saveStore";
 import { isUnlockEverythingActive } from "./unlockOverrideStore";
+import { trackEvent } from "./analytics";
 
 export type MegaChallengeProgress = {
   unlocked: boolean;
@@ -61,10 +62,12 @@ export function isMegaCardUnlocked(id: string): boolean {
 }
 
 export function unlockMegaCard(id: string): void {
-  if (!getMegaCardById(id)) return;
+  const card = getMegaCardById(id);
+  if (!card) return;
   const progress = getMegaProgress();
   if (progress.unlockedCardIds.includes(id)) return;
   saveMegaProgress({ ...progress, unlockedCardIds: [...progress.unlockedCardIds, id] });
+  trackEvent("mega_card_unlocked", { rarity: card.rarity });
 }
 
 /** Unlocks every card whose linked achievement the player has already earned. Returns the newly unlocked cards so the album can celebrate them. Called whenever the album opens - a card earned mid-session appears at the latest on the next album visit. */

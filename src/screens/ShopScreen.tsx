@@ -20,6 +20,7 @@ import { MEGA_ALBUM_SIZE, MEGA_CARDS, type MegaCardDefinition } from "../engine/
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { collectedMegaCardCount, getMegaProgress, isMegaChallengeUnlocked, unlockMegaCard } from "../services/megaChallengeStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
+import { trackEvent } from "../services/analytics";
 import { playSuccessSound } from "../engine/soundEngine";
 import {
   toAchievements,
@@ -109,12 +110,14 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
     unlockColor(id);
     setSelectedColor(id);
     setUnlocked(getUnlockedColors());
+    trackEvent("purchase_completed", { productType: "penColor", tier: id, price });
   }
 
   function handleBuyKey(tier: ChestTier) {
     if (coins < tier.price) return;
     spendCoins(tier.price);
     setPendingChestReveal({ tier, amount: rollChestReward(tier.rewardMin, tier.rewardMax) });
+    trackEvent("purchase_completed", { productType: "chestKey", tier: tier.id, price: tier.price });
   }
 
   function handleBuyMegaPack(product: MegaPackProduct) {
@@ -134,6 +137,7 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
     playSuccessSound();
     setRevealedMegaCard(card);
     setMegaPurchaseCount((n) => n + 1);
+    trackEvent("purchase_completed", { productType: "megaCard", tier: card.rarity, price: product.price });
   }
 
   return (

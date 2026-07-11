@@ -3,7 +3,7 @@ export const APP_TAGLINE = "Quick drawing challenges";
 
 // Bumped by hand only when a new product version ships - unrelated to SaveData's
 // internal schemaVersion, which tracks the save file format, not the game itself.
-export const APP_VERSION = "0.11.1";
+export const APP_VERSION = "0.12.0";
 // Short git commit hash (or a build timestamp fallback), set automatically at build time.
 export const APP_BUILD = __APP_BUILD__;
 // ISO timestamp of when this build was produced, set automatically at build time - not schemaVersion (save file format) or APP_VERSION (hand-bumped product version).
@@ -259,6 +259,9 @@ export const CHEST_TIERS: ChestTier[] = [
 export function rollChestReward(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
+
+/** After buying a chest tier, that same tier is locked out for this long before it can be bought again. Other tiers are unaffected. */
+export const CHEST_PURCHASE_COOLDOWN_MS = 60 * 60 * 1000;
 
 /** How many passed Shape Challenge attempts (score >= passScore) unlock the daily chest / Special Challenge header icons for a new player. */
 export const DAILY_CHEST_UNLOCK_COUNT = 5;

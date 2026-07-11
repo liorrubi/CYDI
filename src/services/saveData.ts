@@ -1,4 +1,4 @@
-import { DEFAULT_DIFFICULTY, DEFAULT_PEN_COLOR, type DifficultyLevel, type PenColorId } from "../app/constants";
+import { DEFAULT_DIFFICULTY, DEFAULT_PEN_COLOR, type ChestTierId, type DifficultyLevel, type PenColorId } from "../app/constants";
 import type { Challenge } from "../types/Challenge";
 
 export const SAVE_SCHEMA_VERSION = 1;
@@ -42,6 +42,8 @@ export type SaveData = {
       date: string;
       count: number;
     };
+    /** Timestamp (ms since epoch) each purchased chest tier becomes buyable again; absent/past = available. Shop-only, unrelated to the free Daily Chest. */
+    shopChestCooldowns: Partial<Record<ChestTierId, number>>;
     successfulDrawings: number;
     completedRounds: number;
     achievementsTutorialShown: boolean;
@@ -82,6 +84,7 @@ export function createDefaultSaveData(): SaveData {
         bestScores: {},
       },
       paidChestDoubles: { date: "", count: 0 },
+      shopChestCooldowns: {},
       successfulDrawings: 0,
       completedRounds: 0,
       achievementsTutorialShown: false,

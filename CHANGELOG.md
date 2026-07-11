@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.17.0 - 2026-07-11
+
+Shop chest keys now have a **per-tier purchase cooldown**: buying a chest tier
+(Iron/Copper/Silver/Gold/Platinum) locks that same tier out for 60 minutes -
+other tiers stay independently purchasable on their own timers. The Buy button
+shows a live `MM:SS` countdown and re-enables itself automatically the instant
+the cooldown ends, no refresh needed. The cooldown is re-checked at the moment
+of the click (before any coins are spent or reward rolled) to prevent
+double-spends from stale UI state or rapid double-clicks, and the per-tier
+"available again at" timestamps are stored in the central save data so the
+lockout survives a refresh or restart. The free Daily Chest is untouched by
+this change. (`src/screens/ShopScreen.tsx`, `src/services/chestCooldownStore.ts`,
+`src/services/saveData.ts`)
+
+Also: "Nimco Design"'s traced portrait ("Portrait Study") is now owner-approved
+and published, so the Artist Packs section shows it as a real, openable pack
+instead of the "Coming Soon" placeholder card. (`src/engine/artistPackLibrary.ts`)
+
 ## 0.16.1 - 2026-07-11
 
 Artist Packs visibility tweak: the Artist Packs section and each pack card now

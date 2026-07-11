@@ -147,10 +147,9 @@ function artwork(
 }
 
 /**
- * Nimco Design — a real artist pack awaiting reviewed content. It currently has
- * NO published artwork, so it is hidden from players (see `getPlayerFacingPacks`).
- * The traced portrait sits as `"draft"`: reviewable in development, never shown
- * to players until the owner explicitly promotes it to `"published"`.
+ * Nimco Design — a real artist pack. "Portrait Study" is the owner-approved and
+ * now explicitly published artwork, so this pack is player-facing (see
+ * `getPlayerFacingPacks` / `packHasPublishedArtwork`).
  */
 const nimcoPack: ArtistPackDefinition = {
   id: "nimco",
@@ -164,12 +163,8 @@ const nimcoPack: ArtistPackDefinition = {
     // affiliateUrl / affiliateLinkId intentionally omitted until configured.
   },
   artworks: [
-    // Draft pending the owner's explicit approval. Wrapped in a DEV-only guard so
-    // its data (and the traced likeness) is tree-shaken OUT of the production
-    // bundle entirely — it exists only in development for review, never ships.
-    ...(import.meta.env.DEV
-      ? [artwork("nimco-portrait", "TEMP POC Portrait", "nimco", "draft", tracedPortrait)]
-      : []),
+    // Published with the owner's explicit approval — player-facing.
+    artwork("nimco-portrait", "Portrait Study", "nimco", "published", tracedPortrait),
   ],
 };
 

@@ -13,11 +13,13 @@ import {
   MEGA_RARITY_LABELS,
   rollChestReward,
   type ChestTier,
+  type ChestTierId,
   type MegaRarity,
   type PenColorId,
 } from "../app/constants";
 import { MEGA_ALBUM_SIZE, MEGA_CARDS, type MegaCardDefinition } from "../engine/megaShapeLibrary";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
+import { isChestOnCooldown, msUntilChestAvailable, startChestCooldown } from "../services/chestCooldownStore";
 import { collectedMegaCardCount, getMegaProgress, isMegaChallengeUnlocked, unlockMegaCard } from "../services/megaChallengeStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
 import { trackEvent } from "../services/analytics";
@@ -74,6 +76,27 @@ function lockedMegaCards(rarity?: MegaRarity): MegaCardDefinition[] {
   return MEGA_CARDS.filter((card) => !unlockedIds.includes(card.id) && (rarity === undefined || card.rarity === rarity));
 }
 
+function formatCooldown(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function snapshotChestCooldowns(): Record<ChestTierId, number> {
+  return Object.fromEntries(CHEST_TIERS.map((tier) => [tier.id, msUntilChestAvailable(tier.id)])) as Record<ChestTierId, number>;
+}
+
+/** Ticks every second so each chest tier's "buy again in MM:SS" button re-renders live and re-enables itself the instant its cooldown expires. */
+function useChestCooldowns(): Record<ChestTierId, number> {
+  const [remaining, setRemaining] = useState<Record<ChestTierId, number>>(snapshotChestCooldowns);
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setRemaining(snapshotChestCooldowns()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+  return remaining;
+}
+
 export default function ShopScreen({ from, highlightPenColorId, onNavigate }: ShopScreenProps) {
   const [coins, setCoins] = useState(() => getCoins());
   const [unlocked, setUnlocked] = useState(() => getUnlockedColors());
@@ -87,6 +110,7 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
   // Briefly highlights the ink color the player tapped from the (locked) pen menu.
   const [highlightedColor, setHighlightedColor] = useState<PenColorId | null>(highlightPenColorId ?? null);
   const colorCardRefs = useRef(new Map<PenColorId, HTMLDivElement>());
+  const chestCooldowns = useChestCooldowns();
   const megaCollected = collectedMegaCardCount();
   const megaProgressPercent = Math.round((megaCollected / MEGA_ALBUM_SIZE) * 100);
 
@@ -114,8 +138,12 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
   }
 
   function handleBuyKey(tier: ChestTier) {
-    if (coins < tier.price) return;
+    // Re-checked straight from save data (not the ticking React state) at the moment of
+    // the click, before any coins move or a reward is rolled, so a click that lands right
+    // as the cooldown state is stale (or a rapid double-click) can't double-charge.
+    if (coins < tier.price || isChestOnCooldown(tier.id)) return;
     spendCoins(tier.price);
+    startChestCooldown(tier.id);
     setPendingChestReveal({ tier, amount: rollChestReward(tier.rewardMin, tier.rewardMax) });
     trackEvent("purchase_completed", { productType: "chestKey", tier: tier.id, price: tier.price });
   }
@@ -159,7 +187,9 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
       <h2>Chest Keys</h2>
       <div className="shop-product-list">
         {CHEST_TIERS.map((tier) => {
-          const canAfford = coins >= tier.price;
+          const cooldownMs = chestCooldowns[tier.id] ?? 0;
+          const onCooldown = cooldownMs > 0;
+          const canAfford = coins >= tier.price && !onCooldown;
           return (
             <div key={tier.id} className={`card shop-product shop-chest shop-chest-${tier.id}`}>
               <span className="chest-tier-icon" aria-hidden="true">
@@ -175,7 +205,7 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
                 </p>
               </div>
               <Button disabled={!canAfford} onClick={() => handleBuyKey(tier)}>
-                🪙 {tier.price}
+                {onCooldown ? `⏱ ${formatCooldown(cooldownMs)}` : `🪙 ${tier.price}`}
               </Button>
             </div>
           );

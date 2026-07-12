@@ -1,4 +1,12 @@
-import { DEFAULT_DIFFICULTY, DEFAULT_PEN_COLOR, type ChestTierId, type DifficultyLevel, type PenColorId } from "../app/constants";
+import {
+  DEFAULT_DIFFICULTY,
+  DEFAULT_PEN_COLOR,
+  DEFAULT_PEN_SKIN,
+  type ChestTierId,
+  type DifficultyLevel,
+  type PenColorId,
+  type PenSkinId,
+} from "../app/constants";
 import type { Challenge } from "../types/Challenge";
 
 export const SAVE_SCHEMA_VERSION = 1;
@@ -15,6 +23,8 @@ export type SaveData = {
     achievements: string[];
     unlockedCategories: string[];
     unlockedPenColors: PenColorId[];
+    /** Cosmetic pen skins the player has bought. The free default (basicPencil) is always owned even when absent here. */
+    unlockedPenSkins: PenSkinId[];
     dailyStreak: {
       lastVisitDate: string;
       currentStreak: number;
@@ -54,6 +64,8 @@ export type SaveData = {
   };
   settings: {
     selectedPenColor: PenColorId;
+    /** Cosmetic pen skin currently equipped; falls back to the default if unset or not owned. */
+    selectedPenSkin: PenSkinId;
     difficulty: DifficultyLevel;
     soundEnabled: boolean;
   };
@@ -69,6 +81,7 @@ export function createDefaultSaveData(): SaveData {
       achievements: [],
       unlockedCategories: [],
       unlockedPenColors: [],
+      unlockedPenSkins: [],
       dailyStreak: { lastVisitDate: "", currentStreak: 0, longestStreak: 0 },
       dailyChest: { lastOpenedDate: "" },
       specialChallenge: { lastFreeDate: "", bestScores: {} },
@@ -95,6 +108,7 @@ export function createDefaultSaveData(): SaveData {
     },
     settings: {
       selectedPenColor: DEFAULT_PEN_COLOR,
+      selectedPenSkin: DEFAULT_PEN_SKIN,
       difficulty: DEFAULT_DIFFICULTY,
       soundEnabled: true,
     },

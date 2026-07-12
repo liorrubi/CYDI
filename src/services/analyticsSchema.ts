@@ -28,7 +28,7 @@ export type CategoryOrCustom = CategoryId | "custom";
 export type EventParamsMap = {
   app_open: Record<string, never>;
   shape_completed: { category: CategoryId; starRating: number; passed: boolean; isNewBest: boolean };
-  purchase_completed: { productType: "penColor" | "chestKey" | "megaCard"; tier: string; price: number };
+  purchase_completed: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
   artist_pack_link_clicked: { artistKey: string; packKey: string; hasAffiliate: boolean };
   game_started: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
@@ -62,7 +62,7 @@ const GAME_TYPES: GameType[] = [
   "specialChallenge",
   "customChallenge",
 ];
-const PRODUCT_TYPES = ["penColor", "chestKey", "megaCard"] as const;
+const PRODUCT_TYPES = ["penColor", "penSkin", "chestKey", "megaCard"] as const;
 const MEGA_RARITIES = ["rare", "epic", "legendary"] as const;
 
 const MAX_STRING_LENGTH = 64;

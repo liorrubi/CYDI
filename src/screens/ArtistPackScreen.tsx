@@ -4,6 +4,7 @@ import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
+import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
@@ -16,9 +17,11 @@ import {
   PREVIEW_DURATION_MS,
   passScoreForDifficulty,
   penColorCssBackground,
+  penInkGlyphColor,
   randomCelebrationMessage,
   randomEncouragementMessage,
   type PenColorId,
+  type PenSkinId,
 } from "../app/constants";
 import {
   artistOutboundUrl,
@@ -34,6 +37,7 @@ import { playEncourageSound, playSelectSound, playSuccessSound, primeAudioContex
 import { addCoins } from "../services/coinsStore";
 import { getDifficulty } from "../services/difficultySettings";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { shareOrCopy } from "../services/nativeShare";
 import { encodeArtistResultLink, type DecodedSharedArtistResult } from "../services/shareLink";
 import { createShortArtistResultLink } from "../services/shareApi";
@@ -300,6 +304,7 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   // The optional draw-along guide (the target ghost) the player can keep on
   // during drawing — mirrors Shape Challenge. It is a non-interactive overlay in
   // DrawingCanvas and never becomes part of the attempt path.
@@ -330,6 +335,11 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
     setPenColor(id);
+  }
+
+  function handleSelectPenSkin(id: PenSkinId) {
+    setSelectedSkin(id);
+    setPenSkin(id);
   }
 
   function handleDone() {
@@ -531,13 +541,22 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
           ghostPath={showTargetGhost ? target : undefined}
           showGhost={showTargetGhost}
           strokeColor={penColor}
+          penSkin={penSkin}
           onChange={setAttemptPath}
           onComplete={setAttemptPath}
         />
       </div>
       {phase === "drawing" && (
         <>
-          <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+          <div className="pen-tools-row">
+            <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+            <PenSkinMenu
+              selected={penSkin}
+              inkColor={penInkGlyphColor(penColor)}
+              onSelect={handleSelectPenSkin}
+              onLockedSkinClick={() => goToShop()}
+            />
+          </div>
           <div className="button-row">
             {isPublished && (
               <Button variant="secondary" onClick={() => setGuideEnabled((enabled) => !enabled)}>

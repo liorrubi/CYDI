@@ -10,7 +10,21 @@ type PenColorMenuProps = {
   onLockedColorClick: (id: PenColorId) => void;
 };
 
-/** Button that opens a menu of every pen color, including locked ones - tapping a locked color jumps straight to its shop product. */
+/** Solid paint-drop glyph — sits on top of the trigger's ink-tinted swatch so the button unambiguously reads as "this changes the ink color", distinct from PenSkinMenu's pen-shaped trigger. Kept white with a soft dark outline so it stays visible against every ink color, including the light-colored ones. */
+function ColorDropIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 2.5 C12 2.5 5 11 5 15.5 C5 19.64 8.36 23 12 23 C15.64 23 19 19.64 19 15.5 C19 11 12 2.5 12 2.5 Z"
+        fill="#ffffff"
+        stroke="rgba(30,32,46,0.35)"
+        strokeWidth="1.2"
+      />
+    </svg>
+  );
+}
+
+/** Button that opens a menu of every pen ink color, including locked ones - tapping a locked color jumps straight to its shop product. Its trigger is tinted with the actual ink color plus a paint-drop icon, so it's clearly the "change ink color" control (as opposed to PenSkinMenu's "change pen style" control next to it). */
 export default function PenColorMenu({ selected, onSelect, onLockedColorClick }: PenColorMenuProps) {
   const [open, setOpen] = useState(false);
   const selectedOption = PEN_COLORS.find((c) => c.id === selected) ?? PEN_COLORS[0];
@@ -29,11 +43,11 @@ export default function PenColorMenu({ selected, onSelect, onLockedColorClick }:
           playToggleSound();
           setOpen((isOpen) => !isOpen);
         }}
-        aria-label="Change pen color"
+        aria-label="Change ink color"
         aria-haspopup="true"
         aria-expanded={open}
       >
-        🖊️
+        <ColorDropIcon />
       </button>
       {open && (
         <div ref={dropdownRef} className="pen-color-dropdown">

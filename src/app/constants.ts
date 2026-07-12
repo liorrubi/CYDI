@@ -3,7 +3,7 @@ export const APP_TAGLINE = "Quick drawing challenges";
 
 // Bumped by hand only when a new product version ships - unrelated to SaveData's
 // internal schemaVersion, which tracks the save file format, not the game itself.
-export const APP_VERSION = "0.16.0";
+export const APP_VERSION = "0.17.0";
 // Short git commit hash (or a build timestamp fallback), set automatically at build time.
 export const APP_BUILD = __APP_BUILD__;
 // ISO timestamp of when this build was produced, set automatically at build time - not schemaVersion (save file format) or APP_VERSION (hand-bumped product version).
@@ -216,10 +216,10 @@ export const DEFAULT_PEN_COLOR: PenColorId = "black";
 
 export const PEN_COLORS: PenColorOption[] = [
   { id: "black", name: "Black", icon: "⚫", hex: "#1e202e" },
-  { id: "purple", name: "Purple Pen", icon: "🟣", hex: "#8b5cf6", price: 1000 },
-  { id: "green", name: "Green Pen", icon: "🟢", hex: "#16a34a", price: 1000 },
-  { id: "orange", name: "Orange Pen", icon: "🟠", hex: "#f97316", price: 1000 },
-  { id: "rainbow", name: "Rainbow Pen", icon: "🌈", price: 10000 },
+  { id: "purple", name: "Purple Ink", icon: "🟣", hex: "#8b5cf6", price: 1000 },
+  { id: "green", name: "Green Ink", icon: "🟢", hex: "#16a34a", price: 1000 },
+  { id: "orange", name: "Orange Ink", icon: "🟠", hex: "#f97316", price: 1000 },
+  { id: "rainbow", name: "Rainbow Ink", icon: "🌈", price: 10000 },
   { id: "diamondBlue", name: "Diamond Blue", icon: "💎", hex: "#4fb6ff", price: 15000 },
 ];
 
@@ -231,6 +231,50 @@ export function penColorById(id: PenColorId): PenColorOption {
 export function penColorCssBackground(id: PenColorId): string {
   if (id === "rainbow") return "linear-gradient(90deg, #f43f5e, #f59e0b, #22c55e, #3b82f6, #a855f7)";
   return penColorById(id).hex ?? "#1e202e";
+}
+
+/** A single solid hex for a pen color's ink, for contexts needing one plain fill color (e.g. an SVG nib tint) rather than a CSS background - "rainbow" has no single hex, so it falls back to a cheerful magenta placeholder. */
+export function penInkGlyphColor(id: PenColorId): string {
+  if (id === "rainbow") return "#a855f7";
+  return penColorById(id).hex ?? "#1e202e";
+}
+
+// ==================== DRAWING PENS (cosmetic pen skins) ====================
+// Purely cosmetic skins for the pen that follows the pointer while drawing.
+// They change ONLY the look of the cosmetic pen overlay - never the stroke
+// points, the ink color, or scoring - so no skin can give a gameplay edge.
+// Separate axis from PEN_COLORS (which sets the ink color of the drawn line).
+
+export type PenSkinId =
+  | "basicPencil"
+  | "improvedPencil"
+  | "magicPencil"
+  | "goldenPencil"
+  | "rainbowPencil"
+  | "royalQuill"
+  | "galaxyPen";
+
+export type PenSkinOption = {
+  id: PenSkinId;
+  name: string;
+  /** Coin price to unlock in the shop; omitted for the free default. */
+  price?: number;
+};
+
+export const DEFAULT_PEN_SKIN: PenSkinId = "basicPencil";
+
+export const PEN_SKINS: PenSkinOption[] = [
+  { id: "basicPencil", name: "Basic Pencil" },
+  { id: "improvedPencil", name: "Improved Pencil", price: 1000 },
+  { id: "magicPencil", name: "Magic Pencil", price: 2500 },
+  { id: "goldenPencil", name: "Golden Pencil", price: 5000 },
+  { id: "rainbowPencil", name: "Rainbow Pencil", price: 7500 },
+  { id: "royalQuill", name: "Royal Quill", price: 12000 },
+  { id: "galaxyPen", name: "Galaxy Pen", price: 20000 },
+];
+
+export function penSkinById(id: PenSkinId): PenSkinOption {
+  return PEN_SKINS.find((s) => s.id === id) ?? PEN_SKINS[0];
 }
 
 export type ChestTierId = "iron" | "copper" | "silver" | "gold" | "platinum";

@@ -2,7 +2,9 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { DrawingPath } from "../types/Challenge";
 import type { Point } from "../types/Point";
-import { CANVAS_SIZE, DEFAULT_PEN_COLOR, PEN_COLORS, penColorById, type PenColorId } from "../app/constants";
+import { CANVAS_SIZE, DEFAULT_PEN_COLOR, PEN_COLORS, penInkGlyphColor, type PenColorId, type PenSkinId } from "../app/constants";
+import PenSkinGlyph from "./PenSkinGlyph";
+import { getSelectedSkin } from "../services/penSkinStore";
 
 export type DrawingCanvasHandle = {
   clear: () => void;
@@ -16,6 +18,8 @@ type DrawingCanvasProps = {
   ghostPath?: DrawingPath;
   showGhost?: boolean;
   strokeColor?: PenColorId;
+  /** Cosmetic pen skin for the follow-the-pointer overlay. Defaults to the player's equipped skin; never affects strokes or scoring. */
+  penSkin?: PenSkinId;
   onChange?: (path: DrawingPath) => void;
   onComplete?: (path: DrawingPath) => void;
   /** Accessible name for the drawing surface. Freehand drawing is inherently
@@ -150,13 +154,6 @@ const PEN_TIP_Y = 53.25;
 const PEN_GAP = 3;
 const PEN_TOUCH_LIFT = 14;
 
-function penInkColor(color: PenColorId): string {
-  // "rainbow" has no single hex — use a cheerful magenta so the nib still reads
-  // as "colored ink" rather than defaulting to black.
-  if (color === "rainbow") return "#a855f7";
-  return penColorById(color).hex ?? "#1e202e";
-}
-
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(function DrawingCanvas(
   {
     width = CANVAS_SIZE,
@@ -165,6 +162,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     ghostPath,
     showGhost = false,
     strokeColor = DEFAULT_PEN_COLOR,
+    penSkin = getSelectedSkin(),
     onChange,
     onComplete,
     ariaLabel,
@@ -368,7 +366,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     onComplete?.({ points: pointsRef.current, canvasWidth: width, canvasHeight: height, breaks: segmentBreaksRef.current });
   }
 
-  const inkColor = penInkColor(strokeColor);
+  const inkColor = penInkGlyphColor(strokeColor);
 
   return (
     <div className="drawing-canvas-shell">
@@ -387,21 +385,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
       />
       {/* Diamond ink glitter — transient sparkles, pointer-events:none, never affects scoring. */}
       <div ref={sparkleLayerRef} className="sparkle-layer" aria-hidden="true" />
-      {/* Cosmetic pen overlay — never receives pointer events, never affects scoring. */}
+      {/* Cosmetic pen overlay — never receives pointer events, never affects scoring.
+          The equipped pen skin only changes how this glyph looks; its nib tip stays
+          fixed so the pointer alignment (PEN_TIP_X / PEN_TIP_Y) holds for every skin. */}
       <div ref={penRef} className="drawing-pen" aria-hidden="true">
         <svg width="66" height="66" viewBox="0 0 44 44" fill="none">
-          <g transform="rotate(-40 22 22)">
-            {/* barrel */}
-            <rect x="16" y="7" width="12" height="21" rx="3" fill="#3b3f52" />
-            {/* highlight stripe */}
-            <rect x="18.5" y="8" width="2.4" height="19" rx="1.2" fill="rgba(255,255,255,0.35)" />
-            {/* top cap */}
-            <rect x="16" y="3.5" width="12" height="5" rx="2.5" fill="#2a2d3c" />
-            {/* metal collar */}
-            <rect x="16.5" y="27" width="11" height="4" rx="1.5" fill="#c7ccd8" />
-            {/* nib — colored to match the ink */}
-            <path d="M17.5 31 H26.5 L22 40 Z" fill={inkColor} />
-          </g>
+          <PenSkinGlyph skin={penSkin} inkColor={inkColor} rotate />
         </svg>
       </div>
     </div>

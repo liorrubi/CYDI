@@ -4,9 +4,11 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
-import { CANVAS_SIZE, MIN_POINTS_TO_SAVE, type PenColorId } from "../app/constants";
+import PenSkinMenu from "../components/PenSkinMenu";
+import { CANVAS_SIZE, MIN_POINTS_TO_SAVE, penInkGlyphColor, type PenColorId, type PenSkinId } from "../app/constants";
 import { saveChallenge } from "../services/challengeStorage";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import {
   toAchievements,
   toCreate,
@@ -32,6 +34,7 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
   const [namePromptOpen, setNamePromptOpen] = useState(false);
   const [name, setName] = useState("");
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
@@ -40,6 +43,15 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
 
   function handleLockedColorClick(id: PenColorId) {
     onNavigate(toShop(toCreate(), id));
+  }
+
+  function handleSelectPenSkin(id: PenSkinId) {
+    setSelectedSkin(id);
+    setPenSkin(id);
+  }
+
+  function handleLockedSkinClick() {
+    onNavigate(toShop(toCreate()));
   }
 
   function handleClear() {
@@ -98,10 +110,19 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
           width={CANVAS_SIZE}
           height={CANVAS_SIZE}
           strokeColor={penColor}
+          penSkin={penSkin}
           onChange={setCurrentPath}
         />
       </div>
-      <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={handleLockedColorClick} />
+      <div className="pen-tools-row">
+        <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={handleLockedColorClick} />
+        <PenSkinMenu
+          selected={penSkin}
+          inkColor={penInkGlyphColor(penColor)}
+          onSelect={handleSelectPenSkin}
+          onLockedSkinClick={handleLockedSkinClick}
+        />
+      </div>
       {error && <p className="form-error">{error}</p>}
       {!namePromptOpen && (
         <div className="button-row">

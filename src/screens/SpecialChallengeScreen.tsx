@@ -4,6 +4,7 @@ import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
+import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import {
@@ -16,9 +17,11 @@ import {
   SPECIAL_CHALLENGE_RETRY_COST,
   coinsForSpecialChallengeScore,
   penColorCssBackground,
+  penInkGlyphColor,
   randomCelebrationMessage,
   randomEncouragementMessage,
   type PenColorId,
+  type PenSkinId,
 } from "../app/constants";
 import { getShapeById, shapesForCategory } from "../engine/shapeLibrary";
 import { scoreAttempt } from "../engine/scoring";
@@ -26,6 +29,7 @@ import { triggerCoinFlight } from "../engine/coinFlight";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins, getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
 import {
   canPlaySpecialChallengeFree,
@@ -79,6 +83,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const [coins, setCoins] = useState(() => getCoins());
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
   const timeUntilNextShape = useTimeUntilNextShape();
@@ -100,6 +105,11 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
     setPenColor(id);
+  }
+
+  function handleSelectPenSkin(id: PenSkinId) {
+    setSelectedSkin(id);
+    setPenSkin(id);
   }
 
   function handleUndo() {
@@ -280,13 +290,22 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
           ghostPath={showTargetGhost ? target : undefined}
           showGhost={showTargetGhost}
           strokeColor={penColor}
+          penSkin={penSkin}
           onChange={setAttemptPath}
           onComplete={setAttemptPath}
         />
       </div>
       {phase === "drawing" && (
         <>
-          <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+          <div className="pen-tools-row">
+            <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+            <PenSkinMenu
+              selected={penSkin}
+              inkColor={penInkGlyphColor(penColor)}
+              onSelect={handleSelectPenSkin}
+              onLockedSkinClick={() => goToShop()}
+            />
+          </div>
           <div className="button-row">
             <Button variant="secondary" onClick={handleUndo} disabled={!attemptPath || attemptPath.points.length === 0}>
               Undo

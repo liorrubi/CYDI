@@ -728,7 +728,17 @@ body {
   }
 }
 
-.pen-color-menu {
+/* Row holding the two pen tool triggers (ink color + pen skin) side by side,
+   so their distinct looks read as two separate controls rather than one. */
+.pen-tools-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4, 20px);
+}
+
+.pen-color-menu,
+.pen-skin-menu {
   position: relative;
   display: flex;
   justify-content: center;
@@ -741,6 +751,22 @@ body {
   border: 2px solid var(--color-border);
   cursor: pointer;
   font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(30, 32, 46, 0.08);
+}
+
+/* Pen skin trigger: deliberately neutral/un-tinted (unlike the ink-colored
+   swatch beside it) so the two controls never look like duplicates of the
+   same thing - this one shows the actual equipped pen illustration. */
+.pen-skin-trigger {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: var(--color-card);
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -806,6 +832,65 @@ body {
 }
 
 .pen-color-option-lock {
+  flex-shrink: 0;
+}
+
+.pen-skin-dropdown {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-card);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 24px rgba(30, 32, 46, 0.18);
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 10;
+  min-width: 200px;
+}
+
+.pen-skin-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.pen-skin-option:hover {
+  background: var(--color-bg);
+}
+
+.pen-skin-option-selected {
+  background: rgba(91, 91, 247, 0.1);
+}
+
+.pen-skin-option-icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pen-skin-option-name {
+  flex: 1;
+}
+
+.pen-skin-option-locked {
+  color: var(--color-text-muted);
+}
+
+.pen-skin-option-lock {
   flex-shrink: 0;
 }
 
@@ -2065,6 +2150,40 @@ body {
   flex-shrink: 0;
   font-weight: 700;
   color: var(--color-success);
+  white-space: nowrap;
+}
+
+/* Drawing Pens (cosmetic pen skins) --------------------------------------- */
+.shop-pen-skin-icon {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md, 12px);
+  background: rgba(0, 0, 0, 0.04);
+  filter: drop-shadow(0 1px 2px rgba(30, 32, 46, 0.2));
+}
+
+/* The equipped skin gets a soft highlighted surface + ring so it's obvious at a glance. */
+.shop-pen-skin-selected {
+  background-color: rgba(91, 91, 247, 0.08);
+  box-shadow: inset 0 0 0 2px rgba(91, 91, 247, 0.45);
+}
+
+.shop-pen-skin-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.shop-pen-skin-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-danger, #d64545);
   white-space: nowrap;
 }
 

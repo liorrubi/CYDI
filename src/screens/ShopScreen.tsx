@@ -4,9 +4,12 @@ import Button from "../components/Button";
 import ChestIcon from "../components/ChestIcon";
 import ChestRewardOverlay from "../components/ChestRewardOverlay";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
+import PenSkinGlyph from "../components/PenSkinGlyph";
 import {
   PEN_COLORS,
   DEFAULT_PEN_COLOR,
+  PEN_SKINS,
+  DEFAULT_PEN_SKIN,
   CHEST_TIERS,
   MEGA_RANDOM_CARD_COST,
   MEGA_RANDOM_TIER_COST,
@@ -16,12 +19,14 @@ import {
   type ChestTierId,
   type MegaRarity,
   type PenColorId,
+  type PenSkinId,
 } from "../app/constants";
 import { MEGA_ALBUM_SIZE, MEGA_CARDS, type MegaCardDefinition } from "../engine/megaShapeLibrary";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { isChestOnCooldown, msUntilChestAvailable, startChestCooldown } from "../services/chestCooldownStore";
 import { collectedMegaCardCount, getMegaProgress, isMegaChallengeUnlocked, unlockMegaCard } from "../services/megaChallengeStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
+import { getSelectedSkin, getUnlockedSkins, setSelectedSkin, unlockSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
 import { playSuccessSound } from "../engine/soundEngine";
 import {
@@ -100,6 +105,8 @@ function useChestCooldowns(): Record<ChestTierId, number> {
 export default function ShopScreen({ from, highlightPenColorId, onNavigate }: ShopScreenProps) {
   const [coins, setCoins] = useState(() => getCoins());
   const [unlocked, setUnlocked] = useState(() => getUnlockedColors());
+  const [unlockedSkins, setUnlockedSkins] = useState(() => getUnlockedSkins());
+  const [selectedSkin, setSelectedSkinState] = useState<PenSkinId>(() => getSelectedSkin());
   const [pendingChestReveal, setPendingChestReveal] = useState<{ tier: ChestTier; amount: number } | null>(null);
   const [revealedMegaCard, setRevealedMegaCard] = useState<MegaCardDefinition | null>(null);
   // Bumped after each pack purchase so the "left in pool" counts re-render.
@@ -135,6 +142,24 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
     setSelectedColor(id);
     setUnlocked(getUnlockedColors());
     trackEvent("purchase_completed", { productType: "penColor", tier: id, price });
+  }
+
+  function handleBuySkin(id: PenSkinId, price: number) {
+    if (coins < price || unlockedSkins.includes(id)) return;
+    spendCoins(price);
+    unlockSkin(id);
+    setSelectedSkin(id);
+    setUnlockedSkins(getUnlockedSkins());
+    setSelectedSkinState(id);
+    playSuccessSound();
+    trackEvent("purchase_completed", { productType: "penSkin", tier: id, price });
+  }
+
+  function handleSelectSkin(id: PenSkinId) {
+    if (!unlockedSkins.includes(id)) return;
+    setSelectedSkin(id);
+    setSelectedSkinState(id);
+    playSuccessSound();
   }
 
   function handleBuyKey(tier: ChestTier) {
@@ -299,6 +324,47 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
         })}
       </div>
       {megaLockToast && <div className="shop-mega-toast" role="status">Open Mega Challenge first</div>}
+      <h2>Drawing Pens</h2>
+      <p className="shop-section-subtitle">Cosmetic pens for your drawing cursor — purely for looks.</p>
+      <div className="shop-product-list">
+        {PEN_SKINS.map((skin) => {
+          const owned = unlockedSkins.includes(skin.id);
+          const isSelected = owned && selectedSkin === skin.id;
+          const isFree = skin.id === DEFAULT_PEN_SKIN;
+          const price = skin.price ?? 0;
+          const canAfford = coins >= price;
+          return (
+            <div
+              key={skin.id}
+              className={`card shop-product shop-pen-skin${isSelected ? " shop-pen-skin-selected" : ""}`}
+            >
+              <span className="shop-pen-skin-icon" aria-hidden="true">
+                <svg width="42" height="42" viewBox="0 0 44 44" fill="none">
+                  <PenSkinGlyph skin={skin.id} inkColor="#1e202e" />
+                </svg>
+              </span>
+              <div className="shop-product-info">
+                <h3>{skin.name}</h3>
+                <p className="status-text">{owned ? (isFree ? "Free" : "Owned") : `🪙 ${price}`}</p>
+              </div>
+              {isSelected ? (
+                <span className="shop-product-owned">✓ Selected</span>
+              ) : owned ? (
+                <Button variant="secondary" onClick={() => handleSelectSkin(skin.id)}>
+                  Select
+                </Button>
+              ) : (
+                <div className="shop-pen-skin-action">
+                  <Button disabled={!canAfford} onClick={() => handleBuySkin(skin.id, price)}>
+                    Buy
+                  </Button>
+                  {!canAfford && <span className="shop-pen-skin-hint">Not enough coins</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
       <h2>Ink Colors</h2>
       <div className="shop-product-list">
         {PEN_COLOR_PRODUCTS.map((color) => {

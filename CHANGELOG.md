@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.22.0 - 2026-07-12
+
+**Drawing Pens — cosmetic pen skins.** A new Shop category, alongside Ink
+Colors: 7 collectible pen designs (Basic Pencil free, up through Improved,
+Magic, Golden, Rainbow, Royal Quill, and Galaxy Pen at 20,000 coins), bought
+with coins and equipped independently of ink color. Skins only restyle the
+cosmetic pen that follows the pointer while drawing — they never touch stroke
+data or scoring. A new **pen style** picker sits in-game next to the existing
+ink color picker on every drawing screen, with a clearly distinct trigger icon
+(the actual equipped pen's illustration, on a neutral button) so it can't be
+confused with the ink-tinted color swatch beside it — which itself now carries
+a paint-drop icon for the same reason. Purchases and the equipped skin persist
+in the existing save data. (`app/constants.ts`, `services/penSkinStore.ts`,
+`components/PenSkinGlyph.tsx`, `components/PenSkinMenu.tsx`,
+`components/PenColorMenu.tsx`, `components/DrawingCanvas.tsx`,
+`screens/ShopScreen.tsx`, and every drawing screen.)
+
+**Fix: header coin counter could freeze mid-count.** The header's count-up
+animation ran on `requestAnimationFrame`, which browsers fully pause while the
+tab is hidden/backgrounded — a purchase or reward made right as the tab lost
+focus could leave the number stuck until (or unless) the tab regained focus.
+Switched the tween to `setInterval`, which only throttles in the background
+instead of pausing outright. (`components/CoinIndicator.tsx`.)
+
+**Ink Colors renamed from "Pen".** Purple/Green/Orange/Rainbow "Pen" are now
+"Ink" in both the Shop's Ink Colors cards and the in-game ink color picker, to
+avoid clashing with the new Drawing Pens naming. (`app/constants.ts`.)
+
 ## 0.21.0 - 2026-07-12
 
 **"Draw It Back" — Artist Pack results are now a two-way challenge.** Opening a

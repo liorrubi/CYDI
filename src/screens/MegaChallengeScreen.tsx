@@ -4,6 +4,7 @@ import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
+import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
@@ -19,9 +20,11 @@ import {
   PREVIEW_DURATION_MS,
   passScoreForDifficulty,
   penColorCssBackground,
+  penInkGlyphColor,
   randomCelebrationMessage,
   randomEncouragementMessage,
   type PenColorId,
+  type PenSkinId,
 } from "../app/constants";
 import { ACHIEVEMENTS } from "../app/achievements";
 import { MEGA_ALBUM_SIZE, MEGA_CARDS, type MegaCardDefinition } from "../engine/megaShapeLibrary";
@@ -43,6 +46,7 @@ import {
   type MegaChallengeProgress,
 } from "../services/megaChallengeStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { shareOrCopy } from "../services/nativeShare";
 import { trackEvent } from "../services/analytics";
 import { toAchievements, toHome, toInstructions, toMegaChallenge, toSettings, toShapeChallenge, toShop } from "../app/routes";
@@ -300,6 +304,7 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
 
   const target = useMemo(() => card.generate(CANVAS_SIZE), [card]);
@@ -314,6 +319,11 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
     }, PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
   }, [phase, card]);
+
+  function handleSelectPenSkin(id: PenSkinId) {
+    setSelectedSkin(id);
+    setPenSkin(id);
+  }
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
@@ -441,13 +451,22 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
           ghostPath={showTargetGhost ? target : undefined}
           showGhost={showTargetGhost}
           strokeColor={penColor}
+          penSkin={penSkin}
           onChange={setAttemptPath}
           onComplete={setAttemptPath}
         />
       </div>
       {phase === "drawing" && (
         <>
-          <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+          <div className="pen-tools-row">
+            <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+            <PenSkinMenu
+              selected={penSkin}
+              inkColor={penInkGlyphColor(penColor)}
+              onSelect={handleSelectPenSkin}
+              onLockedSkinClick={() => goToShop()}
+            />
+          </div>
           <div className="button-row">
             <Button
               variant="secondary"

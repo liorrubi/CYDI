@@ -3,10 +3,20 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
+import PenSkinMenu from "../components/PenSkinMenu";
 import ResultScreen from "./ResultScreen";
-import { ANALYZING_MAX_MS, ANALYZING_MIN_MS, CANVAS_SIZE, PREVIEW_DURATION_MS, type PenColorId } from "../app/constants";
+import {
+  ANALYZING_MAX_MS,
+  ANALYZING_MIN_MS,
+  CANVAS_SIZE,
+  PREVIEW_DURATION_MS,
+  penInkGlyphColor,
+  type PenColorId,
+  type PenSkinId,
+} from "../app/constants";
 import { getChallenge, updateChallenge } from "../services/challengeStorage";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { encodeResultLink } from "../services/shareLink";
 import { createShortResultLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
@@ -43,6 +53,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   const [isNewBest, setIsNewBest] = useState(false);
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
 
@@ -53,6 +64,15 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
 
   function handleLockedColorClick(id: PenColorId) {
     onNavigate(toShop(toPlay(challengeId), id));
+  }
+
+  function handleSelectPenSkin(id: PenSkinId) {
+    setSelectedSkin(id);
+    setPenSkin(id);
+  }
+
+  function handleLockedSkinClick() {
+    onNavigate(toShop(toPlay(challengeId)));
   }
 
   function handleUndo() {
@@ -200,13 +220,22 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
           ghostPath={phase === "preview" ? challenge.target : undefined}
           showGhost={phase === "preview"}
           strokeColor={penColor}
+          penSkin={penSkin}
           onChange={setAttemptPath}
           onComplete={setAttemptPath}
         />
       </div>
       {phase === "drawing" && (
         <>
-          <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={handleLockedColorClick} />
+          <div className="pen-tools-row">
+            <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={handleLockedColorClick} />
+            <PenSkinMenu
+              selected={penSkin}
+              inkColor={penInkGlyphColor(penColor)}
+              onSelect={handleSelectPenSkin}
+              onLockedSkinClick={handleLockedSkinClick}
+            />
+          </div>
           <div className="button-row">
             <Button variant="secondary" onClick={handleUndo} disabled={!attemptPath || attemptPath.points.length === 0}>
               Undo

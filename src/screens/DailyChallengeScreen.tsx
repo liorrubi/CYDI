@@ -4,6 +4,7 @@ import Button from "../components/Button";
 import DailyLeaderboardTable from "../components/DailyLeaderboardTable";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
+import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import {
@@ -12,9 +13,11 @@ import {
   CANVAS_SIZE,
   PREVIEW_DURATION_MS,
   penColorCssBackground,
+  penInkGlyphColor,
   randomCelebrationMessage,
   randomEncouragementMessage,
   type PenColorId,
+  type PenSkinId,
 } from "../app/constants";
 import { DAILY_CHALLENGE_PRIZE_COINS } from "../app/dailyChallengePrizes";
 import { getShapeById } from "../engine/shapeLibrary";
@@ -24,6 +27,7 @@ import { addCoins } from "../services/coinsStore";
 import { dailyChallengeShareUrl } from "../services/dailyChallengeShare";
 import { shareOrCopy } from "../services/nativeShare";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
 import {
   claimDailyPrizes,
@@ -79,6 +83,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   /** One line per unclaimed prize (never summed) - a player who was away for several episodes could have more than one queued at once. */
   const [prizeMessages, setPrizeMessages] = useState<string[]>([]);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
 
   /** Hands over any queued 1st/2nd/3rd place prizes and credits their coins - safe to call any time, since the server clears each prize the moment it's handed over. */
@@ -142,6 +147,11 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
     setPenColor(id);
+  }
+
+  function handleSelectPenSkin(id: PenSkinId) {
+    setSelectedSkin(id);
+    setPenSkin(id);
   }
 
   function handleUndo() {
@@ -384,13 +394,22 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
           ghostPath={phase === "preview" ? target : undefined}
           showGhost={phase === "preview"}
           strokeColor={penColor}
+          penSkin={penSkin}
           onChange={setAttemptPath}
           onComplete={setAttemptPath}
         />
       </div>
       {phase === "drawing" && (
         <>
-          <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+          <div className="pen-tools-row">
+            <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+            <PenSkinMenu
+              selected={penSkin}
+              inkColor={penInkGlyphColor(penColor)}
+              onSelect={handleSelectPenSkin}
+              onLockedSkinClick={() => goToShop()}
+            />
+          </div>
           <div className="button-row">
             <Button variant="secondary" onClick={handleUndo} disabled={!attemptPath || attemptPath.points.length === 0}>
               Undo

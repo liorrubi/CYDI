@@ -5,6 +5,7 @@ import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import PenColorMenu from "../components/PenColorMenu";
+import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
@@ -19,10 +20,12 @@ import {
   journeyRankForPercent,
   passScoreForDifficulty,
   penColorCssBackground,
+  penInkGlyphColor,
   randomCelebrationMessage,
   randomEncouragementMessage,
   starRatingForScore,
   type PenColorId,
+  type PenSkinId,
 } from "../app/constants";
 import { computeAchievementStats, findNewlyUnlockedAchievements, type Achievement } from "../app/achievements";
 import { CATEGORIES, SHAPE_LIBRARY, shapesForCategory, type CategoryId } from "../engine/shapeLibrary";
@@ -41,6 +44,7 @@ import { getUnlockedCategoryIds, unlockCategory } from "../services/categoryUnlo
 import { getDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive } from "../services/unlockOverrideStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { recordRoundCompleted, shouldShowAchievementsTutorial } from "../services/tutorialStore";
 import { recordSuccessfulDrawing } from "../services/successfulDrawingsStore";
 import { trackEvent } from "../services/analytics";
@@ -706,11 +710,17 @@ function ShapePlay({
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
     setPenColor(id);
+  }
+
+  function handleSelectPenSkin(id: PenSkinId) {
+    setSelectedSkin(id);
+    setPenSkin(id);
   }
 
   function handleUndo() {
@@ -888,13 +898,22 @@ function ShapePlay({
           ghostPath={showTargetGhost ? target : undefined}
           showGhost={showTargetGhost}
           strokeColor={penColor}
+          penSkin={penSkin}
           onChange={setAttemptPath}
           onComplete={setAttemptPath}
         />
       </div>
       {phase === "drawing" && (
         <>
-          <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={onNavigateToShop} />
+          <div className="pen-tools-row">
+            <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={onNavigateToShop} />
+            <PenSkinMenu
+              selected={penSkin}
+              inkColor={penInkGlyphColor(penColor)}
+              onSelect={handleSelectPenSkin}
+              onLockedSkinClick={() => onNavigateToShop()}
+            />
+          </div>
           <div className="button-row">
             <Button variant="secondary" onClick={() => setGuideEnabled((enabled) => !enabled)}>
               {guideEnabled ? "Hide Guide" : "Show Guide"}

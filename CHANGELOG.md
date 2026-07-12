@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.22.1 - 2026-07-12
+
+**Drawing Pens shop polish.** Owned pen skins now show the same **✓ Owned**
+badge as Ink Colors, instead of a Select/Selected button pair — equipping a
+different owned skin stays the job of the in-game pen style picker, mirroring
+how ink color selection already worked. Tapping a locked skin in that picker
+now deep-links straight to its card in the Shop's Drawing Pens section and
+briefly highlights it, the same way tapping a locked ink color already jumped
+to Ink Colors. (`screens/ShopScreen.tsx`, `app/routes.ts`, `types/GameMode.ts`,
+`App.tsx`, and every drawing screen's locked-skin handler.)
+
 ## 0.22.0 - 2026-07-12
 
 **Drawing Pens — cosmetic pen skins.** A new Shop category, alongside Ink

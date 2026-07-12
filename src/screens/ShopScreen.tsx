@@ -26,7 +26,7 @@ import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { isChestOnCooldown, msUntilChestAvailable, startChestCooldown } from "../services/chestCooldownStore";
 import { collectedMegaCardCount, getMegaProgress, isMegaChallengeUnlocked, unlockMegaCard } from "../services/megaChallengeStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
-import { getSelectedSkin, getUnlockedSkins, setSelectedSkin, unlockSkin } from "../services/penSkinStore";
+import { getUnlockedSkins, setSelectedSkin, unlockSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
 import { playSuccessSound } from "../engine/soundEngine";
 import {
@@ -45,6 +45,8 @@ type ShopScreenProps = {
   from: Screen;
   /** Pen color to scroll to and briefly highlight in the Ink Colors section - set when the player tapped a locked color in the pen menu. */
   highlightPenColorId?: PenColorId;
+  /** Pen skin to scroll to and briefly highlight in the Drawing Pens section - set when the player tapped a locked skin in the pen style menu. */
+  highlightPenSkinId?: PenSkinId;
   onNavigate: (screen: Screen) => void;
 };
 
@@ -102,11 +104,10 @@ function useChestCooldowns(): Record<ChestTierId, number> {
   return remaining;
 }
 
-export default function ShopScreen({ from, highlightPenColorId, onNavigate }: ShopScreenProps) {
+export default function ShopScreen({ from, highlightPenColorId, highlightPenSkinId, onNavigate }: ShopScreenProps) {
   const [coins, setCoins] = useState(() => getCoins());
   const [unlocked, setUnlocked] = useState(() => getUnlockedColors());
   const [unlockedSkins, setUnlockedSkins] = useState(() => getUnlockedSkins());
-  const [selectedSkin, setSelectedSkinState] = useState<PenSkinId>(() => getSelectedSkin());
   const [pendingChestReveal, setPendingChestReveal] = useState<{ tier: ChestTier; amount: number } | null>(null);
   const [revealedMegaCard, setRevealedMegaCard] = useState<MegaCardDefinition | null>(null);
   // Bumped after each pack purchase so the "left in pool" counts re-render.
@@ -116,7 +117,10 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
   const [megaLockToast, setMegaLockToast] = useState(false);
   // Briefly highlights the ink color the player tapped from the (locked) pen menu.
   const [highlightedColor, setHighlightedColor] = useState<PenColorId | null>(highlightPenColorId ?? null);
+  // Briefly highlights the pen skin the player tapped from the (locked) pen style menu.
+  const [highlightedSkin, setHighlightedSkin] = useState<PenSkinId | null>(highlightPenSkinId ?? null);
   const colorCardRefs = useRef(new Map<PenColorId, HTMLDivElement>());
+  const skinCardRefs = useRef(new Map<PenSkinId, HTMLDivElement>());
   const chestCooldowns = useChestCooldowns();
   const megaCollected = collectedMegaCardCount();
   const megaProgressPercent = Math.round((megaCollected / MEGA_ALBUM_SIZE) * 100);
@@ -135,6 +139,16 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Same deep-link behavior, for a locked pen skin tapped from the pen style menu.
+  useEffect(() => {
+    if (!highlightPenSkinId) return;
+    skinCardRefs.current.get(highlightPenSkinId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timeout = window.setTimeout(() => setHighlightedSkin(null), HIGHLIGHT_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+    // Runs once on mount for the skin this screen instance was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handlePurchase(id: (typeof PEN_COLOR_PRODUCTS)[number]["id"], price: number) {
     if (coins < price || unlocked.includes(id)) return;
     spendCoins(price);
@@ -148,18 +162,13 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
     if (coins < price || unlockedSkins.includes(id)) return;
     spendCoins(price);
     unlockSkin(id);
+    // Auto-equip on purchase, mirroring handlePurchase's auto-select for ink colors.
+    // Equipping a different owned skin afterward happens via the in-game pen style
+    // menu, not here - this shop card only ever shows Owned/Buy, like Ink Colors.
     setSelectedSkin(id);
     setUnlockedSkins(getUnlockedSkins());
-    setSelectedSkinState(id);
     playSuccessSound();
     trackEvent("purchase_completed", { productType: "penSkin", tier: id, price });
-  }
-
-  function handleSelectSkin(id: PenSkinId) {
-    if (!unlockedSkins.includes(id)) return;
-    setSelectedSkin(id);
-    setSelectedSkinState(id);
-    playSuccessSound();
   }
 
   function handleBuyKey(tier: ChestTier) {
@@ -329,14 +338,17 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
       <div className="shop-product-list">
         {PEN_SKINS.map((skin) => {
           const owned = unlockedSkins.includes(skin.id);
-          const isSelected = owned && selectedSkin === skin.id;
           const isFree = skin.id === DEFAULT_PEN_SKIN;
           const price = skin.price ?? 0;
           const canAfford = coins >= price;
           return (
             <div
               key={skin.id}
-              className={`card shop-product shop-pen-skin${isSelected ? " shop-pen-skin-selected" : ""}`}
+              ref={(el) => {
+                if (el) skinCardRefs.current.set(skin.id, el);
+                else skinCardRefs.current.delete(skin.id);
+              }}
+              className={`card shop-product shop-pen-skin${highlightedSkin === skin.id ? " shop-product-highlight" : ""}`}
             >
               <span className="shop-pen-skin-icon" aria-hidden="true">
                 <svg width="42" height="42" viewBox="0 0 44 44" fill="none">
@@ -347,12 +359,8 @@ export default function ShopScreen({ from, highlightPenColorId, onNavigate }: Sh
                 <h3>{skin.name}</h3>
                 <p className="status-text">{owned ? (isFree ? "Free" : "Owned") : `🪙 ${price}`}</p>
               </div>
-              {isSelected ? (
-                <span className="shop-product-owned">✓ Selected</span>
-              ) : owned ? (
-                <Button variant="secondary" onClick={() => handleSelectSkin(skin.id)}>
-                  Select
-                </Button>
+              {owned ? (
+                <span className="shop-product-owned">✓ Owned</span>
               ) : (
                 <div className="shop-pen-skin-action">
                   <Button disabled={!canAfford} onClick={() => handleBuySkin(skin.id, price)}>

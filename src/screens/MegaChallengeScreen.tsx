@@ -464,7 +464,7 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
               selected={penSkin}
               inkColor={penInkGlyphColor(penColor)}
               onSelect={handleSelectPenSkin}
-              onLockedSkinClick={() => goToShop()}
+              onLockedSkinClick={(id) => onNavigate(toShop(toMegaChallenge(), undefined, id))}
             />
           </div>
           <div className="button-row">

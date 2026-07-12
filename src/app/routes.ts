@@ -1,7 +1,7 @@
 import type { Screen } from "../types/GameMode";
 import type { DecodedSharedArtistResult, DecodedSharedResult } from "../services/shareLink";
 import type { DailyHistoryEntry } from "../services/dailyChallengeApi";
-import type { PenColorId } from "./constants";
+import type { PenColorId, PenSkinId } from "./constants";
 
 export type { Screen };
 
@@ -33,8 +33,8 @@ export function toSettings(): Screen {
   return { name: "settings" };
 }
 
-export function toShop(from: Screen = { name: "home" }, highlightPenColorId?: PenColorId): Screen {
-  return { name: "shop", from, highlightPenColorId };
+export function toShop(from: Screen = { name: "home" }, highlightPenColorId?: PenColorId, highlightPenSkinId?: PenSkinId): Screen {
+  return { name: "shop", from, highlightPenColorId, highlightPenSkinId };
 }
 
 export function toAchievements(from: Screen): Screen {

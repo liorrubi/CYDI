@@ -554,7 +554,7 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
               selected={penSkin}
               inkColor={penInkGlyphColor(penColor)}
               onSelect={handleSelectPenSkin}
-              onLockedSkinClick={() => goToShop()}
+              onLockedSkinClick={(id) => onNavigate(toShop(here, undefined, id))}
             />
           </div>
           <div className="button-row">

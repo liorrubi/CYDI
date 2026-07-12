@@ -1,6 +1,6 @@
 import type { DecodedSharedArtistResult, DecodedSharedResult } from "../services/shareLink";
 import type { DailyHistoryEntry } from "../services/dailyChallengeApi";
-import type { PenColorId } from "../app/constants";
+import type { PenColorId, PenSkinId } from "../app/constants";
 
 export type Screen =
   | { name: "home" }
@@ -10,7 +10,7 @@ export type Screen =
   | { name: "friendChallengeIntro"; challengeId: string }
   | { name: "shapeChallenge" }
   | { name: "settings" }
-  | { name: "shop"; from: Screen; highlightPenColorId?: PenColorId }
+  | { name: "shop"; from: Screen; highlightPenColorId?: PenColorId; highlightPenSkinId?: PenSkinId }
   | { name: "achievements"; from: Screen }
   | { name: "instructions"; from: Screen }
   | { name: "sharedResult"; data: DecodedSharedResult }

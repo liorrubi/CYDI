@@ -195,7 +195,14 @@ export default function App() {
           case "settings":
             return <SettingsScreen onNavigate={setScreen} />;
           case "shop":
-            return <ShopScreen from={screen.from} highlightPenColorId={screen.highlightPenColorId} onNavigate={setScreen} />;
+            return (
+              <ShopScreen
+                from={screen.from}
+                highlightPenColorId={screen.highlightPenColorId}
+                highlightPenSkinId={screen.highlightPenSkinId}
+                onNavigate={setScreen}
+              />
+            );
           case "achievements":
             return <AchievementsScreen from={screen.from} onNavigate={setScreen} />;
           case "instructions":

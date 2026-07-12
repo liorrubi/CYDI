@@ -50,8 +50,8 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
     setPenSkin(id);
   }
 
-  function handleLockedSkinClick() {
-    onNavigate(toShop(toCreate()));
+  function handleLockedSkinClick(id: PenSkinId) {
+    onNavigate(toShop(toCreate(), undefined, id));
   }
 
   function handleClear() {

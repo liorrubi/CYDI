@@ -71,8 +71,8 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
     setPenSkin(id);
   }
 
-  function handleLockedSkinClick() {
-    onNavigate(toShop(toPlay(challengeId)));
+  function handleLockedSkinClick(id: PenSkinId) {
+    onNavigate(toShop(toPlay(challengeId), undefined, id));
   }
 
   function handleUndo() {

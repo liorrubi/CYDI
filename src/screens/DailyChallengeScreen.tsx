@@ -407,7 +407,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
               selected={penSkin}
               inkColor={penInkGlyphColor(penColor)}
               onSelect={handleSelectPenSkin}
-              onLockedSkinClick={() => goToShop()}
+              onLockedSkinClick={(id) => onNavigate(toShop(toHome(), undefined, id))}
             />
           </div>
           <div className="button-row">

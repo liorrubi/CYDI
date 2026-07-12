@@ -234,7 +234,9 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
         onBackToMap={() => setSelectedIndex(null)}
         onNavigateToAchievements={goToAchievements}
         onNavigateToInstructions={goToInstructions}
-        onNavigateToShop={(highlightPenColorId) => onNavigate(toShop(toShapeChallenge(), highlightPenColorId))}
+        onNavigateToShop={(highlightPenColorId, highlightPenSkinId) =>
+          onNavigate(toShop(toShapeChallenge(), highlightPenColorId, highlightPenSkinId))
+        }
         onNavigateToSpecialChallenge={goToSpecialChallenge}
         onNavigateToShapeChallenge={goToShapeChallenge}
         onNavigateToHome={goToHome}
@@ -672,7 +674,7 @@ type ShapePlayProps = {
   onBackToMap: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
-  onNavigateToShop: (highlightPenColorId?: PenColorId) => void;
+  onNavigateToShop: (highlightPenColorId?: PenColorId, highlightPenSkinId?: PenSkinId) => void;
   onNavigateToSpecialChallenge: () => void;
   onNavigateToShapeChallenge: () => void;
   onNavigateToHome: () => void;
@@ -911,7 +913,7 @@ function ShapePlay({
               selected={penSkin}
               inkColor={penInkGlyphColor(penColor)}
               onSelect={handleSelectPenSkin}
-              onLockedSkinClick={() => onNavigateToShop()}
+              onLockedSkinClick={(id) => onNavigateToShop(undefined, id)}
             />
           </div>
           <div className="button-row">

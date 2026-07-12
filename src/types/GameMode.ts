@@ -20,4 +20,4 @@ export type Screen =
   | { name: "dailyChallengeReplay"; entry: DailyHistoryEntry }
   | { name: "specialChallenge" }
   | { name: "megaChallenge" }
-  | { name: "artistPack"; packId: string; from: Screen };
+  | { name: "artistPack"; packId: string; from: Screen; replyTo?: DecodedSharedArtistResult };

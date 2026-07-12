@@ -5,6 +5,7 @@ import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import StarRating from "../components/StarRating";
 import { CANVAS_SIZE, DEFAULT_PEN_COLOR, penColorCssBackground } from "../app/constants";
 import type { DecodedSharedArtistResult } from "../services/shareLink";
+import { resolvePublishedArtwork } from "../engine/artistPackLibrary";
 import {
   toAchievements,
   toArtistPack,
@@ -23,13 +24,21 @@ type SharedArtistResultScreenProps = {
 };
 
 /**
- * Read-only landing page for an Artist Pack "Share Result" link. It shows ONLY
- * the sharer's own drawing - never the reference artwork or the draw-along guide
+ * Landing page for an Artist Pack "Share Result" link. It shows ONLY the
+ * sharer's own drawing - never the reference artwork or the draw-along guide
  * (the payload carries no target at all, so there is nothing to leak, even if
  * Show Guide was on while they drew) - plus the score and the artist credit.
+ * "Draw It Back" (only shown when the link carries a still-published artwork
+ * id) drops the viewer straight into that same artwork so the chain can
+ * continue in both directions - see ArtistPackScreen's `replyTo` handling.
  */
 export default function SharedArtistResultScreen({ data, onNavigate }: SharedArtistResultScreenProps) {
   const from = toSharedArtistResult(data);
+  const canDrawItBack = data.artworkId !== undefined && resolvePublishedArtwork(data.packId, data.artworkId) !== undefined;
+
+  function handleDrawItBack() {
+    onNavigate(toArtistPack(data.packId, from, data));
+  }
 
   return (
     <div className="screen">
@@ -61,7 +70,10 @@ export default function SharedArtistResultScreen({ data, onNavigate }: SharedArt
         <Button variant="secondary" onClick={() => onNavigate(toHome())}>
           Home
         </Button>
-        <Button onClick={() => onNavigate(toArtistPack(data.packId))}>Open Artist Pack</Button>
+        <Button variant="secondary" onClick={() => onNavigate(toArtistPack(data.packId))}>
+          Open Artist Pack
+        </Button>
+        {canDrawItBack && <Button onClick={handleDrawItBack}>Draw It Back</Button>}
       </div>
     </div>
   );

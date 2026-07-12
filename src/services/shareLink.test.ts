@@ -92,3 +92,53 @@ test("hash-link fallback round-trips the attempt and never encodes the guide", (
   assert.strictEqual(decoded!.attempt.points.length, attempt.points.length);
   assert.strictEqual(decoded!.attemptColor, "black");
 });
+
+// --- "Draw It Back" artworkId (aid) handling ---
+
+test("artworkId round-trips through build/parse", () => {
+  const decoded = parseArtistResultPayload(buildArtistResultPayload({ ...shareArgs, artworkId: "nimco-portrait" }));
+  assert.strictEqual(decoded?.artworkId, "nimco-portrait");
+});
+
+test("artworkId round-trips through the hash-link encode/decode path", () => {
+  (globalThis as { location?: { origin: string; pathname: string } }).location = {
+    origin: "https://playcydi.com",
+    pathname: "/",
+  };
+  const link = encodeArtistResultLink({ ...shareArgs, artworkId: "nimco-basketball-hoop" });
+  const hash = link.slice(link.indexOf("#") + 1);
+  const decoded = decodeArtistResultHash(hash);
+  assert.strictEqual(decoded?.artworkId, "nimco-basketball-hoop");
+});
+
+test("a payload built without an artworkId (old-link simulation) decodes with artworkId undefined", () => {
+  const decoded = parseArtistResultPayload(buildArtistResultPayload(shareArgs));
+  assert.strictEqual(decoded?.artworkId, undefined);
+  // everything else must still be fully usable
+  assert.strictEqual(decoded?.artistName, "Nimrod Cohen");
+  assert.strictEqual(decoded?.attempt.points.length, attempt.points.length);
+});
+
+test("an invalid aid is dropped (treated as absent), never rejecting the whole payload", () => {
+  const cases: unknown[] = [
+    "x".repeat(65), // too long
+    "Nimco-Portrait", // uppercase not allowed
+    "nimco portrait", // spaces not allowed
+    "../../etc/passwd", // path-traversal-looking string
+    12345, // wrong type entirely
+    "", // empty string
+  ];
+  for (const badAid of cases) {
+    const payload = { ...buildArtistResultPayload(shareArgs), aid: badAid };
+    const decoded = parseArtistResultPayload(payload);
+    assert.ok(decoded, `payload with aid=${JSON.stringify(badAid)} should still parse`);
+    assert.strictEqual(decoded!.artworkId, undefined, `invalid aid=${JSON.stringify(badAid)} should be dropped`);
+    assert.strictEqual(decoded!.artistName, "Nimrod Cohen", "the rest of the payload must remain intact");
+  }
+});
+
+test("a valid aid at the maximum allowed length is accepted", () => {
+  const maxId = "a".repeat(64);
+  const decoded = parseArtistResultPayload(buildArtistResultPayload({ ...shareArgs, artworkId: maxId }));
+  assert.strictEqual(decoded?.artworkId, maxId);
+});

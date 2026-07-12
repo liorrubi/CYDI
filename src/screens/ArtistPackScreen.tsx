@@ -12,6 +12,7 @@ import {
   ANALYZING_MAX_MS,
   ANALYZING_MIN_MS,
   CANVAS_SIZE,
+  DEFAULT_PEN_COLOR,
   PREVIEW_DURATION_MS,
   passScoreForDifficulty,
   penColorCssBackground,
@@ -23,6 +24,7 @@ import {
   artistOutboundUrl,
   getVisibleArtworks,
   getArtistPackById,
+  resolvePublishedArtwork,
   type ArtistArtworkDefinition,
   type ArtistPackDefinition,
 } from "../engine/artistPackLibrary";
@@ -33,7 +35,7 @@ import { addCoins } from "../services/coinsStore";
 import { getDifficulty } from "../services/difficultySettings";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { shareOrCopy } from "../services/nativeShare";
-import { encodeArtistResultLink } from "../services/shareLink";
+import { encodeArtistResultLink, type DecodedSharedArtistResult } from "../services/shareLink";
 import { createShortArtistResultLink } from "../services/shareApi";
 import { trackEvent } from "../services/analytics";
 import { useDialogA11y } from "../hooks/useDialogA11y";
@@ -46,12 +48,23 @@ import type { ScoreBreakdown } from "../types/Score";
 type ArtistPackScreenProps = {
   packId: string;
   from: Screen;
+  /** Present when arriving via "Draw It Back" on a received shared result - drops straight into that artwork instead of the grid, and changes where Back/finish return to. */
+  replyTo?: DecodedSharedArtistResult;
   onNavigate: (screen: Screen) => void;
 };
 
-export default function ArtistPackScreen({ packId, from, onNavigate }: ArtistPackScreenProps) {
+export default function ArtistPackScreen({ packId, from, replyTo, onNavigate }: ArtistPackScreenProps) {
   const pack = getArtistPackById(packId);
-  const [playing, setPlaying] = useState<ArtistArtworkDefinition | null>(null);
+  // Resolved before any hooks (rules-of-hooks) - never falls back to any other
+  // artwork or the grid; a replyTo that doesn't resolve is handled by a
+  // dedicated "unavailable" screen below, not a silent substitution.
+  const replyArtwork = pack && replyTo?.artworkId ? resolvePublishedArtwork(packId, replyTo.artworkId) : undefined;
+  const [playing, setPlaying] = useState<ArtistArtworkDefinition | null>(() => replyArtwork ?? null);
+  // Never reassigned after mount - a reply session always fully navigates away on
+  // finish/back (see handleFinishedPlaying) rather than returning to this same
+  // screen instance with `playing` cleared, so there's no later point where this
+  // would need to flip back to false.
+  const playingViaReply = Boolean(replyArtwork);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   // Bumped after each finished attempt to re-read best scores for the grid.
   const [resultTick, setResultTick] = useState(0);
@@ -75,15 +88,39 @@ export default function ArtistPackScreen({ packId, from, onNavigate }: ArtistPac
     );
   }
 
+  // A replyTo that doesn't resolve (stale/removed artwork id, or an old link
+  // with none at all) never falls back to the grid or any other artwork -
+  // shown as its own dead-end state, same "go back to where you came from"
+  // pattern as the pack-not-found case above.
+  if (replyTo && !replyArtwork) {
+    return (
+      <div className="screen">
+        <AppHeader title="Artist Pack" onBack={() => onNavigate(from)} onNavigateToHome={goToHome} />
+        <p className="status-text">This artwork is no longer available.</p>
+        <div className="button-row">
+          <Button onClick={() => onNavigate(from)}>Back</Button>
+        </div>
+      </div>
+    );
+  }
+
+  /** Reply sessions skip the grid entirely (arrived via "Draw It Back"), so finishing/backing out returns straight to the received shared-result screen instead - the same already-decoded data, no re-fetch. */
+  function handleFinishedPlaying() {
+    if (playingViaReply) {
+      onNavigate(from);
+      return;
+    }
+    setPlaying(null);
+    setResultTick((n) => n + 1);
+  }
+
   if (playing) {
     return (
       <ArtistPlay
         artwork={playing}
         pack={pack}
-        onFinished={() => {
-          setPlaying(null);
-          setResultTick((n) => n + 1);
-        }}
+        replyTo={playingViaReply ? replyTo : undefined}
+        onFinished={handleFinishedPlaying}
         onNavigate={onNavigate}
         here={here}
       />
@@ -226,12 +263,15 @@ type ArtistPhase = "preview" | "drawing" | "analyzing" | "result";
 type ArtistPlayProps = {
   artwork: ArtistArtworkDefinition;
   pack: ArtistPackDefinition;
+  /** Set only for a "Draw It Back" session - the original sender's own attempt/color, shown compared against the recipient's new drawing once they finish (never the real artwork guide). */
+  replyTo?: DecodedSharedArtistResult;
   onFinished: () => void;
   onNavigate: (screen: Screen) => void;
   here: Screen;
 };
 
-function ArtistPlay({ artwork, pack, onFinished, onNavigate, here }: ArtistPlayProps) {
+function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: ArtistPlayProps) {
+  const isReply = replyTo !== undefined;
   const [phase, setPhase] = useState<ArtistPhase>("preview");
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
   const [result, setResult] = useState<ScoreBreakdown | null>(null);
@@ -316,7 +356,10 @@ function ArtistPlay({ artwork, pack, onFinished, onNavigate, here }: ArtistPlayP
    * offline fallback). The link opens a dedicated result page showing ONLY the
    * player's own drawing — the reference artwork and the draw-along guide are
    * never included in the payload, so nothing leaks even if Show Guide was on.
-   * Guarded to published artwork only, so drafts/approved are never shareable. */
+   * Guarded to published artwork only, so drafts/approved are never shareable.
+   * Always carries only THIS player's own attempt - in a reply ("Send Back")
+   * session, `replyTo.attempt` (the sender's drawing) is never included here,
+   * only shown locally in the result comparison below. */
   async function handleShareResult() {
     if (!result || !attemptPath || !isPublished) return;
     const shareArgs = {
@@ -327,6 +370,7 @@ function ArtistPlay({ artwork, pack, onFinished, onNavigate, here }: ArtistPlayP
       score: result,
       attempt: attemptPath,
       attemptColor: penColor,
+      artworkId: artwork.id,
     };
     const url = (await createShortArtistResultLink(shareArgs)) ?? encodeArtistResultLink(shareArgs);
     const outcome = await shareOrCopy({
@@ -381,10 +425,25 @@ function ArtistPlay({ artwork, pack, onFinished, onNavigate, here }: ArtistPlayP
         <StarRating score={result.total} size={44} />
         {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
         <div className="canvas-wrapper">
-          <ShapeOverlayCanvas target={target} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
+          {isReply && replyTo ? (
+            // Reply comparison: sender's drawing vs. the recipient's new one - never
+            // the real artwork guide/target, reusing the same generic overlay used
+            // elsewhere to compare two hand-drawn paths (e.g. SharedResultScreen).
+            <ShapeOverlayCanvas target={replyTo.attempt} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
+          ) : (
+            <ShapeOverlayCanvas target={target} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
+          )}
         </div>
         <p className="overlay-legend">
-          <span className="overlay-legend-swatch overlay-legend-target" /> Target artwork
+          {isReply && replyTo ? (
+            <span
+              className="overlay-legend-swatch overlay-legend-target"
+              style={{ background: penColorCssBackground(replyTo.attemptColor ?? DEFAULT_PEN_COLOR) }}
+            />
+          ) : (
+            <span className="overlay-legend-swatch overlay-legend-target" />
+          )}{" "}
+          {isReply ? "Sender's drawing" : "Target artwork"}
           <span
             className="overlay-legend-swatch"
             style={{ background: penColorCssBackground(penColor), marginLeft: "var(--space-3)" }}
@@ -400,10 +459,10 @@ function ArtistPlay({ artwork, pack, onFinished, onNavigate, here }: ArtistPlayP
             </Button>
             {isPublished && (
               <Button variant="secondary" onClick={handleShareResult}>
-                🔗 Share
+                {isReply ? "↩️ Send Back" : "🔗 Share"}
               </Button>
             )}
-            <Button onClick={onFinished}>Back to Pack</Button>
+            <Button onClick={onFinished}>{isReply ? "Back" : "Back to Pack"}</Button>
           </div>
         )}
       </div>

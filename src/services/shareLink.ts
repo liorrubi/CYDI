@@ -197,6 +197,7 @@ export type SharedArtistResultPayload = {
   s: ScoreBreakdown;
   a: SharePath; // the player's attempt ONLY - no target/guide
   c?: PenColorId; // pen color used, so the landing page matches what the player saw
+  aid?: string; // artwork id - lets "Draw It Back" re-resolve the exact same catalog artwork locally
 };
 
 export type DecodedSharedArtistResult = {
@@ -207,7 +208,18 @@ export type DecodedSharedArtistResult = {
   score: ScoreBreakdown;
   attempt: DrawingPath;
   attemptColor?: PenColorId;
+  artworkId?: string;
 };
+
+// Real artwork ids look like "nimco-basketball-hoop" - lowercase alnum + dashes, a
+// conservative bound well above any real id. A value failing this is dropped (treated
+// as absent) rather than rejecting the whole payload - the rest of it is independently
+// valid and still useful as a read-only shared result even without "Draw It Back".
+const ARTWORK_ID_PATTERN = /^[a-z0-9-]{1,64}$/;
+
+function isValidArtworkId(value: unknown): value is string {
+  return typeof value === "string" && ARTWORK_ID_PATTERN.test(value);
+}
 
 export function buildArtistResultPayload(args: {
   artworkName: string;
@@ -217,6 +229,7 @@ export function buildArtistResultPayload(args: {
   score: ScoreBreakdown;
   attempt: DrawingPath;
   attemptColor?: PenColorId;
+  artworkId?: string;
 }): SharedArtistResultPayload {
   return {
     n: args.artworkName,
@@ -226,6 +239,7 @@ export function buildArtistResultPayload(args: {
     s: args.score,
     a: toSharePath(args.attempt),
     c: args.attemptColor,
+    aid: args.artworkId,
   };
 }
 
@@ -250,6 +264,7 @@ export function parseArtistResultPayload(raw: unknown): DecodedSharedArtistResul
     score: value.s,
     attempt: fromSharePath(value.a),
     attemptColor: typeof value.c === "string" ? (value.c as PenColorId) : undefined,
+    artworkId: isValidArtworkId(value.aid) ? value.aid : undefined,
   };
 }
 
@@ -261,6 +276,7 @@ export function encodeArtistResultLink(args: {
   score: ScoreBreakdown;
   attempt: DrawingPath;
   attemptColor?: PenColorId;
+  artworkId?: string;
 }): string {
   return `${shareBaseUrl()}#a.${encode(buildArtistResultPayload(args))}`;
 }

@@ -344,6 +344,19 @@ export function getVisibleArtworks(pack: ArtistPackDefinition): ArtistArtworkDef
 }
 
 /**
+ * Resolves a specific published artwork by pack+artwork id, used by the "Draw It
+ * Back" reciprocal-share flow (and its own defensive re-check) so both call sites
+ * share one published-only gate rather than duplicating the lookup. Returns
+ * `undefined` for an unknown pack, an unknown artwork, or a real but
+ * draft/approved (unpublished) artwork — never falls back to any other artwork.
+ */
+export function resolvePublishedArtwork(packId: string, artworkId: string): ArtistArtworkDefinition | undefined {
+  const pack = getArtistPackById(packId);
+  if (!pack) return undefined;
+  return getPublishedArtworks(pack).find((art) => art.id === artworkId);
+}
+
+/**
  * Packs shown as cards in the Artist Packs section. Every pack appears (dev-only
  * packs are dropped in production), INCLUDING packs with no published artwork —
  * those render as a disabled "Coming Soon" card. Appearing here does not expose

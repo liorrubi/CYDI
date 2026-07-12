@@ -61,6 +61,7 @@ export async function createShortArtistResultLink(args: {
   score: ScoreBreakdown;
   attempt: DrawingPath;
   attemptColor?: PenColorId;
+  artworkId?: string;
 }): Promise<string | null> {
   const id = await postShare("a", buildArtistResultPayload(args));
   return id ? `${location.origin}/c/${id}` : null;

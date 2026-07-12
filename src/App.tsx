@@ -215,7 +215,7 @@ export default function App() {
           case "megaChallenge":
             return <MegaChallengeScreen onNavigate={setScreen} />;
           case "artistPack":
-            return <ArtistPackScreen packId={screen.packId} from={screen.from} onNavigate={setScreen} />;
+            return <ArtistPackScreen packId={screen.packId} from={screen.from} replyTo={screen.replyTo} onNavigate={setScreen} />;
         }
       })()}
       {showOnboardingTutorial && <OnboardingTutorialOverlay onDismiss={dismissOnboardingTutorial} />}

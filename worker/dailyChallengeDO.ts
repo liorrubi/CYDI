@@ -9,6 +9,12 @@ const WIN_SCORE = 100;
 const MAX_HISTORY = 100;
 const MAX_NAME_LENGTH = 24;
 const TOP_ENTRIES_LIMIT = 10;
+// Lightweight per-(episode, playerId) anti-abuse thresholds. Set loose enough to
+// never reject a real player (a genuine redraw cycle takes many seconds, and no
+// honest player submits hundreds of times to one daily episode) - they only blunt
+// naive rapid spam. See the trust-model note above handleSubmit.
+const SUBMIT_COOLDOWN_MS = 1500;
+const MAX_SUBMISSIONS_PER_EPISODE = 300;
 
 type LeaderboardEntry = { playerId: string; playerName: string; score: number; achievedAt: number };
 
@@ -31,7 +37,9 @@ function upsertTopEntries(entries: LeaderboardEntry[], entry: LeaderboardEntry):
   return combined.slice(0, TOP_ENTRIES_LIMIT);
 }
 
-type BoardEntry = { playerName: string; bestScore: number; updatedAt: number };
+// `lastSubmitAt`/`submitCount` are optional so entries written before this field
+// existed still load; they back the per-identity rate limiting in handleSubmit.
+type BoardEntry = { playerName: string; bestScore: number; updatedAt: number; lastSubmitAt?: number; submitCount?: number };
 
 /** A 1st/2nd/3rd place prize earned in a specific (now-ended) episode, sitting in a player's queue until they claim it. */
 type PendingPrize = { episodeId: number; dateKey: string; place: 1 | 2 | 3; coins: number; playerName: string };
@@ -182,10 +190,26 @@ export class DailyChallengeDO {
     return json(this.publicEpisode(episode, yourBest));
   }
 
+  /**
+   * Records a player's score for an episode.
+   *
+   * TRUST MODEL / KNOWN LIMITATION: the score is computed entirely on the client
+   * and only the resulting number reaches here - the drawing itself is never sent,
+   * and `playerId` is a client-generated value with no authentication. This DO
+   * therefore CANNOT verify a score was legitimately earned: anyone can POST
+   * `{ playerId: <random>, score: 100 }` to win instantly. Truly preventing that
+   * would require sending the attempt path and re-scoring it server-side against
+   * the episode's shape - a deliberate, larger change we chose not to make for a
+   * casual free game. The guards here (input sanity, 0-100 clamp, per-identity
+   * rate limiting) only raise the bar against naive/rapid abuse; a determined
+   * cheater who rotates playerIds still bypasses them.
+   */
   private async handleSubmit(body: unknown): Promise<Response> {
     const b = body as Record<string, unknown> | null;
     const playerId = typeof b?.playerId === "string" && b.playerId ? b.playerId : null;
-    const episodeId = typeof b?.episodeId === "number" && Number.isFinite(b.episodeId) ? b.episodeId : null;
+    // Episode ids are positive integers (see nextEpisodeId) - reject fractions,
+    // zero, and negatives up front rather than letting them fall through to a 404.
+    const episodeId = typeof b?.episodeId === "number" && Number.isInteger(b.episodeId) && b.episodeId > 0 ? b.episodeId : null;
     const scoreRaw = typeof b?.score === "number" && Number.isFinite(b.score) ? b.score : null;
     if (!playerId || episodeId === null || scoreRaw === null) return json({ error: "invalid payload" }, 400);
 
@@ -199,11 +223,30 @@ export class DailyChallengeDO {
 
     const boardKey = this.boardKey(targetEpisode.id, playerId);
     const existingBoard = await this.getBoardEntry(targetEpisode.id, playerId);
+    const now = Date.now();
+
+    // Per-(episode, playerId) rate limiting - blunts rapid spam / accidental
+    // double-submits from a single identity only (see the trust-model note above).
+    if (existingBoard) {
+      if (existingBoard.lastSubmitAt !== undefined && now - existingBoard.lastSubmitAt < SUBMIT_COOLDOWN_MS) {
+        return json({ error: "too many submissions" }, 429);
+      }
+      if ((existingBoard.submitCount ?? 0) >= MAX_SUBMISSIONS_PER_EPISODE) {
+        return json({ error: "too many submissions" }, 429);
+      }
+    }
+
     const improved = !existingBoard || score > existingBoard.bestScore;
     const yourBest = improved ? score : existingBoard!.bestScore;
-    if (improved) {
-      await this.state.storage.put(boardKey, { playerName, bestScore: score, updatedAt: Date.now() } satisfies BoardEntry);
-    }
+    // Written on every submission (not only improvements) so the rate-limit
+    // timestamp/counter advance; bestScore/updatedAt still track the best attempt.
+    await this.state.storage.put(boardKey, {
+      playerName,
+      bestScore: yourBest,
+      updatedAt: improved ? now : existingBoard!.updatedAt,
+      lastSubmitAt: now,
+      submitCount: (existingBoard?.submitCount ?? 0) + 1,
+    } satisfies BoardEntry);
 
     let youWon = false;
 

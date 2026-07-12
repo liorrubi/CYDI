@@ -18,6 +18,10 @@ type DrawingCanvasProps = {
   strokeColor?: PenColorId;
   onChange?: (path: DrawingPath) => void;
   onComplete?: (path: DrawingPath) => void;
+  /** Accessible name for the drawing surface. Freehand drawing is inherently
+   * pointer-based and has no meaningful keyboard equivalent, so the canvas is
+   * labeled for context rather than made keyboard-operable. */
+  ariaLabel?: string;
 };
 
 type StrokeOptions = { lineWidth?: number; dash?: number[] };
@@ -163,6 +167,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     strokeColor = DEFAULT_PEN_COLOR,
     onChange,
     onComplete,
+    ariaLabel,
   },
   ref,
 ) {
@@ -371,6 +376,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
         ref={canvasRef}
         width={width}
         height={height}
+        role="img"
+        aria-label={ariaLabel ?? "Drawing area — draw the shape using touch or a mouse"}
         className={disabled ? "drawing-canvas drawing-canvas-disabled" : "drawing-canvas"}
         style={{ touchAction: "none" }}
         onPointerDown={handlePointerDown}

@@ -460,9 +460,23 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
             // Reply comparison: sender's drawing vs. the recipient's new one - never
             // the real artwork guide/target, reusing the same generic overlay used
             // elsewhere to compare two hand-drawn paths (e.g. SharedResultScreen).
-            <ShapeOverlayCanvas target={replyTo.attempt} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
+            <ShapeOverlayCanvas
+              target={replyTo.attempt}
+              attempt={attemptPath}
+              attemptColor={penColor}
+              width={CANVAS_SIZE}
+              height={CANVAS_SIZE}
+              ariaLabel="Comparison of the sender's drawing and your drawing"
+            />
           ) : (
-            <ShapeOverlayCanvas target={target} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
+            <ShapeOverlayCanvas
+              target={target}
+              attempt={attemptPath}
+              attemptColor={penColor}
+              width={CANVAS_SIZE}
+              height={CANVAS_SIZE}
+              ariaLabel="Comparison of the target artwork and your drawing"
+            />
           )}
         </div>
         <p className="overlay-legend">

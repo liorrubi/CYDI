@@ -143,11 +143,17 @@ export class AnalyticsDO {
 
   private async sumRange(startDate: string, endDate: string): Promise<AllCounters> {
     const days = (await this.state.storage.get<string[]>("days")) ?? [];
+    const inRange = days.filter((day) => day >= startDate && day <= endDate);
+    if (inRange.length === 0) return {};
+
+    // One batched read for every in-range day instead of an awaited get per day.
+    // Report ranges are at most a calendar month (<=31 keys), well under Durable
+    // Object storage's 128-key limit for a single multi-key get.
+    const buckets = await this.state.storage.get<AllCounters>(inRange.map((day) => this.dayStorageKey(day)));
+
     let merged: AllCounters = {};
-    for (const day of days) {
-      if (day < startDate || day > endDate) continue;
-      const bucket = await this.state.storage.get<AllCounters>(this.dayStorageKey(day));
-      if (bucket) merged = mergeCounters(merged, bucket);
+    for (const bucket of buckets.values()) {
+      merged = mergeCounters(merged, bucket);
     }
     return merged;
   }

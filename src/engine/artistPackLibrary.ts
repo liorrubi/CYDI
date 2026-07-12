@@ -220,6 +220,63 @@ function tracedHoop(size: number): DrawingPath {
   return toPathFromParts(parts, size);
 }
 
+// Image-derived trace of man.jpeg (Nimco Design) — a high-contrast B&W
+// photograph of a saxophonist in a conical straw hat (nón lá), shot as a
+// silhouette against a bright sky. Built by a single Canny-edge pass over the
+// whole frame (the strong light/dark boundaries ARE the line art here): Canny
+// (sigma 2) -> closing (disk 3) -> skeleton-graph walk keeping junction-to-
+// junction connectors, pruning short spurs and floating fragments -> stitch
+// straight continuations -> RDP -> joint-normalize preserving the source
+// ~0.79 w:h aspect, centered. The "NIMCO DESIGN ©" watermark and the blurry
+// background horizon were masked out; every stroke sits on the subject: the
+// conical hat (cone edges + wavy brim + radial straw ribs), the face/beard
+// profile, the curved saxophone (neck, body, keys), and the shoulder silhouette.
+//
+// Minimal outer-contour closure pass (owner-directed): four gaps that were cut
+// despite being clearly continuous in the source were bridged along the real
+// silhouette boundary (never with invented connector lines) — the hat cone apex,
+// two gaps in the hat's cone/brim edge, and the neck where the beard/throat
+// meets the torso front. Nothing else was touched: the saxophone, the interior
+// hat ribs, proportions, and positions are unchanged (the pass only merged the
+// four broken outer contours; +5 points total).
+// 26 disconnected parts / 216 pts. Each row is one continuous stroke as
+// normalized [x, y] pairs; toPathFromParts keeps them disconnected so no
+// connector line is drawn between strokes.
+const MAN_PARTS: [number, number][][] = [
+  [[0.5519, 0.2403], [0.5885, 0.1907], [0.6144, 0.1696]],
+  [[0.8377, 0.0755], [0.8304, 0.0503], [0.8182, 0.0284]],
+  [[0.8377, 0.0747], [0.8417, 0.0787], [0.8498, 0.1088], [0.875, 0.1567]],
+  [[0.487, 0.5528], [0.4765, 0.5406], [0.47, 0.5398], [0.4221, 0.5731], [0.3774, 0.5877], [0.3352, 0.5852], [0.3312, 0.5804], [0.3377, 0.5722], [0.3141, 0.5649], [0.3068, 0.5568], [0.2305, 0.5617], [0.1981, 0.5698], [0.1761, 0.5795], [0.1558, 0.5982], [0.1307, 0.6494], [0.125, 0.6705], [0.1258, 0.6956], [0.1356, 0.7151], [0.1412, 0.7727]],
+  [[0.8612, 0.2987], [0.8628, 0.2654], [0.8612, 0.2346], [0.858, 0.2297]],
+  [[0.6997, 0.0933], [0.7167, 0.0755], [0.7735, 0.0365]],
+  [[0.2825, 1], [0.2703, 0.9554], [0.2638, 0.9521], [0.2589, 0.9545], [0.2597, 0.9708]],
+  [[0.4131, 0.2216], [0.401, 0.2256], [0.3571, 0.2622]],
+  [[0.8182, 0.1826], [0.8141, 0.1469], [0.8141, 0.0925]],
+  [[0.8872, 0.3231], [0.8807, 0.3247], [0.7719, 0.3019], [0.7143, 0.2955], [0.6997, 0.2898], [0.6469, 0.2881], [0.5877, 0.2784], [0.4253, 0.2776], [0.3612, 0.2881], [0.3539, 0.2881], [0.3474, 0.2817]],
+  [[0.1615, 1], [0.1485, 0.9359], [0.1437, 0.9294], [0.1453, 0.9196], [0.1396, 0.9115], [0.1453, 0.9018], [0.1542, 0.9042], [0.1648, 0.8985], [0.1599, 0.8782], [0.1485, 0.8539], [0.1485, 0.8393], [0.1445, 0.8304], [0.1453, 0.8255], [0.1542, 0.8198], [0.1542, 0.8141], [0.1469, 0.7946], [0.1315, 0.7955], [0.1234, 0.7849], [0.1128, 0.7857], [0.1063, 0.7695], [0.1096, 0.7597], [0.1299, 0.7695], [0.1404, 0.7654]],
+  [[0.858, 0.2305], [0.8604, 0.2119], [0.858, 0.1786]],
+  [[0.5731, 0.6307], [0.5666, 0.6218], [0.5641, 0.6088], [0.5674, 0.5771]],
+  [[0.5674, 0.5779], [0.5779, 0.5479], [0.5706, 0.5357], [0.5641, 0.5381], [0.5706, 0.5503], [0.5576, 0.5641]],
+  [[0.8369, 0.2914], [0.8401, 0.2784], [0.8393, 0.2192], [0.8425, 0.2094], [0.8409, 0.1193]],
+  [[0.1867, 1], [0.1802, 0.9675], [0.1672, 0.9481], [0.1672, 0.9286]],
+  [[0.168, 0.9286], [0.1623, 0.9261], [0.155, 0.9326], [0.1705, 1]],
+  [[0.5211, 0.2443], [0.5398, 0.2248], [0.5617, 0.1916]],
+  [[0.2776, 0.5609], [0.2906, 0.5682], [0.2881, 0.5763], [0.2362, 0.5795], [0.1997, 0.5942], [0.1964, 0.5917], [0.1981, 0.5804]],
+  [[0.7865, 0.2183], [0.789, 0.1794], [0.7841, 0.1534], [0.7873, 0.1445], [0.7849, 0.1226]],
+  [[0.5365, 0.5771], [0.5219, 0.5804], [0.5122, 0.5739], [0.4984, 0.5844], [0.4838, 0.5795], [0.4464, 0.6006], [0.3782, 0.6242], [0.3352, 0.6266], [0.2808, 0.6234], [0.2606, 0.6266], [0.237, 0.6372], [0.2183, 0.6534], [0.2029, 0.6769], [0.1989, 0.7062], [0.2062, 0.7143], [0.224, 0.72], [0.2208, 0.7248], [0.2094, 0.7265], [0.2216, 0.7711], [0.2143, 0.7776], [0.2143, 0.7825], [0.2232, 0.8271], [0.2346, 0.8328], [0.233, 0.8409], [0.2419, 0.8758], [0.2492, 0.8856], [0.2468, 0.8945], [0.2557, 0.9245]],
+  [[0.2557, 0.9237], [0.2662, 0.9213], [0.2735, 0.9253], [0.2727, 0.9343], [0.28, 0.9497], [0.2792, 0.9578], [0.2914, 1]],
+  [[0.4911, 0.5463], [0.4773, 0.5308], [0.4789, 0.526], [0.526, 0.4976], [0.5487, 0.4903], [0.5398, 0.4716], [0.539, 0.4578], [0.5349, 0.4537], [0.4797, 0.4383], [0.4075, 0.4115], [0.3336, 0.3718], [0.3101, 0.3498], [0.2987, 0.3255], [0.3101, 0.3011], [0.3336, 0.289], [0.3132, 0.2963], [0.3076, 0.3068], [0.3433, 0.293], [0.3474, 0.2817]],
+  [[0.8774, 0.0885], [0.8482, 0.0479], [0.8506, 0.0341], [0.836, 0.0211], [0.8368, 0.0146], [0.8295, 0.0138], [0.819, 0.0162], [0.8044, 0.0032], [0.7946, 0], [0.7808, 0.0032], [0.6907, 0.0544], [0.625, 0.0998]],
+  [[0.4123, 0.2224], [0.4318, 0.211], [0.4416, 0.1981], [0.461, 0.1859], [0.5154, 0.1623], [0.513, 0.1599], [0.5065, 0.1623], [0.4391, 0.2183]],
+  [[0.5722, 0.6299], [0.5885, 0.6291], [0.6031, 0.6339], [0.6128, 0.6315], [0.6193, 0.6364], [0.6688, 0.6372], [0.6818, 0.6372], [0.6851, 0.642], [0.6583, 0.6567], [0.6396, 0.6729], [0.6242, 0.6948], [0.6226, 0.7175], [0.6055, 0.7224], [0.6104, 0.7427], [0.6063, 0.7638], [0.6388, 0.7938], [0.6242, 0.8166], [0.6169, 0.8401], [0.6104, 0.9237], [0.5901, 1]],
+];
+
+function tracedMan(size: number): DrawingPath {
+  const map = (n: number) => (0.06 + n * 0.88) * size;
+  const parts = MAN_PARTS.map((part) => part.map(([x, y]) => ({ x: map(x), y: map(y) })));
+  return toPathFromParts(parts, size);
+}
+
 function artwork(
   id: string,
   name: string,
@@ -256,6 +313,11 @@ const nimcoPack: ArtistPackDefinition = {
     // Basket.jpeg (see HOOP_PARTS above); data + preview archived in
     // artist-source-files/nimco-design/approved-line-art/. Player-facing.
     artwork("nimco-basketball-hoop", "Basketball Hoop", "nimco", "published", tracedHoop),
+    // PUBLISHED (2026-07-12) by the owner — image-derived trace of man.jpeg (see
+    // MAN_PARTS above), a saxophonist in a conical straw hat, after the
+    // owner-directed minimal outer-contour closure pass. Player-facing. Reference
+    // copy archived in approved-line-art/man.ts.
+    artwork("nimco-saxophonist", "Saxophonist", "nimco", "published", tracedMan),
   ],
 };
 

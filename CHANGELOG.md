@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.20.0 - 2026-07-12
+
+The **Nimco Design** Artist Pack gained a third published artwork, **"Saxophonist"**
+— a musician in a conical straw hat (nón lá) playing a saxophone, drawn from
+Nimrod Cohen's high-contrast black-and-white silhouette photograph. It is an
+image-derived trace (Canny edge pass over the frame, skeleton-graph walk, RDP)
+followed by an owner-directed minimal outer-contour closure pass that bridged
+the hat's cone/brim outline and the neck-to-torso connection along the real
+silhouette — leaving the saxophone, the hat's straw ribs, and all proportions
+untouched. 26 pen-lift parts; scores cleanly through the normal draw/score flow
+on desktop and mobile. (`src/engine/artistPackLibrary.ts`; reference line-art in
+`artist-source-files/nimco-design/approved-line-art/man.ts`.)
+
 ## 0.19.0 - 2026-07-12
 
 Sharing an **Artist Pack** result now opens a dedicated result page that shows

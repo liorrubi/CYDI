@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.21.0 - 2026-07-12
+
+**"Draw It Back" — Artist Pack results are now a two-way challenge.** Opening a
+shared Artist Pack result gains a **Draw It Back** button (only for artworks that
+are still published): it drops you straight into that same artwork, and after you
+finish, the result screen shows **your drawing next to the sender's** (never the
+reference guide) and a **Send Back** button that shares a fresh link carrying only
+*your* drawing. The chain can continue in both directions indefinitely. It reuses
+the existing `"a"` share plumbing — the link now also carries the artwork id so the
+recipient's app can re-resolve the exact same catalog artwork locally, with a
+validated, backward-compatible field (older links simply don't offer Draw It Back).
+Share and Send-Back messages now include a clear call to action and the link
+("Think you can beat me? Draw it back! 🎨"). (`src/screens/ArtistPackScreen.tsx`,
+`SharedArtistResultScreen.tsx`, `services/shareLink.ts`.)
+
+**Anonymous, aggregate usage analytics (server-side).** A new Cloudflare Durable
+Object records privacy-preserving counters — `game_started`, `game_completed`,
+`result_shared`, and the pre-existing events — rolled up by day/week/month, game
+type, category, and content. There is **no player, browser, or IP identifier and
+no per-event log**, only running totals; a private, token-gated report endpoint
+exposes completion and share rates for the owner. Everything routes through the
+existing central `trackEvent`, so a future swap to GA4/Firebase touches no call
+sites. (`worker/analyticsDO.ts`, `src/services/analyticsSchema.ts`,
+`src/services/analytics.ts`.)
+
+**Reliability, security & accessibility pass** (from a code review):
+
+- A crafted share link can no longer freeze the recipient's browser: decoded
+  share payloads are now bounded — point count, display-string length, and total
+  size — so a self-contained hash link can't smuggle a pathologically large
+  drawing to render. Legitimate links are unaffected. (`services/shareLink.ts`)
+- Daily Challenge score submission is hardened with per-identity rate limiting and
+  tighter input validation, and its trust model (scores are client-reported) is
+  now documented in code. (`worker/dailyChallengeDO.ts`)
+- The drawing surface and the result/shared comparison canvases now carry
+  accessible labels, so screen readers announce them instead of skipping unlabeled
+  graphics; decorative emoji in share buttons are hidden from assistive tech.
+- Internal: analytics report reads are batched into one multi-key get; share ids
+  are longer (harder to enumerate, existing links still resolve); the
+  Asia/Jerusalem date helper is now a single shared source.
+
 ## 0.20.0 - 2026-07-12
 
 The **Nimco Design** Artist Pack gained a third published artwork, **"Saxophonist"**

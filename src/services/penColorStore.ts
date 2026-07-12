@@ -1,12 +1,15 @@
 import { DEFAULT_PEN_COLOR, PEN_COLORS, type PenColorId } from "../app/constants";
 import { getCoins } from "./coinsStore";
 import { getSaveData, updateSaveData } from "./saveStore";
+import { isUnlockEverythingActive } from "./unlockOverrideStore";
 
 function readUnlocked(): PenColorId[] {
   return getSaveData().progress.unlockedPenColors;
 }
 
+/** Every ink color the player can currently draw with - all of them, unpurchased included, while the Settings "lock management" override is active. */
 export function getUnlockedColors(): PenColorId[] {
+  if (isUnlockEverythingActive()) return PEN_COLORS.map((color) => color.id);
   const unlocked = readUnlocked();
   return unlocked.includes(DEFAULT_PEN_COLOR) ? unlocked : [DEFAULT_PEN_COLOR, ...unlocked];
 }

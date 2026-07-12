@@ -208,7 +208,9 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
       <div className="card instructions-card settings-card">
         <h2>Lock Management</h2>
         <p className="status-text">
-          {allUnlocked ? "All categories and shapes are unlocked." : "Categories and shapes are locked as normal."}
+          {allUnlocked
+            ? "All categories, shapes, ink colors, and pen skins are unlocked."
+            : "Categories, shapes, ink colors, and pen skins are locked as normal."}
         </p>
         <Button variant="secondary" onClick={handleOpenLockPrompt}>
           {allUnlocked ? "🔓 Re-lock Everything" : "🔒 Unlock Everything"}

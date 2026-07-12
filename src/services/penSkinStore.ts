@@ -1,6 +1,7 @@
 import { DEFAULT_PEN_SKIN, PEN_SKINS, type PenSkinId } from "../app/constants";
 import { getCoins } from "./coinsStore";
 import { getSaveData, updateSaveData } from "./saveStore";
+import { isUnlockEverythingActive } from "./unlockOverrideStore";
 
 // Older save blobs (created before Drawing Pens shipped) have no
 // unlockedPenSkins / selectedPenSkin fields, so every read tolerates them
@@ -9,7 +10,9 @@ function readUnlocked(): PenSkinId[] {
   return getSaveData().progress.unlockedPenSkins ?? [];
 }
 
+/** Every pen skin the player can currently equip - all of them, unpurchased included, while the Settings "lock management" override is active. */
 export function getUnlockedSkins(): PenSkinId[] {
+  if (isUnlockEverythingActive()) return PEN_SKINS.map((skin) => skin.id);
   const unlocked = readUnlocked();
   return unlocked.includes(DEFAULT_PEN_SKIN) ? unlocked : [DEFAULT_PEN_SKIN, ...unlocked];
 }

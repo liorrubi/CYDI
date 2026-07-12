@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.22.2 - 2026-07-12
+
+**Fix: "Unlock Everything" didn't unlock ink colors or pen skins.** The
+Settings QA/testing toggle (Lock Management) forced open every category,
+shape, and Mega card, but ink colors and pen skins were missed and still
+required real purchases. Both now honor the override the same way categories
+already did — every ink color and pen skin reads as owned while the toggle is
+on, with no fake ownership persisted, so turning it back off correctly
+reverts to only what was actually bought. Settings copy updated to describe
+the full scope. (`services/penColorStore.ts`, `services/penSkinStore.ts`,
+`services/unlockOverrideStore.ts`, `screens/SettingsScreen.tsx`.)
+
 ## 0.22.1 - 2026-07-12
 
 **Drawing Pens shop polish.** Owned pen skins now show the same **✓ Owned**

@@ -1,6 +1,6 @@
 const UNLOCK_EVERYTHING_KEY = "cydi.allCategoriesUnlockedOverride.v1";
 
-/** Whether the Settings "lock management" cheat toggle has forced every category and shape open, without erasing real purchases/progress underneath - those reassert themselves as soon as this is switched back off. */
+/** Whether the Settings "lock management" cheat toggle has forced every category, shape, ink color, and pen skin open, without erasing real purchases/progress underneath - those reassert themselves as soon as this is switched back off. */
 export function isUnlockEverythingActive(): boolean {
   try {
     return localStorage.getItem(UNLOCK_EVERYTHING_KEY) === "1";

@@ -112,7 +112,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    trackEvent("app_open");
+    trackEvent("app_open", {});
   }, []);
 
   // Covers opening a share link in a tab that already has CYDI loaded (a

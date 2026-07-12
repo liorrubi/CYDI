@@ -44,6 +44,7 @@ import {
 } from "../services/megaChallengeStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { shareOrCopy } from "../services/nativeShare";
+import { trackEvent } from "../services/analytics";
 import { toAchievements, toHome, toInstructions, toMegaChallenge, toSettings, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 import type { DrawingPath } from "../types/Challenge";
@@ -305,9 +306,12 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
 
   useEffect(() => {
     if (phase !== "preview") return;
-    const timeoutId = window.setTimeout(() => setPhase("drawing"), PREVIEW_DURATION_MS);
+    const timeoutId = window.setTimeout(() => {
+      trackEvent("game_started", { gameType: "megaChallenge", category: card.category, contentKey: card.id });
+      setPhase("drawing");
+    }, PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
-  }, [phase]);
+  }, [phase, card]);
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
@@ -339,6 +343,7 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
       );
       if (passed) playSuccessSound();
       else playEncourageSound();
+      trackEvent("game_completed", { gameType: "megaChallenge", category: card.category, contentKey: card.id });
       setPhase("result");
     }, delay);
   }

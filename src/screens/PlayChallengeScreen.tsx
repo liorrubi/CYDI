@@ -10,6 +10,7 @@ import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { encodeResultLink } from "../services/shareLink";
 import { createShortResultLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
+import { trackEvent } from "../services/analytics";
 import { scoreAttempt } from "../engine/scoring";
 import {
   toAchievements,
@@ -60,7 +61,10 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
 
   useEffect(() => {
     if (!challenge || phase !== "preview") return;
-    const timeoutId = window.setTimeout(() => setPhase("drawing"), PREVIEW_DURATION_MS);
+    const timeoutId = window.setTimeout(() => {
+      trackEvent("game_started", { gameType: "customChallenge", category: "custom", contentKey: challenge.id });
+      setPhase("drawing");
+    }, PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
   }, [challenge, phase]);
 
@@ -84,6 +88,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
       setChallenge(updated);
       setResult(scoreResult);
       setIsNewBest(beatBest);
+      trackEvent("game_completed", { gameType: "customChallenge", category: "custom", contentKey: challenge.id });
       setPhase("result");
     }, delay);
   }
@@ -112,6 +117,9 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
       text: `I scored ${result.total}% on "${challenge.name}"! Think you can beat it?`,
       url,
     });
+    if (outcome === "shared" || outcome === "copied") {
+      trackEvent("result_shared", { gameType: "customChallenge", category: "custom", contentKey: challenge.id });
+    }
     if (outcome === "copied") {
       setShareFeedback("Link copied!");
       window.setTimeout(() => setShareFeedback(null), 2500);

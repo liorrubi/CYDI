@@ -719,9 +719,12 @@ function ShapePlay({
 
   useEffect(() => {
     if (phase !== "preview") return;
-    const timeoutId = window.setTimeout(() => setPhase("drawing"), PREVIEW_DURATION_MS);
+    const timeoutId = window.setTimeout(() => {
+      trackEvent("game_started", { gameType: "shapeChallenge", category, contentKey: shape.id });
+      setPhase("drawing");
+    }, PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
-  }, [phase]);
+  }, [phase, category, shape]);
 
   /** The base reward is already credited where `doubleOfferAmount` is set below - only the extra half of a successful double is new (mirrors ChestRewardOverlay), so navigating away before resolving the offer can never forfeit the coins already earned. */
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
@@ -774,6 +777,7 @@ function ShapePlay({
       }
 
       trackEvent("shape_completed", { category, starRating: newStars, passed: passedNow, isNewBest: beatBest });
+      trackEvent("game_completed", { gameType: "shapeChallenge", category, contentKey: shape.id });
 
       setResult(scoreResult);
       setIsNewBest(beatBest);

@@ -26,6 +26,7 @@ import { triggerCoinFlight } from "../engine/coinFlight";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins, getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { trackEvent } from "../services/analytics";
 import {
   canPlaySpecialChallengeFree,
   getSpecialChallengeBestScore,
@@ -89,7 +90,10 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
 
   useEffect(() => {
     if (phase !== "preview") return;
-    const timeoutId = window.setTimeout(() => setPhase("drawing"), PREVIEW_DURATION_MS);
+    const timeoutId = window.setTimeout(() => {
+      trackEvent("game_started", { gameType: "specialChallenge", category: SHAPE.category, contentKey: SHAPE.id });
+      setPhase("drawing");
+    }, PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
   }, [phase]);
 
@@ -131,6 +135,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
       setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
       if (passed) playSuccessSound();
       else playEncourageSound();
+      trackEvent("game_completed", { gameType: "specialChallenge", category: SHAPE.category, contentKey: SHAPE.id });
       setPhase("result");
     }, delay);
   }

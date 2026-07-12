@@ -18,6 +18,10 @@
       {
         "name": "DAILY_CHALLENGE_DO",
         "class_name": "DailyChallengeDO"
+      },
+      {
+        "name": "ANALYTICS_DO",
+        "class_name": "AnalyticsDO"
       }
     ]
   },
@@ -25,6 +29,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["DailyChallengeDO"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["AnalyticsDO"]
     }
   ]
 }

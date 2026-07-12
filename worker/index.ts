@@ -1,12 +1,15 @@
+import { AnalyticsDO } from "./analyticsDO";
 import { DailyChallengeDO } from "./dailyChallengeDO";
 import { parseShareRecord, renderShareImage, shareTitleAndDescription } from "./shareImage";
 
-export { DailyChallengeDO };
+export { AnalyticsDO, DailyChallengeDO };
 
 export interface Env {
   SHARE_KV: KVNamespace;
   ASSETS: Fetcher;
   DAILY_CHALLENGE_DO: DurableObjectNamespace;
+  ANALYTICS_DO: DurableObjectNamespace;
+  ANALYTICS_ADMIN_TOKEN: string;
 }
 
 // Excludes 0/O and 1/I to avoid ids that are ambiguous when read aloud or copied by hand.
@@ -146,6 +149,21 @@ function forwardToDailyDO(request: Request, env: Env, path: string): Promise<Res
   });
 }
 
+// Every /api/analytics/* request is forwarded to the single global AnalyticsDO
+// instance, which processes requests one at a time (see analyticsDO.ts) so counter
+// increments can never race or lose an update.
+function forwardToAnalyticsDO(request: Request, env: Env, path: string): Promise<Response> {
+  const id = env.ANALYTICS_DO.idFromName("analytics");
+  const stub = env.ANALYTICS_DO.get(id);
+  const url = new URL(request.url);
+  const target = new URL(path + url.search, "https://analytics.internal");
+  return stub.fetch(target.toString(), {
+    method: request.method,
+    headers: request.headers,
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -165,6 +183,9 @@ export default {
 
     const episodeMatch = url.pathname.match(/^\/api\/daily\/episode\/(\d+)$/);
     if (episodeMatch && request.method === "GET") return forwardToDailyDO(request, env, `/episode/${episodeMatch[1]}`);
+
+    if (url.pathname === "/api/analytics/event" && request.method === "POST") return forwardToAnalyticsDO(request, env, "/event");
+    if (url.pathname === "/api/analytics/report" && request.method === "GET") return forwardToAnalyticsDO(request, env, "/report");
 
     const shareLinkMatch = url.pathname.match(/^\/c\/([A-Za-z0-9]{4,12})$/);
     if (shareLinkMatch && request.method === "GET") {

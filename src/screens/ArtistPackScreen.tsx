@@ -98,8 +98,8 @@ export default function ArtistPackScreen({ packId, from, onNavigate }: ArtistPac
   function handleConfirmLeave() {
     if (!pack) return;
     trackEvent("artist_pack_link_clicked", {
-      artistId: pack.artist.id,
-      packId: pack.id,
+      artistKey: pack.artist.id,
+      packKey: pack.id,
       hasAffiliate: pack.artist.affiliateUrl !== undefined,
     });
     window.open(artistOutboundUrl(pack.artist), "_blank", "noopener,noreferrer");
@@ -258,9 +258,12 @@ function ArtistPlay({ artwork, pack, onFinished, onNavigate, here }: ArtistPlayP
 
   useEffect(() => {
     if (phase !== "preview") return;
-    const timeoutId = window.setTimeout(() => setPhase("drawing"), PREVIEW_DURATION_MS);
+    const timeoutId = window.setTimeout(() => {
+      trackEvent("game_started", { gameType: "artistPack", category: artwork.category, contentKey: `${pack.id}:${artwork.id}` });
+      setPhase("drawing");
+    }, PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
-  }, [phase]);
+  }, [phase, artwork, pack]);
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
@@ -285,6 +288,7 @@ function ArtistPlay({ artwork, pack, onFinished, onNavigate, here }: ArtistPlayP
       setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
       if (passed) playSuccessSound();
       else playEncourageSound();
+      trackEvent("game_completed", { gameType: "artistPack", category: artwork.category, contentKey: `${pack.id}:${artwork.id}` });
       setPhase("result");
     }, delay);
   }
@@ -330,6 +334,9 @@ function ArtistPlay({ artwork, pack, onFinished, onNavigate, here }: ArtistPlayP
       text: `I scored ${result.total}% drawing "${artwork.name}" from the ${pack.name} Artist Pack by ${pack.artist.name} on CYDI!`,
       url,
     });
+    if (outcome === "shared" || outcome === "copied") {
+      trackEvent("result_shared", { gameType: "artistPack", category: artwork.category, contentKey: `${pack.id}:${artwork.id}` });
+    }
     if (outcome === "copied") {
       setShareFeedback("Link copied!");
       window.setTimeout(() => setShareFeedback(null), 2500);

@@ -16,6 +16,9 @@ dist-ssr
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 
 # Artist Pack source materials — originals, drafts, and private artist files.
 # Never commit or deploy these; only approved game DATA belongs in src/.

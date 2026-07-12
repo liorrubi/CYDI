@@ -24,6 +24,7 @@ import { addCoins } from "../services/coinsStore";
 import { dailyChallengeShareUrl } from "../services/dailyChallengeShare";
 import { shareOrCopy } from "../services/nativeShare";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { trackEvent } from "../services/analytics";
 import {
   claimDailyPrizes,
   fetchCurrentDailyEpisode,
@@ -124,13 +125,18 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const shape = episode ? getShapeById(episode.shapeId) : undefined;
+
   useEffect(() => {
     if (phase !== "preview") return;
-    const timeoutId = window.setTimeout(() => setPhase("drawing"), PREVIEW_DURATION_MS);
+    const timeoutId = window.setTimeout(() => {
+      if (episode && shape) {
+        trackEvent("game_started", { gameType: "dailyChallenge", category: shape.category, contentKey: `daily:${episode.id}` });
+      }
+      setPhase("drawing");
+    }, PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
-  }, [phase]);
-
-  const shape = episode ? getShapeById(episode.shapeId) : undefined;
+  }, [phase, episode, shape]);
   const target = useMemo(() => shape?.generate(CANVAS_SIZE), [shape]);
 
   function handleSelectPenColor(id: PenColorId) {
@@ -154,6 +160,9 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       text: "Can you beat today's CYDI Daily Challenge? Draw it from memory - no peeking!",
       url,
     });
+    if ((outcome === "shared" || outcome === "copied") && episode && shape) {
+      trackEvent("result_shared", { gameType: "dailyChallenge", category: shape.category, contentKey: `daily:${episode.id}` });
+    }
     if (outcome === "copied") {
       setShareFeedback("Link copied!");
       window.setTimeout(() => setShareFeedback(null), 2500);
@@ -163,7 +172,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   }
 
   function handleDone() {
-    if (!attemptPath || !target || !episode) return;
+    if (!attemptPath || !target || !episode || !shape) return;
     const previousBest = yourBest;
     primeAudioContext();
     setPhase("analyzing");
@@ -190,6 +199,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
       if (passed) playSuccessSound();
       else playEncourageSound();
+      trackEvent("game_completed", { gameType: "dailyChallenge", category: shape.category, contentKey: `daily:${episode.id}` });
       setPhase("result");
     }, delay);
   }

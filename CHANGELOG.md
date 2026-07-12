@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.18.0 - 2026-07-12
+
+"Nimco Design" gained a second published artwork, **"Basketball Hoop"** — a
+chain-net hoop shot from below, now a playable drawing challenge in the artist
+pack alongside "Portrait Study". It is an image-derived trace of the artist's
+photograph (the rim and its mounting bracket read as one closed silhouette, with
+the handmade irregular chain net hanging below), 42 pen-lift parts, and scores
+cleanly through the normal draw/score flow on desktop and mobile.
+(`src/engine/artistPackLibrary.ts`)
+
+Internal: added a project-local `create-artist-shape` Claude Code skill
+(`.claude/skills/`) that documents and scripts the artist-image → draft-artwork
+workflow used to produce this piece. No player-facing effect.
+
 ## 0.17.1 - 2026-07-11
 
 "Nimco Design" now shows a real profile photo instead of the generic 🎨 emoji,

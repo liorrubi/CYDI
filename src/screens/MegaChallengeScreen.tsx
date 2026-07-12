@@ -6,7 +6,7 @@ import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCa
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
-import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
+import ResultComparison from "../components/ResultComparison";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
 import {
   ANALYZING_MAX_MS,
@@ -19,7 +19,6 @@ import {
   MEGA_SPECIFIC_UNLOCK_COST,
   PREVIEW_DURATION_MS,
   passScoreForDifficulty,
-  penColorCssBackground,
   penInkGlyphColor,
   randomCelebrationMessage,
   randomEncouragementMessage,
@@ -411,17 +410,7 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
         )}
         <ScoreCard score={result} showPercentSign />
         {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
-        <div className="canvas-wrapper">
-          <ShapeOverlayCanvas target={target} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
-        </div>
-        <p className="overlay-legend">
-          <span className="overlay-legend-swatch overlay-legend-target" /> Target shape
-          <span
-            className="overlay-legend-swatch"
-            style={{ background: penColorCssBackground(penColor), marginLeft: "var(--space-3)" }}
-          />{" "}
-          Your drawing
-        </p>
+        <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
         {doubleOfferAmount === null && (
           <div className="button-row">
             <Button variant="secondary" onClick={handleRetry}>

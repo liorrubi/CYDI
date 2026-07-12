@@ -6,13 +6,12 @@ import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCa
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
-import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
+import ResultComparison from "../components/ResultComparison";
 import {
   ANALYZING_MAX_MS,
   ANALYZING_MIN_MS,
   CANVAS_SIZE,
   PREVIEW_DURATION_MS,
-  penColorCssBackground,
   penInkGlyphColor,
   randomCelebrationMessage,
   randomEncouragementMessage,
@@ -269,7 +268,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const leader = episode.topEntries[0] ?? null;
   const newChallengeAvailable = isLive && submission !== null && submission.current.id !== episode.id;
 
-  if (phase === "result" && result && attemptPath) {
+  if (phase === "result" && result && attemptPath && target) {
     return (
       <div className="screen">
         <AppHeader
@@ -292,17 +291,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
             Your best for this shape: <strong>{yourBest}%</strong>
           </p>
         )}
-        <div className="canvas-wrapper">
-          <ShapeOverlayCanvas target={target} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
-        </div>
-        <p className="overlay-legend">
-          <span className="overlay-legend-swatch overlay-legend-target" /> Target shape
-          <span
-            className="overlay-legend-swatch"
-            style={{ background: penColorCssBackground(penColor), marginLeft: "var(--space-3)" }}
-          />{" "}
-          Your drawing
-        </p>
+        <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
         <div className="button-row">
           <Button variant="secondary" onClick={handleTryAgain}>
             Try Again

@@ -6,7 +6,7 @@ import { getSaveData, updateSaveData } from "./saveStore";
  * Rewarded Ads limit: swap the call to `recordPaidChestDoubleUsed` for an ad-watch-completed callback
  * once real ads are wired up, the daily reset logic here doesn't need to change.
  */
-export const MAX_PAID_CHEST_DOUBLES_PER_DAY = 3;
+export const MAX_PAID_CHEST_DOUBLES_PER_DAY = 1;
 
 function todayDateString(): string {
   const d = new Date();

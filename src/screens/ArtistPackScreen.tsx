@@ -6,6 +6,7 @@ import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCa
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
+import ResultComparison from "../components/ResultComparison";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
 import StarRating from "../components/StarRating";
@@ -465,46 +466,44 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
         <ScoreCard score={result} showPercentSign />
         <StarRating score={result.total} size={44} />
         {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
-        <div className="canvas-wrapper">
-          {isReply && replyTo ? (
-            // Reply comparison: sender's drawing vs. the recipient's new one - never
-            // the real artwork guide/target, reusing the same generic overlay used
-            // elsewhere to compare two hand-drawn paths (e.g. SharedResultScreen).
-            <ShapeOverlayCanvas
-              target={replyTo.attempt}
-              attempt={attemptPath}
-              attemptColor={penColor}
-              width={CANVAS_SIZE}
-              height={CANVAS_SIZE}
-              ariaLabel="Comparison of the sender's drawing and your drawing"
-            />
-          ) : (
-            <ShapeOverlayCanvas
-              target={target}
-              attempt={attemptPath}
-              attemptColor={penColor}
-              width={CANVAS_SIZE}
-              height={CANVAS_SIZE}
-              ariaLabel="Comparison of the target artwork and your drawing"
-            />
-          )}
-        </div>
-        <p className="overlay-legend">
-          {isReply && replyTo ? (
-            <span
-              className="overlay-legend-swatch overlay-legend-target"
-              style={{ background: penColorCssBackground(replyTo.attemptColor ?? DEFAULT_PEN_COLOR) }}
-            />
-          ) : (
-            <span className="overlay-legend-swatch overlay-legend-target" />
-          )}{" "}
-          {isReply ? "Sender's drawing" : "Target artwork"}
-          <span
-            className="overlay-legend-swatch"
-            style={{ background: penColorCssBackground(penColor), marginLeft: "var(--space-3)" }}
-          />{" "}
-          Your drawing
-        </p>
+        {isReply && replyTo ? (
+          // Reply comparison: sender's drawing vs. the recipient's new one - never
+          // the real artwork guide/target, reusing the same generic overlay used
+          // elsewhere to compare two hand-drawn paths (e.g. SharedResultScreen).
+          // No guide toggle here: both drawings are the point of the comparison.
+          <>
+            <div className="canvas-wrapper">
+              <ShapeOverlayCanvas
+                target={replyTo.attempt}
+                attempt={attemptPath}
+                attemptColor={penColor}
+                width={CANVAS_SIZE}
+                height={CANVAS_SIZE}
+                ariaLabel="Comparison of the sender's drawing and your drawing"
+              />
+            </div>
+            <p className="overlay-legend">
+              <span
+                className="overlay-legend-swatch overlay-legend-target"
+                style={{ background: penColorCssBackground(replyTo.attemptColor ?? DEFAULT_PEN_COLOR) }}
+              />{" "}
+              Sender's drawing
+              <span
+                className="overlay-legend-swatch"
+                style={{ background: penColorCssBackground(penColor), marginLeft: "var(--space-3)" }}
+              />{" "}
+              Your drawing
+            </p>
+          </>
+        ) : (
+          <ResultComparison
+            target={target}
+            attempt={attemptPath}
+            attemptColor={penColor}
+            targetLabel="Target artwork"
+            ariaLabel="Comparison of the target artwork and your drawing"
+          />
+        )}
         <p className="artist-artwork-credit artist-artwork-credit-result">🎨 Inspired by {pack.artist.name}</p>
         {shareFeedback && <p className="status-text">{shareFeedback}</p>}
         {doubleOfferAmount === null && (

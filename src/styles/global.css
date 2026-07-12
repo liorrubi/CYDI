@@ -1676,6 +1676,55 @@ body {
   background: #2563eb;
 }
 
+.guide-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.guide-toggle-label {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.guide-toggle {
+  flex-shrink: 0;
+  border: none;
+  background: var(--color-border);
+  border-radius: 999px;
+  width: 52px;
+  height: 30px;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.guide-toggle.is-on {
+  background: var(--color-primary);
+}
+
+.guide-toggle-knob {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(30, 32, 46, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+.guide-toggle.is-on .guide-toggle-knob {
+  transform: translateX(22px);
+}
+
 .journey-progress {
   width: 100%;
   max-width: 520px;

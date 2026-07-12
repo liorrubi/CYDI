@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.24.0 - 2026-07-12
+
+**Guide show/hide toggle on result screens.** Every result screen that overlays
+the target guide on the player's drawing (Shape Challenge, Daily, Mega, Special,
+custom-challenge results, shared-result links, and Artist Pack results) now has
+a small "Guide" switch under the comparison, so players can hide the blue guide
+line and admire their drawing on its own. Defaults to visible and resets to
+visible on every new result. Implemented as a shared `ResultComparison`
+component (canvas + legend + toggle) that replaced the seven copies of the
+overlay/legend markup; the Artist Pack reply comparison (sender's drawing vs.
+yours) intentionally has no toggle since both drawings are the point.
+
+**Paid chest doubles limited to once per day.** Chests bought in the shop can
+now have their reward doubled only once per day (was 3). The free Daily Chest
+is still exempt and can always be doubled.
+
 ## 0.23.0 - 2026-07-12
 
 **Private admin analytics dashboard at `/admin/analytics`.** A single

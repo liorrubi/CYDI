@@ -1,9 +1,9 @@
 import AppHeader from "../components/AppHeader";
 import ScoreCard from "../components/ScoreCard";
-import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
+import ResultComparison from "../components/ResultComparison";
 import StarRating from "../components/StarRating";
 import Button from "../components/Button";
-import { CANVAS_SIZE, DEFAULT_PEN_COLOR, penColorCssBackground, type PenColorId } from "../app/constants";
+import { DEFAULT_PEN_COLOR, type PenColorId } from "../app/constants";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
 
@@ -69,21 +69,7 @@ export default function ResultScreen({
           Your best: <strong>{bestScore}%</strong> <StarRating score={bestScore} size={44} />
         </p>
       )}
-      {target && attempt && (
-        <>
-          <div className="canvas-wrapper">
-            <ShapeOverlayCanvas target={target} attempt={attempt} attemptColor={attemptColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
-          </div>
-          <p className="overlay-legend">
-            <span className="overlay-legend-swatch overlay-legend-target" /> Target shape
-            <span
-              className="overlay-legend-swatch"
-              style={{ background: penColorCssBackground(attemptColor), marginLeft: "var(--space-3)" }}
-            />{" "}
-            Your drawing
-          </p>
-        </>
-      )}
+      {target && attempt && <ResultComparison target={target} attempt={attempt} attemptColor={attemptColor} />}
       {shareFeedback && <p className="status-text">{shareFeedback}</p>}
       <div className="button-row">
         <Button variant="secondary" onClick={onBack}>

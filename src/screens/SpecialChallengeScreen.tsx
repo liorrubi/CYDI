@@ -6,7 +6,7 @@ import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCa
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
-import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
+import ResultComparison from "../components/ResultComparison";
 import {
   ANALYZING_MAX_MS,
   ANALYZING_MIN_MS,
@@ -16,7 +16,6 @@ import {
   SPECIAL_CHALLENGE_MIN_SCORE,
   SPECIAL_CHALLENGE_RETRY_COST,
   coinsForSpecialChallengeScore,
-  penColorCssBackground,
   penInkGlyphColor,
   randomCelebrationMessage,
   randomEncouragementMessage,
@@ -243,17 +242,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
         )}
         <ScoreCard score={result} showPercentSign />
         {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
-        <div className="canvas-wrapper">
-          <ShapeOverlayCanvas target={target} attempt={attemptPath} attemptColor={penColor} width={CANVAS_SIZE} height={CANVAS_SIZE} />
-        </div>
-        <p className="overlay-legend">
-          <span className="overlay-legend-swatch overlay-legend-target" /> Target shape
-          <span
-            className="overlay-legend-swatch"
-            style={{ background: penColorCssBackground(penColor), marginLeft: "var(--space-3)" }}
-          />{" "}
-          Your drawing
-        </p>
+        <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
         {doubleOfferAmount === null && (
           <Button variant="secondary" disabled={coins < SPECIAL_CHALLENGE_RETRY_COST} onClick={handlePaidRetry}>
             Try Again for 🪙 {SPECIAL_CHALLENGE_RETRY_COST}

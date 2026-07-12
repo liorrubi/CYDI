@@ -256,6 +256,28 @@ export default function ArtistPackScreen({ packId, from, replyTo, onNavigate }: 
   );
 }
 
+// ---------- share message copy ----------
+
+/** Keeps admin-authored catalog names on one line and non-empty before they're
+ * dropped into a shared message - defensive, since this data ultimately comes
+ * from static source (artistPackLibrary.ts), not user input. */
+function sanitizeForShareText(value: string, fallback: string): string {
+  const cleaned = value.replace(/[\r\n\t]+/g, " ").trim();
+  return cleaned.length > 0 ? cleaned : fallback;
+}
+
+function buildArtistShareMessage(scoreTotal: number, artworkName: string, artistName: string): string {
+  const safeArtwork = sanitizeForShareText(artworkName, "this artwork");
+  const safeArtist = sanitizeForShareText(artistName, "");
+  const credit = safeArtist ? ` by ${safeArtist}` : "";
+  return `I scored ${scoreTotal}% on “${safeArtwork}”${credit} in CYDI. Think you can beat me? Draw it back! 🎨`;
+}
+
+function buildArtistReplyShareMessage(scoreTotal: number, artworkName: string): string {
+  const safeArtwork = sanitizeForShareText(artworkName, "this artwork");
+  return `I drew it back and scored ${scoreTotal}% on “${safeArtwork}”. Can you beat my score? Your turn! 🎨`;
+}
+
 // ---------- play flow (mirrors MegaChallengeScreen's MegaPlay) ----------
 
 type ArtistPhase = "preview" | "drawing" | "analyzing" | "result";
@@ -359,7 +381,12 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
    * Guarded to published artwork only, so drafts/approved are never shareable.
    * Always carries only THIS player's own attempt - in a reply ("Send Back")
    * session, `replyTo.attempt` (the sender's drawing) is never included here,
-   * only shown locally in the result comparison below. */
+   * only shown locally in the result comparison below.
+   *
+   * The share link is appended directly to the message text (rather than passed
+   * as a separate Web Share `url`), and that exact same combined string is what
+   * the clipboard fallback copies - so the message is identical everywhere,
+   * with no risk of a share target appending the link a second time. */
   async function handleShareResult() {
     if (!result || !attemptPath || !isPublished) return;
     const shareArgs = {
@@ -373,10 +400,14 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
       artworkId: artwork.id,
     };
     const url = (await createShortArtistResultLink(shareArgs)) ?? encodeArtistResultLink(shareArgs);
+    const scoreTotal = Math.round(result.total);
+    const message = isReply
+      ? buildArtistReplyShareMessage(scoreTotal, artwork.name)
+      : buildArtistShareMessage(scoreTotal, artwork.name, pack.artist.name);
+    const fullText = `${message}\n\n${url}`;
     const outcome = await shareOrCopy({
-      title: `CYDI — ${artwork.name} (${pack.name})`,
-      text: `I scored ${result.total}% drawing "${artwork.name}" from the ${pack.name} Artist Pack by ${pack.artist.name} on CYDI!`,
-      url,
+      title: `CYDI — ${sanitizeForShareText(artwork.name, "Artist Pack")}`,
+      text: fullText,
     });
     if (outcome === "shared" || outcome === "copied") {
       trackEvent("result_shared", { gameType: "artistPack", category: artwork.category, contentKey: `${pack.id}:${artwork.id}` });
@@ -385,7 +416,7 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
       setShareFeedback("Link copied!");
       window.setTimeout(() => setShareFeedback(null), 2500);
     } else if (outcome === "failed") {
-      setShareFeedback(`Couldn't share automatically — copy this link: ${url}`);
+      setShareFeedback(`Couldn't share automatically — copy this: ${fullText}`);
     }
   }
 

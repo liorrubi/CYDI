@@ -19,11 +19,18 @@ export function parseShareRecord(raw: string): ShareRecord | null {
   }
 }
 
+// Mirrors the decode-side point cap in src/services/shareLink.ts. Stored share
+// records already pass the 20 KB /api/share body cap, but bounding the point
+// count here too keeps the OG-image renderer from ever being handed a
+// pathologically large path to draw.
+const MAX_SHARE_POINTS = 4000;
+
 function isSharePath(value: unknown): value is SharePath {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
     Array.isArray(v.p) &&
+    v.p.length <= MAX_SHARE_POINTS &&
     v.p.every((pt) => Array.isArray(pt) && pt.length === 2 && pt.every((n) => typeof n === "number")) &&
     typeof v.w === "number" &&
     typeof v.h === "number"

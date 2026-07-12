@@ -142,3 +142,61 @@ test("a valid aid at the maximum allowed length is accepted", () => {
   const decoded = parseArtistResultPayload(buildArtistResultPayload({ ...shareArgs, artworkId: maxId }));
   assert.strictEqual(decoded?.artworkId, maxId);
 });
+
+// --- Decode-side payload bounds (render-DoS / oversized-string protection) ---
+
+/** A minimal, valid raw artist-result payload (wire shape), for tests that need to
+ * inject a pathological field directly rather than going through the builder. */
+function rawArtistPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    n: "Portrait Study",
+    pk: "Nimco Design",
+    ar: "Nimrod Cohen",
+    pid: "nimco",
+    s: { total: 82, shapeMatch: 80, coverage: 85, smoothness: 78, scale: 90, message: "Nice work!" },
+    a: { p: [[10, 10], [20, 20]], w: 320, h: 320 },
+    ...overrides,
+  };
+}
+
+test("a share path with too many points is rejected (render-DoS guard)", () => {
+  const hugePoints = Array.from({ length: 100000 }, (_, i) => [i % 320, (i * 7) % 320]);
+  const decoded = parseArtistResultPayload(rawArtistPayload({ a: { p: hugePoints, w: 320, h: 320 } }));
+  assert.strictEqual(decoded, null, "a path with 100k points must be refused");
+});
+
+test("a share path with an oversized breaks array is rejected", () => {
+  const bigBreaks = Array.from({ length: 100000 }, (_, i) => i);
+  const decoded = parseArtistResultPayload(rawArtistPayload({ a: { p: [[10, 10], [20, 20]], w: 320, h: 320, b: bigBreaks } }));
+  assert.strictEqual(decoded, null, "a path with a 100k-entry breaks array must be refused");
+});
+
+test("a reasonable point count above the encode budget still parses (cap never rejects real links)", () => {
+  const points = Array.from({ length: 300 }, (_, i) => [i % 320, (i * 3) % 320]);
+  const decoded = parseArtistResultPayload(rawArtistPayload({ a: { p: points, w: 320, h: 320 } }));
+  assert.ok(decoded, "300 points is well within the cap and must still parse");
+  assert.strictEqual(decoded!.attempt.points.length, 300);
+});
+
+test("an over-long encoded hash payload is rejected before decoding", () => {
+  const oversized = "a." + "b".repeat(30000);
+  assert.strictEqual(decodeArtistResultHash(oversized), null);
+});
+
+test("oversized display strings are truncated, not rejected", () => {
+  const longName = "z".repeat(5000);
+  const longMessage = "m".repeat(5000);
+  const decoded = parseArtistResultPayload(
+    rawArtistPayload({
+      n: longName,
+      ar: longName,
+      pk: longName,
+      s: { total: 50, shapeMatch: 40, coverage: 50, smoothness: 60, scale: 70, message: longMessage },
+    }),
+  );
+  assert.ok(decoded, "a payload with long strings must still parse");
+  assert.ok(decoded!.artworkName.length <= 500, "artwork name must be truncated");
+  assert.ok(decoded!.artistName.length <= 500, "artist name must be truncated");
+  assert.ok(decoded!.packName.length <= 500, "pack name must be truncated");
+  assert.ok(decoded!.score.message.length <= 500, "score message must be truncated");
+});

@@ -14,6 +14,29 @@ type SharePath = { p: SharePoint[]; w: number; h: number; b?: number[] };
 // original point count, so already-short paths are left untouched.
 const SHARE_POINT_BUDGET = 48;
 
+// --- Decode-side safety bounds ---
+// The compaction above only runs when BUILDING a link, so nothing stops a
+// crafted/corrupt link from carrying a pathological payload. These caps are the
+// decode-side counterpart: a self-contained `#…` hash link has no server body
+// limit (unlike `/api/share`, which caps at 20 KB), so without them a link with
+// millions of points would freeze the recipient's tab when rendered, and an
+// arbitrarily long name/message string would be surfaced verbatim.
+//
+// All are set far above any legitimately-produced value (a real path is <=~50
+// points; real names are short), so a genuine link is never rejected/truncated.
+const MAX_SHARE_POINTS = 4000; // reject a path with more points than this
+const MAX_SHARE_STRING_LEN = 500; // truncate display strings past this
+const MAX_ENCODED_LEN = 28000; // reject a hash payload whose encoded form is longer than this (base64 chars)
+
+function clampShareString(value: string): string {
+  return value.length > MAX_SHARE_STRING_LEN ? value.slice(0, MAX_SHARE_STRING_LEN) : value;
+}
+
+/** Bounds the attacker-controllable `message` string carried inside a shared score, leaving the numeric fields untouched. */
+function clampScoreMessage(score: ScoreBreakdown): ScoreBreakdown {
+  return score.message.length > MAX_SHARE_STRING_LEN ? { ...score, message: score.message.slice(0, MAX_SHARE_STRING_LEN) } : score;
+}
+
 function compactForSharing(path: DrawingPath): DrawingPath {
   if (path.points.length <= SHARE_POINT_BUDGET) return path;
 
@@ -46,10 +69,14 @@ function isSharePath(value: unknown): value is SharePath {
   const v = value as Record<string, unknown>;
   return (
     Array.isArray(v.p) &&
+    // Point/break counts are capped so a crafted link can't hand the renderer a
+    // pathologically large path to draw (a render-time DoS). Runs on both link
+    // transports since both funnel through here.
+    v.p.length <= MAX_SHARE_POINTS &&
     v.p.every((pt) => Array.isArray(pt) && pt.length === 2 && pt.every((n) => typeof n === "number")) &&
     typeof v.w === "number" &&
     typeof v.h === "number" &&
-    (v.b === undefined || (Array.isArray(v.b) && v.b.every((n) => typeof n === "number")))
+    (v.b === undefined || (Array.isArray(v.b) && v.b.length <= MAX_SHARE_POINTS && v.b.every((n) => typeof n === "number")))
   );
 }
 
@@ -63,6 +90,11 @@ function encode(payload: unknown): string {
 }
 
 function decode(encoded: string): unknown {
+  // A hash link is self-contained and never passes through the server's 20 KB
+  // body cap, so bound it here before doing any work - the single choke point
+  // that keeps the whole decoded payload (points, breaks, strings) small.
+  // Thrown errors are caught by every decode*Hash caller and become a null result.
+  if (encoded.length > MAX_ENCODED_LEN) throw new Error("share payload too large");
   const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64 + "===".slice((base64.length + 3) % 4);
   const binary = atob(padded);
@@ -85,7 +117,7 @@ export function buildChallengePayload(challenge: Challenge): SharedChallengePayl
 export function parseChallengePayload(raw: unknown): DecodedSharedChallenge | null {
   const value = raw as Partial<SharedChallengePayload> | null;
   if (!value || typeof value.i !== "string" || typeof value.n !== "string" || !isSharePath(value.t)) return null;
-  return { id: value.i, name: value.n, target: fromSharePath(value.t) };
+  return { id: value.i, name: clampShareString(value.n), target: fromSharePath(value.t) };
 }
 
 export function encodeChallengeLink(challenge: Challenge): string {
@@ -154,8 +186,8 @@ export function parseResultPayload(raw: unknown): DecodedSharedResult | null {
   }
   return {
     challengeId: value.i,
-    challengeName: value.n,
-    score: value.s,
+    challengeName: clampShareString(value.n),
+    score: clampScoreMessage(value.s),
     target: fromSharePath(value.t),
     attempt: fromSharePath(value.a),
   };
@@ -257,11 +289,11 @@ export function parseArtistResultPayload(raw: unknown): DecodedSharedArtistResul
     return null;
   }
   return {
-    artworkName: value.n,
-    packName: value.pk,
-    artistName: value.ar,
-    packId: value.pid,
-    score: value.s,
+    artworkName: clampShareString(value.n),
+    packName: clampShareString(value.pk),
+    artistName: clampShareString(value.ar),
+    packId: clampShareString(value.pid),
+    score: clampScoreMessage(value.s),
     attempt: fromSharePath(value.a),
     attemptColor: typeof value.c === "string" ? (value.c as PenColorId) : undefined,
     artworkId: isValidArtworkId(value.aid) ? value.aid : undefined,

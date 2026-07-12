@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>CYDI Analytics</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #f2f3fa;
+      color: #1e202e;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: baseline; gap: 10px; }
+    .brand h1 { font-size: 22px; letter-spacing: 0.5px; color: #5b5bf7; }
+    .brand span { font-size: 14px; color: #6b6e85; }
+    .card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 2px 10px rgba(30, 32, 46, 0.07);
+    }
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: none;
+      border-radius: 999px;
+      padding: 9px 18px;
+      background: #5b5bf7;
+      color: #fff;
+      font-weight: 600;
+    }
+    button.secondary { background: #e9eaf6; color: #3a3d55; }
+    button:disabled { opacity: 0.55; cursor: default; }
+    /* Login */
+    #login-section { max-width: 420px; margin: 8vh auto 0; width: 100%; }
+    #login-section h2 { font-size: 18px; margin-bottom: 6px; }
+    #login-section p { font-size: 13px; color: #6b6e85; margin-bottom: 14px; }
+    #token-input {
+      width: 100%;
+      font: inherit;
+      padding: 10px 12px;
+      border: 1px solid #d4d6e6;
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+    .form-error { color: #d43f3f; font-size: 13px; margin-bottom: 10px; min-height: 16px; }
+    /* Tabs */
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tabs button { background: #e9eaf6; color: #3a3d55; }
+    .tabs button[aria-selected="true"] { background: #5b5bf7; color: #fff; }
+    .range-label { font-size: 13px; color: #6b6e85; }
+    /* KPIs */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .kpi { background: #f7f8fd; border-radius: 12px; padding: 12px; }
+    .kpi .kpi-value { font-size: 24px; font-weight: 700; color: #2c2f45; }
+    .kpi .kpi-label { font-size: 12px; color: #6b6e85; margin-top: 2px; }
+    .kpi.accent { background: rgba(91, 91, 247, 0.08); }
+    .kpi.accent .kpi-value { color: #5b5bf7; }
+    h3.section-title { font-size: 15px; margin-bottom: 10px; color: #3a3d55; }
+    /* Charts */
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+    .chart-box h4 { font-size: 13px; color: #6b6e85; margin-bottom: 4px; font-weight: 600; }
+    .chart-box svg { width: 100%; height: auto; display: block; }
+    /* Tables */
+    .table-scroll { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { text-align: left; padding: 7px 10px; white-space: nowrap; }
+    th { color: #6b6e85; font-weight: 600; border-bottom: 2px solid #e9eaf6; }
+    td { border-bottom: 1px solid #f0f1f8; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .footnote { font-size: 11.5px; color: #8a8da3; margin-top: 8px; }
+    details > summary { cursor: pointer; font-size: 15px; font-weight: 600; color: #3a3d55; padding: 2px 0; }
+    details[open] > summary { margin-bottom: 10px; }
+    .status-line { font-size: 14px; color: #6b6e85; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <h1>CYDI</h1>
+        <span>Analytics (private)</span>
+      </div>
+      <button id="logout-btn" class="secondary" hidden type="button">Log out</button>
+    </header>
+
+    <section id="login-section" class="card">
+      <h2>Admin access</h2>
+      <p>Enter the analytics admin token. It is kept only in this tab's session and sent only as an Authorization header.</p>
+      <form id="login-form">
+        <input id="token-input" type="password" autocomplete="off" placeholder="Admin token" aria-label="Admin token" />
+        <p id="login-error" class="form-error"></p>
+        <button type="submit">View analytics</button>
+      </form>
+    </section>
+
+    <section id="dashboard" hidden>
+      <div class="wrap" style="padding: 0;">
+        <div class="card">
+          <nav class="tabs" id="tabs" aria-label="Report period"></nav>
+          <p class="range-label" id="range-label" style="margin-top: 10px;"></p>
+        </div>
+        <p id="status" class="status-line" hidden></p>
+        <div class="card" id="kpi-card" hidden>
+          <h3 class="section-title">Overview</h3>
+          <div class="kpi-grid" id="kpi-grid"></div>
+          <p class="footnote">"App opens" counts app launches, not unique users — no user identifier is collected.</p>
+        </div>
+        <div class="card" id="charts-card" hidden>
+          <h3 class="section-title">Daily trend</h3>
+          <div class="chart-grid" id="chart-grid"></div>
+        </div>
+        <div class="card" id="gametype-card" hidden>
+          <h3 class="section-title">By game type</h3>
+          <div class="table-scroll" id="gametype-table"></div>
+          <p class="footnote">Custom Challenges are aggregate counts only — no per-challenge identifiers are ever recorded for them.</p>
+        </div>
+        <div class="card" id="topcontent-card" hidden>
+          <details id="topcontent-details">
+            <summary>Top content (built-in only)</summary>
+            <div class="table-scroll" id="topcontent-table"></div>
+            <p class="footnote">Ranked by games started. Personal (custom) challenge content is never recorded per-item.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    "use strict";
+    (function () {
+      var TOKEN_KEY = "cydi.adminAnalyticsToken";
+      var MS_PER_DAY = 24 * 60 * 60 * 1000;
+      var ACCENT = "#5b5bf7";
+
+      var GAME_TYPE_LABELS = {
+        shapeChallenge: "Shape Challenge",
+        dailyChallenge: "Daily Challenge",
+        specialChallenge: "Special Challenge",
+        megaChallenge: "Mega Challenge",
+        artistPack: "Artist Packs",
+        customChallenge: "Custom Challenges",
+      };
+
+      var TABS = [
+        { id: "today", label: "Today", days: 1 },
+        { id: "7d", label: "Last 7 days", days: 7 },
+        { id: "30d", label: "Last 30 days", days: 30 },
+        { id: "alltime", label: "Since analytics launch", days: 0 },
+      ];
+
+      var activeTab = "7d";
+      var loadSeq = 0;
+
+      // --- DOM helpers (report data is only ever rendered via textContent, never innerHTML) ---
+      function el(tag, className, text) {
+        var node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      }
+      function clear(node) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+      }
+      function byId(id) {
+        return document.getElementById(id);
+      }
+
+      // --- Dates (mirror the server's Asia/Jerusalem day buckets) ---
+      function israelToday() {
+        return new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Jerusalem",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date());
+      }
+      function addDays(dateKey, days) {
+        var parts = dateKey.split("-");
+        var d = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]) + days));
+        return d.toISOString().slice(0, 10);
+      }
+
+      // --- Formatting ---
+      function fmtInt(n) {
+        return Number(n || 0).toLocaleString("en-US");
+      }
+      function fmtRate(r) {
+        return (Number(r || 0) * 100).toFixed(1) + "%";
+      }
+      function rateOf(part, whole) {
+        return whole > 0 ? part / whole : 0;
+      }
+
+      // --- Auth ---
+      function getToken() {
+        try {
+          return sessionStorage.getItem(TOKEN_KEY);
+        } catch (e) {
+          return null;
+        }
+      }
+      function setToken(token) {
+        try {
+          sessionStorage.setItem(TOKEN_KEY, token);
+        } catch (e) {
+          /* session-only convenience; login still works for this page view */
+        }
+      }
+      function clearToken() {
+        try {
+          sessionStorage.removeItem(TOKEN_KEY);
+        } catch (e) {
+          /* ignore */
+        }
+      }
+      function showLogin(message) {
+        byId("dashboard").hidden = true;
+        byId("logout-btn").hidden = true;
+        byId("login-section").hidden = false;
+        byId("login-error").textContent = message || "";
+        byId("token-input").value = "";
+      }
+      function showDashboard() {
+        byId("login-section").hidden = true;
+        byId("dashboard").hidden = false;
+        byId("logout-btn").hidden = false;
+      }
+
+      // --- Data ---
+      function fetchReport(params) {
+        var token = getToken();
+        return fetch("/api/analytics/report?" + new URLSearchParams(params).toString(), {
+          headers: { authorization: "Bearer " + token },
+          cache: "no-store",
+        }).then(function (res) {
+          if (res.status === 401) {
+            var err = new Error("unauthorized");
+            err.unauthorized = true;
+            throw err;
+          }
+          if (!res.ok) throw new Error("Report request failed (HTTP " + res.status + ")");
+          return res.json();
+        });
+      }
+
+      function reportParamsForTab(tab) {
+        if (tab.id === "alltime") return { period: "alltime" };
+        var end = israelToday();
+        var start = addDays(end, -(tab.days - 1));
+        var params = { period: "range", start: start, end: end };
+        if (tab.days > 1) params.series = "1";
+        return params;
+      }
+
+      // --- Rendering ---
+      function renderKpis(report) {
+        var counts = report.counts || {};
+        var grid = byId("kpi-grid");
+        clear(grid);
+        function total(name) {
+          return (counts[name] && counts[name].total) || 0;
+        }
+        var items = [
+          { label: "App opens", value: fmtInt(total("app_open")), accent: true },
+          { label: "Games started", value: fmtInt(total("game_started")), accent: true },
+          { label: "Games completed", value: fmtInt(total("game_completed")), accent: true },
+          { label: "Results shared", value: fmtInt(total("result_shared")), accent: true },
+          { label: "Completion rate", value: fmtRate(report.completionRate), accent: true },
+          { label: "Share rate", value: fmtRate(report.shareRate), accent: true },
+          { label: "Shapes completed", value: fmtInt(total("shape_completed")) },
+          { label: "Purchases", value: fmtInt(total("purchase_completed")) },
+          { label: "Mega cards unlocked", value: fmtInt(total("mega_card_unlocked")) },
+          { label: "Artist link clicks", value: fmtInt(total("artist_pack_link_clicked")) },
+        ];
+        items.forEach(function (item) {
+          var box = el("div", "kpi" + (item.accent ? " accent" : ""));
+          box.appendChild(el("div", "kpi-value", item.value));
+          box.appendChild(el("div", "kpi-label", item.label));
+          grid.appendChild(box);
+        });
+        byId("kpi-card").hidden = false;
+      }
+
+      var SVG_NS = "http://www.w3.org/2000/svg";
+      function svgEl(tag, attrs) {
+        var node = document.createElementNS(SVG_NS, tag);
+        for (var key in attrs) node.setAttribute(key, attrs[key]);
+        return node;
+      }
+
+      function barChart(days, valueOf) {
+        var W = 300;
+        var H = 110;
+        var padBottom = 16;
+        var padTop = 14;
+        var values = days.map(valueOf);
+        var max = Math.max.apply(null, values.concat([1]));
+        var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, role: "img" });
+        var slot = W / days.length;
+        var barW = Math.max(2, Math.min(18, slot * 0.7));
+        days.forEach(function (day, i) {
+          var v = values[i];
+          var h = v === 0 ? 0 : Math.max(2, (v / max) * (H - padTop - padBottom));
+          var x = i * slot + (slot - barW) / 2;
+          var rect = svgEl("rect", {
+            x: x.toFixed(1),
+            y: (H - padBottom - h).toFixed(1),
+            width: barW.toFixed(1),
+            height: h.toFixed(1),
+            rx: "2",
+            fill: v === 0 ? "#e2e3f0" : ACCENT,
+          });
+          if (v === 0) rect.setAttribute("height", "2");
+          if (v === 0) rect.setAttribute("y", String(H - padBottom - 2));
+          var title = document.createElementNS(SVG_NS, "title");
+          title.textContent = day.date + ": " + fmtInt(v);
+          rect.appendChild(title);
+          svg.appendChild(rect);
+        });
+        var maxLabel = svgEl("text", { x: "0", y: "10", "font-size": "9", fill: "#8a8da3" });
+        maxLabel.textContent = "max " + fmtInt(max);
+        svg.appendChild(maxLabel);
+        var startLabel = svgEl("text", { x: "0", y: String(H - 4), "font-size": "9", fill: "#8a8da3" });
+        startLabel.textContent = days[0].date.slice(5);
+        svg.appendChild(startLabel);
+        var endLabel = svgEl("text", { x: String(W), y: String(H - 4), "font-size": "9", fill: "#8a8da3", "text-anchor": "end" });
+        endLabel.textContent = days[days.length - 1].date.slice(5);
+        svg.appendChild(endLabel);
+        return svg;
+      }
+
+      function renderCharts(report) {
+        var card = byId("charts-card");
+        var grid = byId("chart-grid");
+        clear(grid);
+        var days = report.days;
+        if (!days || days.length < 2) {
+          card.hidden = true;
+          return;
+        }
+        var metrics = [
+          { label: "App opens", event: "app_open" },
+          { label: "Games started", event: "game_started" },
+          { label: "Games completed", event: "game_completed" },
+          { label: "Results shared", event: "result_shared" },
+        ];
+        metrics.forEach(function (metric) {
+          var box = el("div", "chart-box");
+          box.appendChild(el("h4", "", metric.label));
+          box.appendChild(
+            barChart(days, function (day) {
+              var counts = day.counts || {};
+              return (counts[metric.event] && counts[metric.event].total) || 0;
+            })
+          );
+          grid.appendChild(box);
+        });
+        card.hidden = false;
+      }
+
+      function makeTable(headers, rows) {
+        var table = el("table");
+        var thead = el("thead");
+        var headRow = el("tr");
+        headers.forEach(function (h) {
+          var th = el("th", h.num ? "num" : "", h.label);
+          headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+        var tbody = el("tbody");
+        rows.forEach(function (cells) {
+          var tr = el("tr");
+          cells.forEach(function (cell, i) {
+            tr.appendChild(el("td", headers[i].num ? "num" : "", cell));
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        return table;
+      }
+
+      function renderGameTypes(report) {
+        var counts = report.counts || {};
+        var started = (counts.game_started && counts.game_started.byGameType) || {};
+        var completed = (counts.game_completed && counts.game_completed.byGameType) || {};
+        var shared = (counts.result_shared && counts.result_shared.byGameType) || {};
+        var types = {};
+        [started, completed, shared].forEach(function (map) {
+          Object.keys(map).forEach(function (t) {
+            types[t] = true;
+          });
+        });
+        var typeList = Object.keys(types).sort(function (a, b) {
+          return (started[b] || 0) - (started[a] || 0);
+        });
+        var container = byId("gametype-table");
+        clear(container);
+        if (typeList.length === 0) {
+          container.appendChild(el("p", "status-line", "No game activity in this period."));
+        } else {
+          var rows = typeList.map(function (t) {
+            var s = started[t] || 0;
+            var c = completed[t] || 0;
+            var sh = shared[t] || 0;
+            return [GAME_TYPE_LABELS[t] || t, fmtInt(s), fmtInt(c), fmtInt(sh), fmtRate(rateOf(c, s)), fmtRate(rateOf(sh, c))];
+          });
+          container.appendChild(
+            makeTable(
+              [
+                { label: "Game type" },
+                { label: "Started", num: true },
+                { label: "Completed", num: true },
+                { label: "Shared", num: true },
+                { label: "Completion", num: true },
+                { label: "Share rate", num: true },
+              ],
+              rows
+            )
+          );
+        }
+        byId("gametype-card").hidden = false;
+      }
+
+      function renderTopContent(report) {
+        var counts = report.counts || {};
+        var started = (counts.game_started && counts.game_started.byContentKey) || {};
+        var completed = (counts.game_completed && counts.game_completed.byContentKey) || {};
+        var shared = (counts.result_shared && counts.result_shared.byContentKey) || {};
+        var keys = Object.keys(started).sort(function (a, b) {
+          return started[b] - started[a];
+        });
+        var top = keys.slice(0, 15);
+        var container = byId("topcontent-table");
+        clear(container);
+        if (top.length === 0) {
+          container.appendChild(el("p", "status-line", "No content plays in this period."));
+        } else {
+          var rows = top.map(function (key) {
+            return [key, fmtInt(started[key] || 0), fmtInt(completed[key] || 0), fmtInt(shared[key] || 0)];
+          });
+          container.appendChild(
+            makeTable(
+              [
+                { label: "Content" },
+                { label: "Started", num: true },
+                { label: "Completed", num: true },
+                { label: "Shared", num: true },
+              ],
+              rows
+            )
+          );
+        }
+        byId("topcontent-card").hidden = false;
+      }
+
+      function renderRangeLabel(tab, report) {
+        var label;
+        if (tab.id === "alltime") {
+          label = "Since analytics launch: " + report.startDate + " → " + report.endDate + " (Israel time)";
+        } else if (tab.days === 1) {
+          label = "Today: " + report.startDate + " (Israel time)";
+        } else {
+          label = "Last " + tab.days + " days: " + report.startDate + " → " + report.endDate + " (Israel time)";
+        }
+        byId("range-label").textContent = label;
+      }
+
+      function setStatus(text) {
+        var status = byId("status");
+        if (text) {
+          status.textContent = text;
+          status.hidden = false;
+        } else {
+          status.hidden = true;
+        }
+      }
+
+      function hideDataCards() {
+        byId("kpi-card").hidden = true;
+        byId("charts-card").hidden = true;
+        byId("gametype-card").hidden = true;
+        byId("topcontent-card").hidden = true;
+      }
+
+      function loadTab(tabId) {
+        var tab = TABS.filter(function (t) {
+          return t.id === tabId;
+        })[0];
+        if (!tab) return;
+        activeTab = tabId;
+        renderTabs();
+        var seq = ++loadSeq;
+        setStatus("Loading…");
+        hideDataCards();
+        byId("range-label").textContent = "";
+        fetchReport(reportParamsForTab(tab))
+          .then(function (report) {
+            if (seq !== loadSeq) return;
+            setStatus("");
+            renderRangeLabel(tab, report);
+            renderKpis(report);
+            renderCharts(report);
+            renderGameTypes(report);
+            renderTopContent(report);
+          })
+          .catch(function (err) {
+            if (seq !== loadSeq) return;
+            if (err && err.unauthorized) {
+              clearToken();
+              showLogin("Invalid or expired token. Enter it again.");
+              return;
+            }
+            setStatus("Could not load the report: " + (err && err.message ? err.message : "unknown error"));
+          });
+      }
+
+      function renderTabs() {
+        var nav = byId("tabs");
+        clear(nav);
+        TABS.forEach(function (tab) {
+          var btn = el("button", "", tab.label);
+          btn.type = "button";
+          btn.setAttribute("aria-selected", tab.id === activeTab ? "true" : "false");
+          btn.addEventListener("click", function () {
+            loadTab(tab.id);
+          });
+          nav.appendChild(btn);
+        });
+      }
+
+      // --- Wiring ---
+      byId("login-form").addEventListener("submit", function (event) {
+        event.preventDefault();
+        var token = byId("token-input").value.trim();
+        if (!token) {
+          byId("login-error").textContent = "Enter a token first.";
+          return;
+        }
+        setToken(token);
+        byId("token-input").value = "";
+        byId("login-error").textContent = "";
+        showDashboard();
+        loadTab(activeTab);
+      });
+
+      byId("logout-btn").addEventListener("click", function () {
+        clearToken();
+        showLogin("");
+      });
+
+      if (getToken()) {
+        showDashboard();
+        loadTab(activeTab);
+      } else {
+        showLogin("");
+      }
+    })();
+  </script>
+</body>
+</html>

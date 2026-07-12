@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.23.0 - 2026-07-12
+
+**Private admin analytics dashboard at `/admin/analytics`.** A single
+self-contained static page (`public/admin/analytics.html`, no dependencies, no
+CDN, noindex) that displays the existing anonymous analytics — a view layer
+only, on top of the token-gated `/api/analytics/report`. Tabs for Today / Last
+7 days / Last 30 days / Since analytics launch; KPI cards (App opens — counts
+launches, not users — games started/completed, shares, completion & share
+rates, plus the other event totals); SVG daily-trend charts; a by-game-type
+table covering every game type including Daily Challenge, Special Challenge,
+and Custom Challenges (aggregates only); and a collapsible Top content table
+for built-in content — personal challenge identifiers are never recorded
+per-item, so they can't appear. The admin token is entered on the page, held
+only in sessionStorage, sent only as an Authorization header (never in the
+URL, code, or console), with a Log out button and automatic sign-out on 401.
+All report data is rendered via DOM APIs (no innerHTML).
+
+**Report endpoint extension (read-only).** `/api/analytics/report` gains
+`period=range&start&end` (rolling window, max 31 days, one batched storage
+read) with an optional `series=1` zero-filled per-day array for charts, and
+`period=alltime` exposing the since-launch totals ingestion always kept.
+Every report response now sends `Cache-Control: no-store`. Event collection,
+validation, storage format, and the existing daily/weekly/monthly periods are
+untouched. (`worker/analyticsDO.ts`.)
+
 ## 0.22.2 - 2026-07-12
 
 **Fix: "Unlock Everything" didn't unlock ink colors or pen skins.** The

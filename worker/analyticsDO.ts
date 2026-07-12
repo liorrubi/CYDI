@@ -1,5 +1,6 @@
 import {
   ANALYTICS_EVENT_NAMES,
+  datesInRange,
   isAnalyticsEventName,
   isValidDateKey,
   israelDateKey,
@@ -17,6 +18,9 @@ import {
 
 const MAX_BODY_BYTES = 1024;
 const FUNNEL_EVENTS = new Set<AnalyticsEventName>(["game_started", "game_completed", "result_shared"]);
+// Hard cap for period=range so a single report read stays one multi-key storage get
+// (Durable Object storage allows up to 128 keys per get; a month is plenty for the admin page).
+const MAX_RANGE_DAYS = 31;
 
 type EventCounters = {
   total: number;
@@ -33,6 +37,14 @@ type Env = {
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
+}
+
+/** Report responses are admin-only, token-gated data that changes with every event - they must never be cached by the browser or any intermediary. */
+function jsonNoStore(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
 }
 
 function incrementKeyMap(map: Record<string, number> | undefined, key: string): Record<string, number> {
@@ -141,24 +153,35 @@ export class AnalyticsDO {
     return json({ ok: true });
   }
 
-  private async sumRange(startDate: string, endDate: string): Promise<AllCounters> {
+  /** One batched multi-key read of every stored day bucket in the range, keyed back by date. Report ranges are at most MAX_RANGE_DAYS / a calendar month (<=31 keys), well under Durable Object storage's 128-key limit for a single multi-key get. */
+  private async readDayBuckets(startDate: string, endDate: string): Promise<Map<string, AllCounters>> {
     const days = (await this.state.storage.get<string[]>("days")) ?? [];
     const inRange = days.filter((day) => day >= startDate && day <= endDate);
-    if (inRange.length === 0) return {};
+    const byDate = new Map<string, AllCounters>();
+    if (inRange.length === 0) return byDate;
 
-    // One batched read for every in-range day instead of an awaited get per day.
-    // Report ranges are at most a calendar month (<=31 keys), well under Durable
-    // Object storage's 128-key limit for a single multi-key get.
     const buckets = await this.state.storage.get<AllCounters>(inRange.map((day) => this.dayStorageKey(day)));
+    for (const day of inRange) {
+      const bucket = buckets.get(this.dayStorageKey(day));
+      if (bucket) byDate.set(day, bucket);
+    }
+    return byDate;
+  }
 
+  private mergeDayBuckets(byDate: Map<string, AllCounters>): AllCounters {
     let merged: AllCounters = {};
-    for (const bucket of buckets.values()) {
+    for (const bucket of byDate.values()) {
       merged = mergeCounters(merged, bucket);
     }
     return merged;
   }
 
-  private buildReport(period: "daily" | "weekly" | "monthly", startDate: string, endDate: string, counts: AllCounters) {
+  private buildReport(
+    period: "daily" | "weekly" | "monthly" | "range" | "alltime",
+    startDate: string,
+    endDate: string,
+    counts: AllCounters,
+  ) {
     const gameStarted = counts.game_started?.total ?? 0;
     const gameCompleted = counts.game_completed?.total ?? 0;
     const resultShared = counts.result_shared?.total ?? 0;
@@ -172,17 +195,48 @@ export class AnalyticsDO {
     };
   }
 
+  /** Arbitrary rolling window (max MAX_RANGE_DAYS), optionally with a per-day series for charts - the admin page's "last 7/30 days" views. Reads the same day buckets the calendar periods already use; nothing new is stored. */
+  private async handleRangeReport(url: URL): Promise<Response> {
+    const start = url.searchParams.get("start") ?? "";
+    const end = url.searchParams.get("end") ?? "";
+    if (!isValidDateKey(start) || !isValidDateKey(end) || start > end) return jsonNoStore({ error: "invalid range" }, 400);
+    const dates = datesInRange(start, end);
+    if (dates.length > MAX_RANGE_DAYS) return jsonNoStore({ error: "range too long" }, 400);
+
+    const byDate = await this.readDayBuckets(start, end);
+    const report = this.buildReport("range", start, end, this.mergeDayBuckets(byDate));
+    if (url.searchParams.get("series") === "1") {
+      // Every requested date appears exactly once, zero-filled when nothing was
+      // recorded, so chart clients never have to reconstruct missing days.
+      return jsonNoStore({ ...report, days: dates.map((date) => ({ date, counts: byDate.get(date) ?? {} })) });
+    }
+    return jsonNoStore(report);
+  }
+
+  /** The running since-launch totals ("alltime" bucket) that ingestion has always maintained - startDate reports the first day that ever recorded an event. */
+  private async handleAlltimeReport(): Promise<Response> {
+    const [counts, days] = await Promise.all([
+      this.state.storage.get<AllCounters>("alltime"),
+      this.state.storage.get<string[]>("days"),
+    ]);
+    const today = israelDateKey(Date.now());
+    const startDate = days?.[0] ?? today;
+    return jsonNoStore(this.buildReport("alltime", startDate, today, counts ?? {}));
+  }
+
   private async handleReport(url: URL, authHeader: string | null): Promise<Response> {
     const token = this.env.ANALYTICS_ADMIN_TOKEN;
     if (!token || !authHeader || !timingSafeEqual(authHeader, `Bearer ${token}`)) {
-      return json({ error: "unauthorized" }, 401);
+      return jsonNoStore({ error: "unauthorized" }, 401);
     }
 
     const period = url.searchParams.get("period") ?? "daily";
-    if (period !== "daily" && period !== "weekly" && period !== "monthly") return json({ error: "invalid period" }, 400);
+    if (period === "range") return this.handleRangeReport(url);
+    if (period === "alltime") return this.handleAlltimeReport();
+    if (period !== "daily" && period !== "weekly" && period !== "monthly") return jsonNoStore({ error: "invalid period" }, 400);
 
     const dateParam = url.searchParams.get("date") ?? israelDateKey(Date.now());
-    if (!isValidDateKey(dateParam)) return json({ error: "invalid date" }, 400);
+    if (!isValidDateKey(dateParam)) return jsonNoStore({ error: "invalid date" }, 400);
 
     let startDate: string;
     let endDate: string;
@@ -195,8 +249,8 @@ export class AnalyticsDO {
       ({ startDate, endDate } = monthlyRange(dateParam));
     }
 
-    const counts = await this.sumRange(startDate, endDate);
-    return json(this.buildReport(period, startDate, endDate, counts));
+    const byDate = await this.readDayBuckets(startDate, endDate);
+    return jsonNoStore(this.buildReport(period, startDate, endDate, this.mergeDayBuckets(byDate)));
   }
 
   async fetch(request: Request): Promise<Response> {

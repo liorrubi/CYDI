@@ -4,7 +4,10 @@ import { CANVAS_SIZE, DEFAULT_PEN_COLOR, type PenColorId } from "../app/constant
 import { drawSegmentedStroke, drawSegmentedUserStroke } from "./DrawingCanvas";
 
 type ShapeOverlayCanvasProps = {
-  target: DrawingPath;
+  /** The reference shape drawn as a gray, semi-transparent guide behind the
+   * attempt. OMIT it to render the player's attempt on its own - used by the
+   * Artist Pack shared-result page, which must never show the guide. */
+  target?: DrawingPath;
   attempt: DrawingPath;
   /** The pen color actually used to draw this attempt - never a fixed color, so the overlay always matches what the player saw on screen. */
   attemptColor?: PenColorId;
@@ -12,7 +15,7 @@ type ShapeOverlayCanvasProps = {
   height?: number;
 };
 
-/** Static, non-interactive comparison of a target shape (gray, semi-transparent) and the player's attempt (in their actual pen color), overlaid. */
+/** Static, non-interactive comparison of a target shape (gray, semi-transparent) and the player's attempt (in their actual pen color), overlaid. When `target` is omitted, only the attempt is drawn. */
 export default function ShapeOverlayCanvas({
   target,
   attempt,
@@ -30,7 +33,9 @@ export default function ShapeOverlayCanvas({
     // See DrawingCanvas.redraw() for why this is a real pixel fill, not a CSS background.
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawSegmentedStroke(ctx, target.points, target.breaks ?? [], "#2563eb", { lineWidth: 6, dash: [12, 8] });
+    if (target) {
+      drawSegmentedStroke(ctx, target.points, target.breaks ?? [], "#2563eb", { lineWidth: 6, dash: [12, 8] });
+    }
     drawSegmentedUserStroke(ctx, attempt.points, attempt.breaks ?? [], attemptColor);
   }, [target, attempt, attemptColor, width, height]);
 

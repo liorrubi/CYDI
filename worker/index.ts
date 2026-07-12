@@ -37,7 +37,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     return json({ error: "invalid json" }, 400);
   }
   const type = (parsed as Record<string, unknown> | null)?.type;
-  if (type !== "c" && type !== "r") return json({ error: "invalid shape" }, 400);
+  if (type !== "c" && type !== "r" && type !== "a") return json({ error: "invalid shape" }, 400);
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const id = randomId();

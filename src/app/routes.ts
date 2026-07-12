@@ -1,5 +1,5 @@
 import type { Screen } from "../types/GameMode";
-import type { DecodedSharedResult } from "../services/shareLink";
+import type { DecodedSharedArtistResult, DecodedSharedResult } from "../services/shareLink";
 import type { DailyHistoryEntry } from "../services/dailyChallengeApi";
 import type { PenColorId } from "./constants";
 
@@ -47,6 +47,10 @@ export function toInstructions(from: Screen): Screen {
 
 export function toSharedResult(data: DecodedSharedResult): Screen {
   return { name: "sharedResult", data };
+}
+
+export function toSharedArtistResult(data: DecodedSharedArtistResult): Screen {
+  return { name: "sharedArtistResult", data };
 }
 
 export function toDailyChallenge(): Screen {

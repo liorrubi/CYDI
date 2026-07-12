@@ -1,4 +1,4 @@
-import type { DecodedSharedResult } from "../services/shareLink";
+import type { DecodedSharedArtistResult, DecodedSharedResult } from "../services/shareLink";
 import type { DailyHistoryEntry } from "../services/dailyChallengeApi";
 import type { PenColorId } from "../app/constants";
 
@@ -14,6 +14,7 @@ export type Screen =
   | { name: "achievements"; from: Screen }
   | { name: "instructions"; from: Screen }
   | { name: "sharedResult"; data: DecodedSharedResult }
+  | { name: "sharedArtistResult"; data: DecodedSharedArtistResult }
   | { name: "dailyChallenge" }
   | { name: "dailyChallengeHistory" }
   | { name: "dailyChallengeReplay"; entry: DailyHistoryEntry }

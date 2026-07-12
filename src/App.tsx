@@ -18,10 +18,11 @@ import AchievementsScreen from "./screens/AchievementsScreen";
 import InstructionsScreen from "./screens/InstructionsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import SharedResultScreen from "./screens/SharedResultScreen";
+import SharedArtistResultScreen from "./screens/SharedArtistResultScreen";
 import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import ArtistPackScreen from "./screens/ArtistPackScreen";
-import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toSharedResult } from "./app/routes";
+import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toSharedArtistResult, toSharedResult } from "./app/routes";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
 import {
@@ -32,7 +33,7 @@ import {
   shouldShowOnboardingTutorial,
 } from "./services/tutorialStore";
 import { getChallenge, updateChallenge } from "./services/challengeStorage";
-import { decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
+import { decodeArtistResultHash, decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
 import { fetchSharedById } from "./services/shareApi";
 import { isDailyChallengeSharePath } from "./services/dailyChallengeShare";
 import type { Screen } from "./types/GameMode";
@@ -64,6 +65,9 @@ function importSharedScreenFromHash(): Screen | null {
   const result = decodeResultHash(hash);
   if (result) return toSharedResult(result);
 
+  const artistResult = decodeArtistResultHash(hash);
+  if (artistResult) return toSharedArtistResult(artistResult);
+
   return null;
 }
 
@@ -80,6 +84,9 @@ async function importSharedScreenFromShortId(id: string): Promise<Screen | null>
   if (shared.kind === "challenge") {
     importSharedChallenge(shared.data);
     return toFriendChallengeIntro(shared.data.id);
+  }
+  if (shared.kind === "artistResult") {
+    return toSharedArtistResult(shared.data);
   }
   return toSharedResult(shared.data);
 }
@@ -201,6 +208,8 @@ export default function App() {
             );
           case "sharedResult":
             return <SharedResultScreen data={screen.data} onNavigate={setScreen} />;
+          case "sharedArtistResult":
+            return <SharedArtistResultScreen data={screen.data} onNavigate={setScreen} />;
           case "specialChallenge":
             return <SpecialChallengeScreen onNavigate={setScreen} />;
           case "megaChallenge":

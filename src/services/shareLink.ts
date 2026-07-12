@@ -1,6 +1,7 @@
 import { resampleAllSegments, splitIntoSegments } from "../engine/normalizePath";
 import type { Challenge, DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
+import type { PenColorId } from "../app/constants";
 
 type SharePoint = [x: number, y: number];
 
@@ -174,6 +175,100 @@ export function decodeResultHash(hash: string): DecodedSharedResult | null {
   if (!hash.startsWith("r.")) return null;
   try {
     return parseResultPayload(decode(hash.slice(2)));
+  } catch {
+    return null;
+  }
+}
+
+// ---------- Artist Pack result share ----------
+//
+// A DELIBERATELY DISTINCT payload from the generic result share (`r`) above.
+// The reference artwork (the draw-along guide / target ghost) is NEVER included
+// - only the player's own attempt (`a`). This makes "the share never leaks the
+// guide" a structural guarantee, not a rendering choice: there is no target
+// field to render, even if the player had Show Guide on while drawing. The
+// artwork/pack/artist names are carried so the landing page can credit the
+// artist without exposing any of the pack's line-art.
+export type SharedArtistResultPayload = {
+  n: string; // artwork name
+  pk: string; // pack name
+  ar: string; // artist name
+  pid: string; // pack id (lets the landing page deep-link to the pack)
+  s: ScoreBreakdown;
+  a: SharePath; // the player's attempt ONLY - no target/guide
+  c?: PenColorId; // pen color used, so the landing page matches what the player saw
+};
+
+export type DecodedSharedArtistResult = {
+  artworkName: string;
+  packName: string;
+  artistName: string;
+  packId: string;
+  score: ScoreBreakdown;
+  attempt: DrawingPath;
+  attemptColor?: PenColorId;
+};
+
+export function buildArtistResultPayload(args: {
+  artworkName: string;
+  packName: string;
+  artistName: string;
+  packId: string;
+  score: ScoreBreakdown;
+  attempt: DrawingPath;
+  attemptColor?: PenColorId;
+}): SharedArtistResultPayload {
+  return {
+    n: args.artworkName,
+    pk: args.packName,
+    ar: args.artistName,
+    pid: args.packId,
+    s: args.score,
+    a: toSharePath(args.attempt),
+    c: args.attemptColor,
+  };
+}
+
+export function parseArtistResultPayload(raw: unknown): DecodedSharedArtistResult | null {
+  const value = raw as Partial<SharedArtistResultPayload> | null;
+  if (
+    !value ||
+    typeof value.n !== "string" ||
+    typeof value.pk !== "string" ||
+    typeof value.ar !== "string" ||
+    typeof value.pid !== "string" ||
+    !isScoreBreakdown(value.s) ||
+    !isSharePath(value.a)
+  ) {
+    return null;
+  }
+  return {
+    artworkName: value.n,
+    packName: value.pk,
+    artistName: value.ar,
+    packId: value.pid,
+    score: value.s,
+    attempt: fromSharePath(value.a),
+    attemptColor: typeof value.c === "string" ? (value.c as PenColorId) : undefined,
+  };
+}
+
+export function encodeArtistResultLink(args: {
+  artworkName: string;
+  packName: string;
+  artistName: string;
+  packId: string;
+  score: ScoreBreakdown;
+  attempt: DrawingPath;
+  attemptColor?: PenColorId;
+}): string {
+  return `${shareBaseUrl()}#a.${encode(buildArtistResultPayload(args))}`;
+}
+
+export function decodeArtistResultHash(hash: string): DecodedSharedArtistResult | null {
+  if (!hash.startsWith("a.")) return null;
+  try {
+    return parseArtistResultPayload(decode(hash.slice(2)));
   } catch {
     return null;
   }

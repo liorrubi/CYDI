@@ -1,12 +1,16 @@
 import {
+  buildArtistResultPayload,
   buildChallengePayload,
   buildResultPayload,
+  parseArtistResultPayload,
   parseChallengePayload,
   parseResultPayload,
+  type DecodedSharedArtistResult,
   type DecodedSharedChallenge,
   type DecodedSharedResult,
 } from "./shareLink";
 import type { Challenge, DrawingPath } from "../types/Challenge";
+import type { PenColorId } from "../app/constants";
 import type { ScoreBreakdown } from "../types/Score";
 
 const REQUEST_TIMEOUT_MS = 4000;
@@ -14,7 +18,7 @@ const REQUEST_TIMEOUT_MS = 4000;
 // Any failure (no server, offline, timeout, old deploy without the /api/share
 // route) resolves to null rather than throwing - callers fall back to the
 // self-contained hash link, which never depends on a server.
-async function postShare(type: "c" | "r", payload: unknown): Promise<string | null> {
+async function postShare(type: "c" | "r" | "a", payload: unknown): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -49,9 +53,23 @@ export async function createShortResultLink(args: {
   return id ? `${location.origin}/c/${id}` : null;
 }
 
+export async function createShortArtistResultLink(args: {
+  artworkName: string;
+  packName: string;
+  artistName: string;
+  packId: string;
+  score: ScoreBreakdown;
+  attempt: DrawingPath;
+  attemptColor?: PenColorId;
+}): Promise<string | null> {
+  const id = await postShare("a", buildArtistResultPayload(args));
+  return id ? `${location.origin}/c/${id}` : null;
+}
+
 export type FetchedShare =
   | { kind: "challenge"; data: DecodedSharedChallenge }
-  | { kind: "result"; data: DecodedSharedResult };
+  | { kind: "result"; data: DecodedSharedResult }
+  | { kind: "artistResult"; data: DecodedSharedArtistResult };
 
 export async function fetchSharedById(id: string): Promise<FetchedShare | null> {
   try {
@@ -65,6 +83,10 @@ export async function fetchSharedById(id: string): Promise<FetchedShare | null> 
     if (data.type === "r") {
       const parsed = parseResultPayload(data.payload);
       return parsed ? { kind: "result", data: parsed } : null;
+    }
+    if (data.type === "a") {
+      const parsed = parseArtistResultPayload(data.payload);
+      return parsed ? { kind: "artistResult", data: parsed } : null;
     }
     return null;
   } catch {

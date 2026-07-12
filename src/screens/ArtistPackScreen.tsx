@@ -33,6 +33,8 @@ import { addCoins } from "../services/coinsStore";
 import { getDifficulty } from "../services/difficultySettings";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { shareOrCopy } from "../services/nativeShare";
+import { encodeArtistResultLink } from "../services/shareLink";
+import { createShortArtistResultLink } from "../services/shareApi";
 import { trackEvent } from "../services/analytics";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { getArtistPackBestScore, recordArtistPackResult } from "../services/artistPackStore";
@@ -306,21 +308,33 @@ function ArtistPlay({ artwork, pack, onFinished, onNavigate, here }: ArtistPlayP
   }
 
   /** Shares this result via CYDI's standard share sheet (OS share, clipboard
-   * fallback). Only the published artwork's name, the pack name, the artist
-   * credit, and the score are included — no unpublished content is exposed. */
+   * fallback), backed by a KV short link (with a self-contained hash link as the
+   * offline fallback). The link opens a dedicated result page showing ONLY the
+   * player's own drawing — the reference artwork and the draw-along guide are
+   * never included in the payload, so nothing leaks even if Show Guide was on.
+   * Guarded to published artwork only, so drafts/approved are never shareable. */
   async function handleShareResult() {
-    if (!result) return;
+    if (!result || !attemptPath || !isPublished) return;
+    const shareArgs = {
+      artworkName: artwork.name,
+      packName: pack.name,
+      artistName: pack.artist.name,
+      packId: pack.id,
+      score: result,
+      attempt: attemptPath,
+      attemptColor: penColor,
+    };
+    const url = (await createShortArtistResultLink(shareArgs)) ?? encodeArtistResultLink(shareArgs);
     const outcome = await shareOrCopy({
       title: `CYDI — ${artwork.name} (${pack.name})`,
       text: `I scored ${result.total}% drawing "${artwork.name}" from the ${pack.name} Artist Pack by ${pack.artist.name} on CYDI!`,
-      url: location.origin,
+      url,
     });
     if (outcome === "copied") {
       setShareFeedback("Link copied!");
       window.setTimeout(() => setShareFeedback(null), 2500);
     } else if (outcome === "failed") {
-      setShareFeedback("Couldn't share — please try again.");
-      window.setTimeout(() => setShareFeedback(null), 2500);
+      setShareFeedback(`Couldn't share automatically — copy this link: ${url}`);
     }
   }
 

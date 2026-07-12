@@ -7,12 +7,12 @@ import { encodePng } from "./pngEncoder";
 type SharePoint = [number, number];
 type SharePath = { p: SharePoint[]; w: number; h: number; b?: number[] };
 
-export type ShareRecord = { type: "c" | "r"; payload: unknown };
+export type ShareRecord = { type: "c" | "r" | "a"; payload: unknown };
 
 export function parseShareRecord(raw: string): ShareRecord | null {
   try {
     const data = JSON.parse(raw) as Record<string, unknown>;
-    if (data.type !== "c" && data.type !== "r") return null;
+    if (data.type !== "c" && data.type !== "r" && data.type !== "a") return null;
     return { type: data.type, payload: data.payload };
   } catch {
     return null;
@@ -37,7 +37,10 @@ function extractDrawnPath(record: ShareRecord): SharePath | null {
   if (typeof record.payload !== "object" || record.payload === null) return null;
   const payload = record.payload as Record<string, unknown>;
   if (record.type === "c" && isSharePath(payload.t)) return payload.t;
-  if (record.type === "r" && isSharePath(payload.a)) return payload.a;
+  // For both played-result share types the drawn path is the player's own
+  // attempt (`a`). The Artist Pack share (`a`) has no target field at all, so
+  // the guide/reference artwork can never end up in the unfurl image.
+  if ((record.type === "r" || record.type === "a") && isSharePath(payload.a)) return payload.a;
   return null;
 }
 
@@ -149,6 +152,23 @@ export function shareTitleAndDescription(record: ShareRecord): { title: string; 
 
   const score = payload.s as Record<string, unknown> | undefined;
   const total = score && typeof score.total === "number" ? Math.round(score.total) : null;
+
+  // Artist Pack result: credit the artist/pack in the unfurl copy, and never
+  // reference any unpublished content (the payload only carries public names).
+  if (record.type === "a") {
+    const packName = typeof payload.pk === "string" ? payload.pk : null;
+    const artistName = typeof payload.ar === "string" ? payload.ar : null;
+    const credit = artistName ? ` by ${artistName}` : "";
+    const packSuffix = packName ? ` from the ${packName} Artist Pack${credit}` : "";
+    return {
+      title: `CYDI Result: ${name}`,
+      description:
+        total !== null
+          ? `I scored ${total}% drawing "${name}"${packSuffix} on CYDI!`
+          : `Check out my CYDI drawing of "${name}"${packSuffix}!`,
+    };
+  }
+
   return {
     title: `CYDI Result: ${name}`,
     description: total !== null ? `I scored ${total}% on "${name}"! Think you can beat it?` : `Check out my CYDI result for "${name}"!`,

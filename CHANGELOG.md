@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.19.0 - 2026-07-12
+
+Sharing an **Artist Pack** result now opens a dedicated result page that shows
+**only the player's own drawing** — never the reference artwork, the draw-along
+guide, or any blend of the two — alongside the score, the artwork name, the pack
+name, and the artist credit. This holds even when *Show Guide* was on while
+drawing: the guide is a structural impossibility in the share, not a rendering
+choice, because the share payload carries only the player's strokes and has no
+target field at all. Only `published` artworks are shareable (drafts/approved
+never expose a link).
+
+The feature reuses CYDI's existing share plumbing rather than adding a parallel
+one: a new `"a"` share type rides the same KV short links (`/api/share`,
+`/c/<id>`) and link-unfurl image, with the self-contained `#a.` hash link as the
+offline fallback. The unfurl preview image is likewise the player's drawing
+only. New `SharedArtistResultScreen.tsx`; `ShapeOverlayCanvas` now renders the
+attempt alone when given no target; share encode/decode in
+`services/shareLink.ts` + `services/shareApi.ts`; worker support in
+`worker/index.ts` + `worker/shareImage.ts`.
+
+Internal: added a dependency-free `node:test` suite (`npm test`, run via a small
+TS-resolve hook in `scripts/`) asserting that a share built with the guide
+active contains the attempt and never the guide, in both the payload and the
+link.
+
 ## 0.18.0 - 2026-07-12
 
 "Nimco Design" gained a second published artwork, **"Basketball Hoop"** — a

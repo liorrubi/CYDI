@@ -14,7 +14,11 @@ export interface Env {
 
 // Excludes 0/O and 1/I to avoid ids that are ambiguous when read aloud or copied by hand.
 const ID_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-const ID_LENGTH = 6;
+// 8 chars over a 32-symbol alphabet (~40 bits) makes enumerating other players'
+// shared drawings ~1000x harder than 6 chars, at no cost. Backward compatible:
+// the /c/:id and /api/share/:id route matchers already accept 4-12 chars, so
+// existing 6-char links keep resolving.
+const ID_LENGTH = 8;
 const MAX_BODY_BYTES = 20_000;
 const TTL_SECONDS = 60 * 60 * 24 * 180; // 180 days
 

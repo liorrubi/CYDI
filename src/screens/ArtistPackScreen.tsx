@@ -504,7 +504,7 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
             </Button>
             {isPublished && (
               <Button variant="secondary" onClick={handleShareResult}>
-                {isReply ? "↩️ Send Back" : "🔗 Share"}
+                <span aria-hidden="true">{isReply ? "↩️" : "🔗"}</span> {isReply ? "Send Back" : "Share"}
               </Button>
             )}
             <Button onClick={onFinished}>{isReply ? "Back" : "Back to Pack"}</Button>

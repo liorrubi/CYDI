@@ -254,7 +254,7 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
           <p className="mega-champion-title">👑 {CHAMPION_TITLE}</p>
           <p className="status-text">You completed the full Mega Album. Your title and crown are permanent!</p>
           <Button variant="secondary" onClick={handleShareChampion}>
-            🔗 Share Your Achievement
+            <span aria-hidden="true">🔗</span> Share Your Achievement
           </Button>
         </div>
       )}
@@ -270,7 +270,9 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
               You collected all {MEGA_ALBUM_SIZE} Mega drawings and completed the album! This permanent title and the
               crown badge next to your coins are now yours, forever.
             </p>
-            <Button onClick={handleShareChampion}>🔗 Share Your Achievement</Button>
+            <Button onClick={handleShareChampion}>
+              <span aria-hidden="true">🔗</span> Share Your Achievement
+            </Button>
             <Button variant="secondary" onClick={handleDismissChampionOverlay}>
               Continue
             </Button>

@@ -171,15 +171,9 @@ export function isAnalyticsEventName(value: unknown): value is AnalyticsEventNam
 // --- Asia/Jerusalem date-range helpers, shared by ingestion (day bucket key) and the
 // --- admin report (daily/weekly/monthly range math). ---
 
-/** "YYYY-MM-DD" for `now` in the Asia/Jerusalem calendar - same approach as worker/dailyChallengeDO.ts's israelDateKey. */
-export function israelDateKey(now: number): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Jerusalem",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(now));
-}
+// Re-exported from the shared single source of truth so existing callers that
+// import it from here (e.g. worker/analyticsDO.ts) keep working unchanged.
+export { israelDateKey } from "../app/israelDate";
 
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 

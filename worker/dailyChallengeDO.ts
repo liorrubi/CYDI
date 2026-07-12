@@ -1,4 +1,11 @@
 import { DAILY_CHALLENGE_PRIZE_COINS } from "../src/app/dailyChallengePrizes";
+import { israelDateKey } from "../src/app/israelDate";
+// NOTE: importing SHAPE_LIBRARY pulls the entire shape catalog (all ~250 shape
+// generator functions) into the Worker bundle, even though this DO only needs
+// the ids for randomShapeId. It's an accepted trade-off - the client re-resolves
+// the chosen shapeId via getShapeById, so the Worker never runs a generator, and
+// avoiding the bundle cost would require a separately-maintained id list (drift
+// risk) or a lazy-generator refactor of the 6900-line library.
 import { SHAPE_LIBRARY } from "../src/engine/shapeLibrary";
 
 // Single global Durable Object instance coordinates the daily challenge, so every
@@ -45,15 +52,6 @@ type BoardEntry = { playerName: string; bestScore: number; updatedAt: number; la
 type PendingPrize = { episodeId: number; dateKey: string; place: 1 | 2 | 3; coins: number; playerName: string };
 
 type HistoryEntry = { id: number; shapeId: string; dateKey: string; topEntries: LeaderboardEntry[] };
-
-function israelDateKey(now: number): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Jerusalem",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(now));
-}
 
 function randomShapeId(): string {
   return SHAPE_LIBRARY[Math.floor(Math.random() * SHAPE_LIBRARY.length)].id;

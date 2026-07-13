@@ -14,6 +14,8 @@
 // hardened to a suffix/substring check). These are still just opaque content ids, never
 // player/device ids.
 import { CATEGORIES, type CategoryId } from "../engine/shapeLibrary";
+import { isRewardedAdPlacement, type RewardedAdPlacement } from "./ads/adPlacements";
+import { isAdFailureReason, type AdFailureReason } from "./ads/adTypes";
 
 export type GameType =
   | "shapeChallenge"
@@ -34,6 +36,16 @@ export type EventParamsMap = {
   game_started: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
   game_completed: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
   result_shared: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
+  // Rewarded ad lifecycle (emitted only by src/services/ads/adAnalytics.ts).
+  // `placement` and `reason` are closed unions owned by the ads module - never
+  // free text, so no SDK error detail or sensitive info can reach analytics.
+  rewarded_ad_requested: { placement: RewardedAdPlacement };
+  rewarded_ad_loaded: { placement: RewardedAdPlacement };
+  rewarded_ad_shown: { placement: RewardedAdPlacement };
+  rewarded_ad_completed: { placement: RewardedAdPlacement };
+  rewarded_ad_dismissed: { placement: RewardedAdPlacement };
+  rewarded_ad_unavailable: { placement: RewardedAdPlacement; reason: AdFailureReason };
+  rewarded_ad_failed: { placement: RewardedAdPlacement; reason: AdFailureReason };
 };
 
 export type AnalyticsEventName = keyof EventParamsMap;
@@ -47,6 +59,13 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "game_started",
   "game_completed",
   "result_shared",
+  "rewarded_ad_requested",
+  "rewarded_ad_loaded",
+  "rewarded_ad_shown",
+  "rewarded_ad_completed",
+  "rewarded_ad_dismissed",
+  "rewarded_ad_unavailable",
+  "rewarded_ad_failed",
 ];
 
 export type ValidationResult<E extends AnalyticsEventName> =
@@ -144,7 +163,30 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   game_started: (p) => validateFunnelEvent(p),
   game_completed: (p) => validateFunnelEvent(p),
   result_shared: (p) => validateFunnelEvent(p),
+  rewarded_ad_requested: (p) => validateAdEvent(p),
+  rewarded_ad_loaded: (p) => validateAdEvent(p),
+  rewarded_ad_shown: (p) => validateAdEvent(p),
+  rewarded_ad_completed: (p) => validateAdEvent(p),
+  rewarded_ad_dismissed: (p) => validateAdEvent(p),
+  rewarded_ad_unavailable: (p) => validateAdFailureEvent(p),
+  rewarded_ad_failed: (p) => validateAdFailureEvent(p),
 };
+
+function validateAdEvent<
+  E extends "rewarded_ad_requested" | "rewarded_ad_loaded" | "rewarded_ad_shown" | "rewarded_ad_completed" | "rewarded_ad_dismissed",
+>(p: unknown): ValidationResult<E> {
+  if (!isRecord(p) || !hasExactKeys(p, ["placement"])) return { valid: false };
+  if (!isRewardedAdPlacement(p.placement)) return { valid: false };
+  return { valid: true, params: { placement: p.placement } as EventParamsMap[E] };
+}
+
+function validateAdFailureEvent<E extends "rewarded_ad_unavailable" | "rewarded_ad_failed">(
+  p: unknown,
+): ValidationResult<E> {
+  if (!isRecord(p) || !hasExactKeys(p, ["placement", "reason"])) return { valid: false };
+  if (!isRewardedAdPlacement(p.placement) || !isAdFailureReason(p.reason)) return { valid: false };
+  return { valid: true, params: { placement: p.placement, reason: p.reason } as EventParamsMap[E] };
+}
 
 function validateFunnelEvent<E extends "game_started" | "game_completed" | "result_shared">(
   p: unknown,

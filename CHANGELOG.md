@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.25.0 - 2026-07-13
+
+**AdMob-ready rewarded ad infrastructure (dormant — no ads served).** New
+`src/services/ads/` module prepares the game for Google AdMob without changing
+any gameplay: a central feature-flag config (`adConfig.ts` — master switch plus
+a separate flag per format, all off) that resolves Google's public test ad
+units in dev and production IDs only from `VITE_ADMOB_*` env vars; a closed,
+typed list of rewarded placements (`daily_retry`, `special_retry`,
+`daily_chest_bonus`, `mega_challenge_bonus`, `shop_double_reward`); a fail-safe
+rewarded-ad service (never throws, never hangs, rewards granted only on an
+SDK-verified reward event) with lifecycle events; and an isolated analytics
+bridge adding seven schema-validated `rewarded_ad_*` events (placement + generic
+failure reason only — the Worker validates them via the shared schema
+automatically). Nothing in the game calls it yet; activation later is flag +
+adapter + env vars. Covered by 18 new tests.
+
 ## 0.24.0 - 2026-07-12
 
 **Guide show/hide toggle on result screens.** Every result screen that overlays

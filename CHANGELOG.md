@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.26.0 - 2026-07-13
+
+**Native app (Android) sharing and Daily Challenge now actually work.** Capacitor
+serves the app from a virtual `https://localhost` origin on native platforms,
+never the real production domain - confirmed live on a physical device that
+this silently broke two things: share links built from the page's own origin
+pointed recipients at `localhost` instead of playcydi.com, and every Worker API
+call (Daily Challenge, short share links, analytics) failed outright. An
+absolute URL alone doesn't fix the API calls either - the WebView's own
+`fetch` still gets CORS-blocked (the Worker sends no
+`Access-Control-Allow-Origin`). Fixed with a new `src/services/nativeApi.ts`:
+`getPublicOrigin()` resolves the real origin for public URLs, and `apiFetch()`
+routes native requests through Capacitor's native HTTP bridge instead (not
+subject to the WebView's CORS policy) - called explicitly from the four
+affected call sites, never by patching the global `fetch`/`XMLHttpRequest`. Web
+behavior is unchanged. (`shareLink.ts`, `shareApi.ts`, `dailyChallengeApi.ts`,
+`analytics.ts`.)
+
+**Android App Links for challenge share links.** `https://playcydi.com/c/{id}`
+now opens the CYDI app directly when it's installed - both cold start (app
+closed) and warm start (app already open), verified on a physical device with
+the challenge opening exactly once either way - and continues opening the
+website as before when it isn't. Scoped to exactly that host/scheme/path
+prefix via a verified intent-filter (`android:autoVerify`, backed by
+`/.well-known/assetlinks.json`), so no other page (Settings, Privacy,
+Analytics) is ever associated with the app. Incoming links are validated
+(exact scheme/host/path/id) and deduplicated by URL before ever touching
+navigation or the network, and reuse the existing share-link import pipeline
+rather than a parallel one. (`src/App.tsx`, `src/app/appLinks.ts`,
+`android/app/src/main/AndroidManifest.xml`.)
+
+Internal: Android's own `versionCode`/`versionName` (build.gradle) are
+separate from this file/`APP_VERSION` and don't need to match it - `versionName`
+is currently `0.2.0`.
+
 ## 0.25.0 - 2026-07-13
 
 **AdMob-ready rewarded ad infrastructure (dormant — no ads served).** New

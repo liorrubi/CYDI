@@ -2,7 +2,9 @@
  * © 2026 Lior Rubinovich. All rights reserved.
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
 import AchievementsTutorialOverlay from "./components/AchievementsTutorialOverlay";
 import OnboardingTutorialOverlay from "./components/OnboardingTutorialOverlay";
 import HomeScreen from "./screens/HomeScreen";
@@ -107,6 +109,38 @@ export default function App() {
   const [showAchievementsTutorial, setShowAchievementsTutorial] = useState(() => shouldShowAchievementsTutorial());
   const [showOnboardingTutorial, setShowOnboardingTutorial] = useState(() => shouldShowOnboardingTutorial());
 
+  // Screen navigation is plain React state, not browser history, so there's
+  // nothing for the Android hardware back button to pop by default (it would
+  // otherwise exit the app immediately from any screen). This stack mirrors
+  // in-app navigation so back-button presses retrace it instead.
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+  const screenHistoryRef = useRef<Screen[]>([]);
+
+  function navigate(next: Screen) {
+    screenHistoryRef.current.push(screenRef.current);
+    setScreen(next);
+  }
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listenerPromise = CapacitorApp.addListener("backButton", () => {
+      const previous = screenHistoryRef.current.pop();
+      if (previous) {
+        setScreen(previous);
+        return;
+      }
+      if (screenRef.current.name === "home") {
+        CapacitorApp.exitApp();
+      } else {
+        setScreen({ name: "home" });
+      }
+    });
+    return () => {
+      listenerPromise.then((listener) => listener.remove());
+    };
+  }, []);
+
   useEffect(() => {
     recordDailyVisit();
   }, []);
@@ -167,7 +201,7 @@ export default function App() {
   function handleTutorialNavigateToAchievements() {
     markAchievementsTutorialShown();
     setShowAchievementsTutorial(false);
-    setScreen(toAchievements(screen));
+    navigate(toAchievements(screen));
   }
 
   return (
@@ -175,54 +209,54 @@ export default function App() {
       {(() => {
         switch (screen.name) {
           case "home":
-            return <HomeScreen onNavigate={setScreen} />;
+            return <HomeScreen onNavigate={navigate} />;
           case "create":
-            return <CreateChallengeScreen onNavigate={setScreen} />;
+            return <CreateChallengeScreen onNavigate={navigate} />;
           case "list":
-            return <MyChallengesScreen onNavigate={setScreen} />;
+            return <MyChallengesScreen onNavigate={navigate} />;
           case "play":
-            return <PlayChallengeScreen challengeId={screen.challengeId} onNavigate={setScreen} />;
+            return <PlayChallengeScreen challengeId={screen.challengeId} onNavigate={navigate} />;
           case "friendChallengeIntro":
-            return <FriendChallengeIntroScreen challengeId={screen.challengeId} onNavigate={setScreen} />;
+            return <FriendChallengeIntroScreen challengeId={screen.challengeId} onNavigate={navigate} />;
           case "shapeChallenge":
-            return <ShapeChallengeScreen onNavigate={setScreen} />;
+            return <ShapeChallengeScreen onNavigate={navigate} />;
           case "dailyChallenge":
-            return <DailyChallengeScreen onNavigate={setScreen} />;
+            return <DailyChallengeScreen onNavigate={navigate} />;
           case "dailyChallengeHistory":
-            return <DailyChallengeHistoryScreen onNavigate={setScreen} />;
+            return <DailyChallengeHistoryScreen onNavigate={navigate} />;
           case "dailyChallengeReplay":
-            return <DailyChallengeScreen onNavigate={setScreen} replay={screen.entry} />;
+            return <DailyChallengeScreen onNavigate={navigate} replay={screen.entry} />;
           case "settings":
-            return <SettingsScreen onNavigate={setScreen} />;
+            return <SettingsScreen onNavigate={navigate} />;
           case "shop":
             return (
               <ShopScreen
                 from={screen.from}
                 highlightPenColorId={screen.highlightPenColorId}
                 highlightPenSkinId={screen.highlightPenSkinId}
-                onNavigate={setScreen}
+                onNavigate={navigate}
               />
             );
           case "achievements":
-            return <AchievementsScreen from={screen.from} onNavigate={setScreen} />;
+            return <AchievementsScreen from={screen.from} onNavigate={navigate} />;
           case "instructions":
             return (
               <InstructionsScreen
                 from={screen.from}
-                onNavigate={setScreen}
+                onNavigate={navigate}
                 onStartTutorial={() => setShowOnboardingTutorial(true)}
               />
             );
           case "sharedResult":
-            return <SharedResultScreen data={screen.data} onNavigate={setScreen} />;
+            return <SharedResultScreen data={screen.data} onNavigate={navigate} />;
           case "sharedArtistResult":
-            return <SharedArtistResultScreen data={screen.data} onNavigate={setScreen} />;
+            return <SharedArtistResultScreen data={screen.data} onNavigate={navigate} />;
           case "specialChallenge":
-            return <SpecialChallengeScreen onNavigate={setScreen} />;
+            return <SpecialChallengeScreen onNavigate={navigate} />;
           case "megaChallenge":
-            return <MegaChallengeScreen onNavigate={setScreen} />;
+            return <MegaChallengeScreen onNavigate={navigate} />;
           case "artistPack":
-            return <ArtistPackScreen packId={screen.packId} from={screen.from} replyTo={screen.replyTo} onNavigate={setScreen} />;
+            return <ArtistPackScreen packId={screen.packId} from={screen.from} replyTo={screen.replyTo} onNavigate={navigate} />;
         }
       })()}
       {showOnboardingTutorial && <OnboardingTutorialOverlay onDismiss={dismissOnboardingTutorial} />}

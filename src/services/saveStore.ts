@@ -1,5 +1,5 @@
 import { importLegacySaveData } from "./legacyImport";
-import { SAVE_SCHEMA_VERSION, type SaveData } from "./saveData";
+import { createDefaultSaveData, SAVE_SCHEMA_VERSION, type SaveData } from "./saveData";
 
 const SAVE_KEY = "cydi.save.v1";
 const PRE_IMPORT_BACKUP_KEY = "cydi.save.preImportBackup.v1";
@@ -9,6 +9,25 @@ let cache: SaveData | null = null;
 
 function isSaveData(value: unknown): value is SaveData {
   return typeof value === "object" && value !== null && typeof (value as SaveData).schemaVersion === "number";
+}
+
+// A blob that parsed as JSON but failed `isSaveData` (e.g. `schemaVersion` got
+// dropped by a bad write) still has real `progress`/`settings` worth keeping -
+// falling straight to `importLegacySaveData` would discard every field with no
+// legacy-key counterpart (megaChallenge, artistPacks, dailyChest, etc.), even
+// though the player's actual progress in the unified blob is otherwise intact.
+// This fills in only what's missing from the defaults instead of resetting.
+function recoverPartialSaveData(value: unknown): SaveData | null {
+  if (typeof value !== "object" || value === null) return null;
+  const v = value as Partial<SaveData>;
+  if (typeof v.progress !== "object" || v.progress === null) return null;
+
+  const defaults = createDefaultSaveData();
+  return {
+    ...defaults,
+    progress: { ...defaults.progress, ...v.progress },
+    settings: typeof v.settings === "object" && v.settings !== null ? { ...defaults.settings, ...v.settings } : defaults.settings,
+  };
 }
 
 function persist(data: SaveData): void {
@@ -37,8 +56,13 @@ function load(): SaveData {
         cache = parsed;
         return cache;
       }
+      const recovered = recoverPartialSaveData(parsed);
+      if (recovered) {
+        persist(recovered);
+        return recovered;
+      }
     } catch {
-      // Corrupted save blob - fall through to the legacy import / defaults below.
+      // Invalid JSON, nothing to recover from - fall through to legacy import / defaults below.
     }
   }
 

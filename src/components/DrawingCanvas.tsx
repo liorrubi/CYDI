@@ -179,6 +179,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
   const strokeStartRef = useRef(0);
   const wasDisabledRef = useRef(disabled);
   const touchLiftRef = useRef(0);
+  // Tracks which single pointer (finger/mouse) is currently drawing, so a second
+  // accidental touch during a stroke can't interleave its points into the same
+  // stroke, and up/move/cancel events from unrelated pointers are ignored.
+  const activePointerIdRef = useRef<number | null>(null);
 
   // Detect coarse (touch) pointers once so the pen can lift a bit higher above
   // a fingertip than beside a mouse cursor.
@@ -327,11 +331,28 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
   function getRelativePoint(event: ReactPointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    // The canvas's CSS-displayed size can shrink below its backing width/height
+    // (e.g. narrow phones), so map client coords through the scale ratio rather
+    // than assuming 1 CSS px == 1 canvas px - otherwise strokes drift from the
+    // finger/cursor and scoring runs against distorted coordinates.
+    const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+    return { x: (event.clientX - rect.left) * scaleX, y: (event.clientY - rect.top) * scaleY };
   }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (disabled) return;
+    // Ignore a second finger touching down mid-stroke - only the pointer that
+    // started the stroke may add points to it.
+    if (activePointerIdRef.current !== null) return;
+    activePointerIdRef.current = event.pointerId;
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture isn't available in every environment (e.g. jsdom) -
+      // drawing still works via pointerup/pointerleave, just without the
+      // off-canvas-drag protection capture provides.
+    }
     const { x, y } = getRelativePoint(event);
     showPen(x, y);
     maybeSparkle(x, y);
@@ -350,7 +371,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
   }
 
   function handlePointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (disabled || !isDrawingRef.current) return;
+    if (disabled || !isDrawingRef.current || event.pointerId !== activePointerIdRef.current) return;
     const { x, y } = getRelativePoint(event);
     movePen(x, y, true);
     maybeSparkle(x, y);
@@ -359,11 +380,20 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     onChange?.({ points: pointsRef.current, canvasWidth: width, canvasHeight: height, breaks: segmentBreaksRef.current });
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (event.pointerId !== activePointerIdRef.current) return;
+    activePointerIdRef.current = null;
     hidePen();
     if (disabled || !isDrawingRef.current) return;
     isDrawingRef.current = false;
     onComplete?.({ points: pointsRef.current, canvasWidth: width, canvasHeight: height, breaks: segmentBreaksRef.current });
+  }
+
+  /** OS-level interruptions (incoming call, back-gesture, control center) fire
+   * pointercancel instead of pointerup - handled the same way so the stroke is
+   * still finalized instead of leaving the pen icon stuck and the drawing lost. */
+  function handlePointerCancel(event: ReactPointerEvent<HTMLCanvasElement>) {
+    handlePointerUp(event);
   }
 
   const inkColor = penInkGlyphColor(strokeColor);
@@ -382,6 +412,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
       />
       {/* Diamond ink glitter — transient sparkles, pointer-events:none, never affects scoring. */}
       <div ref={sparkleLayerRef} className="sparkle-layer" aria-hidden="true" />

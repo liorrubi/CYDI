@@ -24,7 +24,9 @@ const SHARE_POINT_BUDGET = 48;
 //
 // All are set far above any legitimately-produced value (a real path is <=~50
 // points; real names are short), so a genuine link is never rejected/truncated.
-const MAX_SHARE_POINTS = 4000; // reject a path with more points than this
+// Exported so other decoders of user-supplied payloads (e.g. saveTransfer's
+// pasted backup codes) can apply the same DoS bound instead of inventing one.
+export const MAX_SHARE_POINTS = 4000; // reject a path with more points than this
 const MAX_SHARE_STRING_LEN = 500; // truncate display strings past this
 const MAX_ENCODED_LEN = 28000; // reject a hash payload whose encoded form is longer than this (base64 chars)
 

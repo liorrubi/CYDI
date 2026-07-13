@@ -50,13 +50,15 @@ export default function ShapeOverlayCanvas({
   const label = ariaLabel ?? (target ? "Comparison of the reference drawing and the attempt drawing" : "The shared drawing");
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      role="img"
-      aria-label={label}
-      className="drawing-canvas drawing-canvas-disabled"
-    />
+    <div className="drawing-canvas-shell">
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+        role="img"
+        aria-label={label}
+        className="drawing-canvas drawing-canvas-disabled"
+      />
+    </div>
   );
 }

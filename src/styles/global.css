@@ -37,6 +37,13 @@
   outline-offset: 2px;
 }
 
+html,
+body {
+  /* Stops pull-to-refresh/rubber-band scrolling the whole page while a stroke
+     is being drawn near the top/bottom edge of the drawing canvas. */
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -46,10 +53,15 @@ body {
 
 #root {
   min-height: 100vh;
+  /* 100dvh tracks the mobile browser's actual visible viewport (address bar
+     shown/hidden); ignored as an invalid value by browsers that don't support
+     it, leaving the 100vh fallback above in effect. */
+  min-height: 100dvh;
 }
 
 .screen {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -791,6 +803,9 @@ body {
   gap: 2px;
   z-index: 10;
   min-width: 200px;
+  /* Centered on its trigger, which can sit off-center in the pen-tools row -
+     clamp so it shrinks instead of overflowing the viewport on narrow phones. */
+  max-width: calc(100vw - 2 * var(--space-4));
 }
 
 .pen-color-option {
@@ -849,6 +864,7 @@ body {
   gap: 2px;
   z-index: 10;
   min-width: 200px;
+  max-width: calc(100vw - 2 * var(--space-4));
 }
 
 .pen-skin-option {
@@ -1345,6 +1361,19 @@ body {
   background: rgba(20, 12, 0, 0.55);
   backdrop-filter: blur(2px);
   animation: achievement-overlay-in 400ms ease;
+}
+
+.password-prompt-overlay,
+.myc-tutorial-overlay,
+.achievement-unlock-overlay,
+.chest-reward-overlay {
+  /* These overlays cover the full viewport (inset:0), so their own padding is
+     what keeps the centered card off a notch/Dynamic-Island or home-indicator
+     - env() resolves to 0px without viewport-fit=cover, so this is a no-op on
+     browsers/contexts without a safe area. Placed after the rules above so it
+     wins the cascade over their shorthand `padding: var(--space-4)`. */
+  padding-top: max(var(--space-4), env(safe-area-inset-top, 0px));
+  padding-bottom: max(var(--space-4), env(safe-area-inset-bottom, 0px));
 }
 
 .chest-reward-card {
@@ -2492,6 +2521,7 @@ body {
   .screen {
     padding: var(--space-4) var(--space-3) var(--space-5);
     gap: var(--space-3);
+    padding-top: max(var(--space-4), env(safe-area-inset-top, 0px));
     padding-bottom: max(var(--space-5), env(safe-area-inset-bottom, 0px));
   }
 

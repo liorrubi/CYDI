@@ -1,5 +1,6 @@
 import { SAVE_SCHEMA_VERSION, type SaveData } from "./saveData";
 import { backupCurrentSaveData, getSaveData, replaceSaveData } from "./saveStore";
+import { MAX_SHARE_POINTS } from "./shareLink";
 
 function encodeUtf8Base64(text: string): string {
   const bytes = new TextEncoder().encode(text);
@@ -18,6 +19,22 @@ function isSaveDataShape(value: unknown): value is SaveData {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return typeof v.schemaVersion === "number" && typeof v.progress === "object" && v.progress !== null && typeof v.settings === "object" && v.settings !== null;
+}
+
+// A backup code is pasted by hand from an arbitrary source, so - like an incoming
+// share link - it must not be trusted to carry a reasonable point count. Without
+// this, a crafted code with a challenge holding millions of points would be
+// written straight to localStorage and later freeze the tab when rendered/scored.
+function hasReasonableChallengePointCounts(data: SaveData): boolean {
+  const challenges = data.progress.challenges;
+  if (!Array.isArray(challenges)) return false;
+  return challenges.every((challenge) => {
+    const points = challenge?.target?.points;
+    const breaks = challenge?.target?.breaks;
+    if (!Array.isArray(points) || points.length > MAX_SHARE_POINTS) return false;
+    if (breaks !== undefined && (!Array.isArray(breaks) || breaks.length > MAX_SHARE_POINTS)) return false;
+    return true;
+  });
 }
 
 /** Produces a portable backup code (base64-encoded JSON) of the player's full save data, for moving progress to another device or browser by hand. */
@@ -47,6 +64,9 @@ export function importSaveCode(code: string): ImportResult {
   }
 
   if (!isSaveDataShape(parsed)) {
+    return { ok: false, error: "That doesn't look like a valid backup code." };
+  }
+  if (!hasReasonableChallengePointCounts(parsed)) {
     return { ok: false, error: "That doesn't look like a valid backup code." };
   }
   if (parsed.schemaVersion !== SAVE_SCHEMA_VERSION) {

@@ -9,6 +9,7 @@
 // auto-tracks on its own, with no custom-event API to plug into.
 
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
+import { apiFetch } from "./nativeApi";
 
 export type { AnalyticsEventName };
 export type AnalyticsParams = Record<string, string | number | boolean>;
@@ -134,7 +135,7 @@ const cloudflareAnalyticsProvider: AnalyticsProvider = {
   name: "cloudflare-worker",
   trackEvent(eventName, params) {
     try {
-      fetch("/api/analytics/event", {
+      apiFetch("/api/analytics/event", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ eventName, params }),

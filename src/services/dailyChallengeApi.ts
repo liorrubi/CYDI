@@ -1,3 +1,5 @@
+import { apiFetch } from "./nativeApi";
+
 const REQUEST_TIMEOUT_MS = 4000;
 
 /** One row of the Top 10 board. There's no separate "winner" field anywhere - the winner of an episode is always entries[0]. */
@@ -28,12 +30,9 @@ export type DailyClaimedPrize = { episodeId: number; dateKey: string; place: 1 |
 
 // Same fail-closed pattern as shareApi.ts: any network/server problem resolves
 // to null so callers can show a friendly "offline" state instead of throwing.
-async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
+async function request<T>(path: string, init?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<T | null> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const response = await fetch(path, { ...init, signal: controller.signal });
-    clearTimeout(timer);
+    const response = await apiFetch(path, { ...init, timeoutMs: REQUEST_TIMEOUT_MS });
     if (!response.ok) return null;
     return (await response.json()) as T;
   } catch {

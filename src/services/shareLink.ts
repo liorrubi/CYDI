@@ -2,6 +2,7 @@ import { resampleAllSegments, splitIntoSegments } from "../engine/normalizePath"
 import type { Challenge, DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
 import type { PenColorId } from "../app/constants";
+import { getPublicOrigin } from "./nativeApi";
 
 type SharePoint = [x: number, y: number];
 
@@ -104,8 +105,11 @@ function decode(encoded: string): unknown {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+// Uses the real production origin on native (never the native WebView's virtual
+// "https://localhost") so a link shared from the app is actually reachable by whoever
+// opens it - see nativeApi.ts. Unchanged on web.
 function shareBaseUrl(): string {
-  return `${location.origin}${location.pathname}`;
+  return `${getPublicOrigin()}${location.pathname}`;
 }
 
 export type SharedChallengePayload = { i: string; n: string; t: SharePath };

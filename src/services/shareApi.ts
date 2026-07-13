@@ -9,6 +9,7 @@ import {
   type DecodedSharedChallenge,
   type DecodedSharedResult,
 } from "./shareLink";
+import { apiFetch, getPublicOrigin } from "./nativeApi";
 import type { Challenge, DrawingPath } from "../types/Challenge";
 import type { PenColorId } from "../app/constants";
 import type { ScoreBreakdown } from "../types/Score";
@@ -20,15 +21,12 @@ const REQUEST_TIMEOUT_MS = 4000;
 // self-contained hash link, which never depends on a server.
 async function postShare(type: "c" | "r" | "a", payload: unknown): Promise<string | null> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const response = await fetch("/api/share", {
+    const response = await apiFetch("/api/share", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ type, payload }),
-      signal: controller.signal,
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
-    clearTimeout(timer);
     if (!response.ok) return null;
     const data = (await response.json()) as { id?: unknown };
     return typeof data.id === "string" ? data.id : null;
@@ -39,7 +37,7 @@ async function postShare(type: "c" | "r" | "a", payload: unknown): Promise<strin
 
 export async function createShortChallengeLink(challenge: Challenge): Promise<string | null> {
   const id = await postShare("c", buildChallengePayload(challenge));
-  return id ? `${location.origin}/c/${id}` : null;
+  return id ? `${getPublicOrigin()}/c/${id}` : null;
 }
 
 export async function createShortResultLink(args: {
@@ -50,7 +48,7 @@ export async function createShortResultLink(args: {
   attempt: DrawingPath;
 }): Promise<string | null> {
   const id = await postShare("r", buildResultPayload(args));
-  return id ? `${location.origin}/c/${id}` : null;
+  return id ? `${getPublicOrigin()}/c/${id}` : null;
 }
 
 export async function createShortArtistResultLink(args: {
@@ -64,7 +62,7 @@ export async function createShortArtistResultLink(args: {
   artworkId?: string;
 }): Promise<string | null> {
   const id = await postShare("a", buildArtistResultPayload(args));
-  return id ? `${location.origin}/c/${id}` : null;
+  return id ? `${getPublicOrigin()}/c/${id}` : null;
 }
 
 export type FetchedShare =
@@ -74,7 +72,7 @@ export type FetchedShare =
 
 export async function fetchSharedById(id: string): Promise<FetchedShare | null> {
   try {
-    const response = await fetch(`/api/share/${id}`);
+    const response = await apiFetch(`/api/share/${id}`);
     if (!response.ok) return null;
     const data = (await response.json()) as { type?: unknown; payload?: unknown };
     if (data.type === "c") {

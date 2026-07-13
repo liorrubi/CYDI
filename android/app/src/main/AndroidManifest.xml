@@ -22,6 +22,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Android App Link for challenge share links only - deliberately scoped to
+                 the /c/ path prefix, not the whole playcydi.com domain, so pages like
+                 Privacy/Settings/Analytics keep opening in the browser. autoVerify
+                 requires /.well-known/assetlinks.json to be served from playcydi.com. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="playcydi.com"
+                    android:pathPrefix="/c/" />
+            </intent-filter>
+
         </activity>
 
         <provider

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.playcydi.cydi",
+      "sha256_cert_fingerprints": [
+        "80:C9:6C:AF:42:2C:96:9D:84:7B:16:37:15:5C:14:F4:80:D2:A8:C7:CB:68:FF:AC:4D:0F:C7:2F:60:D4:C1:3C"
+      ]
+    }
+  }
+]

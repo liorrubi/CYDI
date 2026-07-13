@@ -7,9 +7,10 @@ android {
         applicationId "com.playcydi.cydi"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // versionName mirrors APP_VERSION in src/app/constants.ts (shown in Settings as
-        // "Version {APP_VERSION}") - the app's single source of truth for its product
-        // version. Keep the two in sync by hand when APP_VERSION is bumped.
+        // versionName is the Android-facing product version (Play Store listings,
+        // device Settings > Apps) - distinct from APP_VERSION in src/app/constants.ts,
+        // which is the in-app "Version X" string shown on the Settings screen. Bump by
+        // hand as needed; the two aren't required to match.
         //
         // versionCode must strictly increase on every APK/AAB actually distributed to a
         // device or the Play Store (side-load, internal testing, or production) - Android
@@ -19,8 +20,8 @@ android {
         // and nothing was overwritten. Reusing the same versionCode across debug builds
         // during development, then forgetting to bump it before the next real distribution,
         // is what caused that.
-        versionCode 2
-        versionName "0.20.0"
+        versionCode 3
+        versionName "0.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

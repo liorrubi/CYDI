@@ -25,6 +25,7 @@ import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import ArtistPackScreen from "./screens/ArtistPackScreen";
 import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toSharedArtistResult, toSharedResult } from "./app/routes";
+import { resolveIncomingAppLinkId, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
 import {
@@ -74,7 +75,7 @@ function importSharedScreenFromHash(): Screen | null {
 }
 
 function shortLinkIdFromPath(): string | null {
-  const match = location.pathname.match(/^\/c\/([A-Za-z0-9]{4,12})$/);
+  const match = location.pathname.match(SHORT_LINK_PATH_PATTERN);
   return match ? match[1] : null;
 }
 
@@ -116,6 +117,7 @@ export default function App() {
   const screenRef = useRef(screen);
   screenRef.current = screen;
   const screenHistoryRef = useRef<Screen[]>([]);
+  const lastHandledAppLinkUrlRef = useRef<string | null>(null);
 
   function navigate(next: Screen) {
     screenHistoryRef.current.push(screenRef.current);
@@ -136,6 +138,35 @@ export default function App() {
         setScreen({ name: "home" });
       }
     });
+    return () => {
+      listenerPromise.then((listener) => listener.remove());
+    };
+  }, []);
+
+  // Android App Link (https://playcydi.com/c/<id>) - the native counterpart to
+  // the web-only hash/short-link effects below. The WebView's own `location`
+  // never changes for these (the URL only ever reaches native code via an
+  // Android Intent, singleTask routes it to this same running instance), so
+  // the id has to come from getLaunchUrl()/appUrlOpen instead of `location`.
+  // Covers both cold start (app wasn't running - getLaunchUrl) and warm start
+  // (app already open - appUrlOpen); resolveIncomingAppLinkId's dedup guards
+  // against both firing for the same URL, and against a redelivered intent.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    function handleIncomingUrl(rawUrl: string) {
+      const id = resolveIncomingAppLinkId(rawUrl, lastHandledAppLinkUrlRef.current);
+      if (!id) return;
+      lastHandledAppLinkUrlRef.current = rawUrl;
+      importSharedScreenFromShortId(id).then((shared) => {
+        if (shared) setScreen(shared);
+      });
+    }
+
+    CapacitorApp.getLaunchUrl().then((result) => {
+      if (result?.url) handleIncomingUrl(result.url);
+    });
+    const listenerPromise = CapacitorApp.addListener("appUrlOpen", ({ url }) => handleIncomingUrl(url));
     return () => {
       listenerPromise.then((listener) => listener.remove());
     };

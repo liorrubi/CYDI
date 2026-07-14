@@ -465,7 +465,9 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
         )}
         <ScoreCard score={result} showPercentSign />
         <StarRating score={result.total} size={44} />
-        {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
+        {doubleOfferAmount !== null && (
+          <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} placement="artist_pack_double_reward" />
+        )}
         {isReply && replyTo ? (
           // Reply comparison: sender's drawing vs. the recipient's new one - never
           // the real artwork guide/target, reusing the same generic overlay used

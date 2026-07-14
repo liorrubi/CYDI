@@ -241,7 +241,9 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
           </div>
         )}
         <ScoreCard score={result} showPercentSign />
-        {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
+        {doubleOfferAmount !== null && (
+          <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} placement="special_challenge_double_reward" />
+        )}
         <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
         {doubleOfferAmount === null && (
           <Button variant="secondary" disabled={coins < SPECIAL_CHALLENGE_RETRY_COST} onClick={handlePaidRetry}>

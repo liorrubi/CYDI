@@ -19,12 +19,12 @@ export type AdMobPluginLike = {
   showRewardVideoAd(): Promise<{ type?: string; amount?: number } | undefined>;
 };
 
-export function createAdMobAdapter(admob: AdMobPluginLike): AdAdapter {
+export function createAdMobAdapter(admob: AdMobPluginLike, options?: { testing?: boolean }): AdAdapter {
   return {
     name: "admob-capacitor",
 
     async initialize(): Promise<void> {
-      await admob.initialize();
+      await admob.initialize(options?.testing ? { initializeForTesting: true } : undefined);
     },
 
     async loadRewarded(adUnitId: string): Promise<void> {

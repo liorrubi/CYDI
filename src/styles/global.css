@@ -1617,6 +1617,7 @@ body {
 
 .double-offer-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
   justify-content: center;
 }
@@ -1640,6 +1641,13 @@ body {
 .double-offer-double:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* The rewarded-ad button is the primary CTA whenever an ad is available - the math
+   button next to it stays fully functional, just visually secondary. */
+.double-offer-ad-primary {
+  background: #34d399;
+  color: #0b2b22;
 }
 
 .double-offer-skip {

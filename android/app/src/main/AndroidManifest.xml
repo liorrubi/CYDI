@@ -47,6 +47,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- AdMob App ID - required by the AdMob SDK regardless of whether AD_FLAGS.master
+             is on; the SDK reads this at process start. Actual ad requests remain gated in
+             JS (services/ads) by feature flags, consent, and platform - this alone does not
+             cause any ad request. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3787018288764544~9422228867" />
     </application>
 
     <!-- Permissions -->

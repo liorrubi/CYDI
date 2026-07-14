@@ -845,7 +845,9 @@ function ShapePlay({
             Your best: <strong>{bestScore}%</strong> <StarRating score={bestScore} size={44} />
           </p>
         )}
-        {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
+        {doubleOfferAmount !== null && (
+          <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} placement="shape_challenge_double_reward" />
+        )}
         <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
         {doubleOfferAmount === null && (
           <>

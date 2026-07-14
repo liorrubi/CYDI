@@ -1,5 +1,53 @@
 apply plugin: 'com.android.application'
 
+// Release signing config - read from a properties file OUTSIDE this project
+// entirely (never inside the repo, even gitignored - a project-local file was
+// tried first and this workspace's own file-change monitoring surfaced its
+// contents unintentionally, so nothing sensitive lives under the project root
+// anymore). Never read/logged by this build script beyond the property lookups
+// below; Gradle loads the file's actual values directly into memory.
+def signingPropertiesFile = new File(System.getProperty("user.home"), "keys/playcydi-signing.properties")
+def signingProperties = new Properties()
+if (signingPropertiesFile.exists()) {
+    signingProperties.load(new FileInputStream(signingPropertiesFile))
+}
+
+// Fails fast, with a clear message, only when a release-type task is actually
+// being run - evaluated once the full task graph is known, so `assembleDebug`/
+// tests/etc. are never affected by this file's absence. A configuration-time
+// check inside buildTypes.release{} would fire for every build type, including
+// debug, since Gradle configures the whole variant model regardless of which
+// task was requested.
+gradle.taskGraph.whenReady { taskGraph ->
+    def buildingRelease = taskGraph.allTasks.any { it.name.toLowerCase().contains("release") }
+    if (!buildingRelease) return
+
+    if (!signingPropertiesFile.exists()) {
+        throw new GradleException(
+            "Release signing properties not found at ${signingPropertiesFile}. " +
+            "Create that file (storeFile, storePassword, keyAlias, keyPassword) before " +
+            "building a release APK/AAB - see android/app/build.gradle for the expected keys."
+        )
+    }
+    // Validates presence only - never logs/echoes any value from the file, even
+    // the (non-secret) storeFile path, to stay within "never inspect this file".
+    ["storeFile", "storePassword", "keyAlias", "keyPassword"].each { key ->
+        def value = signingProperties[key]
+        if (value == null || value.toString().trim().isEmpty()) {
+            throw new GradleException(
+                "Release signing properties file at ${signingPropertiesFile} is missing (or has a blank) " +
+                "'${key}' value. Required keys: storeFile, storePassword, keyAlias, keyPassword."
+            )
+        }
+    }
+    if (!new File(signingProperties['storeFile'].toString()).exists()) {
+        throw new GradleException(
+            "The keystore file referenced by 'storeFile' in ${signingPropertiesFile} does not exist on disk. " +
+            "Double-check the path (forward slashes, even on Windows)."
+        )
+    }
+}
+
 android {
     namespace = "com.playcydi.cydi"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,10 +55,9 @@ android {
         applicationId "com.playcydi.cydi"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // versionName is the Android-facing product version (Play Store listings,
-        // device Settings > Apps) - distinct from APP_VERSION in src/app/constants.ts,
-        // which is the in-app "Version X" string shown on the Settings screen. Bump by
-        // hand as needed; the two aren't required to match.
+        // versionName mirrors APP_VERSION in src/app/constants.ts (the in-app
+        // "Version X" string on the Settings screen) - kept in sync by hand so the
+        // Play Store listing/device Settings always match what the app itself claims.
         //
         // versionCode must strictly increase on every APK/AAB actually distributed to a
         // device or the Play Store (side-load, internal testing, or production) - Android
@@ -20,8 +67,8 @@ android {
         // and nothing was overwritten. Reusing the same versionCode across debug builds
         // during development, then forgetting to bump it before the next real distribution,
         // is what caused that.
-        versionCode 3
-        versionName "0.2.0"
+        versionCode 5
+        versionName "0.26.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -29,8 +76,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (signingPropertiesFile.exists()) {
+                storeFile file(signingProperties['storeFile'])
+                storePassword signingProperties['storePassword']
+                keyAlias signingProperties['keyAlias']
+                keyPassword signingProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (signingPropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

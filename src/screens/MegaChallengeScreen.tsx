@@ -409,7 +409,9 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
           </div>
         )}
         <ScoreCard score={result} showPercentSign />
-        {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
+        {doubleOfferAmount !== null && (
+          <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} placement="mega_challenge_bonus" />
+        )}
         <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
         {doubleOfferAmount === null && (
           <div className="button-row">

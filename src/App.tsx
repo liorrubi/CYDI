@@ -39,6 +39,7 @@ import { getChallenge, updateChallenge } from "./services/challengeStorage";
 import { decodeArtistResultHash, decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
 import { fetchSharedById } from "./services/shareApi";
 import { isDailyChallengeSharePath } from "./services/dailyChallengeShare";
+import { initializeNativeAds } from "./services/ads/nativeAdsSetup";
 import type { Screen } from "./types/GameMode";
 
 /** Imports a shared challenge idempotently, keeping the recipient's own progress if they've already opened this link before - only `name`/`target` ever sync from the payload, never `createdAt`/`personalBest`/`attempts`. */
@@ -123,6 +124,13 @@ export default function App() {
     screenHistoryRef.current.push(screenRef.current);
     setScreen(next);
   }
+
+  // Fail-closed ad bootstrap (consent -> SDK init -> adapter registration), a
+  // no-op on web - see nativeAdsSetup.ts for the full sequencing/consent contract.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    initializeNativeAds();
+  }, []);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;

@@ -52,11 +52,13 @@ captures/
 # Comment next line if keeping position of elements in Navigation Editor is relevant for you
 .idea/navEditor.xml
 
-# Keystore files - never commit signing material (debug.keystore itself lives
-# outside this repo, at the user's ~/.android/, but this guards against a future
-# release keystore accidentally being created inside the project folder).
+# Keystore files and the release signing config that points at one - never
+# commit signing material (debug.keystore itself lives outside this repo, at
+# the user's ~/.android/, but this guards against a future release keystore
+# accidentally being created inside the project folder).
 *.jks
 *.keystore
+keystore.properties
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild

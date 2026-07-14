@@ -3,10 +3,12 @@
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
 import type { DrawingPath } from "../types/Challenge";
+import { ALPHABET_SHAPES } from "./alphabetShapes";
 
 export type CategoryId =
   | "geometric"
   | "symbols"
+  | "alphabet"
   | "animals"
   | "nature"
   | "food"
@@ -20,6 +22,7 @@ export type CategoryId =
 export const CATEGORIES: { id: CategoryId; name: string; icon: string }[] = [
   { id: "geometric", name: "Geometric Shapes", icon: "🔷" },
   { id: "symbols", name: "Symbols", icon: "♾️" },
+  { id: "alphabet", name: "English Alphabet", icon: "🔤" },
   { id: "home", name: "Home & Objects", icon: "🏠" },
   { id: "nature", name: "Nature", icon: "🌿" },
   { id: "food", name: "Food", icon: "🍎" },
@@ -6942,6 +6945,7 @@ const UNIVERSAL_SHAPES: ShapeDefinition[] = [
 export const SHAPE_LIBRARY: ShapeDefinition[] = [
   ...GEOMETRIC_SHAPES,
   ...SYMBOL_SHAPES,
+  ...ALPHABET_SHAPES,
   ...ANIMAL_SHAPES,
   ...NATURE_SHAPES,
   ...FOOD_SHAPES,

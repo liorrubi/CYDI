@@ -4116,3 +4116,105 @@ body {
   margin-top: var(--space-2);
   font-size: 12px;
 }
+
+/* Standalone /privacy page (rendered outside the game <App/> tree). Wider and
+   left-aligned than the game cards for comfortable long-form reading, responsive
+   on mobile and desktop. */
+.privacy-page {
+  align-items: center;
+}
+
+.privacy-topbar,
+.privacy-card {
+  width: 100%;
+  max-width: 720px;
+}
+
+.privacy-topbar {
+  display: flex;
+}
+
+.privacy-back-link {
+  display: inline-block;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--color-accent, #7c3aed);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  box-shadow: 0 2px 8px rgba(30, 32, 46, 0.08);
+}
+
+.privacy-back-link:hover {
+  text-decoration: underline;
+}
+
+.privacy-card {
+  text-align: left;
+  max-width: 720px;
+}
+
+.privacy-card:hover {
+  transform: none;
+  box-shadow: 0 4px 16px rgba(30, 32, 46, 0.08);
+}
+
+/* Override the game's centered .status-text for comfortable long-form reading. */
+.privacy-card .status-text,
+.privacy-card .privacy-list {
+  text-align: left;
+}
+
+.privacy-title {
+  margin: 0 0 var(--space-2);
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.privacy-card h2 {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: 19px;
+}
+
+.privacy-card h3 {
+  margin: var(--space-4) 0 var(--space-1);
+  font-size: 16px;
+}
+
+.privacy-card .status-text {
+  line-height: 1.6;
+}
+
+.privacy-dates {
+  margin-bottom: var(--space-4);
+}
+
+.privacy-list {
+  margin: var(--space-1) 0 var(--space-2);
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  line-height: 1.6;
+}
+
+.privacy-copyright {
+  margin-top: var(--space-5);
+  opacity: 0.75;
+}
+
+.privacy-footer {
+  margin-top: var(--space-5);
+  display: flex;
+  justify-content: center;
+}
+
+/* Read-only Privacy Request ID field in Settings: full-width, monospace so the
+   UUID is legible, and wraps rather than overflowing on narrow screens. */
+.privacy-request-id-value {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  text-align: center;
+  word-break: break-all;
+}

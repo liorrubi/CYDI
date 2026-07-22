@@ -70,7 +70,7 @@ android {
         // 6 shipped to Play internal testing (release/v6-internal-test); 7 = next
         // installable build carrying the ContentRepository work on top of v6.
         versionCode 7
-        versionName "0.27.0"
+        versionName "0.27.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

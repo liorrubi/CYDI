@@ -140,6 +140,18 @@ export function getShapesForCategory(category: CategoryId | string): ShapeDefini
   return activeSource.getAllShapes().filter((s) => s.category === category);
 }
 
+/**
+ * The BAKED-IN shapes for a category, ignoring any active remote source.
+ * Used only by legacy progress migration: a legacy `levelIndexByCategory`
+ * counter was accumulated under the baked-in order (remote catalogs did not
+ * exist in any build that wrote that format), so deriving which shape ids it
+ * represents MUST use the baked order - deriving against a remote catalog that
+ * inserted/reordered shapes would mislabel which shapes were completed.
+ */
+export function getLocalShapesForCategory(category: CategoryId | string): ShapeDefinition[] {
+  return engineShapesForCategory(category as CategoryId);
+}
+
 export function getShapeById(id: string): ShapeDefinition | undefined {
   if (activeSource === localContentSource) return engineGetShapeById(id);
   // Resilience: an id the remote catalog doesn't know (e.g. the daily

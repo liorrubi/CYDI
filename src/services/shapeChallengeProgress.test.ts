@@ -67,6 +67,44 @@ test("completed counts and totals match the legacy raw values", () => {
   assert.equal(getCategoryCompletedCount(progress, "untouched"), 0);
 });
 
+test("legacy derivation uses the BAKED order even when a remote catalog inserted a shape", async () => {
+  // Reproduces the on-device finding: a v1 save (levelIndex only), upgraded on
+  // a client where a remote catalog inserted a brand-new shape at position 1 of
+  // the category. The derived completed ids must be the baked first-N (what the
+  // player actually completed), NOT the remote order (which would wrongly mark
+  // the never-played inserted shape complete and drop a real one).
+  const repo = await import("../content/contentRepository.ts");
+  const { contentSourceFromCatalog } = await import("../content/remoteContentSource.ts");
+  const { buildCatalogFromLocalContent } = await import("../content/exportCatalog.ts");
+
+  const bakedFirst3 = getShapesForCategory(CATEGORY).slice(0, 3).map((s) => s.id);
+
+  const catalog = buildCatalogFromLocalContent(1);
+  const insertAt = catalog.shapes.findIndex((s) => s.category === CATEGORY) + 1;
+  catalog.shapes.splice(insertAt, 0, {
+    id: "remote-inserted-xyz",
+    name: "Remote Inserted",
+    category: CATEGORY,
+    path: { points: [[10, 10], [20, 20], [30, 10]] },
+  });
+
+  try {
+    repo.setContentSource(contentSourceFromCatalog(catalog, repo.localContentSource));
+    // Sanity: the remote source really did insert the shape at position 1.
+    assert.equal(repo.getShapesForCategory(CATEGORY)[1].id, "remote-inserted-xyz");
+
+    const progress = legacyProgress({ [CATEGORY]: 3 });
+    const derived = getCompletedShapeIds(progress, CATEGORY);
+    assert.deepEqual(derived, bakedFirst3, "must be baked first-3, not remote order");
+    assert.ok(!derived.includes("remote-inserted-xyz"), "never-played inserted shape must not be marked complete");
+
+    const normalized = normalizeProgress(progress);
+    assert.deepEqual(normalized.completedShapeIdsByCategory?.[CATEGORY], bakedFirst3);
+  } finally {
+    repo.resetContentSource();
+  }
+});
+
 // ---------- v2 semantics: ids are authoritative and index-independent.
 
 test("v2 id list is preferred over the legacy counter when both exist", () => {

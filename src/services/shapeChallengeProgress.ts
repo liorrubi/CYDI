@@ -1,4 +1,4 @@
-import { getShapesForCategory, type ShapeDefinition } from "../content/contentRepository";
+import { getLocalShapesForCategory, type ShapeDefinition } from "../content/contentRepository";
 import { getSaveData, updateSaveData } from "./saveStore";
 
 /**
@@ -16,8 +16,12 @@ import { getSaveData, updateSaveData } from "./saveStore";
  *
  * READ PATH: helpers below prefer v2 and lazily DERIVE it from the legacy
  * counter when absent (a save written by an older build): the first N shapes
- * of the category, in current level order — exactly the set the old
- * `index <= levelIndex` rule treated as completed. Nothing is written during
+ * of the category, IN BAKED-IN LEVEL ORDER — exactly the set the old
+ * `index <= levelIndex` rule treated as completed. The baked order (not the
+ * active, possibly-remote catalog) is deliberate: a legacy counter was only
+ * ever written by a build with no remote content, so that is the order it was
+ * accumulated under; deriving against a remote catalog that inserted/reordered
+ * shapes would mislabel which shapes were completed. Nothing is written during
  * reads; the derived form is persisted on the next `saveProgress`.
  */
 export type ShapeChallengeProgress = {
@@ -53,7 +57,8 @@ export function getCompletedShapeIds(progress: ShapeChallengeProgress, category:
   if (stored) return stored;
   const legacyCount = progress.levelIndexByCategory[category] ?? 0;
   if (legacyCount <= 0) return [];
-  const shapes = getShapesForCategory(category);
+  // Baked order - see the module note on the read path.
+  const shapes = getLocalShapesForCategory(category);
   return shapes.slice(0, Math.min(legacyCount, shapes.length)).map((shape) => shape.id);
 }
 
@@ -143,7 +148,8 @@ export function normalizeProgress(progress: ShapeChallengeProgress): ShapeChalle
   const categories = new Set([...Object.keys(levelIndexByCategory), ...Object.keys(completedShapeIdsByCategory)]);
 
   for (const category of categories) {
-    const shapes = getShapesForCategory(category);
+    // Baked order for legacy derivation - see the module note on the read path.
+    const shapes = getLocalShapesForCategory(category);
     if (!completedShapeIdsByCategory[category]) {
       if (shapes.length === 0) continue; // unknown category: keep the legacy counter untouched, derive nothing
       const legacyCount = Math.min(levelIndexByCategory[category] ?? 0, shapes.length);

@@ -144,3 +144,86 @@ test("rejects ids with unsafe characters", () => {
 test("rejects non-object payloads", () => {
   for (const v of [null, [], "x", 42]) assert.equal(validateCatalog(v).ok, false);
 });
+
+// --- Release envelope ---
+
+const { validateReleaseEnvelope, parseReleaseJson, sha256Hex, RELEASE_ID_PATTERN, MAX_TOTAL_POINTS, MAX_POINTS_PER_SHAPE: MAX_PPS } =
+  await import("./catalogSchema.ts");
+
+async function goodRelease() {
+  const catalogJson = JSON.stringify(goodCatalog());
+  return {
+    releaseId: "r-1784700000000-Ab12Cd",
+    catalogHash: await sha256Hex(catalogJson),
+    publishedAt: "2026-07-22T12:00:00.000Z",
+    contentVersion: 3,
+    formatVersion: CATALOG_FORMAT_VERSION,
+    catalogJson,
+  };
+}
+
+test("a well-formed release envelope validates and exposes the parsed catalog", async () => {
+  const result = validateReleaseEnvelope(await goodRelease());
+  assert.ok(result.ok, !result.ok ? result.error : "");
+  assert.equal(result.ok && result.catalog.shapes.length, 2);
+});
+
+test("parseReleaseJson round-trips", async () => {
+  const result = parseReleaseJson(JSON.stringify(await goodRelease()));
+  assert.ok(result.ok);
+});
+
+test("release with a malformed releaseId is rejected", async () => {
+  for (const bad of ["", "not-a-release", "r-abc-XY12", "r-1784700000000-", "x-1784700000000-Ab12Cd"]) {
+    const r = { ...(await goodRelease()), releaseId: bad };
+    assert.equal(validateReleaseEnvelope(r).ok, false, bad);
+  }
+});
+
+test("release with a malformed hash is rejected", async () => {
+  for (const bad of ["", "zz".repeat(32), "abcd", "A".repeat(64)]) {
+    const r = { ...(await goodRelease()), catalogHash: bad };
+    assert.equal(validateReleaseEnvelope(r).ok, false, bad);
+  }
+});
+
+test("release whose contentVersion/formatVersion disagree with the embedded catalog is rejected", async () => {
+  const r1 = { ...(await goodRelease()), contentVersion: 999 };
+  assert.equal(validateReleaseEnvelope(r1).ok, false);
+  const r2 = { ...(await goodRelease()), formatVersion: 999 };
+  assert.equal(validateReleaseEnvelope(r2).ok, false);
+});
+
+test("release embedding an invalid catalog is rejected", async () => {
+  const r = { ...(await goodRelease()), catalogJson: "{}" };
+  const result = validateReleaseEnvelope(r);
+  assert.equal(result.ok, false);
+  assert.ok(!result.ok && result.error.includes("embedded catalog"));
+});
+
+test("releaseId pattern matches what the Worker generates", () => {
+  assert.ok(RELEASE_ID_PATTERN.test(`r-${Date.now()}-A1b2C3`));
+});
+
+test("catalog exceeding the total point budget is rejected", () => {
+  // Enough max-size shapes to blow the whole-catalog budget.
+  const shapeCount = Math.ceil(MAX_TOTAL_POINTS / MAX_PPS) + 1;
+  const points = Array.from({ length: MAX_PPS }, (_, i) => [i % 320, (i * 7) % 320] as [number, number]);
+  const c = {
+    ...goodCatalog(),
+    shapes: Array.from({ length: shapeCount }, (_, i) => ({
+      id: `bulk-${i}`,
+      name: `Bulk ${i}`,
+      category: "geometric",
+      path: { points },
+    })),
+  };
+  const result = validateCatalog(c);
+  assert.equal(result.ok, false);
+  assert.ok(!result.ok && result.error.includes("total point budget"));
+});
+
+test("sha256Hex produces the expected digest", async () => {
+  // Known vector: sha256("abc")
+  assert.equal(await sha256Hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+});

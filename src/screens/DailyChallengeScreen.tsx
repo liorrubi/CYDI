@@ -19,7 +19,8 @@ import {
   type PenSkinId,
 } from "../app/constants";
 import { DAILY_CHALLENGE_PRIZE_COINS } from "../app/dailyChallengePrizes";
-import { getShapeById } from "../content/contentRepository";
+import type { ShapeDefinition } from "../content/contentRepository";
+import { resolveDailyShape } from "../services/dailyShapeResolver";
 import { scoreAttempt } from "../engine/scoring";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins } from "../services/coinsStore";
@@ -70,6 +71,8 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const playerId = useMemo(() => getPlayerId(), []);
   const [phase, setPhase] = useState<Phase>("loading");
   const [episode, setEpisode] = useState<DailyEpisode | null>(null);
+  /** Resolved ONCE per episode in load() (see dailyShapeResolver) and never re-resolved afterwards - the challenge must not change after the player has seen or started it, even if a newer catalog arrives mid-session. */
+  const [shape, setShape] = useState<ShapeDefinition | null>(null);
   const [yourBest, setYourBest] = useState<number | null>(null);
   const [isNewBest, setIsNewBest] = useState(false);
   const [nameDraft, setNameDraft] = useState(() => getPlayerName());
@@ -100,6 +103,10 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       setPhase("error");
       return;
     }
+    // Guaranteed to return a drawable shape: active catalog -> cached release
+    // -> one refresh -> deterministic local substitute (reported to analytics).
+    const resolution = await resolveDailyShape(fetched.shapeId);
+    setShape(resolution.shape);
     setEpisode(fetched);
     setYourBest(fetched.yourBest);
     setIsNewBest(false);
@@ -128,8 +135,6 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const shape = episode ? getShapeById(episode.shapeId) : undefined;
 
   useEffect(() => {
     if (phase !== "preview") return;

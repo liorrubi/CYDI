@@ -18,12 +18,24 @@
 
 export const CATALOG_FORMAT_VERSION = 1;
 
-/**
- * KV key the published catalog lives under. It shares the existing SHARE_KV
- * namespace (no new binding to provision): share ids are 4-12 random
- * alphanumerics, so the "content:" prefix can never collide with them.
- */
-export const CATALOG_KV_KEY = "content:catalog";
+// ---------------------------------------------------------------------------
+// KV layout (dedicated CONTENT_KV namespace - never SHARE_KV):
+//   content:catalog:<releaseId>  -> immutable CatalogRelease envelope
+//   content:active               -> { releaseId } pointer to the live release
+//   content:releases             -> newest-first index of release metadata
+// Publishing writes a NEW release then flips the pointer; rollback is just
+// pointing content:active back at an earlier releaseId. Old releases are
+// never deleted automatically.
+// ---------------------------------------------------------------------------
+export const CONTENT_ACTIVE_KEY = "content:active";
+export const CONTENT_RELEASES_INDEX_KEY = "content:releases";
+export function contentReleaseKey(releaseId: string): string {
+  return `content:catalog:${releaseId}`;
+}
+
+/** r-<unix ms>-<random alnum>. Generated server-side at publish time. */
+export const RELEASE_ID_PATTERN = /^r-[0-9]{10,17}-[A-Za-z0-9]{4,12}$/;
+const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/;
 
 // Hard caps - a catalog exceeding any of these is rejected outright, both by
 // the Worker on upload and by the client before activating remote content
@@ -32,6 +44,8 @@ export const MAX_CATALOG_BYTES = 10_000_000; // well under the 25 MB KV value li
 export const MAX_CATEGORIES = 64;
 export const MAX_SHAPES = 5000;
 export const MAX_POINTS_PER_SHAPE = 5000;
+/** Whole-catalog point budget - even MAX_SHAPES tiny shapes can't smuggle in an absurd total. */
+export const MAX_TOTAL_POINTS = 2_000_000;
 export const MAX_NAME_LENGTH = 100;
 export const MAX_ICON_LENGTH = 16;
 
@@ -119,6 +133,7 @@ export function validateCatalog(value: unknown): CatalogValidationResult {
   }
   const shapeIds = new Set<string>();
   const categoriesWithShapes = new Set<string>();
+  let totalPoints = 0;
   // Points may legitimately overshoot the canvas a little (a few generators
   // draw right up to / marginally past the edge); reject only clearly-broken
   // coordinates far outside the canvas.
@@ -139,6 +154,8 @@ export function validateCatalog(value: unknown): CatalogValidationResult {
     if (!Array.isArray(points) || points.length < 2 || points.length > MAX_POINTS_PER_SHAPE) {
       return fail(`shape "${shape.id}": points must have 2..${MAX_POINTS_PER_SHAPE} entries`);
     }
+    totalPoints += points.length;
+    if (totalPoints > MAX_TOTAL_POINTS) return fail(`catalog exceeds the total point budget (${MAX_TOTAL_POINTS})`);
     for (const point of points) {
       if (!Array.isArray(point) || point.length !== 2) return fail(`shape "${shape.id}": malformed point`);
       const [x, y] = point;
@@ -187,3 +204,77 @@ export function parseCatalogJson(raw: string): CatalogValidationResult {
   }
   return validateCatalog(parsed);
 }
+
+// ---------------------------------------------------------------------------
+// Release envelope - what actually gets stored in KV and served to clients.
+// ---------------------------------------------------------------------------
+
+/**
+ * An immutable publish record. `catalogJson` is the EXACT raw catalog text as
+ * uploaded (never re-serialized), so `catalogHash` = sha256(catalogJson) can
+ * be re-verified byte-for-byte by the Worker's read-back check and by the
+ * client after download. Adoption/rollback decisions compare `releaseId` and
+ * `catalogHash` - never "higher contentVersion wins", so re-activating an
+ * older release rolls clients back too.
+ */
+export type CatalogRelease = {
+  releaseId: string;
+  catalogHash: string;
+  publishedAt: string;
+  contentVersion: number;
+  formatVersion: number;
+  catalogJson: string;
+};
+
+export type ReleaseValidationResult = { ok: true; release: CatalogRelease; catalog: ContentCatalog } | { ok: false; error: string };
+
+/** Strict validation of an untrusted release envelope (KV value, HTTP body, or client cache), including full validation of the embedded catalog. Does NOT verify the hash - that is an async step callers do with sha256Hex where integrity matters. */
+export function validateReleaseEnvelope(value: unknown): ReleaseValidationResult {
+  if (!isRecord(value)) return { ok: false, error: "release is not an object" };
+  if (typeof value.releaseId !== "string" || !RELEASE_ID_PATTERN.test(value.releaseId)) {
+    return { ok: false, error: "invalid releaseId" };
+  }
+  if (typeof value.catalogHash !== "string" || !SHA256_HEX_PATTERN.test(value.catalogHash)) {
+    return { ok: false, error: "invalid catalogHash" };
+  }
+  if (typeof value.publishedAt !== "string" || value.publishedAt.length > 40) return { ok: false, error: "invalid publishedAt" };
+  if (typeof value.catalogJson !== "string") return { ok: false, error: "missing catalogJson" };
+
+  const catalogResult = parseCatalogJson(value.catalogJson);
+  if (!catalogResult.ok) return { ok: false, error: `embedded catalog invalid: ${catalogResult.error}` };
+  const catalog = catalogResult.catalog;
+
+  if (value.contentVersion !== catalog.contentVersion) return { ok: false, error: "contentVersion mismatch with embedded catalog" };
+  if (value.formatVersion !== catalog.formatVersion) return { ok: false, error: "formatVersion mismatch with embedded catalog" };
+
+  return { ok: true, release: value as unknown as CatalogRelease, catalog };
+}
+
+/** Parses raw envelope JSON and validates it, without ever throwing. */
+export function parseReleaseJson(raw: string): ReleaseValidationResult {
+  // The envelope is the catalog plus small metadata - reuse the same cap with headroom for JSON string escaping.
+  if (raw.length > MAX_CATALOG_BYTES * 1.5) return { ok: false, error: "release exceeds size cap" };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: "release is not valid JSON" };
+  }
+  return validateReleaseEnvelope(parsed);
+}
+
+/** sha256 as lowercase hex. Web Crypto - available in browsers, Workers, and Node 20+. */
+export async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** Newest-first metadata rows stored under content:releases for admin listing/rollback tooling. */
+export type ReleaseIndexEntry = {
+  releaseId: string;
+  catalogHash: string;
+  publishedAt: string;
+  contentVersion: number;
+  shapes: number;
+  categories: number;
+};

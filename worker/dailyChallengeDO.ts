@@ -7,7 +7,7 @@ import { israelDateKey } from "../src/app/israelDate";
 // avoiding the bundle cost would require a separately-maintained id list (drift
 // risk) or a lazy-generator refactor of the 6900-line library.
 import { SHAPE_LIBRARY } from "../src/engine/shapeLibrary";
-import { CATALOG_KV_KEY, parseCatalogJson } from "../src/content/catalogSchema";
+import { CONTENT_ACTIVE_KEY, contentReleaseKey, parseReleaseJson, RELEASE_ID_PATTERN } from "../src/content/catalogSchema";
 
 // Single global Durable Object instance coordinates the daily challenge, so every
 // request (rollover check, score submission, "first to 100" arbitration) is
@@ -29,6 +29,8 @@ type LeaderboardEntry = { playerId: string; playerName: string; score: number; a
 type Episode = {
   id: number;
   shapeId: string;
+  /** The catalog release shapeId was drawn from, or null when it came from the baked-in library. Lets clients verify they hold (or fetch) the matching catalog before playing. Optional: episodes stored before this field existed load as undefined. */
+  contentReleaseId?: string | null;
   dateKey: string; // "YYYY-MM-DD" in Asia/Jerusalem
   startedAt: number;
   endedAt: number | null;
@@ -68,7 +70,7 @@ function json(data: unknown, status = 200): Response {
 }
 
 /** The only binding this DO reads from the environment. Optional so the DO still works in a test harness that provides no KV. */
-type DailyEnv = { SHARE_KV?: KVNamespace };
+type DailyEnv = { CONTENT_KV?: KVNamespace };
 
 export class DailyChallengeDO {
   private state: DurableObjectState;
@@ -80,26 +82,33 @@ export class DailyChallengeDO {
   }
 
   /**
-   * The pool a new episode's shape is drawn from: the published remote
-   * catalog when one exists (so the server can never pick a shape the
+   * The pool a new episode's shape is drawn from: the ACTIVE published
+   * release when one exists (so the server can never pick a shape the
    * remote-content clients don't have), otherwise the baked-in library.
-   * Read once per episode (one KV read per day, plus win-rollovers) -
-   * no caching needed.
+   * Returns the releaseId alongside the pick so the episode can record
+   * exactly which catalog it came from. Read once per episode (one KV
+   * round-trip per day, plus win-rollovers) - no caching needed.
    */
-  private async pickShapeIdForNewEpisode(): Promise<string> {
+  private async pickShapeIdForNewEpisode(): Promise<{ shapeId: string; contentReleaseId: string | null }> {
     try {
-      const raw = await this.env.SHARE_KV?.get(CATALOG_KV_KEY);
-      if (raw) {
-        const result = parseCatalogJson(raw);
-        if (result.ok) {
-          const shapes = result.catalog.shapes;
-          return shapes[Math.floor(Math.random() * shapes.length)].id;
+      const pointerRaw = await this.env.CONTENT_KV?.get(CONTENT_ACTIVE_KEY);
+      if (pointerRaw) {
+        const releaseId = (JSON.parse(pointerRaw) as Record<string, unknown>).releaseId;
+        if (typeof releaseId === "string" && RELEASE_ID_PATTERN.test(releaseId)) {
+          const raw = await this.env.CONTENT_KV?.get(contentReleaseKey(releaseId));
+          if (raw) {
+            const result = parseReleaseJson(raw);
+            if (result.ok) {
+              const shapes = result.catalog.shapes;
+              return { shapeId: shapes[Math.floor(Math.random() * shapes.length)].id, contentReleaseId: releaseId };
+            }
+          }
         }
       }
     } catch {
       // KV hiccup - fall through to the baked-in pool.
     }
-    return randomShapeId();
+    return { shapeId: randomShapeId(), contentReleaseId: null };
   }
 
   private boardKey(episodeId: number, playerId: string): string {
@@ -122,9 +131,11 @@ export class DailyChallengeDO {
   }
 
   private async createEpisode(dateKey: string): Promise<Episode> {
+    const pick = await this.pickShapeIdForNewEpisode();
     return {
       id: await this.nextEpisodeId(),
-      shapeId: await this.pickShapeIdForNewEpisode(),
+      shapeId: pick.shapeId,
+      contentReleaseId: pick.contentReleaseId,
       dateKey,
       startedAt: Date.now(),
       endedAt: null,
@@ -186,6 +197,7 @@ export class DailyChallengeDO {
     return {
       id: episode.id,
       shapeId: episode.shapeId,
+      contentReleaseId: episode.contentReleaseId ?? null,
       dateKey: episode.dateKey,
       startedAt: episode.startedAt,
       status: episode.status,

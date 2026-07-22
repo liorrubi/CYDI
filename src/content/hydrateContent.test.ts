@@ -10,12 +10,24 @@ const store = new Map<string, string>();
   removeItem: (k: string) => void store.delete(k),
 };
 
-const { applyCachedCatalog, CATALOG_CACHE_KEY } = await import("./hydrateContent.ts");
+const { applyCachedCatalog, getCachedCatalog, getCachedReleaseId, RELEASE_CACHE_KEY } = await import("./hydrateContent.ts");
 const { buildCatalogFromLocalContent } = await import("./exportCatalog.ts");
+const { sha256Hex } = await import("./catalogSchema.ts");
 const repo = await import("./contentRepository.ts");
 
-function seedCache(value: string): void {
-  store.set(CATALOG_CACHE_KEY, value);
+async function makeReleaseRaw(contentVersion: number, mutate?: (release: Record<string, unknown>) => void): Promise<string> {
+  const catalog = buildCatalogFromLocalContent(contentVersion);
+  const catalogJson = JSON.stringify(catalog);
+  const release: Record<string, unknown> = {
+    releaseId: `r-${1784700000000 + contentVersion}-TEST${contentVersion}`,
+    catalogHash: await sha256Hex(catalogJson),
+    publishedAt: "2026-07-22T00:00:00.000Z",
+    contentVersion: catalog.contentVersion,
+    formatVersion: catalog.formatVersion,
+    catalogJson,
+  };
+  mutate?.(release);
+  return JSON.stringify(release);
 }
 
 test("no cache -> nothing applied, local content stays active", () => {
@@ -29,15 +41,15 @@ test("no cache -> nothing applied, local content stays active", () => {
   }
 });
 
-test("valid cached catalog is applied as the active source", () => {
+test("valid cached release is applied as the active source", async () => {
   store.clear();
-  const catalog = buildCatalogFromLocalContent(11);
-  seedCache(JSON.stringify(catalog));
+  store.set(RELEASE_CACHE_KEY, await makeReleaseRaw(11));
   try {
     const result = applyCachedCatalog();
     assert.equal(result.applied, true);
     assert.equal(result.contentVersion, 11);
-    assert.equal(repo.getAllShapes().length, catalog.shapes.length);
+    assert.equal(result.releaseId, "r-1784700000011-TEST11");
+    assert.equal(repo.getAllShapes().length, repo.localContentSource.getAllShapes().length);
   } finally {
     repo.resetContentSource();
   }
@@ -45,40 +57,65 @@ test("valid cached catalog is applied as the active source", () => {
 
 test("corrupt cached JSON is rejected AND removed; local content stays", () => {
   store.clear();
-  seedCache("{corrupt!!!");
+  store.set(RELEASE_CACHE_KEY, "{corrupt!!!");
   try {
     const result = applyCachedCatalog();
     assert.equal(result.applied, false);
-    assert.equal(store.has(CATALOG_CACHE_KEY), false, "corrupt cache must be cleared");
+    assert.equal(store.has(RELEASE_CACHE_KEY), false, "corrupt cache must be cleared");
   } finally {
     repo.resetContentSource();
   }
 });
 
-test("a cached catalog with an unsupported (newer) formatVersion is rejected and cleared", () => {
+test("a cached release whose embedded catalog has an unsupported formatVersion is rejected and cleared", async () => {
   store.clear();
-  const catalog = buildCatalogFromLocalContent(12);
-  seedCache(JSON.stringify({ ...catalog, formatVersion: 999 }));
+  const catalog = { ...buildCatalogFromLocalContent(12), formatVersion: 999 };
+  const catalogJson = JSON.stringify(catalog);
+  store.set(
+    RELEASE_CACHE_KEY,
+    JSON.stringify({
+      releaseId: "r-1784700000012-TESTX",
+      catalogHash: await sha256Hex(catalogJson),
+      publishedAt: "2026-07-22T00:00:00.000Z",
+      contentVersion: catalog.contentVersion,
+      formatVersion: 999,
+      catalogJson,
+    }),
+  );
   try {
     const result = applyCachedCatalog();
     assert.equal(result.applied, false);
     assert.ok(result.reason?.includes("formatVersion"));
-    assert.equal(store.has(CATALOG_CACHE_KEY), false);
+    assert.equal(store.has(RELEASE_CACHE_KEY), false);
   } finally {
     repo.resetContentSource();
   }
 });
 
-test("a structurally valid catalog with missing ids/categories is rejected", () => {
+test("an envelope with a tampered releaseId is rejected", async () => {
   store.clear();
-  const catalog = buildCatalogFromLocalContent(13);
-  const broken = { ...catalog, shapes: catalog.shapes.map((s, i) => (i === 0 ? { ...s, category: "ghost-category" } : s)) };
-  seedCache(JSON.stringify(broken));
+  store.set(RELEASE_CACHE_KEY, await makeReleaseRaw(13, (r) => (r.releaseId = "../../etc/passwd")));
   try {
-    const result = applyCachedCatalog();
-    assert.equal(result.applied, false);
-    assert.equal(repo.getAllShapes().length, repo.localContentSource.getAllShapes().length, "local content stays active");
+    assert.equal(applyCachedCatalog().applied, false);
   } finally {
     repo.resetContentSource();
   }
+});
+
+test("getCachedCatalog exposes the parsed catalog; getCachedReleaseId is cheap and matches", async () => {
+  store.clear();
+  store.set(RELEASE_CACHE_KEY, await makeReleaseRaw(14));
+  const cached = getCachedCatalog();
+  assert.ok(cached);
+  assert.equal(cached!.releaseId, "r-1784700000014-TEST14");
+  assert.equal(cached!.catalog.contentVersion, 14);
+  assert.equal(getCachedReleaseId(), "r-1784700000014-TEST14");
+});
+
+test("legacy phase-1 cache key is dropped on boot", () => {
+  store.clear();
+  store.set("cydi.contentCatalog.v1", "{}");
+  applyCachedCatalog();
+  assert.equal(store.has("cydi.contentCatalog.v1"), false);
+  repo.resetContentSource();
 });

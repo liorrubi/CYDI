@@ -9,8 +9,23 @@
   },
   "kv_namespaces": [
     {
+      // Shared drawings/challenges ONLY (see worker/index.ts share routes).
       "binding": "SHARE_KV",
       "id": "27ae6995fdef4040ac555ee8f1830bee"
+    },
+    {
+      // Dynamic content catalog releases (content:catalog:<releaseId>,
+      // content:active, content:releases) - deliberately separated from
+      // SHARE_KV so content publishing can never touch user share data.
+      //
+      // PLACEHOLDER ID - REQUIRED BEFORE PRODUCTION DEPLOY:
+      //   wrangler kv namespace create CONTENT_KV        (production id)
+      // and replace the id below. `wrangler dev --local` ignores the id
+      // (local simulator keys off the binding name), so local development
+      // and tests work as-is. A production deploy with this placeholder
+      // fails fast at upload time - that is intentional.
+      "binding": "CONTENT_KV",
+      "id": "PLACEHOLDER-create-content-kv-namespace-before-deploy"
     }
   ],
   "durable_objects": {

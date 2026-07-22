@@ -84,8 +84,8 @@ export interface ContentSource {
   getArtistPacks(): ArtistPackDefinition[];
 }
 
-/** The baked-in catalog that ships inside the app bundle. Always available offline. */
-const localContentSource: ContentSource = {
+/** The baked-in catalog that ships inside the app bundle. Always available offline. Exported so a remote source can delegate the collections a catalog doesn't carry (mega cards, artist packs) back to it. */
+export const localContentSource: ContentSource = {
   getCategories: () => CATEGORIES,
   getAllShapes: () => SHAPE_LIBRARY,
   getMegaCards: () => MEGA_CARDS,
@@ -142,7 +142,10 @@ export function getShapesForCategory(category: CategoryId | string): ShapeDefini
 
 export function getShapeById(id: string): ShapeDefinition | undefined {
   if (activeSource === localContentSource) return engineGetShapeById(id);
-  return activeSource.getAllShapes().find((s) => s.id === id);
+  // Resilience: an id the remote catalog doesn't know (e.g. the daily
+  // challenge references a shape a slimmer catalog dropped) still resolves
+  // against the baked-in library rather than breaking the screen.
+  return activeSource.getAllShapes().find((s) => s.id === id) ?? engineGetShapeById(id);
 }
 
 // ---------- Mega Challenge cards ----------

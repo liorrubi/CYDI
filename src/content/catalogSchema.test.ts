@@ -104,7 +104,7 @@ test("allows slight overshoot beyond the canvas edge", () => {
 });
 
 test("rejects malformed breaks (non-increasing, out of range, too many)", () => {
-  const bad = [[0], [3], [1, 1], [5]];
+  const bad = [[0], [4], [1, 1], [5]];
   for (const breaks of bad) {
     const c = goodCatalog();
     c.shapes[0].path.breaks = breaks as number[];
@@ -112,11 +112,16 @@ test("rejects malformed breaks (non-increasing, out of range, too many)", () => 
   }
 });
 
-test("accepts valid breaks", () => {
+test("accepts valid breaks, including the trailing break toPathFromParts emits", () => {
   const c = goodCatalog();
   c.shapes[0].path.points = [[1, 1], [2, 2], [3, 3], [4, 4]];
   c.shapes[0].path.breaks = [1, 3];
   assert.ok(validateCatalog(c).ok);
+
+  const c2 = goodCatalog();
+  c2.shapes[0].path.points = [[1, 1], [2, 2], [3, 3], [4, 4]];
+  c2.shapes[0].path.breaks = [2, 4]; // trailing break == points.length
+  assert.ok(validateCatalog(c2).ok);
 });
 
 test("rejects catalogs over the shape-count cap", () => {

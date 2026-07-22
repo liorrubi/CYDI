@@ -148,7 +148,10 @@ export function validateCatalog(value: unknown): CatalogValidationResult {
       if (!Array.isArray(breaks) || breaks.length >= points.length) return fail(`shape "${shape.id}": invalid breaks`);
       let previous = 0;
       for (const b of breaks) {
-        if (typeof b !== "number" || !Number.isInteger(b) || b <= previous || b >= points.length) {
+        // A trailing break equal to points.length is legal - toPathFromParts
+        // emits one as the final segment boundary and the renderer treats it
+        // as a no-op, so real baked-in shapes contain it.
+        if (typeof b !== "number" || !Number.isInteger(b) || b <= previous || b > points.length) {
           return fail(`shape "${shape.id}": breaks must be strictly increasing indices inside points`);
         }
         previous = b;

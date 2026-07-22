@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "node --import ./scripts/register-ts.mjs --test \"src/**/*.test.ts\"",
+    "export-catalog": "node --import ./scripts/register-ts.mjs scripts/exportContentCatalog.ts",
     "preview": "vite preview"
   },
   "dependencies": {

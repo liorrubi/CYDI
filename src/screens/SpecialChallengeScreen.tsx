@@ -22,7 +22,7 @@ import {
   type PenColorId,
   type PenSkinId,
 } from "../app/constants";
-import { getShapeById, shapesForCategory } from "../engine/shapeLibrary";
+import { getShapeById, getShapesForCategory } from "../content/contentRepository";
 import { scoreAttempt } from "../engine/scoring";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
@@ -50,7 +50,7 @@ type SpecialChallengeScreenProps = {
 };
 
 /** Daily-rotating target - deterministically picked from the Fantasy category by calendar date, so every player sees the same "special" shape on a given day and it changes at local midnight. */
-const SPECIAL_CHALLENGE_SHAPE_POOL = shapesForCategory("fantasy").map((s) => s.id);
+const SPECIAL_CHALLENGE_SHAPE_POOL = getShapesForCategory("fantasy").map((s) => s.id);
 const SHAPE = getShapeById(pickDailyShapeId(SPECIAL_CHALLENGE_SHAPE_POOL))!;
 
 /** Compact score-to-coins table for the intro card, listed low to high (SPECIAL_CHALLENGE_COIN_BANDS itself is ordered high to low for the lookup in coinsForSpecialChallengeScore). */

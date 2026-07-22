@@ -19,7 +19,7 @@ import {
   type PenSkinId,
 } from "../app/constants";
 import { DAILY_CHALLENGE_PRIZE_COINS } from "../app/dailyChallengePrizes";
-import { getShapeById } from "../engine/shapeLibrary";
+import { getShapeById } from "../content/contentRepository";
 import { scoreAttempt } from "../engine/scoring";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins } from "../services/coinsStore";

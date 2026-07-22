@@ -1,4 +1,4 @@
-import { getVisibleArtworks, packHasPublishedArtwork, type ArtistPackDefinition } from "../engine/artistPackLibrary";
+import { getVisibleArtworks, packHasPublishedArtwork, type ArtistPackDefinition } from "../content/contentRepository";
 
 type ArtistPackCardProps = {
   pack: ArtistPackDefinition;

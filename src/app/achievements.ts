@@ -1,8 +1,8 @@
 import { starRatingForScore } from "./constants";
-import { SHAPE_LIBRARY } from "../engine/shapeLibrary";
+import { getAllShapes } from "../content/contentRepository";
 import { getLongestStreak } from "../services/dailyStreakStore";
 import { getSharedChallengesCount } from "../services/sharedChallengesStore";
-import type { ShapeChallengeProgress } from "../services/shapeChallengeProgress";
+import { getTotalCompletedCount, type ShapeChallengeProgress } from "../services/shapeChallengeProgress";
 
 export type AchievementStats = {
   fiveStarCount: number;
@@ -27,13 +27,13 @@ export type Achievement = {
 
 export function computeAchievementStats(progress: ShapeChallengeProgress): AchievementStats {
   const scores = Object.values(progress.bestScores);
-  const unlockedShapesCount = Object.values(progress.levelIndexByCategory).reduce((sum, n) => sum + n, 0);
+  const unlockedShapesCount = getTotalCompletedCount(progress);
   return {
     fiveStarCount: scores.filter((s) => starRatingForScore(s) === 5).length,
     aboveNinetyCount: scores.filter((s) => s >= 90).length,
     hasHundredScore: scores.some((s) => s === 100),
     unlockedShapesCount,
-    totalShapesCount: SHAPE_LIBRARY.length,
+    totalShapesCount: getAllShapes().length,
     hasCompletedFirst: unlockedShapesCount >= 1,
     longestDailyStreak: getLongestStreak(),
     sharedChallengesCount: getSharedChallengesCount(),
@@ -178,7 +178,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Master Explorer",
     description: "Unlock every shape",
     coinReward: 3000,
-    target: SHAPE_LIBRARY.length,
+    target: getAllShapes().length,
     currentValue: (s) => s.unlockedShapesCount,
   },
   {

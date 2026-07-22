@@ -5,7 +5,7 @@ import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
 import StarRating from "../components/StarRating";
 import { CANVAS_SIZE, DEFAULT_PEN_COLOR, penColorCssBackground } from "../app/constants";
 import type { DecodedSharedArtistResult } from "../services/shareLink";
-import { resolvePublishedArtwork } from "../engine/artistPackLibrary";
+import { resolvePublishedArtwork } from "../content/contentRepository";
 import {
   toAchievements,
   toArtistPack,

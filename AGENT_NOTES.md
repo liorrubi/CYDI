@@ -32,11 +32,13 @@ When asked to lock or unlock the shapes (e.g. "unlock all shapes so I can browse
 `src/screens/ShapeChallengeScreen.tsx`, inside the `ShapeMap` component, in the
 `shapes.map((shape, index) => { ... })` block:
 
-- Normal/correct behavior: `const unlocked = index <= levelIndex;` (progressive unlock -
-  a shape is only available once the previous one in its category has been passed).
+- Normal/correct behavior:
+  `const unlocked = unlockAllOverride || isShapeUnlockedAt(progress, category, shapes, index);`
+  (progressive unlock - a shape is playable once completed, or when it's the current
+  frontier: the first not-yet-completed shape in the category).
 - To temporarily unlock everything for browsing: replace that line with
   `const unlocked = true;` and leave a `// TEMP: ...` comment so it's easy to find and
   revert later.
-- `levelIndex` comes from the per-category progress store (`getCategoryLevelIndex`) -
-  don't touch that when toggling the lock bypass; only the `unlocked` line itself needs
-  to change.
+- The unlock rule lives in `src/services/shapeChallengeProgress.ts`
+  (`isShapeUnlockedAt` / `getFrontierIndex`, id-based) - don't touch that when toggling
+  the lock bypass; only the `unlocked` line itself needs to change.

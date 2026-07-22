@@ -17,7 +17,10 @@ export type SaveData = {
   progress: {
     coins: number;
     shapeChallenge: {
+      /** Legacy per-category "shapes deep" counter — kept as a dual-written mirror of `completedShapeIdsByCategory` so older builds and older save codes stay compatible (see shapeChallengeProgress.ts). */
       levelIndexByCategory: Record<string, number>;
+      /** v2 progress: stable shape ids completed per category, authoritative when present. Optional because saves written by older builds don't have it; derived lazily on read. */
+      completedShapeIdsByCategory?: Record<string, string[]>;
       bestScores: Record<string, number>;
     };
     achievements: string[];
@@ -77,7 +80,7 @@ export function createDefaultSaveData(): SaveData {
     updatedAt: Date.now(),
     progress: {
       coins: 0,
-      shapeChallenge: { levelIndexByCategory: {}, bestScores: {} },
+      shapeChallenge: { levelIndexByCategory: {}, completedShapeIdsByCategory: {}, bestScores: {} },
       achievements: [],
       unlockedCategories: [],
       unlockedPenColors: [],

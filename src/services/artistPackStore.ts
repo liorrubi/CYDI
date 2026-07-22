@@ -1,5 +1,5 @@
 import { coinsForStars, passScoreForDifficulty, starRatingForScore } from "../app/constants";
-import { getVisibleArtworks, type ArtistPackDefinition } from "../engine/artistPackLibrary";
+import { getVisibleArtworks, type ArtistPackDefinition } from "../content/contentRepository";
 import { getDifficulty } from "./difficultySettings";
 import { getSaveData, updateSaveData } from "./saveStore";
 

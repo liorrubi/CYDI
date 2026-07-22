@@ -24,7 +24,10 @@ export interface Env {
   ASSETS: Fetcher;
   DAILY_CHALLENGE_DO: DurableObjectNamespace;
   ANALYTICS_DO: DurableObjectNamespace;
+  /** Admin bearer for the analytics report endpoint only. */
   ANALYTICS_ADMIN_TOKEN: string;
+  /** Admin bearer for content-catalog publish/activate/list/delete. Deliberately SEPARATE from ANALYTICS_ADMIN_TOKEN so the two capabilities can be rotated and scoped independently. */
+  CONTENT_ADMIN_TOKEN: string;
 }
 
 // Excludes 0/O and 1/I to avoid ids that are ambiguous when read aloud or copied by hand.
@@ -155,10 +158,11 @@ async function handleShareLinkPage(id: string, request: Request, env: Env): Prom
 }
 
 // ---------- Content catalog (server-published shapes/categories) ----------
-// GET is public and served straight from KV; PUT/DELETE are owner-only,
-// guarded by the same admin bearer token as the analytics report. The
-// catalog is pure JSON data (validated on upload with the exact same
-// schema the client enforces) - the server never stores or serves code.
+// GET is public and served straight from KV; PUT/POST(activate)/DELETE and the
+// releases listing are owner-only, guarded by CONTENT_ADMIN_TOKEN (separate
+// from the analytics token). The catalog is pure JSON data (validated on upload
+// with the exact same schema the client enforces) - the server never stores or
+// serves code.
 
 // Constant-time comparison, same rationale as analyticsDO.ts.
 function timingSafeEqual(a: string, b: string): boolean {
@@ -168,8 +172,9 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function isAdminAuthorized(request: Request, env: Env): boolean {
-  const token = env.ANALYTICS_ADMIN_TOKEN;
+/** Content-catalog admin gate - uses CONTENT_ADMIN_TOKEN, independent of the analytics token. */
+function isContentAdminAuthorized(request: Request, env: Env): boolean {
+  const token = env.CONTENT_ADMIN_TOKEN;
   const authHeader = request.headers.get("authorization");
   return Boolean(token && authHeader && timingSafeEqual(authHeader, `Bearer ${token}`));
 }
@@ -217,7 +222,7 @@ async function handleCatalogGet(env: Env): Promise<Response> {
  *   the active release) so a retried upload never creates duplicate releases.
  */
 async function handleCatalogPut(request: Request, env: Env): Promise<Response> {
-  if (!isAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
 
   const raw = await request.text();
   if (!raw || raw.length > MAX_CATALOG_BYTES) return jsonNoStore({ error: "catalog missing or exceeds size cap" }, 400);
@@ -285,7 +290,7 @@ async function handleCatalogPut(request: Request, env: Env): Promise<Response> {
 
 /** Rollback/activation: points content:active at an EXISTING, re-validated release. No re-upload, no version comparison - the pointer is the single source of truth. */
 async function handleCatalogActivate(request: Request, env: Env): Promise<Response> {
-  if (!isAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
 
   let releaseId: unknown;
   try {
@@ -309,7 +314,7 @@ async function handleCatalogActivate(request: Request, env: Env): Promise<Respon
 
 /** Admin listing of published releases, newest first - the rollback menu. */
 async function handleReleasesList(request: Request, env: Env): Promise<Response> {
-  if (!isAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
   const [indexRaw, pointerRaw] = await Promise.all([
     env.CONTENT_KV.get(CONTENT_RELEASES_INDEX_KEY),
     env.CONTENT_KV.get(CONTENT_ACTIVE_KEY),
@@ -325,7 +330,7 @@ async function handleReleasesList(request: Request, env: Env): Promise<Response>
 
 /** Deactivation switch: removes only the ACTIVE POINTER (all releases stay for rollback). Clients see 404, clear their cache, and fall back to baked-in content. */
 async function handleCatalogDelete(request: Request, env: Env): Promise<Response> {
-  if (!isAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
   await env.CONTENT_KV.delete(CONTENT_ACTIVE_KEY);
   return jsonNoStore({ ok: true });
 }

@@ -69,6 +69,30 @@ function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 }
 
+/**
+ * DAILY SHAPE SOURCE — SAFETY GATE.
+ *
+ * The daily challenge is GLOBAL: one episode is served to EVERY installed app
+ * version at once. If the server picked a shape from the remote catalog, an
+ * older app build (one shipped before dynamic content, or any build that
+ * hasn't downloaded the matching catalog) could be handed a shapeId it cannot
+ * resolve. The client resolver degrades gracefully to a local substitute, but
+ * that means different players race on different shapes — unfair for a
+ * leaderboard.
+ *
+ * So until a per-request APP-VERSION compatibility mechanism exists (the
+ * client tells the server which catalog/version it can handle, and the server
+ * only offers a remote shape to clients that can draw it), the daily pool is
+ * LOCKED to the 276 baked-in shapes that every shipped build already has.
+ *
+ * Flip to true ONLY together with that compatibility mechanism. The
+ * remote-selection code path is retained (below) and already tested, so
+ * enabling it is a one-line change plus the version negotiation.
+ */
+// Typed as `boolean` (not the literal `false`) so the retained remote-selection
+// path below is not flagged as unreachable while the gate is closed.
+const DAILY_USES_REMOTE_CATALOG: boolean = false;
+
 /** The only binding this DO reads from the environment. Optional so the DO still works in a test harness that provides no KV. */
 type DailyEnv = { CONTENT_KV?: KVNamespace };
 
@@ -82,14 +106,16 @@ export class DailyChallengeDO {
   }
 
   /**
-   * The pool a new episode's shape is drawn from: the ACTIVE published
-   * release when one exists (so the server can never pick a shape the
-   * remote-content clients don't have), otherwise the baked-in library.
-   * Returns the releaseId alongside the pick so the episode can record
-   * exactly which catalog it came from. Read once per episode (one KV
-   * round-trip per day, plus win-rollovers) - no caching needed.
+   * The pool a new episode's shape is drawn from. While DAILY_USES_REMOTE_CATALOG
+   * is false (see the safety-gate note above), this is ALWAYS the 276 baked-in
+   * shapes every shipped build has, so no client can ever be handed an
+   * unresolvable daily shape. When the gate is later opened, it draws from the
+   * active published release and records its releaseId. Read once per episode.
    */
   private async pickShapeIdForNewEpisode(): Promise<{ shapeId: string; contentReleaseId: string | null }> {
+    if (!DAILY_USES_REMOTE_CATALOG) {
+      return { shapeId: randomShapeId(), contentReleaseId: null };
+    }
     try {
       const pointerRaw = await this.env.CONTENT_KV?.get(CONTENT_ACTIVE_KEY);
       if (pointerRaw) {

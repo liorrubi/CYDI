@@ -58,7 +58,8 @@ export type DailyShapeResolverDeps = {
 const defaultDeps: DailyShapeResolverDeps = {
   resolveActive: getShapeById,
   resolveCached: findInCachedRelease,
-  refresh: refreshCatalogInBackground,
+  // Cache-busting is essential here - see the bypassHttpCache note in hydrateContent.ts.
+  refresh: () => refreshCatalogInBackground({ bypassHttpCache: true }),
   substitutePool: () => localContentSource.getAllShapes(),
   hasCache: () => getCachedCatalog() !== null,
   reportFallback: (requestedId, substituteId, hadCache) =>

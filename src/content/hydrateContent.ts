@@ -116,11 +116,21 @@ export function applyCachedCatalog(): HydrateResult {
  * Fetches the server's active release and caches it for the next launch.
  * Never throws; never touches the active source. 404 means "no remote
  * content published" and clears the cache (server-side rollback switch).
+ *
+ * `bypassHttpCache` adds a unique query param so the request punches through
+ * the browser/edge HTTP cache (GET /api/content/catalog is served with
+ * max-age=300). The periodic boot refresh happily rides that cache; the
+ * daily-shape resolver must NOT - when an episode references a shape from a
+ * release this client doesn't hold, the server has explicitly told us a
+ * newer release exists, and a 5-minute-stale cached copy would (verified
+ * live) hand back the OLD release and wrongly demote the day's real shape
+ * to a substitute.
  */
-export async function refreshCatalogInBackground(): Promise<HydrateResult> {
+export async function refreshCatalogInBackground(options?: { bypassHttpCache?: boolean }): Promise<HydrateResult> {
+  const path = options?.bypassHttpCache ? `/api/content/catalog?fresh=${Date.now()}` : "/api/content/catalog";
   let response;
   try {
-    response = await apiFetch("/api/content/catalog", { timeoutMs: FETCH_TIMEOUT_MS });
+    response = await apiFetch(path, { timeoutMs: FETCH_TIMEOUT_MS });
   } catch {
     return { applied: false, reason: "network error" }; // offline etc. - cache/local stays in effect
   }

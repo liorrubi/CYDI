@@ -1,6 +1,7 @@
 import { AnalyticsDO } from "./analyticsDO";
 import { DailyChallengeDO } from "./dailyChallengeDO";
 import { parseShareRecord, renderShareImage, shareTitleAndDescription } from "./shareImage";
+import { CATALOG_KV_KEY, MAX_CATALOG_BYTES, parseCatalogJson } from "../src/content/catalogSchema";
 
 export { AnalyticsDO, DailyChallengeDO };
 
@@ -139,6 +140,64 @@ async function handleShareLinkPage(id: string, request: Request, env: Env): Prom
     .transform(pageResponse);
 }
 
+// ---------- Content catalog (server-published shapes/categories) ----------
+// GET is public and served straight from KV; PUT/DELETE are owner-only,
+// guarded by the same admin bearer token as the analytics report. The
+// catalog is pure JSON data (validated on upload with the exact same
+// schema the client enforces) - the server never stores or serves code.
+
+// Constant-time comparison, same rationale as analyticsDO.ts.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function isAdminAuthorized(request: Request, env: Env): boolean {
+  const token = env.ANALYTICS_ADMIN_TOKEN;
+  const authHeader = request.headers.get("authorization");
+  return Boolean(token && authHeader && timingSafeEqual(authHeader, `Bearer ${token}`));
+}
+
+async function handleCatalogGet(env: Env): Promise<Response> {
+  const raw = await env.SHARE_KV.get(CATALOG_KV_KEY);
+  if (raw === null) return json({ error: "no catalog published" }, 404);
+  return new Response(raw, {
+    headers: {
+      "content-type": "application/json",
+      // Short edge cache: a freshly published catalog reaches every client
+      // within minutes while repeat app launches mostly hit the edge.
+      "cache-control": "public, max-age=300",
+    },
+  });
+}
+
+async function handleCatalogPut(request: Request, env: Env): Promise<Response> {
+  if (!isAdminAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+
+  const raw = await request.text();
+  if (!raw || raw.length > MAX_CATALOG_BYTES) return json({ error: "catalog missing or exceeds size cap" }, 400);
+
+  const result = parseCatalogJson(raw);
+  if (!result.ok) return json({ error: `invalid catalog: ${result.error}` }, 400);
+
+  await env.SHARE_KV.put(CATALOG_KV_KEY, raw);
+  return json({
+    ok: true,
+    contentVersion: result.catalog.contentVersion,
+    categories: result.catalog.categories.length,
+    shapes: result.catalog.shapes.length,
+  });
+}
+
+/** Rollback-to-baked-in switch: with the key gone, GET returns 404, clients clear their cache on next refresh and fall back to bundled content. */
+async function handleCatalogDelete(request: Request, env: Env): Promise<Response> {
+  if (!isAdminAuthorized(request, env)) return json({ error: "unauthorized" }, 401);
+  await env.SHARE_KV.delete(CATALOG_KV_KEY);
+  return json({ ok: true });
+}
+
 // Every /api/daily/* request is forwarded to the single global DailyChallengeDO
 // instance, which processes requests one at a time (see dailyChallengeDO.ts).
 function forwardToDailyDO(request: Request, env: Env, path: string): Promise<Response> {
@@ -179,6 +238,12 @@ export default {
 
     const shareImageMatch = url.pathname.match(/^\/api\/share\/([A-Za-z0-9]{4,12})\/image\.png$/);
     if (shareImageMatch && request.method === "GET") return handleShareImage(shareImageMatch[1], env);
+
+    if (url.pathname === "/api/content/catalog") {
+      if (request.method === "GET") return handleCatalogGet(env);
+      if (request.method === "PUT") return handleCatalogPut(request, env);
+      if (request.method === "DELETE") return handleCatalogDelete(request, env);
+    }
 
     if (url.pathname === "/api/daily/current" && request.method === "GET") return forwardToDailyDO(request, env, "/current");
     if (url.pathname === "/api/daily/submit" && request.method === "POST") return forwardToDailyDO(request, env, "/submit");

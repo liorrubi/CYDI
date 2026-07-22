@@ -7,6 +7,7 @@ import { israelDateKey } from "../src/app/israelDate";
 // avoiding the bundle cost would require a separately-maintained id list (drift
 // risk) or a lazy-generator refactor of the 6900-line library.
 import { SHAPE_LIBRARY } from "../src/engine/shapeLibrary";
+import { CATALOG_KV_KEY, parseCatalogJson } from "../src/content/catalogSchema";
 
 // Single global Durable Object instance coordinates the daily challenge, so every
 // request (rollover check, score submission, "first to 100" arbitration) is
@@ -66,11 +67,39 @@ function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 }
 
+/** The only binding this DO reads from the environment. Optional so the DO still works in a test harness that provides no KV. */
+type DailyEnv = { SHARE_KV?: KVNamespace };
+
 export class DailyChallengeDO {
   private state: DurableObjectState;
+  private env: DailyEnv;
 
-  constructor(state: DurableObjectState) {
+  constructor(state: DurableObjectState, env: DailyEnv) {
     this.state = state;
+    this.env = env;
+  }
+
+  /**
+   * The pool a new episode's shape is drawn from: the published remote
+   * catalog when one exists (so the server can never pick a shape the
+   * remote-content clients don't have), otherwise the baked-in library.
+   * Read once per episode (one KV read per day, plus win-rollovers) -
+   * no caching needed.
+   */
+  private async pickShapeIdForNewEpisode(): Promise<string> {
+    try {
+      const raw = await this.env.SHARE_KV?.get(CATALOG_KV_KEY);
+      if (raw) {
+        const result = parseCatalogJson(raw);
+        if (result.ok) {
+          const shapes = result.catalog.shapes;
+          return shapes[Math.floor(Math.random() * shapes.length)].id;
+        }
+      }
+    } catch {
+      // KV hiccup - fall through to the baked-in pool.
+    }
+    return randomShapeId();
   }
 
   private boardKey(episodeId: number, playerId: string): string {
@@ -95,7 +124,7 @@ export class DailyChallengeDO {
   private async createEpisode(dateKey: string): Promise<Episode> {
     return {
       id: await this.nextEpisodeId(),
-      shapeId: randomShapeId(),
+      shapeId: await this.pickShapeIdForNewEpisode(),
       dateKey,
       startedAt: Date.now(),
       endedAt: null,

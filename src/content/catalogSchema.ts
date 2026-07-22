@@ -18,6 +18,13 @@
 
 export const CATALOG_FORMAT_VERSION = 1;
 
+/**
+ * KV key the published catalog lives under. It shares the existing SHARE_KV
+ * namespace (no new binding to provision): share ids are 4-12 random
+ * alphanumerics, so the "content:" prefix can never collide with them.
+ */
+export const CATALOG_KV_KEY = "content:catalog";
+
 // Hard caps - a catalog exceeding any of these is rejected outright, both by
 // the Worker on upload and by the client before activating remote content
 // (render-DoS/memory guard, same philosophy as shareLink's point caps).

@@ -67,10 +67,10 @@ android {
         // and nothing was overwritten. Reusing the same versionCode across debug builds
         // during development, then forgetting to bump it before the next real distribution,
         // is what caused that.
-        // 6 shipped to Play internal testing (release/v6-internal-test); 7 = next
-        // installable build carrying the ContentRepository work on top of v6.
-        versionCode 7
-        versionName "0.27.1"
+        // 6 shipped to Play internal testing (release/v6-internal-test); 7 was the
+        // local ContentRepository test build; 8 = dynamic-content test build.
+        versionCode 8
+        versionName "0.27.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

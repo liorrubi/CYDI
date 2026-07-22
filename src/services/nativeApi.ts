@@ -12,6 +12,29 @@ import { Capacitor, CapacitorHttp } from "@capacitor/core";
 export const PRODUCTION_ORIGIN = "https://playcydi.com";
 
 /**
+ * TEST-ONLY api-origin override, baked in at BUILD time via the
+ * VITE_API_ORIGIN_OVERRIDE env var. Lets a clearly-marked local test APK
+ * point its API calls at an isolated staging Worker (e.g. an https tunnel to
+ * `wrangler dev --local`) instead of production. Empty (the default, and the
+ * only value real builds are ever produced with) keeps every API call on
+ * PRODUCTION_ORIGIN. Deliberately does NOT affect getPublicOrigin - share
+ * links must always point at the real site, even from a test build.
+ */
+function apiOriginOverride(): string {
+  // Statically replaced by Vite; guarded so plain-Node tests (no import.meta.env) see "".
+  try {
+    return (import.meta.env?.VITE_API_ORIGIN_OVERRIDE as string | undefined) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** The origin native API calls are routed to - production unless a test build baked in an override. */
+export function getApiOrigin(): string {
+  return apiOriginOverride() || PRODUCTION_ORIGIN;
+}
+
+/**
  * The origin to build a public, shareable URL against - the production domain on
  * native, whatever the page is actually served from on web (playcydi.com, a preview
  * deploy, or localhost during `npm run dev`). Web behavior is unchanged: this only
@@ -43,10 +66,10 @@ export type NativeHttpOptions = {
   readTimeout?: number;
 };
 
-/** Pure: resolves what a native request for `path` would look like, against the real production origin - never `location`, never the WebView's virtual origin. */
+/** Pure: resolves what a native request for `path` would look like, against the real production origin (or a test build's baked-in override) - never `location`, never the WebView's virtual origin. */
 export function buildNativeHttpOptions(path: string, init: ApiFetchInit = {}): NativeHttpOptions {
   return {
-    url: `${PRODUCTION_ORIGIN}${path}`,
+    url: `${getApiOrigin()}${path}`,
     method: init.method ?? "GET",
     headers: init.headers,
     data: init.body,

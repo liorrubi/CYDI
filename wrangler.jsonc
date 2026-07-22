@@ -17,15 +17,14 @@
       // Dynamic content catalog releases (content:catalog:<releaseId>,
       // content:active, content:releases) - deliberately separated from
       // SHARE_KV so content publishing can never touch user share data.
-      //
-      // PLACEHOLDER ID - REQUIRED BEFORE PRODUCTION DEPLOY:
-      //   wrangler kv namespace create CONTENT_KV        (production id)
-      // and replace the id below. `wrangler dev --local` ignores the id
-      // (local simulator keys off the binding name), so local development
-      // and tests work as-is. A production deploy with this placeholder
-      // fails fast at upload time - that is intentional.
+      // Real namespaces created 2026-07-22 on the playcydi Cloudflare
+      // account (empty; wired here but not yet serving until deploy):
+      //   id         -> production namespace
+      //   preview_id -> `wrangler dev --remote` / preview deploys
+      // `wrangler dev --local` ignores both and keys off the binding name.
       "binding": "CONTENT_KV",
-      "id": "PLACEHOLDER-create-content-kv-namespace-before-deploy"
+      "id": "17ed84bd6bea49d08f6aad52c57c0952",
+      "preview_id": "35365d9060f74390aad633564e0241ef"
     }
   ],
   "durable_objects": {

@@ -73,8 +73,10 @@ android {
         // build; 10 = same build with the WebView DevTools socket enabled
         // (CYDI_TEST_WEBVIEW_DEBUG) so the locked MIUI device can be driven for
         // E2E. All 0.27.2; versionCode bumps only because MIUI silently refuses
-        // same-versionCode updates. 10 is TEST-ONLY - never ship it to Play.
-        versionCode 10
+        // same-versionCode updates. 7-10 were local/DevTools test builds (never
+        // for Play). 11 = first clean production candidate: no DevTools, no API
+        // override, signed with the Play keystore, for Closed Testing.
+        versionCode 11
         versionName "0.27.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

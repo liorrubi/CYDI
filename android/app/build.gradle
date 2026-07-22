@@ -20,7 +20,7 @@ android {
         // and nothing was overwritten. Reusing the same versionCode across debug builds
         // during development, then forgetting to bump it before the next real distribution,
         // is what caused that.
-        versionCode 3
+        versionCode 4
         versionName "0.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

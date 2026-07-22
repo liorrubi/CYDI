@@ -27,7 +27,13 @@ import {
   type PenSkinId,
 } from "../app/constants";
 import { computeAchievementStats, findNewlyUnlockedAchievements, type Achievement } from "../app/achievements";
-import { CATEGORIES, SHAPE_LIBRARY, shapesForCategory, type CategoryId } from "../engine/shapeLibrary";
+import {
+  getAllShapes,
+  getCategories,
+  getCategoryById,
+  getShapesForCategory,
+  type CategoryId,
+} from "../content/contentRepository";
 import { scoreAttempt } from "../engine/scoring";
 import {
   playAchievementUnlockedSound,
@@ -49,16 +55,19 @@ import { recordSuccessfulDrawing } from "../services/successfulDrawingsStore";
 import { trackEvent } from "../services/analytics";
 import {
   clearProgress,
-  getCategoryLevelIndex,
+  getCategoryCompletedCount,
+  getFrontierIndex,
   getProgress,
+  getTotalCompletedCount,
+  isShapeUnlockedAt,
+  markShapeCompleted,
   saveProgress,
   type ShapeChallengeProgress,
 } from "../services/shapeChallengeProgress";
 import { collectedMegaCardCount, isMegaChallengeUnlocked, unlockMegaChallenge } from "../services/megaChallengeStore";
-import { MEGA_ALBUM_SIZE } from "../engine/megaShapeLibrary";
+import { getMegaAlbumSize, getPlayerFacingPacks } from "../content/contentRepository";
 import { MEGA_CHALLENGE_UNLOCK_COST } from "../app/constants";
 import ArtistPackCard from "../components/ArtistPackCard";
-import { getPlayerFacingPacks } from "../engine/artistPackLibrary";
 import { getArtistPackCompletedCount } from "../services/artistPackStore";
 import {
   toAchievements,
@@ -128,8 +137,9 @@ export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScree
   }, [pendingAchievements[0]?.id]);
 
   function handleProgressChange(category: CategoryId, updated: ShapeChallengeProgress) {
-    if (updated.levelIndexByCategory[category] > (progress.levelIndexByCategory[category] ?? 0)) {
-      setJustUnlockedIndex(updated.levelIndexByCategory[category]);
+    if (getCategoryCompletedCount(updated, category) > getCategoryCompletedCount(progress, category)) {
+      // Highlight the tile the pass just unlocked - the new frontier shape.
+      setJustUnlockedIndex(getFrontierIndex(updated, category, getShapesForCategory(category)));
     }
     setProgress(updated);
     let newlyUnlocked = detectAndBankNewAchievements(updated);
@@ -332,7 +342,7 @@ function CategoryListScreen({
   // touched yet, so this change can never retroactively lock out shapes
   // someone already unlocked by playing.
   function isCategoryAccessible(category: CategoryId): boolean {
-    return unlockedCategoryIds.includes(category) || getCategoryLevelIndex(progress, category) > 0;
+    return unlockedCategoryIds.includes(category) || getCategoryCompletedCount(progress, category) > 0;
   }
 
   function handleUnlockCategory(category: CategoryId) {
@@ -348,12 +358,13 @@ function CategoryListScreen({
     }, 700);
   }
 
-  const totalUnlocked = Object.values(progress.levelIndexByCategory).reduce((sum, n) => sum + n, 0);
-  const totalShapes = SHAPE_LIBRARY.length;
+  const totalUnlocked = getTotalCompletedCount(progress);
+  const totalShapes = getAllShapes().length;
   const overallPercent = Math.round((totalUnlocked / totalShapes) * 100);
   const rank = journeyRankForPercent(overallPercent);
   const megaCollected = collectedMegaCardCount();
-  const megaPercent = Math.round((megaCollected / MEGA_ALBUM_SIZE) * 100);
+  const megaAlbumSize = getMegaAlbumSize();
+  const megaPercent = Math.round((megaCollected / megaAlbumSize) * 100);
 
   return (
     <div className="screen">
@@ -389,7 +400,7 @@ function CategoryListScreen({
         onClick={handleMegaCardClick}
         aria-label={
           megaUnlocked
-            ? `Mega Challenge, ${megaCollected} of ${MEGA_ALBUM_SIZE} legendary shapes collected`
+            ? `Mega Challenge, ${megaCollected} of ${megaAlbumSize} legendary shapes collected`
             : `Mega Challenge, locked. Unlock for ${MEGA_CHALLENGE_UNLOCK_COST.toLocaleString("en-US")} coins`
         }
       >
@@ -401,7 +412,7 @@ function CategoryListScreen({
             <span className="mega-entry-title">Mega Challenge</span>
             {megaUnlocked ? (
               <span className="mega-entry-count">
-                {megaCollected}/{MEGA_ALBUM_SIZE}
+                {megaCollected}/{megaAlbumSize}
               </span>
             ) : (
               <span className="mega-entry-cost">🪙 {MEGA_CHALLENGE_UNLOCK_COST.toLocaleString("en-US")}</span>
@@ -439,11 +450,11 @@ function CategoryListScreen({
       )}
 
       <div className="category-grid">
-        {CATEGORIES.map((category, index) => {
-          const shapes = shapesForCategory(category.id);
-          const unlocked = Math.min(getCategoryLevelIndex(progress, category.id), shapes.length);
+        {getCategories().map((category, index, categories) => {
+          const shapes = getShapesForCategory(category.id);
+          const unlocked = Math.min(getCategoryCompletedCount(progress, category.id), shapes.length);
           const percent = Math.round((unlocked / shapes.length) * 100);
-          const hue = Math.round((index / CATEGORIES.length) * 360);
+          const hue = Math.round((index / categories.length) * 360);
           const accessible = isCategoryAccessible(category.id);
           const isUnlocking = unlockingCategory === category.id;
           const showAsLocked = !accessible && !isUnlocking;
@@ -595,10 +606,9 @@ function ShapeMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justUnlockedIndex]);
 
-  const shapes = shapesForCategory(category);
-  const categoryInfo = CATEGORIES.find((c) => c.id === category)!;
-  const levelIndex = getCategoryLevelIndex(progress, category);
-  const unlockedCount = Math.min(levelIndex, shapes.length);
+  const shapes = getShapesForCategory(category);
+  const categoryInfo = getCategoryById(category)!;
+  const unlockedCount = Math.min(getCategoryCompletedCount(progress, category), shapes.length);
   const progressPercent = Math.round((unlockedCount / shapes.length) * 100);
   // The Settings "lock management" cheat toggle makes every tile playable without
   // touching real progress, so the header stat/progress bar above still reflect
@@ -624,7 +634,7 @@ function ShapeMap({
       </div>
       <div className="shape-grid">
         {shapes.map((shape, index) => {
-          const unlocked = unlockAllOverride || index <= levelIndex;
+          const unlocked = unlockAllOverride || isShapeUnlockedAt(progress, category, shapes, index);
           const best = progress.bestScores[shape.id];
 
           if (!unlocked) {
@@ -695,12 +705,13 @@ function ShapePlay({
   onNavigateToHome,
   onNavigateToSettings,
 }: ShapePlayProps) {
-  const shapes = useMemo(() => shapesForCategory(category), [category]);
+  const shapes = useMemo(() => getShapesForCategory(category), [category]);
   const shape = shapes[levelIndex];
   const target = useMemo(() => shape.generate(CANVAS_SIZE), [shape]);
   const bestScore = progress.bestScores[shape.id];
   const passScore = useMemo(() => passScoreForDifficulty(getDifficulty()), []);
-  const categoryLevelIndex = getCategoryLevelIndex(progress, category);
+  // The frontier - the first not-yet-completed shape - is the only shape whose pass advances progress.
+  const frontierIndex = getFrontierIndex(progress, category, shapes);
 
   const [phase, setPhase] = useState<Phase>("preview");
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
@@ -757,14 +768,12 @@ function ShapePlay({
       const scoreResult = scoreAttempt(target, attemptPath);
       const beatBest = bestScore === undefined || scoreResult.total > bestScore;
       const passedNow = scoreResult.total >= passScore;
-      const advancesFrontier = passedNow && levelIndex === categoryLevelIndex;
+      const advancesFrontier = passedNow && levelIndex === frontierIndex;
 
+      const progressAfterPass = advancesFrontier ? markShapeCompleted(progress, category, shape.id) : progress;
       const updatedProgress: ShapeChallengeProgress = {
-        levelIndexByCategory: {
-          ...progress.levelIndexByCategory,
-          [category]: advancesFrontier ? categoryLevelIndex + 1 : categoryLevelIndex,
-        },
-        bestScores: { ...progress.bestScores, [shape.id]: beatBest ? scoreResult.total : bestScore! },
+        ...progressAfterPass,
+        bestScores: { ...progressAfterPass.bestScores, [shape.id]: beatBest ? scoreResult.total : bestScore! },
       };
       saveProgress(updatedProgress);
       // Recorded before onProgressChange so that achievement detection (which
@@ -811,7 +820,7 @@ function ShapePlay({
   const nextIndex = levelIndex + 1;
   // Next shape is reachable either because this attempt just unlocked it (frontier pass)
   // or because it was already unlocked from a previous pass (replaying an old shape).
-  const canGoToNextShape = nextIndex < shapes.length && nextIndex <= categoryLevelIndex;
+  const canGoToNextShape = nextIndex < shapes.length && nextIndex <= frontierIndex;
   const bestLabel = bestScore === undefined ? "—" : String(bestScore);
   const showTargetGhost = phase === "preview" || (phase === "drawing" && guideEnabled);
 

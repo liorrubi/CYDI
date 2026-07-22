@@ -31,7 +31,7 @@ import {
   resolvePublishedArtwork,
   type ArtistArtworkDefinition,
   type ArtistPackDefinition,
-} from "../engine/artistPackLibrary";
+} from "../content/contentRepository";
 import { scoreAttempt } from "../engine/scoring";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playEncourageSound, playSelectSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";

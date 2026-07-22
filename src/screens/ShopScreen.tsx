@@ -21,7 +21,7 @@ import {
   type PenColorId,
   type PenSkinId,
 } from "../app/constants";
-import { MEGA_ALBUM_SIZE, MEGA_CARDS, type MegaCardDefinition } from "../engine/megaShapeLibrary";
+import { getMegaAlbumSize, getMegaCards, type MegaCardDefinition } from "../content/contentRepository";
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { isChestOnCooldown, msUntilChestAvailable, startChestCooldown } from "../services/chestCooldownStore";
 import { collectedMegaCardCount, getMegaProgress, isMegaChallengeUnlocked, unlockMegaCard } from "../services/megaChallengeStore";
@@ -80,7 +80,7 @@ const TIER_LABELS: Record<"random" | MegaRarity, string> = {
 
 function lockedMegaCards(rarity?: MegaRarity): MegaCardDefinition[] {
   const unlockedIds = getMegaProgress().unlockedCardIds;
-  return MEGA_CARDS.filter((card) => !unlockedIds.includes(card.id) && (rarity === undefined || card.rarity === rarity));
+  return getMegaCards().filter((card) => !unlockedIds.includes(card.id) && (rarity === undefined || card.rarity === rarity));
 }
 
 function formatCooldown(ms: number): string {
@@ -123,7 +123,8 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
   const skinCardRefs = useRef(new Map<PenSkinId, HTMLDivElement>());
   const chestCooldowns = useChestCooldowns();
   const megaCollected = collectedMegaCardCount();
-  const megaProgressPercent = Math.round((megaCollected / MEGA_ALBUM_SIZE) * 100);
+  const megaAlbumSize = getMegaAlbumSize();
+  const megaProgressPercent = Math.round((megaCollected / megaAlbumSize) * 100);
 
   useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
 
@@ -253,7 +254,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
       <div className="card shop-mega-progress">
         <div className="shop-mega-progress-row">
           <span>
-            Mega Album: {megaCollected} / {MEGA_ALBUM_SIZE} collected
+            Mega Album: {megaCollected} / {megaAlbumSize} collected
           </span>
           <span>{megaProgressPercent}%</span>
         </div>

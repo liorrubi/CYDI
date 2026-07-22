@@ -1,4 +1,4 @@
-import type { ShapeDefinition } from "../engine/shapeLibrary";
+import type { ShapeDefinition } from "../content/contentRepository";
 import type { Point } from "../types/Point";
 
 type ShapePreviewIconProps = {

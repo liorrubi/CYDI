@@ -13,6 +13,11 @@
 // filtering in analytics.ts's sanitizeParams denylist (now or if that denylist is later
 // hardened to a suffix/substring check). These are still just opaque content ids, never
 // player/device ids.
+// DELIBERATE ENGINE IMPORT (not the ContentRepository): this module is shared
+// with the Cloudflare Worker, and src/content/contentRepository.ts pulls in
+// artistPackLibrary, whose helpers read `import.meta.env` - which doesn't exist
+// in the workerd runtime. Client code everywhere else must go through the
+// repository; this file is the documented exception.
 import { CATEGORIES, type CategoryId } from "../engine/shapeLibrary";
 import { isRewardedAdPlacement, type RewardedAdPlacement } from "./ads/adPlacements";
 import { isAdFailureReason, type AdFailureReason } from "./ads/adTypes";

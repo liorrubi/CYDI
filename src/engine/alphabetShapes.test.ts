@@ -15,7 +15,7 @@ const { ALPHABET_SHAPES } = await import("./alphabetShapes.ts");
 const { SHAPE_LIBRARY, shapesForCategory, CATEGORIES } = await import("./shapeLibrary.ts");
 const { CANVAS_SIZE } = await import("../app/constants.ts");
 const { scoreAttempt } = await import("./scoring.ts");
-const { getCategoryLevelIndex } = await import("../services/shapeChallengeProgress.ts");
+const { getCategoryCompletedCount } = await import("../services/shapeChallengeProgress.ts");
 
 const A_TO_Z = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
@@ -82,5 +82,5 @@ test("every letter guide is scoreable: a perfect self-trace scores highly", () =
 
 test("a fresh/empty progress defaults the new category to level 0 (existing saves unaffected)", () => {
   const emptyProgress = { levelIndexByCategory: {}, bestScores: {} };
-  assert.equal(getCategoryLevelIndex(emptyProgress, "alphabet"), 0);
+  assert.equal(getCategoryCompletedCount(emptyProgress, "alphabet"), 0);
 });

@@ -340,7 +340,20 @@ export function getPublishedArtworks(pack: ArtistPackDefinition): ArtistArtworkD
  * an admin panel, and it never affects production.
  */
 export function getVisibleArtworks(pack: ArtistPackDefinition): ArtistArtworkDefinition[] {
-  return import.meta.env.DEV ? pack.artworks : getPublishedArtworks(pack);
+  return isDevBuild() ? pack.artworks : getPublishedArtworks(pack);
+}
+
+// Same rationale/wrapping as isDevBuild() in analytics.ts / adConfig.ts:
+// `import.meta.env` is statically replaced by Vite at build time but doesn't
+// exist under plain Node (the test runner importing this via the
+// ContentRepository), so it's read inside try/catch instead of directly.
+// An unknown environment is treated as dev - matching the other modules.
+function isDevBuild(): boolean {
+  try {
+    return import.meta.env.DEV;
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -364,7 +377,16 @@ export function resolvePublishedArtwork(packId: string, artworkId: string): Arti
  * to players, and unpublished artwork isn't even in the production bundle.
  */
 export function getPlayerFacingPacks(): ArtistPackDefinition[] {
-  return ALL_ARTIST_PACKS.filter((pack) => !(pack.devOnly && import.meta.env.PROD));
+  return ALL_ARTIST_PACKS.filter((pack) => !(pack.devOnly && isProdBuild()));
+}
+
+/** try/catch for the same reason as isDevBuild above; unknown environment = not prod, so dev-only packs stay visible to the Node test runner. */
+function isProdBuild(): boolean {
+  try {
+    return import.meta.env.PROD;
+  } catch {
+    return false;
+  }
 }
 
 /** Whether a pack has any published artwork. A pack with none is "Coming Soon":

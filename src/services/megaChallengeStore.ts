@@ -1,5 +1,5 @@
 import { MEGA_COMPLETION_REWARD, MEGA_PERFECT_SCORE } from "../app/constants";
-import { MEGA_CARDS, getMegaCardById, type MegaCardDefinition } from "../engine/megaShapeLibrary";
+import { getMegaCardById, getMegaCards, type MegaCardDefinition } from "../content/contentRepository";
 import { getUnlockedAchievementIds } from "./achievementsStore";
 import { getSaveData, updateSaveData } from "./saveStore";
 import { isUnlockEverythingActive } from "./unlockOverrideStore";
@@ -41,7 +41,7 @@ export function isMegaChallengeUnlocked(): boolean {
 export function unlockMegaChallenge(): boolean {
   const progress = getMegaProgress();
   if (progress.unlocked) return false;
-  const firstCardId = MEGA_CARDS[0]?.id;
+  const firstCardId = getMegaCards()[0]?.id;
   const unlockedCardIds =
     firstCardId && !progress.unlockedCardIds.includes(firstCardId)
       ? [...progress.unlockedCardIds, firstCardId]
@@ -74,7 +74,7 @@ export function unlockMegaCard(id: string): void {
 export function syncAchievementCardUnlocks(): MegaCardDefinition[] {
   const progress = getMegaProgress();
   const earnedAchievements = getUnlockedAchievementIds();
-  const newlyUnlocked = MEGA_CARDS.filter(
+  const newlyUnlocked = getMegaCards().filter(
     (card) => !progress.unlockedCardIds.includes(card.id) && earnedAchievements.includes(card.unlockAchievementId),
   );
   if (newlyUnlocked.length === 0) return [];
@@ -122,12 +122,12 @@ function realCollectedMegaCardCount(): number {
 
 /** Collected count for display (entry card / album progress). Reflects the test override so the UI reads as fully collected while it's active. */
 export function collectedMegaCardCount(): number {
-  return isUnlockEverythingActive() ? MEGA_CARDS.length : realCollectedMegaCardCount();
+  return isUnlockEverythingActive() ? getMegaCards().length : realCollectedMegaCardCount();
 }
 
 /** Album complete = every Mega card genuinely collected. Deliberately ignores the test override: the permanent Challenge Champion title must only be earned for real, never faked by (or persisted from) the Settings unlock toggle. */
 export function isMegaAlbumComplete(): boolean {
-  return realCollectedMegaCardCount() >= MEGA_CARDS.length;
+  return realCollectedMegaCardCount() >= getMegaCards().length;
 }
 
 export function isChallengeChampion(): boolean {

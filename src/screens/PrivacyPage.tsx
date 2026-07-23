@@ -32,7 +32,7 @@ export default function PrivacyPage() {
         <p className="status-text privacy-dates">
           <strong>Effective date:</strong> 14 July 2026
           <br />
-          <strong>Last updated:</strong> 14 July 2026
+          <strong>Last updated:</strong> 23 July 2026
         </p>
 
         <p className="status-text">
@@ -89,6 +89,14 @@ export default function PrivacyPage() {
             sent to or stored by us.
           </li>
         </ul>
+
+        <h3>Game content updates</h3>
+        <p className="status-text">
+          CYDI may download updated game content, such as shapes, categories, level ordering, and related
+          metadata, from our servers. This content may be cached locally on your device for faster loading and
+          offline use. The downloaded game-content catalog does not contain personal information and is not linked
+          to your real identity.
+        </p>
 
         <h3>Analytics</h3>
         <p className="status-text">

@@ -48,5 +48,14 @@
       "tag": "v2",
       "new_sqlite_classes": ["AnalyticsDO"]
     }
-  ]
+  ],
+  // Secrets the Worker cannot run without. Declaring them here makes wrangler
+  // validate their presence (never their value) at upload/dev time, so a
+  // `versions upload` that is missing CONTENT_ADMIN_TOKEN is caught instead of
+  // silently shipping a build where content-admin auth can never succeed.
+  // Values are set out-of-band (`wrangler secret put` / dashboard) and unchanged
+  // secrets carry forward from the previous version - they are never in the repo.
+  "secrets": {
+    "required": ["CONTENT_ADMIN_TOKEN", "ANALYTICS_ADMIN_TOKEN"]
+  }
 }

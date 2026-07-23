@@ -8,7 +8,7 @@
 
 import { connectAdAnalytics } from "./adAnalytics";
 
-export { AD_FLAGS, isAdFormatEnabled, type AdFeatureFlags } from "./adConfig";
+export { AD_FLAGS, isAdFormatEnabled, isAdTestingEnvironment, type AdFeatureFlags } from "./adConfig";
 export { REWARDED_AD_PLACEMENTS, isRewardedAdPlacement, type RewardedAdPlacement } from "./adPlacements";
 export type {
   AdFormat,
@@ -23,6 +23,7 @@ export type {
 } from "./adTypes";
 export {
   registerAdAdapter,
+  registerAdConsentGate,
   subscribeRewardedAdEvents,
   isRewardedAdAvailable,
   isRewardedAdReady,
@@ -31,6 +32,14 @@ export {
 } from "./rewardedAds";
 export { createAdMobAdapter } from "./admobAdapter";
 export type { AdMobPluginLike } from "./admobAdapter";
+export {
+  getConsentState,
+  subscribeConsentState,
+  initializeConsent,
+  refreshConsentAfterPrivacyOptions,
+  type ConsentState,
+  type ConsentPluginLike,
+} from "./consent";
 
 // Analytics bridge is wired the moment the ad system is first imported, so no
 // call site ever has to remember it. Idempotent (named subscription).

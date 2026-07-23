@@ -9,8 +9,22 @@
   },
   "kv_namespaces": [
     {
+      // Shared drawings/challenges ONLY (see worker/index.ts share routes).
       "binding": "SHARE_KV",
       "id": "27ae6995fdef4040ac555ee8f1830bee"
+    },
+    {
+      // Dynamic content catalog releases (content:catalog:<releaseId>,
+      // content:active, content:releases) - deliberately separated from
+      // SHARE_KV so content publishing can never touch user share data.
+      // Real namespaces created 2026-07-22 on the playcydi Cloudflare
+      // account (empty; wired here but not yet serving until deploy):
+      //   id         -> production namespace
+      //   preview_id -> `wrangler dev --remote` / preview deploys
+      // `wrangler dev --local` ignores both and keys off the binding name.
+      "binding": "CONTENT_KV",
+      "id": "17ed84bd6bea49d08f6aad52c57c0952",
+      "preview_id": "35365d9060f74390aad633564e0241ef"
     }
   ],
   "durable_objects": {
@@ -34,5 +48,14 @@
       "tag": "v2",
       "new_sqlite_classes": ["AnalyticsDO"]
     }
-  ]
+  ],
+  // Secrets the Worker cannot run without. Declaring them here makes wrangler
+  // validate their presence (never their value) at upload/dev time, so a
+  // `versions upload` that is missing CONTENT_ADMIN_TOKEN is caught instead of
+  // silently shipping a build where content-admin auth can never succeed.
+  // Values are set out-of-band (`wrangler secret put` / dashboard) and unchanged
+  // secrets carry forward from the previous version - they are never in the repo.
+  "secrets": {
+    "required": ["CONTENT_ADMIN_TOKEN", "ANALYTICS_ADMIN_TOKEN"]
+  }
 }

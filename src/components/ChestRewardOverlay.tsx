@@ -108,6 +108,7 @@ export default function ChestRewardOverlay({
           <DoubleCoinsOffer
             amount={amount}
             onResolved={handleDoubleResolved}
+            placement={isPaidChest ? "shop_double_reward" : "daily_chest_bonus"}
             remainingDoubles={remainingDoubles}
             onDoubleAttempted={isPaidChest ? recordPaidChestDoubleUsed : undefined}
           />

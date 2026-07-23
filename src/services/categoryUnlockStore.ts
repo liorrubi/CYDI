@@ -1,9 +1,9 @@
-import { CATEGORIES, type CategoryId } from "../engine/shapeLibrary";
+import { getCategories, type CategoryId } from "../content/contentRepository";
 import { isUnlockEverythingActive } from "./unlockOverrideStore";
 import { getSaveData, updateSaveData } from "./saveStore";
 
 function firstCategoryId(): CategoryId {
-  return CATEGORIES[0].id;
+  return getCategories()[0].id;
 }
 
 function readUnlocked(): CategoryId[] {
@@ -12,7 +12,7 @@ function readUnlocked(): CategoryId[] {
 
 /** The first category is always free; every other category must be purchased with coins - unless the lock management override is active. */
 export function getUnlockedCategoryIds(): CategoryId[] {
-  if (isUnlockEverythingActive()) return CATEGORIES.map((category) => category.id);
+  if (isUnlockEverythingActive()) return getCategories().map((category) => category.id);
   const unlocked = readUnlocked();
   const first = firstCategoryId();
   return unlocked.includes(first) ? unlocked : [first, ...unlocked];

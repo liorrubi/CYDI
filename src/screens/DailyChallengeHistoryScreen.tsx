@@ -5,7 +5,7 @@ import EmptyState from "../components/EmptyState";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
 import StarRating from "../components/StarRating";
 import { DAILY_CHALLENGE_PRIZE_COINS } from "../app/dailyChallengePrizes";
-import { getShapeById } from "../engine/shapeLibrary";
+import { getShapeById } from "../content/contentRepository";
 import { fetchDailyEpisode, fetchDailyHistory, type DailyHistoryEntry } from "../services/dailyChallengeApi";
 import { getPlayerId } from "../services/playerProfileStore";
 import {

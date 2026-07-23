@@ -16,6 +16,12 @@ export const REWARDED_AD_PLACEMENTS = [
   "mega_challenge_bonus",
   /** Double a shop/coin reward. */
   "shop_double_reward",
+  /** Double the coin reward on a regular shape challenge. */
+  "shape_challenge_double_reward",
+  /** Double the coin reward on a special challenge. */
+  "special_challenge_double_reward",
+  /** Double the coin reward on an Artist Pack challenge. */
+  "artist_pack_double_reward",
 ] as const;
 
 export type RewardedAdPlacement = (typeof REWARDED_AD_PLACEMENTS)[number];

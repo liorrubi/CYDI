@@ -13,6 +13,11 @@
 // filtering in analytics.ts's sanitizeParams denylist (now or if that denylist is later
 // hardened to a suffix/substring check). These are still just opaque content ids, never
 // player/device ids.
+// DELIBERATE ENGINE IMPORT (not the ContentRepository): this module is shared
+// with the Cloudflare Worker, and src/content/contentRepository.ts pulls in
+// artistPackLibrary, whose helpers read `import.meta.env` - which doesn't exist
+// in the workerd runtime. Client code everywhere else must go through the
+// repository; this file is the documented exception.
 import { CATEGORIES, type CategoryId } from "../engine/shapeLibrary";
 import { isRewardedAdPlacement, type RewardedAdPlacement } from "./ads/adPlacements";
 import { isAdFailureReason, type AdFailureReason } from "./ads/adTypes";
@@ -36,6 +41,10 @@ export type EventParamsMap = {
   game_started: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
   game_completed: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
   result_shared: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
+  // Daily challenge episode referenced a shape this client couldn't resolve
+  // (old cached catalog / offline) and a safe local substitute was played
+  // instead. Opaque content ids only - never player/device data.
+  daily_shape_fallback: { contentKey: string; substituteKey: string; hadCache: boolean };
   // Rewarded ad lifecycle (emitted only by src/services/ads/adAnalytics.ts).
   // `placement` and `reason` are closed unions owned by the ads module - never
   // free text, so no SDK error detail or sensitive info can reach analytics.
@@ -59,6 +68,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "game_started",
   "game_completed",
   "result_shared",
+  "daily_shape_fallback",
   "rewarded_ad_requested",
   "rewarded_ad_loaded",
   "rewarded_ad_shown",
@@ -163,6 +173,12 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   game_started: (p) => validateFunnelEvent(p),
   game_completed: (p) => validateFunnelEvent(p),
   result_shared: (p) => validateFunnelEvent(p),
+  daily_shape_fallback: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["contentKey", "substituteKey", "hadCache"])) return { valid: false };
+    const { contentKey, substituteKey, hadCache } = p;
+    if (!isSafeString(contentKey) || !isSafeString(substituteKey) || !isBoolean(hadCache)) return { valid: false };
+    return { valid: true, params: { contentKey, substituteKey, hadCache } };
+  },
   rewarded_ad_requested: (p) => validateAdEvent(p),
   rewarded_ad_loaded: (p) => validateAdEvent(p),
   rewarded_ad_shown: (p) => validateAdEvent(p),

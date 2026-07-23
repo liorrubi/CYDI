@@ -15,6 +15,7 @@ import {
   isRewardedAdReady,
   preloadRewardedAd,
   registerAdAdapter,
+  registerAdConsentGate,
   showRewardedAd,
   subscribeRewardedAdEvents,
 } from "./rewardedAds";
@@ -136,6 +137,32 @@ test("no adapter registered: everything resolves instantly as unavailable", asyn
   assert.equal(isRewardedAdReady(), false);
   await preloadRewardedAd(PLACEMENT); // must not throw
   assert.deepEqual(await showRewardedAd(PLACEMENT), { status: "unavailable", reason: "no_adapter" });
+});
+
+// --- Consent gate (fail-closed) ----------------------------------------------------
+
+test("consent gate blocking is checked before the adapter, with no SDK calls", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  registerAdConsentGate(() => false);
+  const spy = makeSpyAdapter(async () => ({ type: "coins", amount: 5 }));
+  assert.equal(isRewardedAdAvailable(), false);
+  assert.deepEqual(await showRewardedAd(PLACEMENT), { status: "unavailable", reason: "consent_blocked" });
+  assert.deepEqual(spy.calls, [], "no adapter method may run while consent blocks ad requests");
+});
+
+test("consent gate allowing lets the normal flow proceed", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  registerAdConsentGate(() => true);
+  makeSpyAdapter(async () => ({ type: "coins", amount: 5 }));
+  assert.deepEqual(await showRewardedAd(PLACEMENT), { status: "rewarded", reward: { type: "coins", amount: 5 } });
+});
+
+test("the consent gate resets to allowed between tests (pre-consent test suite compatibility)", async () => {
+  // The previous test registered a blocking gate; _resetRewardedAdsForTests() (beforeEach)
+  // must have restored the default "allowed" gate, or this would still be blocked.
+  _setAdFlagsForTests(flags(true, true));
+  makeSpyAdapter(async () => ({ type: "coins", amount: 1 }));
+  assert.equal((await showRewardedAd(PLACEMENT)).status, "rewarded");
 });
 
 // --- Full flow, lifecycle events, and rewards ---------------------------------------

@@ -1,15 +1,33 @@
 import { AnalyticsDO } from "./analyticsDO";
 import { DailyChallengeDO } from "./dailyChallengeDO";
 import { parseShareRecord, renderShareImage, shareTitleAndDescription } from "./shareImage";
+import {
+  CONTENT_ACTIVE_KEY,
+  CONTENT_RELEASES_INDEX_KEY,
+  contentReleaseKey,
+  MAX_CATALOG_BYTES,
+  parseCatalogJson,
+  parseReleaseJson,
+  RELEASE_ID_PATTERN,
+  sha256Hex,
+  type CatalogRelease,
+  type ReleaseIndexEntry,
+} from "../src/content/catalogSchema";
 
 export { AnalyticsDO, DailyChallengeDO };
 
 export interface Env {
+  /** User share content ONLY (drawings/challenges/results). Never content-catalog data. */
   SHARE_KV: KVNamespace;
+  /** Dynamic content catalog releases - see the KV-layout note in catalogSchema.ts. */
+  CONTENT_KV: KVNamespace;
   ASSETS: Fetcher;
   DAILY_CHALLENGE_DO: DurableObjectNamespace;
   ANALYTICS_DO: DurableObjectNamespace;
+  /** Admin bearer for the analytics report endpoint only. */
   ANALYTICS_ADMIN_TOKEN: string;
+  /** Admin bearer for content-catalog publish/activate/list/delete. Deliberately SEPARATE from ANALYTICS_ADMIN_TOKEN so the two capabilities can be rotated and scoped independently. */
+  CONTENT_ADMIN_TOKEN: string;
 }
 
 // Excludes 0/O and 1/I to avoid ids that are ambiguous when read aloud or copied by hand.
@@ -139,6 +157,184 @@ async function handleShareLinkPage(id: string, request: Request, env: Env): Prom
     .transform(pageResponse);
 }
 
+// ---------- Content catalog (server-published shapes/categories) ----------
+// GET is public and served straight from KV; PUT/POST(activate)/DELETE and the
+// releases listing are owner-only, guarded by CONTENT_ADMIN_TOKEN (separate
+// from the analytics token). The catalog is pure JSON data (validated on upload
+// with the exact same schema the client enforces) - the server never stores or
+// serves code.
+
+// Constant-time comparison, same rationale as analyticsDO.ts.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/** Content-catalog admin gate - uses CONTENT_ADMIN_TOKEN, independent of the analytics token. */
+function isContentAdminAuthorized(request: Request, env: Env): boolean {
+  const token = env.CONTENT_ADMIN_TOKEN;
+  const authHeader = request.headers.get("authorization");
+  return Boolean(token && authHeader && timingSafeEqual(authHeader, `Bearer ${token}`));
+}
+
+/** Admin responses must never sit in any shared/edge cache. */
+function jsonNoStore(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
+}
+
+/** Reads the active pointer and returns the referenced release's raw envelope text, or null when nothing is published/dangling. */
+async function readActiveReleaseRaw(env: Env): Promise<string | null> {
+  const pointerRaw = await env.CONTENT_KV.get(CONTENT_ACTIVE_KEY);
+  if (pointerRaw === null) return null;
+  let releaseId: unknown;
+  try {
+    releaseId = (JSON.parse(pointerRaw) as Record<string, unknown>).releaseId;
+  } catch {
+    return null;
+  }
+  if (typeof releaseId !== "string" || !RELEASE_ID_PATTERN.test(releaseId)) return null;
+  return env.CONTENT_KV.get(contentReleaseKey(releaseId));
+}
+
+async function handleCatalogGet(env: Env): Promise<Response> {
+  const raw = await readActiveReleaseRaw(env);
+  if (raw === null) return json({ error: "no catalog published" }, 404);
+  return new Response(raw, {
+    headers: {
+      "content-type": "application/json",
+      // Short edge cache: a freshly published catalog reaches every client
+      // within minutes while repeat app launches mostly hit the edge.
+      "cache-control": "public, max-age=300",
+    },
+  });
+}
+
+/**
+ * Publish flow (all-or-nothing, immutable):
+ *   validate -> hash -> store under a NEW releaseId -> read back and verify
+ *   byte-for-byte -> update the releases index -> only then flip
+ *   content:active. Re-publishing identical bytes is a no-op (same hash as
+ *   the active release) so a retried upload never creates duplicate releases.
+ */
+async function handleCatalogPut(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+
+  const raw = await request.text();
+  if (!raw || raw.length > MAX_CATALOG_BYTES) return jsonNoStore({ error: "catalog missing or exceeds size cap" }, 400);
+
+  const result = parseCatalogJson(raw);
+  if (!result.ok) return jsonNoStore({ error: `invalid catalog: ${result.error}` }, 400);
+  const catalogHash = await sha256Hex(raw);
+
+  const activeRaw = await readActiveReleaseRaw(env);
+  if (activeRaw !== null) {
+    const active = parseReleaseJson(activeRaw);
+    if (active.ok && active.release.catalogHash === catalogHash) {
+      return jsonNoStore({ ok: true, alreadyActive: true, releaseId: active.release.releaseId, catalogHash });
+    }
+  }
+
+  const releaseId = `r-${Date.now()}-${randomId().slice(0, 6)}`;
+  const release: CatalogRelease = {
+    releaseId,
+    catalogHash,
+    publishedAt: new Date().toISOString(),
+    contentVersion: result.catalog.contentVersion,
+    formatVersion: result.catalog.formatVersion,
+    catalogJson: raw,
+  };
+  const releaseRaw = JSON.stringify(release);
+  await env.CONTENT_KV.put(contentReleaseKey(releaseId), releaseRaw);
+
+  // Read-back verification: the pointer only ever flips to a release whose
+  // stored bytes provably round-tripped intact.
+  const readBack = await env.CONTENT_KV.get(contentReleaseKey(releaseId));
+  if (readBack === null || readBack !== releaseRaw || (await sha256Hex(JSON.parse(readBack).catalogJson)) !== catalogHash) {
+    return jsonNoStore({ error: "read-back verification failed; active catalog unchanged" }, 500);
+  }
+
+  const indexRaw = await env.CONTENT_KV.get(CONTENT_RELEASES_INDEX_KEY);
+  let index: ReleaseIndexEntry[] = [];
+  try {
+    index = indexRaw ? (JSON.parse(indexRaw) as ReleaseIndexEntry[]) : [];
+  } catch {
+    index = [];
+  }
+  index.unshift({
+    releaseId,
+    catalogHash,
+    publishedAt: release.publishedAt,
+    contentVersion: release.contentVersion,
+    shapes: result.catalog.shapes.length,
+    categories: result.catalog.categories.length,
+  });
+  // The index is a listing convenience; release blobs themselves are never auto-deleted.
+  await env.CONTENT_KV.put(CONTENT_RELEASES_INDEX_KEY, JSON.stringify(index.slice(0, 50)));
+
+  await env.CONTENT_KV.put(CONTENT_ACTIVE_KEY, JSON.stringify({ releaseId }));
+
+  return jsonNoStore({
+    ok: true,
+    releaseId,
+    catalogHash,
+    contentVersion: release.contentVersion,
+    categories: result.catalog.categories.length,
+    shapes: result.catalog.shapes.length,
+  });
+}
+
+/** Rollback/activation: points content:active at an EXISTING, re-validated release. No re-upload, no version comparison - the pointer is the single source of truth. */
+async function handleCatalogActivate(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+
+  let releaseId: unknown;
+  try {
+    releaseId = ((await request.json()) as Record<string, unknown>).releaseId;
+  } catch {
+    return jsonNoStore({ error: "invalid json" }, 400);
+  }
+  if (typeof releaseId !== "string" || !RELEASE_ID_PATTERN.test(releaseId)) return jsonNoStore({ error: "invalid releaseId" }, 400);
+
+  const raw = await env.CONTENT_KV.get(contentReleaseKey(releaseId));
+  if (raw === null) return jsonNoStore({ error: "release not found" }, 404);
+  const result = parseReleaseJson(raw);
+  if (!result.ok) return jsonNoStore({ error: `stored release failed validation: ${result.error}` }, 500);
+  if ((await sha256Hex(result.release.catalogJson)) !== result.release.catalogHash) {
+    return jsonNoStore({ error: "stored release failed hash verification" }, 500);
+  }
+
+  await env.CONTENT_KV.put(CONTENT_ACTIVE_KEY, JSON.stringify({ releaseId }));
+  return jsonNoStore({ ok: true, releaseId, contentVersion: result.release.contentVersion, catalogHash: result.release.catalogHash });
+}
+
+/** Admin listing of published releases, newest first - the rollback menu. */
+async function handleReleasesList(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  const [indexRaw, pointerRaw] = await Promise.all([
+    env.CONTENT_KV.get(CONTENT_RELEASES_INDEX_KEY),
+    env.CONTENT_KV.get(CONTENT_ACTIVE_KEY),
+  ]);
+  let activeReleaseId: string | null = null;
+  try {
+    activeReleaseId = pointerRaw ? ((JSON.parse(pointerRaw) as Record<string, unknown>).releaseId as string) : null;
+  } catch {
+    activeReleaseId = null;
+  }
+  return jsonNoStore({ activeReleaseId, releases: indexRaw ? JSON.parse(indexRaw) : [] });
+}
+
+/** Deactivation switch: removes only the ACTIVE POINTER (all releases stay for rollback). Clients see 404, clear their cache, and fall back to baked-in content. */
+async function handleCatalogDelete(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  await env.CONTENT_KV.delete(CONTENT_ACTIVE_KEY);
+  return jsonNoStore({ ok: true });
+}
+
 // Every /api/daily/* request is forwarded to the single global DailyChallengeDO
 // instance, which processes requests one at a time (see dailyChallengeDO.ts).
 function forwardToDailyDO(request: Request, env: Env, path: string): Promise<Response> {
@@ -179,6 +375,14 @@ export default {
 
     const shareImageMatch = url.pathname.match(/^\/api\/share\/([A-Za-z0-9]{4,12})\/image\.png$/);
     if (shareImageMatch && request.method === "GET") return handleShareImage(shareImageMatch[1], env);
+
+    if (url.pathname === "/api/content/catalog") {
+      if (request.method === "GET") return handleCatalogGet(env);
+      if (request.method === "PUT") return handleCatalogPut(request, env);
+      if (request.method === "DELETE") return handleCatalogDelete(request, env);
+    }
+    if (url.pathname === "/api/content/activate" && request.method === "POST") return handleCatalogActivate(request, env);
+    if (url.pathname === "/api/content/releases" && request.method === "GET") return handleReleasesList(request, env);
 
     if (url.pathname === "/api/daily/current" && request.method === "GET") return forwardToDailyDO(request, env, "/current");
     if (url.pathname === "/api/daily/submit" && request.method === "POST") return forwardToDailyDO(request, env, "/submit");

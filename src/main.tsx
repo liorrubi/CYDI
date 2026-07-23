@@ -24,11 +24,18 @@ if (path === '/privacy') {
     )
   })
 } else {
-  import('./App.tsx').then(({ default: App }) => {
+  // Remote-content boot: apply the cached catalog (if any) BEFORE the first
+  // render so every screen sees one consistent content source, then refresh
+  // the cache in the background for the next launch. Both steps fall back to
+  // the baked-in content on any failure - see hydrateContent.ts.
+  import('./content/hydrateContent.ts').then(async ({ applyCachedCatalog, refreshCatalogInBackground }) => {
+    applyCachedCatalog()
+    const { default: App } = await import('./App.tsx')
     root.render(
       <StrictMode>
         <App />
       </StrictMode>,
     )
+    void refreshCatalogInBackground()
   })
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Capacitor } from "@capacitor/core";
 import AppHeader from "../components/AppHeader";
@@ -12,6 +12,7 @@ import { isUnlockEverythingActive, setUnlockEverything } from "../services/unloc
 import { exportSaveCode, importSaveCode } from "../services/saveTransfer";
 import { getPlayerId } from "../services/playerProfileStore";
 import { copyTextToClipboard } from "../services/clipboard";
+import { getConsentState, refreshConsentAfterPrivacyOptions, subscribeConsentState } from "../services/ads";
 import {
   toAchievements,
   toHome,
@@ -56,6 +57,12 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const [importDone, setImportDone] = useState(false);
   const [privacyId] = useState(() => getPlayerId());
   const [copyIdFeedback, setCopyIdFeedback] = useState<string | null>(null);
+  const [consentState, setConsentState] = useState(getConsentState());
+
+  // Reactive to the async native consent init (App.tsx's initializeNativeAds()),
+  // which may resolve before or after this screen mounts - subscribing (rather than
+  // reading getConsentState() once) covers both orderings.
+  useEffect(() => subscribeConsentState("settings-privacy", setConsentState), []);
 
   async function handleCopyPrivacyId() {
     playChipSound();
@@ -73,6 +80,12 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
     } else {
       window.location.assign("/privacy");
     }
+  }
+
+  async function handleOpenPrivacyOptions() {
+    playChipSound();
+    const { AdMob } = await import("@capacitor-community/admob");
+    await refreshConsentAfterPrivacyOptions(AdMob);
   }
 
   const creditsDialogRef = useDialogA11y<HTMLDivElement>(creditsOpen, { onClose: () => setCreditsOpen(false) });
@@ -310,6 +323,11 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
           <Button variant="secondary" onClick={() => setAccessibilityOpen(true)}>
             Accessibility
           </Button>
+          {Capacitor.isNativePlatform() && consentState.privacyOptionsRequired && (
+            <Button variant="secondary" onClick={handleOpenPrivacyOptions}>
+              Privacy Options
+            </Button>
+          )}
         </div>
       </div>
 

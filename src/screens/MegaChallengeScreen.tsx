@@ -26,7 +26,7 @@ import {
   type PenSkinId,
 } from "../app/constants";
 import { ACHIEVEMENTS } from "../app/achievements";
-import { MEGA_ALBUM_SIZE, MEGA_CARDS, type MegaCardDefinition } from "../engine/megaShapeLibrary";
+import { getMegaAlbumSize, getMegaCards, type MegaCardDefinition } from "../content/contentRepository";
 import { scoreAttempt } from "../engine/scoring";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playEncourageSound, playSelectSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
@@ -148,7 +148,8 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
   // test toggle; the Champion status stays strictly on real progress so the
   // permanent title can never be faked by (or persisted from) the toggle.
   const collected = collectedMegaCardCount();
-  const percent = Math.round((collected / MEGA_ALBUM_SIZE) * 100);
+  const megaAlbumSize = getMegaAlbumSize();
+  const percent = Math.round((collected / megaAlbumSize) * 100);
   const isChampion = isMegaAlbumComplete();
 
   return (
@@ -179,7 +180,7 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
           </div>
           <div className="mega-hero-progress-line">
             <span>
-              Progress: {collected} / {MEGA_ALBUM_SIZE} collected
+              Progress: {collected} / {megaAlbumSize} collected
             </span>
             <span>{percent}%</span>
           </div>
@@ -190,7 +191,7 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
         </div>
 
         <div className="mega-album-grid">
-          {MEGA_CARDS.map((card) => {
+          {getMegaCards().map((card) => {
             const unlocked = isMegaCardUnlocked(card.id);
             const bestScore = progress.bestScores[card.id];
             const isPerfect = progress.perfectCardIds.includes(card.id);
@@ -270,7 +271,7 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
             </span>
             <h2>{CHAMPION_TITLE}</h2>
             <p>
-              You collected all {MEGA_ALBUM_SIZE} Mega drawings and completed the album! This permanent title and the
+              You collected all {megaAlbumSize} Mega drawings and completed the album! This permanent title and the
               crown badge next to your coins are now yours, forever.
             </p>
             <Button onClick={handleShareChampion}>
@@ -409,7 +410,9 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
           </div>
         )}
         <ScoreCard score={result} showPercentSign />
-        {doubleOfferAmount !== null && <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} />}
+        {doubleOfferAmount !== null && (
+          <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} placement="mega_challenge_bonus" />
+        )}
         <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
         {doubleOfferAmount === null && (
           <div className="button-row">

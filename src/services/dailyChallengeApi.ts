@@ -8,6 +8,8 @@ export type DailyLeaderboardEntry = { playerId: string; playerName: string; scor
 export type DailyEpisode = {
   id: number;
   shapeId: string;
+  /** Catalog release the server drew shapeId from; null for baked-in picks. Absent on responses from older Worker deploys. */
+  contentReleaseId?: string | null;
   dateKey: string;
   startedAt: number;
   status: "active" | "ended";

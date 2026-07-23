@@ -41,8 +41,15 @@ export const AD_FLAGS: AdFeatureFlags = {
 // Tests exercise enabled/disabled flows without editing the shipped flags above.
 let activeFlags: AdFeatureFlags = AD_FLAGS;
 
-/** A format serves ads only when BOTH the master switch and its own flag are on. */
+/**
+ * A format serves ads only when BOTH the master switch and its own flag are on -
+ * UNLESS this is an internal-test-ads build, which bypasses AD_FLAGS entirely and
+ * only ever turns "rewarded" on (the one format this integration exercises). This
+ * never touches AD_FLAGS.master itself, which stays hardcoded false for every real
+ * production build regardless of this branch.
+ */
 export function isAdFormatEnabled(format: AdFormat, flags: AdFeatureFlags = activeFlags): boolean {
+  if (isInternalTestAdsMode()) return format === "rewarded";
   return flags.master && flags.formats[format];
 }
 
@@ -138,16 +145,39 @@ function isDevBuild(): boolean {
   }
 }
 
-/** AdMob App ID for SDK initialization - test ID in dev, env-configured in prod. */
+// See the VITE_ADS_INTERNAL_TEST_MODE doc comment in vite-env.d.ts for the exact
+// scoping rule: literal "true" only, never committed anywhere, inline-only on the
+// one build command that produces the internal-testing AAB's web assets.
+let internalTestModeOverride: boolean | undefined;
+function isInternalTestAdsMode(): boolean {
+  if (internalTestModeOverride !== undefined) return internalTestModeOverride;
+  try {
+    return import.meta.env.VITE_ADS_INTERNAL_TEST_MODE === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** Test-only: override (or with no argument, restore) internal-test-ads-mode detection. */
+export function _setAdsInternalTestModeForTests(value?: boolean): void {
+  internalTestModeOverride = value;
+}
+
+/** True in a dev server run OR an internal-test-ads build - the SDK should initialize in test mode. */
+export function isAdTestingEnvironment(): boolean {
+  return isDevBuild() || isInternalTestAdsMode();
+}
+
+/** AdMob App ID for SDK initialization - test ID in dev/internal-test builds, env-configured in prod. */
 export function getAdMobAppId(platform: AdPlatform): string {
-  return isDevBuild() ? GOOGLE_TEST_APP_IDS[platform] : PROD_APP_IDS[platform];
+  return isAdTestingEnvironment() ? GOOGLE_TEST_APP_IDS[platform] : PROD_APP_IDS[platform];
 }
 
 /**
- * Resolve the ad unit ID for a format+platform. Dev builds always get Google test
- * units; production gets the env-configured ID, or "" when that format isn't
- * configured (callers treat "" as "format unavailable", never as an error).
+ * Resolve the ad unit ID for a format+platform. Dev and internal-test builds always
+ * get Google test units; production gets the env-configured ID, or "" when that
+ * format isn't configured (callers treat "" as "format unavailable", never an error).
  */
 export function getAdUnitId(format: AdFormat, platform: AdPlatform): string {
-  return isDevBuild() ? GOOGLE_TEST_AD_UNITS[format][platform] : PROD_AD_UNITS[format][platform];
+  return isAdTestingEnvironment() ? GOOGLE_TEST_AD_UNITS[format][platform] : PROD_AD_UNITS[format][platform];
 }

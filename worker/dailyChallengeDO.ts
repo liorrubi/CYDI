@@ -7,6 +7,7 @@ import { israelDateKey } from "../src/app/israelDate";
 // avoiding the bundle cost would require a separately-maintained id list (drift
 // risk) or a lazy-generator refactor of the 6900-line library.
 import { SHAPE_LIBRARY } from "../src/engine/shapeLibrary";
+import { CONTENT_ACTIVE_KEY, contentReleaseKey, parseReleaseJson, RELEASE_ID_PATTERN } from "../src/content/catalogSchema";
 
 // Single global Durable Object instance coordinates the daily challenge, so every
 // request (rollover check, score submission, "first to 100" arbitration) is
@@ -28,6 +29,8 @@ type LeaderboardEntry = { playerId: string; playerName: string; score: number; a
 type Episode = {
   id: number;
   shapeId: string;
+  /** The catalog release shapeId was drawn from, or null when it came from the baked-in library. Lets clients verify they hold (or fetch) the matching catalog before playing. Optional: episodes stored before this field existed load as undefined. */
+  contentReleaseId?: string | null;
   dateKey: string; // "YYYY-MM-DD" in Asia/Jerusalem
   startedAt: number;
   endedAt: number | null;
@@ -66,11 +69,72 @@ function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 }
 
+/**
+ * DAILY SHAPE SOURCE — SAFETY GATE.
+ *
+ * The daily challenge is GLOBAL: one episode is served to EVERY installed app
+ * version at once. If the server picked a shape from the remote catalog, an
+ * older app build (one shipped before dynamic content, or any build that
+ * hasn't downloaded the matching catalog) could be handed a shapeId it cannot
+ * resolve. The client resolver degrades gracefully to a local substitute, but
+ * that means different players race on different shapes — unfair for a
+ * leaderboard.
+ *
+ * So until a per-request APP-VERSION compatibility mechanism exists (the
+ * client tells the server which catalog/version it can handle, and the server
+ * only offers a remote shape to clients that can draw it), the daily pool is
+ * LOCKED to the 276 baked-in shapes that every shipped build already has.
+ *
+ * Flip to true ONLY together with that compatibility mechanism. The
+ * remote-selection code path is retained (below) and already tested, so
+ * enabling it is a one-line change plus the version negotiation.
+ */
+// Typed as `boolean` (not the literal `false`) so the retained remote-selection
+// path below is not flagged as unreachable while the gate is closed.
+const DAILY_USES_REMOTE_CATALOG: boolean = false;
+
+/** The only binding this DO reads from the environment. Optional so the DO still works in a test harness that provides no KV. */
+type DailyEnv = { CONTENT_KV?: KVNamespace };
+
 export class DailyChallengeDO {
   private state: DurableObjectState;
+  private env: DailyEnv;
 
-  constructor(state: DurableObjectState) {
+  constructor(state: DurableObjectState, env: DailyEnv) {
     this.state = state;
+    this.env = env;
+  }
+
+  /**
+   * The pool a new episode's shape is drawn from. While DAILY_USES_REMOTE_CATALOG
+   * is false (see the safety-gate note above), this is ALWAYS the 276 baked-in
+   * shapes every shipped build has, so no client can ever be handed an
+   * unresolvable daily shape. When the gate is later opened, it draws from the
+   * active published release and records its releaseId. Read once per episode.
+   */
+  private async pickShapeIdForNewEpisode(): Promise<{ shapeId: string; contentReleaseId: string | null }> {
+    if (!DAILY_USES_REMOTE_CATALOG) {
+      return { shapeId: randomShapeId(), contentReleaseId: null };
+    }
+    try {
+      const pointerRaw = await this.env.CONTENT_KV?.get(CONTENT_ACTIVE_KEY);
+      if (pointerRaw) {
+        const releaseId = (JSON.parse(pointerRaw) as Record<string, unknown>).releaseId;
+        if (typeof releaseId === "string" && RELEASE_ID_PATTERN.test(releaseId)) {
+          const raw = await this.env.CONTENT_KV?.get(contentReleaseKey(releaseId));
+          if (raw) {
+            const result = parseReleaseJson(raw);
+            if (result.ok) {
+              const shapes = result.catalog.shapes;
+              return { shapeId: shapes[Math.floor(Math.random() * shapes.length)].id, contentReleaseId: releaseId };
+            }
+          }
+        }
+      }
+    } catch {
+      // KV hiccup - fall through to the baked-in pool.
+    }
+    return { shapeId: randomShapeId(), contentReleaseId: null };
   }
 
   private boardKey(episodeId: number, playerId: string): string {
@@ -93,9 +157,11 @@ export class DailyChallengeDO {
   }
 
   private async createEpisode(dateKey: string): Promise<Episode> {
+    const pick = await this.pickShapeIdForNewEpisode();
     return {
       id: await this.nextEpisodeId(),
-      shapeId: randomShapeId(),
+      shapeId: pick.shapeId,
+      contentReleaseId: pick.contentReleaseId,
       dateKey,
       startedAt: Date.now(),
       endedAt: null,
@@ -157,6 +223,7 @@ export class DailyChallengeDO {
     return {
       id: episode.id,
       shapeId: episode.shapeId,
+      contentReleaseId: episode.contentReleaseId ?? null,
       dateKey: episode.dateKey,
       startedAt: episode.startedAt,
       status: episode.status,

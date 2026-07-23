@@ -33,6 +33,8 @@ export const AD_FAILURE_REASONS = [
   "no_adapter",
   /** No ad unit ID configured for this format+platform. */
   "not_configured",
+  /** Google UMP consent does not currently allow an ad request (fail-closed default). */
+  "consent_blocked",
   /** An ad is already on screen. */
   "already_showing",
   /** Invalid placement passed from non-typechecked code. */

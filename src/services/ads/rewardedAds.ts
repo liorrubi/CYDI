@@ -56,6 +56,18 @@ function activeAdapter(): AdAdapter | undefined {
   return last;
 }
 
+// Defaults to "allowed" only so the pre-existing test suite (written before
+// consent existed) keeps passing unmodified. The real native bootstrap
+// (services/ads/nativeAdsSetup.ts) always registers a live gate reading the
+// actual UMP consent state before anything ad-side can run, so the effective
+// default in the shipped app is fail-closed, not this fallback.
+let consentGate: () => boolean = () => true;
+
+/** Register the live consent check every rewarded-ad request must pass first. */
+export function registerAdConsentGate(gate: () => boolean): void {
+  consentGate = gate;
+}
+
 // --- Lifecycle event fan-out ---------------------------------------------------
 
 // Keyed by listener name for the same HMR/StrictMode replace-not-duplicate
@@ -134,6 +146,7 @@ let lastLoadFailure: AdFailureReason = "load_failed";
 /** The blocking reason right now, or null when a rewarded ad could actually be served. */
 function rewardedBlockReason(): AdFailureReason | null {
   if (!isAdFormatEnabled("rewarded")) return "ads_disabled";
+  if (!consentGate()) return "consent_blocked";
   if (activeAdapter() === undefined) return "no_adapter";
   if (getAdUnitId("rewarded", detectPlatform()) === "") return "not_configured";
   return null;
@@ -254,6 +267,7 @@ export function _resetRewardedAdsForTests(): void {
   lastLoadFailure = "load_failed";
   loadTimeoutMs = LOAD_TIMEOUT_MS;
   showTimeoutMs = SHOW_TIMEOUT_MS;
+  consentGate = () => true;
 }
 
 /** Test-only: shrink timeouts so timeout paths run in milliseconds. */

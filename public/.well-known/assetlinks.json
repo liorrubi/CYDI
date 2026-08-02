@@ -5,7 +5,8 @@
       "namespace": "android_app",
       "package_name": "com.playcydi.cydi",
       "sha256_cert_fingerprints": [
-        "80:C9:6C:AF:42:2C:96:9D:84:7B:16:37:15:5C:14:F4:80:D2:A8:C7:CB:68:FF:AC:4D:0F:C7:2F:60:D4:C1:3C"
+        "80:C9:6C:AF:42:2C:96:9D:84:7B:16:37:15:5C:14:F4:80:D2:A8:C7:CB:68:FF:AC:4D:0F:C7:2F:60:D4:C1:3C",
+        "A1:5B:26:CF:AF:84:A9:D7:1A:85:B7:14:49:12:D8:EB:94:EB:1B:15:B3:CD:BF:A9:E1:BC:3C:45:B5:47:5E:EE"
       ]
     }
   }

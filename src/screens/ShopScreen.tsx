@@ -358,14 +358,14 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
               </span>
               <div className="shop-product-info">
                 <h3>{skin.name}</h3>
-                <p className="status-text">{owned ? (isFree ? "Free" : "Owned") : `🪙 ${price}`}</p>
+                {owned && <p className="status-text">{isFree ? "Free" : "Owned"}</p>}
               </div>
               {owned ? (
                 <span className="shop-product-owned">✓ Owned</span>
               ) : (
                 <div className="shop-pen-skin-action">
                   <Button disabled={!canAfford} onClick={() => handleBuySkin(skin.id, price)}>
-                    Buy
+                    🪙 {price}
                   </Button>
                   {!canAfford && <span className="shop-pen-skin-hint">Not enough coins</span>}
                 </div>

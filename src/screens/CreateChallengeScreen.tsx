@@ -3,12 +3,14 @@ import type { FormEvent } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
+import DrawingTutorialOverlay from "../components/DrawingTutorialOverlay";
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import { CANVAS_SIZE, MIN_POINTS_TO_SAVE, penInkGlyphColor, type PenColorId, type PenSkinId } from "../app/constants";
 import { saveChallenge } from "../services/challengeStorage";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
+import { markDrawingTutorialShown, shouldShowDrawingTutorial } from "../services/tutorialStore";
 import {
   toAchievements,
   toCreate,
@@ -35,6 +37,16 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
   const [name, setName] = useState("");
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
+  // First time a genuinely new player reaches the canvas, walk them through
+  // the drawing controls (pen, guide, undo, done) - shown once, ever. The
+  // canvas here is drawable immediately on mount, so this checks once at
+  // mount rather than watching a "drawing" phase like the other screens.
+  const [showDrawingTutorial, setShowDrawingTutorial] = useState(() => shouldShowDrawingTutorial());
+
+  function dismissDrawingTutorial() {
+    markDrawingTutorialShown();
+    setShowDrawingTutorial(false);
+  }
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
@@ -148,6 +160,7 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
           </div>
         </form>
       )}
+      {showDrawingTutorial && <DrawingTutorialOverlay onDismiss={dismissDrawingTutorial} />}
     </div>
   );
 }

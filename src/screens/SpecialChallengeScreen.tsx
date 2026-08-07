@@ -3,6 +3,7 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
+import DrawingTutorialOverlay from "../components/DrawingTutorialOverlay";
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
@@ -30,6 +31,7 @@ import { addCoins, getCoins, onCoinsChanged, spendCoins } from "../services/coin
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
+import { markDrawingTutorialShown, shouldShowDrawingTutorial } from "../services/tutorialStore";
 import {
   canPlaySpecialChallengeFree,
   getSpecialChallengeBestScore,
@@ -84,8 +86,22 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const [coins, setCoins] = useState(() => getCoins());
+  const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
   const timeUntilNextShape = useTimeUntilNextShape();
+
+  // First time a genuinely new player reaches the canvas, walk them through
+  // the drawing controls (pen, guide, undo, done) - shown once, ever.
+  useEffect(() => {
+    if (phase === "drawing" && shouldShowDrawingTutorial()) {
+      setShowDrawingTutorial(true);
+    }
+  }, [phase]);
+
+  function dismissDrawingTutorial() {
+    markDrawingTutorialShown();
+    setShowDrawingTutorial(false);
+  }
 
   useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
 
@@ -305,6 +321,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
           </div>
         </>
       )}
+      {showDrawingTutorial && <DrawingTutorialOverlay onDismiss={dismissDrawingTutorial} />}
     </div>
   );
 }

@@ -51,6 +51,18 @@ export function markOnboardingTutorialShown(): void {
   });
 }
 
+export function markDrawingTutorialShown(): void {
+  updateSaveData((data) => {
+    data.progress.drawingTutorialShown = true;
+  });
+}
+
+/** Same "genuinely new player" guard as the onboarding tutorial: `completedRounds === 0` keeps this from firing for veterans whose older saves predate the `drawingTutorialShown` field. */
+export function shouldShowDrawingTutorial(): boolean {
+  const progress = getSaveData().progress;
+  return !progress.drawingTutorialShown && progress.completedRounds === 0;
+}
+
 export function shouldShowMyChallengesTutorial(): boolean {
   return !getSaveData().progress.myChallengesTutorialShown;
 }

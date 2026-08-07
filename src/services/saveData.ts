@@ -64,6 +64,7 @@ export type SaveData = {
     achievementsTutorialShown: boolean;
     myChallengesTutorialShown: boolean;
     onboardingTutorialShown: boolean;
+    drawingTutorialShown: boolean;
     challenges: Challenge[];
     sharedChallengeIds: string[];
   };
@@ -109,6 +110,7 @@ export function createDefaultSaveData(): SaveData {
       achievementsTutorialShown: false,
       myChallengesTutorialShown: false,
       onboardingTutorialShown: false,
+      drawingTutorialShown: false,
       challenges: [],
       sharedChallengeIds: [],
     },

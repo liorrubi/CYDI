@@ -4,6 +4,7 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
+import DrawingTutorialOverlay from "../components/DrawingTutorialOverlay";
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
@@ -50,7 +51,7 @@ import { getDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive } from "../services/unlockOverrideStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
-import { recordRoundCompleted, shouldShowAchievementsTutorial } from "../services/tutorialStore";
+import { markDrawingTutorialShown, recordRoundCompleted, shouldShowAchievementsTutorial, shouldShowDrawingTutorial } from "../services/tutorialStore";
 import { recordSuccessfulDrawing } from "../services/successfulDrawingsStore";
 import { trackEvent } from "../services/analytics";
 import {
@@ -723,7 +724,21 @@ function ShapePlay({
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
+  const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
+
+  // First time a genuinely new player reaches the canvas, walk them through
+  // the drawing controls (pen, guide, undo, done) - shown once, ever.
+  useEffect(() => {
+    if (phase === "drawing" && shouldShowDrawingTutorial()) {
+      setShowDrawingTutorial(true);
+    }
+  }, [phase]);
+
+  function dismissDrawingTutorial() {
+    markDrawingTutorialShown();
+    setShowDrawingTutorial(false);
+  }
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
@@ -930,6 +945,7 @@ function ShapePlay({
           </div>
         </>
       )}
+      {showDrawingTutorial && <DrawingTutorialOverlay onDismiss={dismissDrawingTutorial} />}
     </div>
   );
 }

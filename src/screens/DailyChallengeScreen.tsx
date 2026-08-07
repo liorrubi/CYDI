@@ -3,6 +3,7 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DailyLeaderboardTable from "../components/DailyLeaderboardTable";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
+import DrawingTutorialOverlay from "../components/DrawingTutorialOverlay";
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
@@ -29,6 +30,7 @@ import { shareOrCopy } from "../services/nativeShare";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
+import { markDrawingTutorialShown, shouldShowDrawingTutorial } from "../services/tutorialStore";
 import {
   claimDailyPrizes,
   fetchCurrentDailyEpisode,
@@ -86,7 +88,21 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const [prizeMessages, setPrizeMessages] = useState<string[]>([]);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
+  const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
+
+  // First time a genuinely new player reaches the canvas, walk them through
+  // the drawing controls (pen, guide, undo, done) - shown once, ever.
+  useEffect(() => {
+    if (phase === "drawing" && shouldShowDrawingTutorial()) {
+      setShowDrawingTutorial(true);
+    }
+  }, [phase]);
+
+  function dismissDrawingTutorial() {
+    markDrawingTutorialShown();
+    setShowDrawingTutorial(false);
+  }
 
   /** Hands over any queued 1st/2nd/3rd place prizes and credits their coins - safe to call any time, since the server clears each prize the moment it's handed over. */
   async function claimPrizes() {
@@ -424,6 +440,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       )}
       {isLive && shareFeedback && <p className="status-text">{shareFeedback}</p>}
       <DailyLeaderboardTable entries={episode.topEntries} highlightPlayerId={playerId} />
+      {showDrawingTutorial && <DrawingTutorialOverlay onDismiss={dismissDrawingTutorial} />}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
+import DrawingTutorialOverlay from "../components/DrawingTutorialOverlay";
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ResultScreen from "./ResultScreen";
@@ -21,6 +22,7 @@ import { encodeResultLink } from "../services/shareLink";
 import { createShortResultLink } from "../services/shareApi";
 import { shareOrCopy } from "../services/nativeShare";
 import { trackEvent } from "../services/analytics";
+import { markDrawingTutorialShown, shouldShowDrawingTutorial } from "../services/tutorialStore";
 import { scoreAttempt } from "../engine/scoring";
 import {
   toAchievements,
@@ -55,7 +57,21 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
+
+  // First time a genuinely new player reaches the canvas, walk them through
+  // the drawing controls (pen, guide, undo, done) - shown once, ever.
+  useEffect(() => {
+    if (phase === "drawing" && shouldShowDrawingTutorial()) {
+      setShowDrawingTutorial(true);
+    }
+  }, [phase]);
+
+  function dismissDrawingTutorial() {
+    markDrawingTutorialShown();
+    setShowDrawingTutorial(false);
+  }
 
   function handleSelectPenColor(id: PenColorId) {
     setSelectedColor(id);
@@ -244,6 +260,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
           </div>
         </>
       )}
+      {showDrawingTutorial && <DrawingTutorialOverlay onDismiss={dismissDrawingTutorial} />}
     </div>
   );
 }

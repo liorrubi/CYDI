@@ -75,9 +75,12 @@ android {
         // E2E. All 0.27.2; versionCode bumps only because MIUI silently refuses
         // same-versionCode updates. 7-10 were local/DevTools test builds (never
         // for Play). 11 = first clean production candidate: no DevTools, no API
-        // override, signed with the Play keystore, for Closed Testing.
-        versionCode 11
-        versionName "0.27.2"
+        // override, signed with the Play keystore, for Closed Testing. 12 = next
+        // release candidate, APP_VERSION bumped to 0.28.0 - adds Dark Mode, Rate
+        // CYDI (Settings), first-time drawing-controls tutorial, and the Shop pen
+        // price UI tweak; no DevTools, signed with the Play keystore.
+        versionCode 12
+        versionName "0.28.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

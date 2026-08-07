@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.28.0 - 2026-08-07
+
+**Dark Mode.** A Light/Dark toggle in Settings now applies across the whole
+app - every screen, dialog, and control - via CSS variables and a
+`data-theme` attribute, persisted in save data. The drawing canvas itself
+stays white on purpose (needed for scoring and to defeat Android's
+force-dark heuristic); only its surrounding chrome reacts to theme.
+
+**Rate CYDI.** A "Rate CYDI" card in Settings opens the Google Play listing,
+styled like the existing "How to Play" card. No rewards or incentives are
+tied to it.
+
+**First-time drawing controls tutorial.** A short one-time "Drawing Tools"
+walkthrough now appears the first time a genuinely new player reaches any
+drawing canvas - covering all five entry points (Shape Challenge, Daily
+Challenge, Special Challenge, Play Challenge, Create Challenge), not just
+whichever one they happen to try first. Never shown again once dismissed,
+and never interferes with returning players.
+
+**Shop: Drawing Pens price moved into the buy button**, matching the Ink
+Colors section's existing style (coin icon + price inside the button
+instead of separate text next to it).
+
 ## 0.26.0 - 2026-07-13
 
 **Native app (Android) sharing and Daily Challenge now actually work.** Capacitor

@@ -26,6 +26,7 @@ import {
 import type { Screen } from "../types/GameMode";
 
 const LOCK_MANAGEMENT_PASSWORD = "1111";
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.playcydi.cydi";
 
 function formatBuildTime(iso: string): string {
   const date = new Date(iso);
@@ -71,6 +72,11 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
     const ok = await copyTextToClipboard(privacyId);
     setCopyIdFeedback(ok ? "Copied!" : "Couldn't copy automatically - select the ID above and copy it manually.");
     window.setTimeout(() => setCopyIdFeedback(null), 2500);
+  }
+
+  function handleRateApp() {
+    playChipSound();
+    window.open(PLAY_STORE_URL, "_blank");
   }
 
   function handleOpenPrivacyPolicy() {
@@ -240,6 +246,18 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
           <div className="settings-row-text">
             <h2>How to Play</h2>
             <p className="status-text">Review the rules and tips for drawing shapes.</p>
+          </div>
+          <span className="settings-clickable-card-arrow" aria-hidden="true">
+            ›
+          </span>
+        </div>
+      </button>
+
+      <button type="button" className="card instructions-card settings-card settings-clickable-card" onClick={handleRateApp}>
+        <div className="settings-row">
+          <div className="settings-row-text">
+            <h2>Rate CYDI</h2>
+            <p className="status-text">Enjoying the game? Leave a rating on Google Play.</p>
           </div>
           <span className="settings-clickable-card-arrow" aria-hidden="true">
             ›

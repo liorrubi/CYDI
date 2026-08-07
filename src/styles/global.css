@@ -10,11 +10,25 @@
   --color-bg: #f4f5fb;
   --color-card: #ffffff;
   --color-border: #e3e5f0;
+  /* Page background behind everything, incl. the top-level <body> — kept apart from
+     --color-card because in light mode the body is pure white while cards float on
+     top of the slightly-tinted --color-bg; dark mode needs the same separation. */
+  --color-page-bg: #ffffff;
 
   --accent-blue: #7fa8d9;
   --accent-purple: #a794e8;
   --accent-green: #7cc9a0;
   --accent-orange: #eab088;
+
+  /* Darker-shade "text on tinted background" variants for the accent colors above
+     (badges/titles), kept separate from --color-primary-dark etc. because those also
+     serve as solid button fills with white text and can't move in the same direction. */
+  --color-primary-text: #4444d6;
+  --accent-blue-text: #2f5f96;
+  --accent-purple-text: #5b3fa6;
+  --accent-green-text: #1f7a52;
+  --accent-orange-text: #a15a1f;
+  --accent-gold-text: #b98600;
 
   --radius-sm: 8px;
   --radius-md: 14px;
@@ -26,6 +40,27 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-primary: #7b7bfa;
+  --color-accent: #ffc94d;
+  --color-success: #3ecb85;
+  --color-danger: #ff6b7a;
+  --color-text: #eef0fa;
+  --color-text-muted: #a4a8bd;
+  --color-bg: #14151f;
+  --color-card: #1e2030;
+  --color-border: #33354a;
+  --color-page-bg: #14151f;
+
+  --color-primary-text: #a3a0ff;
+  --accent-blue-text: #8fb8e8;
+  --accent-purple-text: #c3b0f2;
+  --accent-green-text: #6fd9a8;
+  --accent-orange-text: #f0a868;
+  --accent-gold-text: #ffd166;
 }
 
 * {
@@ -47,7 +82,7 @@ body {
 body {
   margin: 0;
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: #ffffff;
+  background: var(--color-page-bg);
   color: var(--color-text);
 }
 
@@ -445,7 +480,7 @@ body {
 
 .encourage-banner {
   background: rgba(91, 91, 247, 0.12);
-  color: var(--color-primary-dark);
+  color: var(--color-primary-text);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   font-weight: 600;
@@ -514,7 +549,7 @@ body {
 }
 
 .home-card.home-card-accent-blue h2 {
-  color: #2f5f96;
+  color: var(--accent-blue-text);
 }
 
 .home-card.home-card-accent-purple {
@@ -522,7 +557,7 @@ body {
 }
 
 .home-card.home-card-accent-purple h2 {
-  color: #5b3fa6;
+  color: var(--accent-purple-text);
 }
 
 .home-card.home-card-featured {
@@ -536,7 +571,7 @@ body {
 }
 
 .home-card.home-card-accent-green h2 {
-  color: #1f7a52;
+  color: var(--accent-green-text);
 }
 
 .home-card.home-card-accent-orange {
@@ -544,7 +579,7 @@ body {
 }
 
 .home-card.home-card-accent-orange h2 {
-  color: #a15a1f;
+  color: var(--accent-orange-text);
 }
 
 .home-card.home-card-accent-gold {
@@ -552,7 +587,7 @@ body {
 }
 
 .home-card.home-card-accent-gold h2 {
-  color: #b98600;
+  color: var(--accent-gold-text);
 }
 
 .btn {
@@ -2390,7 +2425,7 @@ body {
   margin-top: 4px;
   font-size: 11px;
   font-weight: 700;
-  color: var(--color-primary-dark);
+  color: var(--color-primary-text);
   background: rgba(91, 91, 247, 0.1);
   padding: 2px 8px;
   border-radius: 999px;
@@ -2746,7 +2781,7 @@ body {
   position: fixed;
   transform: translate(-50%, 0);
   max-width: 260px;
-  background: #ffffff;
+  background: var(--color-card);
   color: var(--color-text);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
@@ -2839,23 +2874,23 @@ body {
 }
 
 .onboarding-accent-primary .onboarding-title {
-  color: var(--color-primary-dark);
+  color: var(--color-primary-text);
 }
 
 .onboarding-accent-purple .onboarding-title {
-  color: #5b3fa6;
+  color: var(--accent-purple-text);
 }
 
 .onboarding-accent-orange .onboarding-title {
-  color: #a15a1f;
+  color: var(--accent-orange-text);
 }
 
 .onboarding-accent-green .onboarding-title {
-  color: #1f7a52;
+  color: var(--accent-green-text);
 }
 
 .onboarding-accent-gold .onboarding-title {
-  color: #b98600;
+  color: var(--accent-gold-text);
 }
 
 .onboarding-skip,

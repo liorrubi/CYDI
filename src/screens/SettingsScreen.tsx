@@ -8,6 +8,7 @@ import { APP_BUILD, APP_BUILD_TIME, APP_VERSION, DIFFICULTY_LEVELS, passScoreFor
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { playChipSound } from "../engine/soundEngine";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
+import { getThemeMode, setThemeMode } from "../services/themeStore";
 import { isUnlockEverythingActive, setUnlockEverything } from "../services/unlockOverrideStore";
 import { exportSaveCode, importSaveCode } from "../services/saveTransfer";
 import { getPlayerId } from "../services/playerProfileStore";
@@ -41,6 +42,7 @@ type SettingsScreenProps = {
 
 export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const [difficulty, setDifficultyState] = useState(() => getDifficulty());
+  const [themeMode, setThemeModeState] = useState(() => getThemeMode());
   const [allUnlocked, setAllUnlockedState] = useState(() => isUnlockEverythingActive());
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
   const [password, setPassword] = useState("");
@@ -99,6 +101,12 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
     playChipSound();
     setDifficulty(level);
     setDifficultyState(level);
+  }
+
+  function handleSelectTheme(mode: "light" | "dark") {
+    playChipSound();
+    setThemeMode(mode);
+    setThemeModeState(mode);
   }
 
   function handleOpenLockPrompt() {
@@ -194,6 +202,29 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
             <p className="status-text">Turn game sound effects on or off.</p>
           </div>
           <SoundToggleButton />
+        </div>
+      </div>
+
+      <div className="card instructions-card settings-card">
+        <h2>Appearance</h2>
+        <p className="status-text">Choose a light or dark look for the app.</p>
+        <div className="difficulty-picker-options">
+          <button
+            type="button"
+            className={themeMode === "light" ? "difficulty-chip difficulty-chip-selected" : "difficulty-chip"}
+            onClick={() => handleSelectTheme("light")}
+            aria-pressed={themeMode === "light"}
+          >
+            {themeMode === "light" ? "✓ " : ""}☀️ Light
+          </button>
+          <button
+            type="button"
+            className={themeMode === "dark" ? "difficulty-chip difficulty-chip-selected" : "difficulty-chip"}
+            onClick={() => handleSelectTheme("dark")}
+            aria-pressed={themeMode === "dark"}
+          >
+            {themeMode === "dark" ? "✓ " : ""}🌙 Dark
+          </button>
         </div>
       </div>
 

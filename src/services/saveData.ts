@@ -2,10 +2,12 @@ import {
   DEFAULT_DIFFICULTY,
   DEFAULT_PEN_COLOR,
   DEFAULT_PEN_SKIN,
+  DEFAULT_THEME_MODE,
   type ChestTierId,
   type DifficultyLevel,
   type PenColorId,
   type PenSkinId,
+  type ThemeMode,
 } from "../app/constants";
 import type { Challenge } from "../types/Challenge";
 
@@ -71,6 +73,7 @@ export type SaveData = {
     selectedPenSkin: PenSkinId;
     difficulty: DifficultyLevel;
     soundEnabled: boolean;
+    themeMode: ThemeMode;
   };
 };
 
@@ -114,6 +117,7 @@ export function createDefaultSaveData(): SaveData {
       selectedPenSkin: DEFAULT_PEN_SKIN,
       difficulty: DEFAULT_DIFFICULTY,
       soundEnabled: true,
+      themeMode: DEFAULT_THEME_MODE,
     },
   };
 }

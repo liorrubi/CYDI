@@ -5,6 +5,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/global.css'
+import { applyThemeMode, getThemeMode } from './services/themeStore'
+
+// Stamp the saved theme onto <html> before anything renders, so there's no
+// flash of the wrong theme on load.
+applyThemeMode(getThemeMode())
 
 const root = createRoot(document.getElementById('root')!)
 

@@ -196,6 +196,10 @@ export const DIFFICULTY_LEVELS: { id: DifficultyLevel; icon: string; name: strin
 
 export const DEFAULT_DIFFICULTY: DifficultyLevel = "skilled";
 
+export type ThemeMode = "light" | "dark";
+
+export const DEFAULT_THEME_MODE: ThemeMode = "light";
+
 export function passScoreForDifficulty(level: DifficultyLevel): number {
   return DIFFICULTY_LEVELS.find((d) => d.id === level)?.passScore ?? SHAPE_CHALLENGE_PASS_SCORE;
 }

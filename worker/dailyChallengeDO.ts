@@ -26,6 +26,26 @@ const MAX_SUBMISSIONS_PER_EPISODE = 300;
 
 type LeaderboardEntry = { playerId: string; playerName: string; score: number; achievedAt: number };
 
+/**
+ * What actually goes out over the wire for a leaderboard row. `playerId` is a permanent,
+ * client-generated identifier - previously sent to EVERY caller for EVERY row via
+ * publicEpisode()/handleHistory(), unauthenticated, which made it possible to link a given
+ * player's presence across episodes purely from public API responses. Nothing in the game
+ * actually needs another player's raw id: the only thing the UI does with it is decide
+ * whether a row is "you" (see DailyLeaderboardTable), which this computes server-side per
+ * requester instead - so a caller only ever learns "is this row mine", never anyone's id.
+ */
+type PublicLeaderboardEntry = { playerName: string; score: number; achievedAt: number; isYou: boolean };
+
+function redactEntries(entries: LeaderboardEntry[], requestingPlayerId: string | null): PublicLeaderboardEntry[] {
+  return entries.map((e) => ({
+    playerName: e.playerName,
+    score: e.score,
+    achievedAt: e.achievedAt,
+    isYou: requestingPlayerId !== null && e.playerId === requestingPlayerId,
+  }));
+}
+
 type Episode = {
   id: number;
   shapeId: string;
@@ -219,7 +239,7 @@ export class DailyChallengeDO {
     return current;
   }
 
-  private publicEpisode(episode: Episode, yourBest: number | null) {
+  private publicEpisode(episode: Episode, yourBest: number | null, requestingPlayerId: string | null) {
     return {
       id: episode.id,
       shapeId: episode.shapeId,
@@ -227,7 +247,7 @@ export class DailyChallengeDO {
       dateKey: episode.dateKey,
       startedAt: episode.startedAt,
       status: episode.status,
-      topEntries: episode.topEntries ?? [],
+      topEntries: redactEntries(episode.topEntries ?? [], requestingPlayerId),
       yourBest,
     };
   }
@@ -235,16 +255,20 @@ export class DailyChallengeDO {
   private async handleCurrent(playerId: string | null): Promise<Response> {
     const current = await this.loadCurrent();
     const yourBest = playerId ? (await this.getBoardEntry(current.id, playerId))?.bestScore ?? null : null;
-    return json(this.publicEpisode(current, yourBest));
+    return json(this.publicEpisode(current, yourBest, playerId));
   }
 
-  private async handleHistory(limit: number): Promise<Response> {
+  private async handleHistory(limit: number, requestingPlayerId: string | null): Promise<Response> {
     // Loading current first applies any pending lazy rollover, so a freshly-ended
     // episode shows up in the history list immediately rather than only after
     // the next unrelated /current request happens to trigger the rollover.
     await this.loadCurrent();
     const history = (await this.state.storage.get<HistoryEntry[]>("historyIndex")) ?? [];
-    return json({ episodes: history.slice(0, limit) });
+    const redacted = history.slice(0, limit).map((entry) => ({
+      ...entry,
+      topEntries: redactEntries(entry.topEntries, requestingPlayerId),
+    }));
+    return json({ episodes: redacted });
   }
 
   private async handleEpisode(id: number, playerId: string | null): Promise<Response> {
@@ -252,7 +276,7 @@ export class DailyChallengeDO {
     const episode = id === current.id ? current : await this.state.storage.get<Episode>(`episode:${id}`);
     if (!episode) return json({ error: "not found" }, 404);
     const yourBest = playerId ? (await this.getBoardEntry(episode.id, playerId))?.bestScore ?? null : null;
-    return json(this.publicEpisode(episode, yourBest));
+    return json(this.publicEpisode(episode, yourBest, playerId));
   }
 
   /**
@@ -343,7 +367,7 @@ export class DailyChallengeDO {
       yourBest,
       youWon,
       episodeId: targetEpisode.id,
-      current: this.publicEpisode(freshCurrent, currentYourBest),
+      current: this.publicEpisode(freshCurrent, currentYourBest, playerId),
     });
   }
 
@@ -387,7 +411,7 @@ export class DailyChallengeDO {
 
     if (url.pathname === "/history" && request.method === "GET") {
       const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 20));
-      return this.handleHistory(limit);
+      return this.handleHistory(limit, playerId);
     }
 
     const episodeMatch = url.pathname.match(/^\/episode\/(\d+)$/);

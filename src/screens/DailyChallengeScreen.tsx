@@ -439,7 +439,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
         </div>
       )}
       {isLive && shareFeedback && <p className="status-text">{shareFeedback}</p>}
-      <DailyLeaderboardTable entries={episode.topEntries} highlightPlayerId={playerId} />
+      <DailyLeaderboardTable entries={episode.topEntries} />
       {showDrawingTutorial && <DrawingTutorialOverlay onDismiss={dismissDrawingTutorial} />}
     </div>
   );

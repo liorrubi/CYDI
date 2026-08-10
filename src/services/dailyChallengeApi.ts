@@ -2,8 +2,12 @@ import { apiFetch } from "./nativeApi";
 
 const REQUEST_TIMEOUT_MS = 4000;
 
-/** One row of the Top 10 board. There's no separate "winner" field anywhere - the winner of an episode is always entries[0]. */
-export type DailyLeaderboardEntry = { playerId: string; playerName: string; score: number; achievedAt: number };
+/**
+ * One row of the Top 10 board. There's no separate "winner" field anywhere - the winner of
+ * an episode is always entries[0]. No raw player id here on purpose - the Worker never sends
+ * one for any row; `isYou` is computed server-side per requester instead (see dailyChallengeDO.ts).
+ */
+export type DailyLeaderboardEntry = { playerName: string; score: number; achievedAt: number; isYou: boolean };
 
 export type DailyEpisode = {
   id: number;

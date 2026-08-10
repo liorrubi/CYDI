@@ -97,7 +97,7 @@ export default function DailyChallengeHistoryScreen({ onNavigate }: DailyChallen
                   ) : (
                     <ul className="daily-history-prizes">
                       {entry.topEntries.map((winner, index) => (
-                        <li key={winner.playerId}>
+                        <li key={index}>
                           {MEDALS[index]} {winner.playerName} - {winner.score}% (+{DAILY_CHALLENGE_PRIZE_COINS[index]} 🪙)
                         </li>
                       ))}

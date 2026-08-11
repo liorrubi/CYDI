@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.29.0 - 2026-08-11
+
+**Rewarded ads are now shippable, but ship dark.** This build is the first that
+can actually serve a rewarded ad: `AD_FLAGS.master` and `AD_FLAGS.formats.rewarded`
+are both on, and the production rewarded ad unit resolves from
+`VITE_ADMOB_REWARDED_ANDROID`. Nothing serves yet - the remote kill switch
+(`/api/config/ads`) is the only remaining gate, it is fail-closed, and it has no
+published config at all, so every installed build stays dark until someone
+publishes `{ "enabled": true }`. That is the point: launching (and re-killing)
+rewarded ads no longer needs a new build or a store review. Every other ad format
+is still off at build time. No change to the reward flow, the math-exercise
+fallback, or anything a player sees today.
+
+**Ad content capped at Teen.** CYDI is a 13+ title on Google Play with no in-app
+age gate, so `AdMob.initialize()` now passes `maxAdContentRating: Teen`. The newer
+`AgeRestrictedTreatment.TEEN` signal was evaluated and deliberately skipped: it
+only exists in Google Mobile Ads SDK 25.x while the Capacitor plugin pins 24.9.x,
+and a major SDK upgrade plus a native override of the plugin wasn't worth it for
+that one flag. The deprecated TFCD/TFUA tags are not used.
+
 ## 0.28.0 - 2026-08-07
 
 **Dark Mode.** A Light/Dark toggle in Settings now applies across the whole

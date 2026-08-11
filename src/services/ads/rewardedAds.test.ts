@@ -71,9 +71,12 @@ afterEach(() => {
 
 // --- Feature flags ---------------------------------------------------------------
 
-test("shipped flags are all off - ads are prepared but not enabled", () => {
-  assert.equal(AD_FLAGS.master, false);
+test("shipped flags enable rewarded only - every other format stays off", () => {
+  assert.equal(AD_FLAGS.master, true);
+  assert.equal(AD_FLAGS.formats.rewarded, true);
+  assert.equal(isAdFormatEnabled("rewarded"), true);
   for (const format of ALL_FORMATS) {
+    if (format === "rewarded") continue;
     assert.equal(AD_FLAGS.formats[format], false);
     assert.equal(isAdFormatEnabled(format), false);
   }
@@ -102,12 +105,20 @@ test("rewarded flag off blocks rewarded ads in the service, with no SDK calls", 
   assert.deepEqual(spy.calls, [], "no adapter method may run while the format is disabled");
 });
 
-test("with shipped flags (all off) nothing reaches the SDK", async () => {
+// The shipped-configuration counterpart to "remote-gate blocking is checked before the
+// adapter" below: that one proves the gate's behavior with synthetic flags, this one
+// proves the REAL AD_FLAGS (master + rewarded both on) plus the fail-closed remote gate
+// the app registers when no remote config is published - i.e. exactly what an installed
+// AAB does today. Neither preload nor show may touch the SDK: no adapter.initialize(),
+// no load, no show.
+test("with shipped flags (rewarded on) and the remote switch off, nothing reaches the SDK", async () => {
+  registerRemoteAdsGate(() => false);
   const spy = makeSpyAdapter(async () => ({ type: "coins", amount: 5 }));
+  assert.equal(isAdFormatEnabled("rewarded"), true, "the build must be rewarded-capable for this to prove anything");
+  assert.equal(isRewardedAdAvailable(), false);
   await preloadRewardedAd(PLACEMENT);
-  const result = await showRewardedAd(PLACEMENT);
-  assert.equal(result.status, "unavailable");
-  assert.deepEqual(spy.calls, []);
+  assert.deepEqual(await showRewardedAd(PLACEMENT), { status: "unavailable", reason: "ads_disabled" });
+  assert.deepEqual(spy.calls, [], "no adapter method may run while the remote kill switch is off");
 });
 
 // --- Placements -------------------------------------------------------------------

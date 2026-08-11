@@ -21,16 +21,22 @@ export type AdFeatureFlags = {
 };
 
 /**
- * Ads are being PREPARED but not launched yet - everything stays `false` until
- * placements/rewards are decided. While a format is off (or master is off), the
- * ad service never initializes an SDK or issues a single ad request for it, and
- * every public call resolves instantly as "unavailable". Launching later =
- * flipping `master` plus the formats you want, here only.
+ * `master` and `rewarded` are both on, so a shipped build is fully capable of serving
+ * rewarded ads - but it still serves NOTHING until the remote kill switch
+ * (remoteKillSwitch.ts) says so. That switch is a separate, independent, fail-closed
+ * gate: it defaults to off and currently has no published config at all, so every
+ * build stays dark until someone publishes `{ enabled: true }`. That is the whole
+ * point of this combination - launching (and re-killing) rewarded ads needs no new
+ * build. Every other format is still off here and needs a build to change.
+ *
+ * While a format is off - or master is off, or the remote switch is off - the ad
+ * service never initializes an SDK or issues a single ad request for it, and every
+ * public call resolves instantly as "unavailable".
  */
 export const AD_FLAGS: AdFeatureFlags = {
-  master: false,
+  master: true,
   formats: {
-    rewarded: false,
+    rewarded: true,
     rewardedInterstitial: false,
     interstitial: false,
     banner: false,
@@ -45,8 +51,8 @@ let activeFlags: AdFeatureFlags = AD_FLAGS;
  * A format serves ads only when BOTH the master switch and its own flag are on -
  * UNLESS this is an internal-test-ads build, which bypasses AD_FLAGS entirely and
  * only ever turns "rewarded" on (the one format this integration exercises). This
- * never touches AD_FLAGS.master itself, which stays hardcoded false for every real
- * production build regardless of this branch.
+ * never touches AD_FLAGS itself, so a production build's per-format flags decide
+ * production behavior regardless of this branch.
  */
 export function isAdFormatEnabled(format: AdFormat, flags: AdFeatureFlags = activeFlags): boolean {
   if (isInternalTestAdsMode()) return format === "rewarded";

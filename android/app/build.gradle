@@ -78,9 +78,14 @@ android {
         // override, signed with the Play keystore, for Closed Testing. 12 = next
         // release candidate, APP_VERSION bumped to 0.28.0 - adds Dark Mode, Rate
         // CYDI (Settings), first-time drawing-controls tutorial, and the Shop pen
-        // price UI tweak; no DevTools, signed with the Play keystore.
-        versionCode 12
-        versionName "0.28.0"
+        // price UI tweak; no DevTools, signed with the Play keystore. 13 = 0.29.0,
+        // the first rewarded-ads-capable build: AD_FLAGS master + rewarded are on and
+        // the production rewarded ad unit resolves, but the fail-closed remote kill
+        // switch has no published config, so it ships dark. Bumped off 12 rather than
+        // reusing it because a signed 0.28.0 AAB with versionCode 12 already exists
+        // locally and may already be on Play, which would permanently block re-upload.
+        versionCode 13
+        versionName "0.29.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

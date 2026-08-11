@@ -31,7 +31,7 @@ export async function initializeNativeAds(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
 
   try {
-    const { AdMob } = await import("@capacitor-community/admob");
+    const { AdMob, MaxAdContentRating } = await import("@capacitor-community/admob");
 
     const [consentState] = await Promise.all([initializeConsent(AdMob), refreshRemoteAdsKillSwitch()]);
     registerAdConsentGate(() => getConsentState().canRequestAds);
@@ -41,7 +41,12 @@ export async function initializeNativeAds(): Promise<void> {
     if (!isRemoteAdsEnabled()) return;
 
     const testing = isAdTestingEnvironment();
-    await AdMob.initialize({ initializeForTesting: testing });
+    // CYDI is a 13+ title on Google Play with no in-app age gate, so ad content is
+    // capped at Teen. The newer AgeRestrictedTreatment.TEEN would be the stricter
+    // signal, but it only exists in Google Mobile Ads SDK 25.x while this plugin
+    // pins 24.9.+, and it isn't worth a major SDK upgrade plus a native override of
+    // the plugin on its own. The deprecated TFCD/TFUA tags are deliberately not used.
+    await AdMob.initialize({ initializeForTesting: testing, maxAdContentRating: MaxAdContentRating.Teen });
     registerAdAdapter(createAdMobAdapter(AdMob, { testing }));
   } catch {
     // No adapter ends up registered; every rewarded-ad call resolves "unavailable"

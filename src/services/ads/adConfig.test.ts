@@ -27,10 +27,19 @@ afterEach(() => {
   _setAdFlagsForTests();
 });
 
-test("production path is untouched: AD_FLAGS.master stays false, no format is enabled", () => {
+// master and rewarded are both intentionally on: the shipped build must be capable of
+// serving rewarded ads so the remote kill switch alone can launch them, with no new
+// build. What keeps ads off is that switch (fail-closed, nothing published), not these
+// flags - see the remote-gate tests in rewardedAds.test.ts. Every OTHER format staying
+// off is still a build-time invariant, and that is what this test locks down.
+test("rewarded is the only format the build can serve; all others stay off", () => {
   _setAdsInternalTestModeForTests(false);
-  assert.equal(AD_FLAGS.master, false);
-  for (const format of ALL_FORMATS) assert.equal(isAdFormatEnabled(format), false);
+  assert.equal(AD_FLAGS.master, true);
+  assert.equal(isAdFormatEnabled("rewarded"), true);
+  for (const format of ALL_FORMATS) {
+    if (format === "rewarded") continue;
+    assert.equal(isAdFormatEnabled(format), false, `${format} must stay off`);
+  }
 });
 
 test("internal-test-ads mode forces rewarded on, every other format stays off, and AD_FLAGS is never mutated", () => {
@@ -43,7 +52,7 @@ test("internal-test-ads mode forces rewarded on, every other format stays off, a
   }
   // The shipped flags object itself must be byte-for-byte unchanged.
   assert.equal(AD_FLAGS.master, masterBefore);
-  assert.equal(AD_FLAGS.master, false);
+  assert.equal(AD_FLAGS.master, true);
 });
 
 test("internal-test-ads mode resolves Google's official test app ID and ad unit IDs, never real ones", () => {

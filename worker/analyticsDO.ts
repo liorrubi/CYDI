@@ -27,6 +27,17 @@ type EventCounters = {
   byGameType?: Record<string, number>;
   byCategory?: Record<string, number>;
   byContentKey?: Record<string, number>;
+  // shape_completed only - running sum of starRating and count of passed===true,
+  // so the report can derive an average score / pass rate. Absent on day buckets
+  // recorded before this field existed; merges treat that as 0, not "unknown".
+  sumStarRating?: number;
+  passedCount?: number;
+  // Count of shape_completed events that actually contributed to sumStarRating/
+  // passedCount - NOT the same as `total`, which also includes events recorded
+  // before these fields existed. Using `total` as the averaging denominator would
+  // silently dilute averageScore/passRate with pre-existing history that has no
+  // matching numerator. This is the correct denominator for both.
+  scoredCount?: number;
 };
 
 type AllCounters = Partial<Record<AnalyticsEventName, EventCounters>>;
@@ -77,7 +88,19 @@ function incrementEvent(counters: AllCounters, eventName: AnalyticsEventName, pa
       updated.byContentKey = incrementKeyMap(existing.byContentKey, contentKey);
     }
   }
+  if (eventName === "shape_completed") {
+    const starRating = params.starRating as number;
+    const passed = params.passed as boolean;
+    updated.sumStarRating = (existing.sumStarRating ?? 0) + starRating;
+    updated.passedCount = (existing.passedCount ?? 0) + (passed ? 1 : 0);
+    updated.scoredCount = (existing.scoredCount ?? 0) + 1;
+  }
   return { ...counters, [eventName]: updated };
+}
+
+function mergeOptionalSum(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined && b === undefined) return undefined;
+  return (a ?? 0) + (b ?? 0);
 }
 
 function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
@@ -91,6 +114,9 @@ function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byGameType: mergeKeyMaps(ae.byGameType, be.byGameType),
       byCategory: mergeKeyMaps(ae.byCategory, be.byCategory),
       byContentKey: mergeKeyMaps(ae.byContentKey, be.byContentKey),
+      sumStarRating: mergeOptionalSum(ae.sumStarRating, be.sumStarRating),
+      passedCount: mergeOptionalSum(ae.passedCount, be.passedCount),
+      scoredCount: mergeOptionalSum(ae.scoredCount, be.scoredCount),
     };
   }
   return merged;
@@ -185,6 +211,16 @@ export class AnalyticsDO {
     const gameStarted = counts.game_started?.total ?? 0;
     const gameCompleted = counts.game_completed?.total ?? 0;
     const resultShared = counts.result_shared?.total ?? 0;
+    const shapeCompleted = counts.shape_completed;
+    // Denominator is scoredCount, NOT total - total also includes shape_completed
+    // events recorded before sumStarRating/passedCount existed, which would
+    // otherwise dilute both rates with history that has no matching numerator.
+    const scoredCount = shapeCompleted?.scoredCount ?? 0;
+    // null (not 0) when there's nothing to average yet, or when this range predates
+    // scoredCount existing - lets the admin page show "no data" instead of a
+    // misleading 0.
+    const averageScore = scoredCount > 0 && shapeCompleted ? (shapeCompleted.sumStarRating ?? 0) / scoredCount : null;
+    const passRate = scoredCount > 0 && shapeCompleted ? (shapeCompleted.passedCount ?? 0) / scoredCount : null;
     return {
       period,
       startDate,
@@ -192,6 +228,8 @@ export class AnalyticsDO {
       counts,
       completionRate: gameStarted > 0 ? gameCompleted / gameStarted : 0,
       shareRate: gameCompleted > 0 ? resultShared / gameCompleted : 0,
+      averageScore,
+      passRate,
     };
   }
 

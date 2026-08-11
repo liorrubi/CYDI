@@ -123,6 +123,10 @@
           <div class="table-scroll" id="gametype-table"></div>
           <p class="footnote">Custom Challenges are aggregate counts only — no per-challenge identifiers are ever recorded for them.</p>
         </div>
+        <div class="card" id="adsummary-card" hidden>
+          <h3 class="section-title">Rewarded ads</h3>
+          <div id="adsummary-body"></div>
+        </div>
         <div class="card" id="topcontent-card" hidden>
           <details id="topcontent-details">
             <summary>Top content (built-in only)</summary>
@@ -277,6 +281,8 @@
           { label: "Completion rate", value: fmtRate(report.completionRate), accent: true },
           { label: "Share rate", value: fmtRate(report.shareRate), accent: true },
           { label: "Shapes completed", value: fmtInt(total("shape_completed")) },
+          { label: "Average score", value: report.averageScore == null ? "—" : report.averageScore.toFixed(2) + " / 5" },
+          { label: "Pass rate", value: report.passRate == null ? "—" : fmtRate(report.passRate) },
           { label: "Purchases", value: fmtInt(total("purchase_completed")) },
           { label: "Mega cards unlocked", value: fmtInt(total("mega_card_unlocked")) },
           { label: "Artist link clicks", value: fmtInt(total("artist_pack_link_clicked")) },
@@ -463,6 +469,38 @@
         byId("topcontent-card").hidden = false;
       }
 
+      function renderAdSummary(report) {
+        var counts = report.counts || {};
+        function total(name) {
+          return (counts[name] && counts[name].total) || 0;
+        }
+        var items = [
+          { label: "Ads requested", value: total("rewarded_ad_requested") },
+          { label: "Ads shown", value: total("rewarded_ad_shown") },
+          { label: "Ads completed (reward granted)", value: total("rewarded_ad_completed") },
+          { label: "“Double it?” offers shown", value: total("reward_offer_shown") },
+          { label: "Offers completed via ad", value: total("reward_ad_completed") },
+        ];
+        var grandTotal = items.reduce(function (sum, item) {
+          return sum + item.value;
+        }, 0);
+        var body = byId("adsummary-body");
+        clear(body);
+        if (grandTotal === 0) {
+          body.appendChild(el("p", "status-line", "No rewarded-ad activity in this period."));
+        } else {
+          var grid = el("div", "kpi-grid");
+          items.forEach(function (item) {
+            var box = el("div", "kpi");
+            box.appendChild(el("div", "kpi-value", fmtInt(item.value)));
+            box.appendChild(el("div", "kpi-label", item.label));
+            grid.appendChild(box);
+          });
+          body.appendChild(grid);
+        }
+        byId("adsummary-card").hidden = false;
+      }
+
       function renderRangeLabel(tab, report) {
         var label;
         if (tab.id === "alltime") {
@@ -489,6 +527,7 @@
         byId("kpi-card").hidden = true;
         byId("charts-card").hidden = true;
         byId("gametype-card").hidden = true;
+        byId("adsummary-card").hidden = true;
         byId("topcontent-card").hidden = true;
       }
 
@@ -511,6 +550,7 @@
             renderKpis(report);
             renderCharts(report);
             renderGameTypes(report);
+            renderAdSummary(report);
             renderTopContent(report);
           })
           .catch(function (err) {

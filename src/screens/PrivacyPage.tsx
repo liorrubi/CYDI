@@ -32,7 +32,7 @@ export default function PrivacyPage() {
         <p className="status-text privacy-dates">
           <strong>Effective date:</strong> 14 July 2026
           <br />
-          <strong>Last updated:</strong> 23 July 2026
+          <strong>Last updated:</strong> 11 August 2026
         </p>
 
         <p className="status-text">
@@ -127,6 +127,10 @@ export default function PrivacyPage() {
         </p>
         <ul className="status-text privacy-list">
           <li>Your IP address.</li>
+          <li>
+            Your approximate (general) location, which is derived from your IP address rather than from device
+            location services. CYDI requests no location permission and never collects precise or GPS location.
+          </li>
           <li>Your product interactions, including app launches, taps, and video views.</li>
           <li>Diagnostic and performance information.</li>
           <li>Device and account identifiers, including your Advertising ID and App Set ID.</li>

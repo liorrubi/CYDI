@@ -55,6 +55,18 @@ export type EventParamsMap = {
   rewarded_ad_dismissed: { placement: RewardedAdPlacement };
   rewarded_ad_unavailable: { placement: RewardedAdPlacement; reason: AdFailureReason };
   rewarded_ad_failed: { placement: RewardedAdPlacement; reason: AdFailureReason };
+  // Reward-offer UX funnel (emitted only by src/components/DoubleCoinsOffer.tsx).
+  // A DIFFERENT, coarser layer than the rewarded_ad_* SDK-lifecycle events above:
+  // these track what the PLAYER did/saw in the offer banner, not what the SDK did.
+  // Funnel: offer_shown -> (skipped | ad_started -> (ad_completed | ad_failed)) ->
+  // fallback_used (whenever the math-quiz path is entered, whether chosen directly
+  // or reached after ad_failed). `placement` only - no PII, no new identifiers.
+  reward_offer_shown: { placement: RewardedAdPlacement };
+  reward_ad_started: { placement: RewardedAdPlacement };
+  reward_ad_completed: { placement: RewardedAdPlacement };
+  reward_ad_failed: { placement: RewardedAdPlacement };
+  reward_skipped: { placement: RewardedAdPlacement };
+  reward_fallback_used: { placement: RewardedAdPlacement };
 };
 
 export type AnalyticsEventName = keyof EventParamsMap;
@@ -76,6 +88,12 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "rewarded_ad_dismissed",
   "rewarded_ad_unavailable",
   "rewarded_ad_failed",
+  "reward_offer_shown",
+  "reward_ad_started",
+  "reward_ad_completed",
+  "reward_ad_failed",
+  "reward_skipped",
+  "reward_fallback_used",
 ];
 
 export type ValidationResult<E extends AnalyticsEventName> =
@@ -186,10 +204,27 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   rewarded_ad_dismissed: (p) => validateAdEvent(p),
   rewarded_ad_unavailable: (p) => validateAdFailureEvent(p),
   rewarded_ad_failed: (p) => validateAdFailureEvent(p),
+  reward_offer_shown: (p) => validateAdEvent(p),
+  reward_ad_started: (p) => validateAdEvent(p),
+  reward_ad_completed: (p) => validateAdEvent(p),
+  reward_ad_failed: (p) => validateAdEvent(p),
+  reward_skipped: (p) => validateAdEvent(p),
+  reward_fallback_used: (p) => validateAdEvent(p),
 };
 
 function validateAdEvent<
-  E extends "rewarded_ad_requested" | "rewarded_ad_loaded" | "rewarded_ad_shown" | "rewarded_ad_completed" | "rewarded_ad_dismissed",
+  E extends
+    | "rewarded_ad_requested"
+    | "rewarded_ad_loaded"
+    | "rewarded_ad_shown"
+    | "rewarded_ad_completed"
+    | "rewarded_ad_dismissed"
+    | "reward_offer_shown"
+    | "reward_ad_started"
+    | "reward_ad_completed"
+    | "reward_ad_failed"
+    | "reward_skipped"
+    | "reward_fallback_used",
 >(p: unknown): ValidationResult<E> {
   if (!isRecord(p) || !hasExactKeys(p, ["placement"])) return { valid: false };
   if (!isRewardedAdPlacement(p.placement)) return { valid: false };

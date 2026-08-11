@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { playChipSound, playCoinsSound, playDangerSound, playSelectSound, playSuccessSound } from "../engine/soundEngine";
 import { MAX_PAID_CHEST_DOUBLES_PER_DAY } from "../services/chestDoubleLimitStore";
 import { isRewardedAdAvailable, preloadRewardedAd, showRewardedAd, type RewardedAdPlacement } from "../services/ads";
+import { trackEvent } from "../services/analytics";
 import { resolveAdOutcome } from "./doubleOfferAdFlow";
 
 type DoubleCoinsOfferProps = {
@@ -54,23 +55,27 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
 
   useEffect(() => {
     preloadRewardedAd(placement);
+    trackEvent("reward_offer_shown", { placement });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleSkip() {
     playSelectSound();
+    trackEvent("reward_skipped", { placement });
     onResolved(amount, anchorRef.current);
   }
 
   function handleChooseDouble() {
     playChipSound();
     onDoubleAttempted?.();
+    trackEvent("reward_fallback_used", { placement });
     setPhase("quiz");
   }
 
   async function handleWatchAd() {
     playChipSound();
     onDoubleAttempted?.();
+    trackEvent("reward_ad_started", { placement });
     setAdPending(true);
     const result = await showRewardedAd(placement);
     setAdPending(false);
@@ -80,6 +85,10 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       playCoinsSound();
       setGrantSource("ad");
       setWasCorrect(true);
+      trackEvent("reward_ad_completed", { placement });
+    } else {
+      trackEvent("reward_ad_failed", { placement });
+      if (outcome.nextPhase === "quiz") trackEvent("reward_fallback_used", { placement });
     }
     setPhase(outcome.nextPhase);
   }

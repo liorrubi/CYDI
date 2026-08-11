@@ -13,6 +13,7 @@ import {
   type CatalogRelease,
   type ReleaseIndexEntry,
 } from "../src/content/catalogSchema";
+import { ADS_CONFIG_KV_KEY, isValidRemoteAdsConfig, parseRemoteAdsConfig } from "../src/services/ads/remoteAdsConfigSchema";
 
 export { AnalyticsDO, DailyChallengeDO };
 
@@ -335,6 +336,42 @@ async function handleCatalogDelete(request: Request, env: Env): Promise<Response
   return jsonNoStore({ ok: true });
 }
 
+// ---------- Ads remote kill switch ----------
+// Deliberately tiny and separate from the content-catalog concept above - it's one
+// boolean, not a release. Reuses CONTENT_KV and CONTENT_ADMIN_TOKEN as an operational
+// convenience (same "small trusted config" boundary as catalog publishing), rather
+// than provisioning a dedicated KV namespace/secret for a single flag. GET is public
+// so the client's fail-closed fetch (src/services/ads/remoteKillSwitch.ts) always has
+// something to read; PUT is owner-only, same auth as catalog publishing.
+
+async function handleAdsConfigGet(env: Env): Promise<Response> {
+  const raw = await env.CONTENT_KV.get(ADS_CONFIG_KV_KEY);
+  if (raw === null) return json({ error: "no ads config published" }, 404);
+  const config = parseRemoteAdsConfig(raw);
+  if (!config) return json({ error: "stored ads config failed validation" }, 500);
+  return new Response(JSON.stringify(config), {
+    headers: {
+      "content-type": "application/json",
+      // Short: this is a kill switch - a change must reach clients within a
+      // minute or two, not the 5-minute cache the content catalog uses.
+      "cache-control": "public, max-age=60",
+    },
+  });
+}
+
+async function handleAdsConfigPut(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    return jsonNoStore({ error: "invalid json" }, 400);
+  }
+  if (!isValidRemoteAdsConfig(parsed)) return jsonNoStore({ error: "body must be exactly { enabled: boolean }" }, 400);
+  await env.CONTENT_KV.put(ADS_CONFIG_KV_KEY, JSON.stringify(parsed));
+  return jsonNoStore({ ok: true, enabled: parsed.enabled });
+}
+
 // Every /api/daily/* request is forwarded to the single global DailyChallengeDO
 // instance, which processes requests one at a time (see dailyChallengeDO.ts).
 function forwardToDailyDO(request: Request, env: Env, path: string): Promise<Response> {
@@ -383,6 +420,11 @@ export default {
     }
     if (url.pathname === "/api/content/activate" && request.method === "POST") return handleCatalogActivate(request, env);
     if (url.pathname === "/api/content/releases" && request.method === "GET") return handleReleasesList(request, env);
+
+    if (url.pathname === "/api/config/ads") {
+      if (request.method === "GET") return handleAdsConfigGet(env);
+      if (request.method === "PUT") return handleAdsConfigPut(request, env);
+    }
 
     if (url.pathname === "/api/daily/current" && request.method === "GET") return forwardToDailyDO(request, env, "/current");
     if (url.pathname === "/api/daily/submit" && request.method === "POST") return forwardToDailyDO(request, env, "/submit");

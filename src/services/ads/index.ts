@@ -24,6 +24,7 @@ export type {
 export {
   registerAdAdapter,
   registerAdConsentGate,
+  registerRemoteAdsGate,
   subscribeRewardedAdEvents,
   isRewardedAdAvailable,
   isRewardedAdReady,
@@ -40,6 +41,8 @@ export {
   type ConsentState,
   type ConsentPluginLike,
 } from "./consent";
+export { isRemoteAdsEnabled, refreshRemoteAdsKillSwitch } from "./remoteKillSwitch";
+export { isValidRemoteAdsConfig, type RemoteAdsConfig } from "./remoteAdsConfigSchema";
 
 // Analytics bridge is wired the moment the ad system is first imported, so no
 // call site ever has to remember it. Idempotent (named subscription).

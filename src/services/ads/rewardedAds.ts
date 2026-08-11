@@ -68,6 +68,18 @@ export function registerAdConsentGate(gate: () => boolean): void {
   consentGate = gate;
 }
 
+// Same test-compatibility rationale as consentGate above: defaults to "allowed"
+// so the pre-existing test suite keeps passing unmodified. The real native
+// bootstrap (nativeAdsSetup.ts) always registers a live gate reading the actual
+// remote kill switch (remoteKillSwitch.ts) before anything ad-side can run, so
+// the effective default in the shipped app is fail-closed, not this fallback.
+let remoteAdsGate: () => boolean = () => true;
+
+/** Register the live remote-kill-switch check every rewarded-ad request must pass, alongside the consent gate. */
+export function registerRemoteAdsGate(gate: () => boolean): void {
+  remoteAdsGate = gate;
+}
+
 // --- Lifecycle event fan-out ---------------------------------------------------
 
 // Keyed by listener name for the same HMR/StrictMode replace-not-duplicate
@@ -146,6 +158,7 @@ let lastLoadFailure: AdFailureReason = "load_failed";
 /** The blocking reason right now, or null when a rewarded ad could actually be served. */
 function rewardedBlockReason(): AdFailureReason | null {
   if (!isAdFormatEnabled("rewarded")) return "ads_disabled";
+  if (!remoteAdsGate()) return "ads_disabled";
   if (!consentGate()) return "consent_blocked";
   if (activeAdapter() === undefined) return "no_adapter";
   if (getAdUnitId("rewarded", detectPlatform()) === "") return "not_configured";
@@ -268,6 +281,7 @@ export function _resetRewardedAdsForTests(): void {
   loadTimeoutMs = LOAD_TIMEOUT_MS;
   showTimeoutMs = SHOW_TIMEOUT_MS;
   consentGate = () => true;
+  remoteAdsGate = () => true;
 }
 
 /** Test-only: shrink timeouts so timeout paths run in milliseconds. */

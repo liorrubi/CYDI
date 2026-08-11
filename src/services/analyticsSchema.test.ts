@@ -131,6 +131,40 @@ test("app_open rejects any param at all", () => {
   assert.equal(validateEventParams("app_open", { anything: "here" }).valid, false);
 });
 
+// --- Reward-offer funnel events (DoubleCoinsOffer) - same {placement}-only shape,
+// --- a separate namespace from the rewarded_ad_* SDK-lifecycle events. ---
+
+test("all 6 reward_* offer-funnel events accept {placement} for every real placement", () => {
+  const events = [
+    "reward_offer_shown",
+    "reward_ad_started",
+    "reward_ad_completed",
+    "reward_ad_failed",
+    "reward_skipped",
+    "reward_fallback_used",
+  ] as const;
+  for (const eventName of events) {
+    assert.equal(validateEventParams(eventName, { placement: "shape_challenge_double_reward" }).valid, true, eventName);
+  }
+});
+
+test("reward_* events reject an unknown placement, a missing placement, and an extra key", () => {
+  assert.equal(validateEventParams("reward_offer_shown", { placement: "hacked" }).valid, false);
+  assert.equal(validateEventParams("reward_ad_started", {}).valid, false);
+  assert.equal(
+    validateEventParams("reward_ad_completed", { placement: "daily_retry", extra: 1 }).valid,
+    false,
+  );
+});
+
+test("reward_* events are a distinct namespace from rewarded_ad_* (no accidental collision)", () => {
+  assert.equal(isAnalyticsEventName("reward_ad_completed"), true);
+  assert.equal(isAnalyticsEventName("rewarded_ad_completed"), true);
+  // Each validates independently under its own schema entry.
+  assert.equal(validateEventParams("reward_ad_completed", { placement: "daily_retry" }).valid, true);
+  assert.equal(validateEventParams("rewarded_ad_completed", { placement: "daily_retry" }).valid, true);
+});
+
 // --- Weekly range helper: Israel week = Sunday-Saturday ---
 
 test("weeklyRange always returns a Sunday..Saturday span containing the input date", () => {

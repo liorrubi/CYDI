@@ -1,26 +1,31 @@
 // Native-only bootstrap for the ad system. Fail-closed and strictly ordered so
-// NOTHING ad-related happens before consent is confirmed:
+// NOTHING ad-related happens before consent AND the remote kill switch both clear:
 //   1. Web build -> return immediately, before even importing the AdMob SDK. This
 //      is what guarantees zero ad requests (and zero SDK bytes ever executed) on
 //      the web build.
-//   2. Run UMP consent (consent.ts). Register the live consent gate regardless of
-//      the result - wiring the gate is not itself an ad request.
-//   3. Only if consent says canRequestAds === true: initialize the AdMob SDK and
-//      register the adapter. If consent is not sufficient, stop here - no SDK
-//      init, no adapter, no preload, no ad request. (A later consent grant via
-//      Settings' privacy-options button updates the gate for future requests, but
-//      does not retroactively initialize the SDK mid-session - relaunching the app
-//      re-runs this sequence, which is standard AdMob/UMP integration practice.)
+//   2. Run UMP consent (consent.ts) and fetch the remote kill switch
+//      (remoteKillSwitch.ts) in parallel - independent checks, same "every app
+//      open" cadence. Register both live gates regardless of the result - wiring
+//      a gate is not itself an ad request.
+//   3. Only if consent says canRequestAds === true AND the remote flag says
+//      enabled === true: initialize the AdMob SDK and register the adapter.
+//      Otherwise stop here - no SDK init, no adapter, no preload, no ad request.
+//      (A later consent grant via Settings' privacy-options button, or a later
+//      remote-flag flip, updates its gate for future requests, but neither
+//      retroactively initializes the SDK mid-session - relaunching the app
+//      re-runs this whole sequence.)
 //
-// Never throws: any failure here (plugin missing, consent flow exception, SDK
-// init exception) must leave the game exactly as if this module were never
-// called - the ad service already treats "no adapter" as a normal "unavailable".
+// Never throws: any failure here (plugin missing, consent flow exception, remote
+// fetch failure, SDK init exception) must leave the game exactly as if this
+// module were never called - the ad service already treats "no adapter" as a
+// normal "unavailable".
 
 import { Capacitor } from "@capacitor/core";
 import { createAdMobAdapter } from "./admobAdapter";
 import { isAdTestingEnvironment } from "./adConfig";
-import { registerAdAdapter, registerAdConsentGate } from "./rewardedAds";
+import { registerAdAdapter, registerAdConsentGate, registerRemoteAdsGate } from "./rewardedAds";
 import { getConsentState, initializeConsent } from "./consent";
+import { isRemoteAdsEnabled, refreshRemoteAdsKillSwitch } from "./remoteKillSwitch";
 
 export async function initializeNativeAds(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
@@ -28,10 +33,12 @@ export async function initializeNativeAds(): Promise<void> {
   try {
     const { AdMob } = await import("@capacitor-community/admob");
 
-    const consentState = await initializeConsent(AdMob);
+    const [consentState] = await Promise.all([initializeConsent(AdMob), refreshRemoteAdsKillSwitch()]);
     registerAdConsentGate(() => getConsentState().canRequestAds);
+    registerRemoteAdsGate(isRemoteAdsEnabled);
 
     if (!consentState.canRequestAds) return;
+    if (!isRemoteAdsEnabled()) return;
 
     const testing = isAdTestingEnvironment();
     await AdMob.initialize({ initializeForTesting: testing });

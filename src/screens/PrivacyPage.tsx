@@ -112,13 +112,20 @@ export default function PrivacyPage() {
         <h3>Advertising (Android app)</h3>
         <p className="status-text">
           The CYDI Android app may offer optional rewarded advertisements through the Google AdMob / Google Mobile
-          Ads SDK (a “watch an ad to double your reward” feature). Rewarded ads are always optional — you can earn
-          the same reward instead by solving a short math question.
+          Ads SDK. After you earn coins, the app may offer you the chance to double them by watching a rewarded
+          video ad. Watching is entirely your choice: you can always decline and simply continue with the coins you
+          have already earned, which are yours either way.
+        </p>
+        <p className="status-text">
+          A reward that depends on an ad is granted only when an ad is actually served and completed in the way
+          Google’s ads SDK itself confirms as a completed reward. If an ad cannot be requested, cannot be shown, or
+          does not reach that confirmation, no ad-based reward is granted. Declining, closing, or skipping an ad
+          never reduces the coins you have already earned.
         </p>
         <p className="status-text">
           Before requesting an ad, the app checks with Google’s User Messaging Platform (UMP) whether ads may be
           requested and shows a consent form where one is required. If ads may not be requested, no ad is requested
-          and the non-ad option is used.
+          and no ad-based reward is granted.
         </p>
         <p className="status-text">
           When ads are served, the Google Mobile Ads SDK may automatically collect and share the following for the

@@ -84,8 +84,14 @@ android {
         // switch has no published config, so it ships dark. Bumped off 12 rather than
         // reusing it because a signed 0.28.0 AAB with versionCode 12 already exists
         // locally and may already be on Play, which would permanently block re-upload.
-        versionCode 13
-        versionName "0.29.0"
+        // 13 shipped to Production and the remote switch is now published as
+        // { enabled: true }, so rewarded ads are live. 14 = 0.30.0: removes the
+        // math-quiz route to the ×2 coin reward from user-facing builds (watching a
+        // rewarded ad is now the only way to earn it, and a capped daily chest double is
+        // charged only once an ad has actually granted it), plus the matching privacy
+        // policy wording.
+        versionCode 14
+        versionName "0.30.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

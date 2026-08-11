@@ -3,7 +3,7 @@ import { playChipSound, playCoinsSound, playDangerSound, playSelectSound, playSu
 import { MAX_PAID_CHEST_DOUBLES_PER_DAY } from "../services/chestDoubleLimitStore";
 import { isRewardedAdAvailable, preloadRewardedAd, showRewardedAd, type RewardedAdPlacement } from "../services/ads";
 import { trackEvent } from "../services/analytics";
-import { resolveAdOutcome } from "./doubleOfferAdFlow";
+import { consumesDoubleAttempt, resolveAdOutcome } from "./doubleOfferAdFlow";
 
 type DoubleCoinsOfferProps = {
   /** The coin reward already earned and guaranteed - doubling only ever adds on top of this, never takes it away. */
@@ -14,7 +14,7 @@ type DoubleCoinsOfferProps = {
   placement: RewardedAdPlacement;
   /** Remaining doubles under a daily cap (paid shop chests) - omit for unlimited (Daily Chest, challenge rewards). When 0, the double option is hidden and only the base reward can be collected. */
   remainingDoubles?: number;
-  /** Called once, when the player commits to attempting a double (before the ad/quiz) - lets the caller record the attempt against its daily cap. Only meaningful alongside `remainingDoubles`. */
+  /** Called once, ONLY after a double has actually been granted, so the caller can count it against its daily cap. A failed, blocked, unavailable or early-closed ad grants nothing and must therefore cost nothing. Only meaningful alongside `remainingDoubles`. */
   onDoubleAttempted?: () => void;
 };
 
@@ -26,16 +26,40 @@ function randomFactor(): number {
 }
 
 /**
+ * Is the math-quiz route to the double available? DEV BUILDS ONLY - it exists purely so
+ * the doubling flow can be exercised on the web dev server, where no rewarded ad can
+ * ever be served. It must never be reachable in a build that goes to users.
+ *
+ * Deliberately FAIL-CLOSED, unlike the isDevBuild() helpers in adConfig.ts /
+ * analytics.ts / artistPackLibrary.ts: those treat an unknown environment as dev so
+ * dev-only content stays visible to the Node test runner, but here an unknown
+ * environment must resolve to "no math route" - the safe direction for something whose
+ * whole purpose is that players cannot reach it. `import.meta.env.DEV` is statically
+ * replaced at build time, so this is false in every production bundle.
+ */
+function isMathFallbackEnabled(): boolean {
+  try {
+    return import.meta.env.DEV === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Flashing "double or nothing" offer shown after a coin reward. Skipping keeps the
- * original amount unchanged. Choosing to double offers a rewarded video ad as the
- * primary option whenever one is actually available (ads enabled, consent obtained,
- * native platform, ad configured) - watching it through to the SDK's own reward
- * callback doubles the coins. The math quiz (a random multiplication-table question,
- * product always <= 100) is a PERMANENT fallback: it stays offered even when an ad is
- * available, and is the only option when one isn't (ads disabled, no consent, on the
- * web, or the ad fails/times out/is dismissed). A wrong quiz answer keeps the original
- * amount - the player can never end up with less than they already earned, and a
- * dismissed or failed ad never blocks gameplay.
+ * original amount unchanged.
+ *
+ * Watching a rewarded video ad is the ONLY way a player can double their coins: the
+ * grant happens exclusively on the SDK's own confirmed reward callback (see
+ * doubleOfferAdFlow.ts), never merely on opening the ad. When no ad can be served (ads
+ * disabled, no consent, on the web, not configured) or an ad attempt fails, the player
+ * is NOT granted the double and is NOT offered any substitute - they just see a short
+ * "ads aren't available right now" note and keep the coins they already earned. Nothing
+ * here can ever leave a player with less than they earned.
+ *
+ * The math quiz is retained as a DEV-ONLY route (isMathFallbackEnabled) so the doubling
+ * flow stays testable on the dev server, where a rewarded ad is never available. It is
+ * absent from every user-facing build.
  *
  * Callers with a daily cap (paid shop chests) pass `remainingDoubles` and `onDoubleAttempted`;
  * once the cap is hit, the double option disappears and only the base reward remains
@@ -48,10 +72,17 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   const [wasCorrect, setWasCorrect] = useState(false);
   const [grantSource, setGrantSource] = useState<GrantSource>("quiz");
   const [adPending, setAdPending] = useState(false);
+  const [adUnavailableNotice, setAdUnavailableNotice] = useState(false);
   const anchorRef = useRef<HTMLDivElement | null>(null);
 
   const doublingAvailable = remainingDoubles === undefined || remainingDoubles > 0;
   const adAvailable = isRewardedAdAvailable();
+  const mathFallbackEnabled = isMathFallbackEnabled();
+  // Whether any route to the double actually exists right now - drives the headline so
+  // we never ask "double it?" when nothing can deliver it.
+  const canAttemptDouble = doublingAvailable && (adAvailable || mathFallbackEnabled);
+  // No ad, and no dev math route: say so quietly rather than offering a dead button.
+  const showNoAdNotice = doublingAvailable && (adUnavailableNotice || (!adAvailable && !mathFallbackEnabled));
 
   useEffect(() => {
     preloadRewardedAd(placement);
@@ -67,19 +98,21 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
 
   function handleChooseDouble() {
     playChipSound();
-    onDoubleAttempted?.();
     trackEvent("reward_fallback_used", { placement });
     setPhase("quiz");
   }
 
   async function handleWatchAd() {
     playChipSound();
-    onDoubleAttempted?.();
     trackEvent("reward_ad_started", { placement });
     setAdPending(true);
     const result = await showRewardedAd(placement);
     setAdPending(false);
     const outcome = resolveAdOutcome(result);
+    // Charged against the daily cap only once the ad has actually granted the double -
+    // an unavailable, blocked, failed, timed-out or early-closed ad costs the player
+    // nothing and leaves them free to try again.
+    if (consumesDoubleAttempt(outcome)) onDoubleAttempted?.();
     if (outcome.grantSource === "ad") {
       playSuccessSound();
       playCoinsSound();
@@ -88,7 +121,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       trackEvent("reward_ad_completed", { placement });
     } else {
       trackEvent("reward_ad_failed", { placement });
-      if (outcome.nextPhase === "quiz") trackEvent("reward_fallback_used", { placement });
+      // No substitute route is offered - just a quiet notice back on the offer screen.
+      if (outcome.adUnavailable) setAdUnavailableNotice(true);
     }
     setPhase(outcome.nextPhase);
   }
@@ -100,6 +134,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     setWasCorrect(correct);
     setPhase("feedback");
     if (correct) {
+      // Same rule as the ad route: the cap is charged only when a double is granted.
+      onDoubleAttempted?.();
       playSuccessSound();
       playCoinsSound();
     } else {
@@ -116,26 +152,28 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       {phase === "offer" && (
         <>
           <p className="double-offer-headline">
-            {doublingAvailable ? `🪙 +${amount} coins - double it?` : `🪙 +${amount} coins`}
+            {canAttemptDouble ? `🪙 +${amount} coins - double it?` : `🪙 +${amount} coins`}
           </p>
           {remainingDoubles !== undefined && (
             <p className="double-offer-limit-note">
               Chest doubles left today: {remainingDoubles}/{MAX_PAID_CHEST_DOUBLES_PER_DAY}
             </p>
           )}
+          {showNoAdNotice && <p className="double-offer-limit-note">Ads aren’t available right now.</p>}
           <div className="double-offer-buttons">
             {doublingAvailable && adAvailable && (
               <button type="button" className="double-offer-double double-offer-ad-primary" onClick={handleWatchAd} disabled={adPending}>
                 {adPending ? "Loading ad…" : "🎬 Watch Ad to Double"}
               </button>
             )}
-            {doublingAvailable && (
+            {/* Dev-only: never rendered in a user-facing build (see isMathFallbackEnabled). */}
+            {doublingAvailable && mathFallbackEnabled && (
               <button type="button" className="double-offer-double" onClick={handleChooseDouble} disabled={adPending}>
-                {adAvailable ? "🧮 Solve Math Instead" : "✖️2 Double"}
+                🧮 Solve Math (dev)
               </button>
             )}
             <button type="button" className="double-offer-skip" onClick={handleSkip} disabled={adPending}>
-              {doublingAvailable ? "Skip" : "Continue"}
+              {canAttemptDouble ? "Skip" : "Continue"}
             </button>
           </div>
         </>

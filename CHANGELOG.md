@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.30.0 - 2026-08-11
+
+**Watching a rewarded ad is now the only way to double a coin reward.** The
+"solve a short multiplication question instead" route to the same ×2 coins is
+gone from user-facing builds. The double is granted exclusively when Google's
+ads SDK confirms a completed reward - never on merely opening an ad. When no ad
+can be served, or an ad fails, times out or is closed early, nothing is granted
+and nothing is offered in its place: the offer banner shows a short "Ads aren't
+available right now." note and the player simply keeps the coins they had already
+earned. Coins already earned are never at risk. The quiz itself survives only
+behind a dev-build flag so the flow stays testable on the dev server, where a
+rewarded ad can never be served.
+
+**A capped daily chest double is now charged only when it is actually granted.**
+Previously the daily allowance was spent the moment the player tapped "Watch Ad",
+so an ad that was unavailable, consent-blocked, failed to load, errored, timed
+out or was closed early cost them an attempt and gave nothing back. The counter
+now advances only on a confirmed ad reward, matching both the "Chest doubles left
+today" label and the store's own "marks one double as used" contract.
+
+**Privacy policy wording updated** to describe ad-based rewards in terms of what
+the ads SDK confirms, rather than referring to a non-ad alternative.
+
 ## 0.29.0 - 2026-08-11
 
 **Rewarded ads are now shippable, but ship dark.** This build is the first that

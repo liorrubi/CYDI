@@ -58,9 +58,10 @@ export type EventParamsMap = {
   // Reward-offer UX funnel (emitted only by src/components/DoubleCoinsOffer.tsx).
   // A DIFFERENT, coarser layer than the rewarded_ad_* SDK-lifecycle events above:
   // these track what the PLAYER did/saw in the offer banner, not what the SDK did.
-  // Funnel: offer_shown -> (skipped | ad_started -> (ad_completed | ad_failed)) ->
-  // fallback_used (whenever the math-quiz path is entered, whether chosen directly
-  // or reached after ad_failed). `placement` only - no PII, no new identifiers.
+  // Funnel: offer_shown -> (skipped | ad_started -> (ad_completed | ad_failed)).
+  // fallback_used is retained for historical data only: the math-quiz path it tracked
+  // is now dev-only, so user-facing builds never emit it. `placement` only - no PII,
+  // no new identifiers.
   reward_offer_shown: { placement: RewardedAdPlacement };
   reward_ad_started: { placement: RewardedAdPlacement };
   reward_ad_completed: { placement: RewardedAdPlacement };

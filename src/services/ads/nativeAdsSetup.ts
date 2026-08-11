@@ -49,7 +49,8 @@ export async function initializeNativeAds(): Promise<void> {
     await AdMob.initialize({ initializeForTesting: testing, maxAdContentRating: MaxAdContentRating.Teen });
     registerAdAdapter(createAdMobAdapter(AdMob, { testing }));
   } catch {
-    // No adapter ends up registered; every rewarded-ad call resolves "unavailable"
-    // and the math-exercise fallback in DoubleCoinsOffer is unaffected.
+    // No adapter ends up registered; every rewarded-ad call resolves "unavailable",
+    // so DoubleCoinsOffer shows its "ads aren't available right now" note and grants
+    // nothing beyond the coins the player already earned.
   }
 }

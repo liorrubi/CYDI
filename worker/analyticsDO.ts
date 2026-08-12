@@ -5,9 +5,11 @@ import {
   isValidDateKey,
   israelDateKey,
   monthlyRange,
+  normalizeAnalyticsPlatform,
   validateEventParams,
   weeklyRange,
   type AnalyticsEventName,
+  type AnalyticsPlatform,
 } from "../src/services/analyticsSchema";
 
 // Single global Durable Object instance (see worker/index.ts's forwardToAnalyticsDO,
@@ -24,6 +26,11 @@ const MAX_RANGE_DAYS = 31;
 
 type EventCounters = {
   total: number;
+  // Android app vs. website, for every event (the split is only ever 3-4 keys, so
+  // unlike byContentKey it costs nothing to keep on all of them). Absent on day
+  // buckets recorded before this field existed; events from app versions that
+  // predate it land under "unknown" rather than being guessed into a platform.
+  byPlatform?: Record<string, number>;
   byGameType?: Record<string, number>;
   byCategory?: Record<string, number>;
   byContentKey?: Record<string, number>;
@@ -72,9 +79,15 @@ function mergeKeyMaps(a: Record<string, number> | undefined, b: Record<string, n
 }
 
 /** Only game_started/game_completed/result_shared (the funnel the report computes rates from) get gameType/category/contentKey breakdowns - no breakdown is invented for the other 5 events, which just get a total. */
-function incrementEvent(counters: AllCounters, eventName: AnalyticsEventName, params: Record<string, unknown>): AllCounters {
+function incrementEvent(
+  counters: AllCounters,
+  eventName: AnalyticsEventName,
+  params: Record<string, unknown>,
+  platform: AnalyticsPlatform,
+): AllCounters {
   const existing = counters[eventName] ?? { total: 0 };
   const updated: EventCounters = { ...existing, total: existing.total + 1 };
+  updated.byPlatform = incrementKeyMap(existing.byPlatform, platform);
   if (FUNNEL_EVENTS.has(eventName)) {
     const gameType = params.gameType as string;
     const category = params.category as string;
@@ -111,6 +124,7 @@ function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
     const ae = merged[eventName] ?? { total: 0 };
     merged[eventName] = {
       total: ae.total + be.total,
+      byPlatform: mergeKeyMaps(ae.byPlatform, be.byPlatform),
       byGameType: mergeKeyMaps(ae.byGameType, be.byGameType),
       byCategory: mergeKeyMaps(ae.byCategory, be.byCategory),
       byContentKey: mergeKeyMaps(ae.byContentKey, be.byContentKey),
@@ -160,6 +174,9 @@ export class AnalyticsDO {
     const validated = validateEventParams(eventName, b?.params);
     if (!validated.valid) return json({ error: "invalid params" }, 400);
     const params = validated.params as unknown as Record<string, unknown>;
+    // Coerced to a closed set, and never rejected: an event from an older client
+    // that sends no platform is still recorded, just as "unknown".
+    const platform = normalizeAnalyticsPlatform(b?.platform);
 
     const dateKey = israelDateKey(Date.now());
     const [alltime, dayCounters] = await Promise.all([
@@ -167,8 +184,8 @@ export class AnalyticsDO {
       this.state.storage.get<AllCounters>(this.dayStorageKey(dateKey)),
     ]);
 
-    const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params);
-    const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params);
+    const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params, platform);
+    const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params, platform);
 
     await Promise.all([
       this.state.storage.put("alltime", updatedAlltime),

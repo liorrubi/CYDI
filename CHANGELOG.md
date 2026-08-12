@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.31.0 - 2026-08-12
+
+**Sharing on Android now opens the real Android share sheet.** Every share point
+in the game - the header link button, a daily challenge, a Champion boast, a
+custom challenge, a result, an Artist Pack drawing - now opens the native
+Sharesheet through Capacitor's Share plugin, so a player can send straight to
+WhatsApp, Gmail, Messages or anywhere else instead of only copying a link. The
+distinction that matters is preserved: shares whose link *is* the content (a
+`/c/<id>` challenge or result link) keep pointing at that link, while shares that
+are just "come play CYDI" point at the Play Store listing so a recipient lands on
+the install page. The website keeps its existing behaviour and its playcydi.com
+links, unchanged.
+
+**The website now has a direct link to the Android app.** A "Get the Android
+App" card on the home screen opens the Play Store listing. It is hidden inside
+the Android app itself, where it would be meaningless.
+
+**In-app update notifications on Android.** When a newer version is available on
+Google Play, the app offers Play's own flexible-update prompt once at startup.
+It never blocks play: declining costs nothing, the download runs in the
+background, and an update that finished downloading is installed at the next
+launch rather than interrupting a drawing. Anywhere Play can't answer - the
+website, a side-loaded build - it does nothing at all.
+
+**Analytics can now tell the Android app apart from the website**, as a coarse
+build-type label only. No new data about players is collected.
+
 ## 0.30.0 - 2026-08-11
 
 **Watching a rewarded ad is now the only way to double a coin reward.** The

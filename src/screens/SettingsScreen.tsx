@@ -25,7 +25,25 @@ import {
 } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
-const LOCK_MANAGEMENT_PASSWORD = "1111";
+// SHA-256 of the Lock Management password, so the password itself is not a
+// plain-text string sitting in the shipped bundle (a `grep` of the APK/site used
+// to reveal it instantly). This ONLY removes the trivial-discovery path: the
+// unlock is still a client-side localStorage flag, so this is obfuscation of a
+// convenience toggle, not a real security boundary.
+const LOCK_MANAGEMENT_PASSWORD_SHA256 = "33f63fdca6471586f33c5c4ea3c79b10ccf1ae6281410815a66a45f3457c6192";
+
+async function matchesLockPassword(input: string): Promise<boolean> {
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    return hex === LOCK_MANAGEMENT_PASSWORD_SHA256;
+  } catch {
+    // crypto.subtle needs a secure context. Every real surface has one (https on
+    // the site, https://localhost in the WebView, localhost in dev), so this is
+    // only reachable in an exotic environment - fail closed rather than unlock.
+    return false;
+  }
+}
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.playcydi.cydi";
 
 function formatBuildTime(iso: string): string {
@@ -125,9 +143,9 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
     setPasswordPromptOpen(false);
   }
 
-  function handleConfirmLockPassword(event: FormEvent) {
+  async function handleConfirmLockPassword(event: FormEvent) {
     event.preventDefault();
-    if (password !== LOCK_MANAGEMENT_PASSWORD) {
+    if (!(await matchesLockPassword(password))) {
       setPasswordError("Incorrect password.");
       return;
     }

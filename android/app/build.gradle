@@ -89,9 +89,16 @@ android {
         // math-quiz route to the ×2 coin reward from user-facing builds (watching a
         // rewarded ad is now the only way to earn it, and a capped daily chest double is
         // charged only once an ad has actually granted it), plus the matching privacy
-        // policy wording.
-        versionCode 14
-        versionName "0.30.0"
+        // policy wording. 15 = next Play release: the Android Sharesheet for every
+        // share point (@capacitor/share) with generic shares pointing at the Play
+        // listing, the website's "Get the Android App" CTA, and the App-vs-web
+        // platform split in analytics. NOTE: the MIUI test device now carries a
+        // debug-signed verification build at versionCode 16 (used to verify the
+        // Sharesheet on real hardware), so a future DEVICE test build needs 17+.
+        // Play is unaffected - its highest upload is 14, so 15 is the next release.
+        // Ships as 0.31.0 (the public release before it is 0.30.0 / versionCode 14).
+        versionCode 15
+        versionName "0.31.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

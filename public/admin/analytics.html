@@ -123,6 +123,11 @@
           <div class="table-scroll" id="gametype-table"></div>
           <p class="footnote">Custom Challenges are aggregate counts only — no per-challenge identifiers are ever recorded for them.</p>
         </div>
+        <div class="card" id="platform-card" hidden>
+          <h3 class="section-title">App vs. web</h3>
+          <div class="table-scroll" id="platform-table"></div>
+          <p class="footnote">Coarse build type only (Android app / website). These totals start from the release that added the split, so they can be lower than the KPIs above, which also include earlier history that carries no platform at all. “Unknown” means an event that arrived without a platform — an older client still in the wild.</p>
+        </div>
         <div class="card" id="adsummary-card" hidden>
           <h3 class="section-title">Rewarded ads</h3>
           <div id="adsummary-body"></div>
@@ -437,6 +442,50 @@
         byId("gametype-card").hidden = false;
       }
 
+      var PLATFORM_LABELS = { android: "Android app", ios: "iOS app", web: "Website", unknown: "Unknown" };
+
+      function renderPlatforms(report) {
+        var counts = report.counts || {};
+        var opens = (counts.app_open && counts.app_open.byPlatform) || {};
+        var started = (counts.game_started && counts.game_started.byPlatform) || {};
+        var completed = (counts.game_completed && counts.game_completed.byPlatform) || {};
+        var shared = (counts.result_shared && counts.result_shared.byPlatform) || {};
+        var platforms = {};
+        [opens, started, completed, shared].forEach(function (map) {
+          Object.keys(map).forEach(function (p) {
+            platforms[p] = true;
+          });
+        });
+        var list = Object.keys(platforms).sort(function (a, b) {
+          return (started[b] || 0) - (started[a] || 0);
+        });
+        var container = byId("platform-table");
+        clear(container);
+        if (list.length === 0) {
+          container.appendChild(el("p", "status-line", "No platform data in this period."));
+        } else {
+          var rows = list.map(function (p) {
+            var s = started[p] || 0;
+            var c = completed[p] || 0;
+            return [PLATFORM_LABELS[p] || p, fmtInt(opens[p] || 0), fmtInt(s), fmtInt(c), fmtInt(shared[p] || 0), fmtRate(rateOf(c, s))];
+          });
+          container.appendChild(
+            makeTable(
+              [
+                { label: "Platform" },
+                { label: "Opens", num: true },
+                { label: "Started", num: true },
+                { label: "Completed", num: true },
+                { label: "Shared", num: true },
+                { label: "Completion", num: true },
+              ],
+              rows
+            )
+          );
+        }
+        byId("platform-card").hidden = false;
+      }
+
       function renderTopContent(report) {
         var counts = report.counts || {};
         var started = (counts.game_started && counts.game_started.byContentKey) || {};
@@ -527,6 +576,7 @@
         byId("kpi-card").hidden = true;
         byId("charts-card").hidden = true;
         byId("gametype-card").hidden = true;
+        byId("platform-card").hidden = true;
         byId("adsummary-card").hidden = true;
         byId("topcontent-card").hidden = true;
       }
@@ -550,6 +600,7 @@
             renderKpis(report);
             renderCharts(report);
             renderGameTypes(report);
+            renderPlatforms(report);
             renderAdSummary(report);
             renderTopContent(report);
           })

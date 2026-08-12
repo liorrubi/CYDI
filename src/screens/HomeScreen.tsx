@@ -13,6 +13,7 @@ import {
   toSpecialChallenge,
 } from "../app/routes";
 import { playSelectSound } from "../engine/soundEngine";
+import { isAndroidApp, PLAY_STORE_URL } from "../services/nativeShare";
 import type { Screen } from "../types/GameMode";
 
 type HomeScreenProps = {
@@ -23,6 +24,15 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   function handleSelect(screen: Screen) {
     playSelectSound();
     onNavigate(screen);
+  }
+
+  // Hidden inside the Android app itself, where "get the app" is meaningless -
+  // this is the website's install CTA only.
+  const showGetTheApp = !isAndroidApp();
+
+  function handleGetTheApp() {
+    playSelectSound();
+    window.open(PLAY_STORE_URL, "_blank", "noopener");
   }
 
   return (
@@ -74,6 +84,12 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           <h2>🪙 Shop</h2>
           <p>Spend your CYDI Coins</p>
         </button>
+        {showGetTheApp && (
+          <button type="button" className="card home-card home-card-accent-green" onClick={handleGetTheApp}>
+            <h2>📱 Get the Android App</h2>
+            <p>Play CYDI on your phone — free on Google Play</p>
+          </button>
+        )}
       </div>
     </div>
   );

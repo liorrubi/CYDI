@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateEventParams, weeklyRange, monthlyRange, isAnalyticsEventName } from "./analyticsSchema.ts";
+import { validateEventParams, weeklyRange, monthlyRange, isAnalyticsEventName, normalizeAnalyticsPlatform } from "./analyticsSchema.ts";
 import { sanitizeParams } from "./analytics.ts";
 
 // --- Each of the 8 events' real observed param shapes validates successfully ---
@@ -198,4 +198,28 @@ test("monthlyRange handles February in a leap year", () => {
 
 test("monthlyRange handles February in a non-leap year", () => {
   assert.deepEqual(monthlyRange("2026-02-10"), { startDate: "2026-02-01", endDate: "2026-02-28" });
+});
+
+// --- Platform split (Android app vs. website). It rides alongside `params`, so it must
+// --- never leak into a validated event's params, and must always coerce to a closed set. ---
+
+test("normalizeAnalyticsPlatform accepts only the real platform strings", () => {
+  assert.equal(normalizeAnalyticsPlatform("android"), "android");
+  assert.equal(normalizeAnalyticsPlatform("ios"), "ios");
+  assert.equal(normalizeAnalyticsPlatform("web"), "web");
+});
+
+test("normalizeAnalyticsPlatform coerces anything else to 'unknown' rather than trusting it", () => {
+  // An older client that predates the field, plus values a hostile body could send.
+  assert.equal(normalizeAnalyticsPlatform(undefined), "unknown");
+  assert.equal(normalizeAnalyticsPlatform(null), "unknown");
+  assert.equal(normalizeAnalyticsPlatform("Android"), "unknown");
+  assert.equal(normalizeAnalyticsPlatform("../../etc"), "unknown");
+  assert.equal(normalizeAnalyticsPlatform(42), "unknown");
+  assert.equal(normalizeAnalyticsPlatform({ platform: "web" }), "unknown");
+});
+
+test("a platform sent inside params is still rejected - it is a sibling of params, never a param", () => {
+  const result = validateEventParams("app_open", { platform: "android" });
+  assert.equal(result.valid, false);
 });

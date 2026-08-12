@@ -262,6 +262,27 @@ export function isAnalyticsEventName(value: unknown): value is AnalyticsEventNam
   return typeof value === "string" && (ANALYTICS_EVENT_NAMES as string[]).includes(value);
 }
 
+/**
+ * Which client surface an event came from - the Android app vs. the website.
+ * Deliberately sent as a sibling of `params` in the ingest body rather than as a
+ * param, so no per-event schema changes (and no risk of it colliding with the
+ * sanitizeParams denylist). Values are exactly Capacitor's `getPlatform()`
+ * strings; "unknown" covers app versions shipped before this field existed, so
+ * old data is never silently attributed to the wrong surface.
+ *
+ * This is a coarse build-type label, not a device or user identifier: it adds no
+ * new data collection, and every event stays an aggregate counter increment.
+ */
+export const ANALYTICS_PLATFORMS = ["android", "ios", "web"] as const;
+export type AnalyticsPlatform = (typeof ANALYTICS_PLATFORMS)[number] | "unknown";
+
+/** Closed-set coercion, so a malformed or hostile body can never inflate the platform counter with arbitrary keys. */
+export function normalizeAnalyticsPlatform(value: unknown): AnalyticsPlatform {
+  return typeof value === "string" && (ANALYTICS_PLATFORMS as readonly string[]).includes(value)
+    ? (value as AnalyticsPlatform)
+    : "unknown";
+}
+
 // --- Asia/Jerusalem date-range helpers, shared by ingestion (day bucket key) and the
 // --- admin report (daily/weekly/monthly range math). ---
 

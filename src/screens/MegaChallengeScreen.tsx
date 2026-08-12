@@ -46,7 +46,7 @@ import {
 } from "../services/megaChallengeStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
-import { shareOrCopy } from "../services/nativeShare";
+import { genericShareUrl, shareOrCopy } from "../services/nativeShare";
 import { trackEvent } from "../services/analytics";
 import { toAchievements, toHome, toInstructions, toMegaChallenge, toSettings, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
@@ -120,7 +120,9 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
     await shareOrCopy({
       title: CHAMPION_TITLE,
       text: CHAMPION_SHARE_TEXT,
-      url: location.origin,
+      // Play Store listing in the Android app, this site on web - the boast
+      // itself carries no link payload, only the champion message.
+      url: genericShareUrl(location.origin),
     });
   }
 

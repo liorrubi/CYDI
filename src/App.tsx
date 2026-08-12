@@ -40,6 +40,7 @@ import { decodeArtistResultHash, decodeChallengeHash, decodeResultHash, type Dec
 import { fetchSharedById } from "./services/shareApi";
 import { isDailyChallengeSharePath } from "./services/dailyChallengeShare";
 import { initializeNativeAds } from "./services/ads/nativeAdsSetup";
+import { maybePromptAppUpdate } from "./services/appUpdate";
 import type { Screen } from "./types/GameMode";
 
 /** Imports a shared challenge idempotently, keeping the recipient's own progress if they've already opened this link before - only `name`/`target` ever sync from the payload, never `createdAt`/`personalBest`/`attempts`. */
@@ -130,6 +131,12 @@ export default function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     initializeNativeAds();
+  }, []);
+
+  // Google Play flexible in-app update - asked once per cold start, Android app
+  // only, and a silent no-op anywhere Play can't answer. See appUpdate.ts.
+  useEffect(() => {
+    maybePromptAppUpdate();
   }, []);
 
   useEffect(() => {

@@ -8,6 +8,8 @@
 // unrelated to this file - it's a beacon script loaded in index.html that Cloudflare
 // auto-tracks on its own, with no custom-event API to plug into.
 
+import { Capacitor } from "@capacitor/core";
+
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
 import { apiFetch } from "./nativeApi";
 
@@ -138,7 +140,11 @@ const cloudflareAnalyticsProvider: AnalyticsProvider = {
       apiFetch("/api/analytics/event", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventName, params }),
+        // `platform` rides alongside params (never inside them) so the Worker can
+        // split Android-app usage from website usage without a per-event schema
+        // change. "android" | "ios" | "web" only - a coarse build-type label, not
+        // a device or user identifier.
+        body: JSON.stringify({ eventName, params, platform: Capacitor.getPlatform() }),
         keepalive: true,
       }).catch(() => {});
     } catch {

@@ -26,7 +26,7 @@ import { scoreAttempt } from "../engine/scoring";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins } from "../services/coinsStore";
 import { dailyChallengeShareUrl } from "../services/dailyChallengeShare";
-import { shareOrCopy } from "../services/nativeShare";
+import { genericShareUrl, shareOrCopy } from "../services/nativeShare";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
@@ -184,7 +184,12 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   }
 
   async function handleShare() {
-    const url = dailyChallengeShareUrl();
+    // Every daily link points at whatever challenge is live right now - there is
+    // no per-share payload to preserve, so in the Android app it becomes the
+    // Play Store listing (the /daily path isn't a registered App Link, and
+    // location.origin is the WebView's virtual origin there anyway). The invite
+    // text below is unchanged, so the "beat today's daily" framing survives.
+    const url = genericShareUrl(dailyChallengeShareUrl());
     const outcome = await shareOrCopy({
       title: "CYDI Daily Challenge",
       text: "Can you beat today's CYDI Daily Challenge? Draw it from memory - no peeking!",

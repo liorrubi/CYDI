@@ -5,7 +5,20 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // A request matching a real asset normally bypasses the Worker entirely, so
+    // "/" was served straight from dist/index.html and never reached the SEO
+    // <head>/copy rewriting in worker/index.ts.
+    //
+    // This list REPLACES the default routing rather than adding to it: any path
+    // not matched here is answered by the asset server alone (falling back to
+    // index.html per not_found_handling) and never invokes the Worker - a
+    // positive-only list would silently swallow /api/* the day someone forgot to
+    // add a route to it. So the rule is inverted: everything runs the Worker
+    // first, minus the purely static directories, which keep being served
+    // directly exactly as before (including /.well-known/assetlinks.json, which
+    // Android App Link verification depends on).
+    "run_worker_first": ["/*", "!/assets/*", "!/images/*", "!/admin/*", "!/.well-known/*", "!/favicon.svg", "!/app-ads.txt"]
   },
   "kv_namespaces": [
     {

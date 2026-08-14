@@ -14,6 +14,7 @@ import {
   type ReleaseIndexEntry,
 } from "../src/content/catalogSchema";
 import { ADS_CONFIG_KV_KEY, isValidRemoteAdsConfig, parseRemoteAdsConfig } from "../src/services/ads/remoteAdsConfigSchema";
+import { canonicalUrl, renderSeoSection, robotsTxt, seoPageForPath, sitemapXml, type SeoPage } from "./seoPages";
 
 export { AnalyticsDO, DailyChallengeDO };
 
@@ -156,6 +157,87 @@ async function handleShareLinkPage(id: string, request: Request, env: Env): Prom
       },
     })
     .transform(pageResponse);
+}
+
+// ---------- Web-only SEO (metadata + crawlable copy) ----------
+// Same HTMLRewriter approach as handleShareLinkPage above, for the homepage and
+// the SEO landing paths: real visitors get the identical HTML/JS bundle and the
+// identical game, only the <head> differs and a copy block is appended at the
+// very end of <body> - after the full-height #root, so the game still owns the
+// whole first screen. The Android app is untouched by construction: Capacitor
+// loads index.html from the APK and never fetches HTML through this Worker.
+
+async function handleSeoPage(page: SeoPage, request: Request, env: Env): Promise<Response> {
+  // The landing paths are served by the assets binding's SPA fallback
+  // (not_found_handling: single-page-application), so this returns the shell.
+  let shell = await env.ASSETS.fetch(request);
+  if (!shell.ok) {
+    // Defensive only: if a path ever stops falling back, serve the shell
+    // explicitly rather than turning a landing page into a 404.
+    shell = await env.ASSETS.fetch(new Request(new URL("/", request.url), request));
+    if (!shell.ok) return shell;
+  }
+
+  const canonical = canonicalUrl(page.path);
+
+  return new HTMLRewriter()
+    .on("title", {
+      element(el) {
+        el.setInnerContent(page.title);
+      },
+    })
+    .on('meta[property="og:title"]', {
+      element(el) {
+        el.setAttribute("content", page.title);
+      },
+    })
+    .on('meta[property="og:description"]', {
+      element(el) {
+        el.setAttribute("content", page.description);
+      },
+    })
+    .on('meta[name="twitter:title"]', {
+      element(el) {
+        el.setAttribute("content", page.title);
+      },
+    })
+    .on('meta[name="twitter:description"]', {
+      element(el) {
+        el.setAttribute("content", page.description);
+      },
+    })
+    .on("head", {
+      element(el) {
+        // The shell has no description/canonical/og:url of its own, so these are
+        // appended rather than rewritten - exactly one of each per page.
+        el.append(`<meta name="description" content="${escapeAttribute(page.description)}">`, { html: true });
+        el.append(`<link rel="canonical" href="${canonical}">`, { html: true });
+        el.append(`<meta property="og:url" content="${canonical}">`, { html: true });
+      },
+    })
+    .on("body", {
+      element(el) {
+        el.append(renderSeoSection(page), { html: true });
+      },
+    })
+    .transform(shell);
+}
+
+function escapeAttribute(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
+
+function textResponse(body: string, contentType: string): Response {
+  return new Response(body, {
+    headers: { "content-type": contentType, "cache-control": "public, max-age=3600" },
+  });
+}
+
+/** Copies a response so a header can be added - transform()/asset responses are not guaranteed mutable. */
+function withHeader(response: Response, name: string, value: string): Response {
+  const headers = new Headers(response.headers);
+  headers.set(name, value);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 // ---------- Content catalog (server-published shapes/categories) ----------
@@ -437,10 +519,21 @@ export default {
     if (url.pathname === "/api/analytics/event" && request.method === "POST") return forwardToAnalyticsDO(request, env, "/event");
     if (url.pathname === "/api/analytics/report" && request.method === "GET") return forwardToAnalyticsDO(request, env, "/report");
 
+    if (url.pathname === "/robots.txt" && request.method === "GET") return textResponse(robotsTxt(), "text/plain; charset=utf-8");
+    if (url.pathname === "/sitemap.xml" && request.method === "GET")
+      return textResponse(sitemapXml(), "application/xml; charset=utf-8");
+
     const shareLinkMatch = url.pathname.match(/^\/c\/([A-Za-z0-9]{4,12})$/);
     if (shareLinkMatch && request.method === "GET") {
+      // Share pages are per-player, thin, and near-duplicates of the SPA shell -
+      // kept out of the index so they can never compete with the real pages.
       const rewritten = await handleShareLinkPage(shareLinkMatch[1], request, env);
-      if (rewritten) return rewritten;
+      return withHeader(rewritten ?? (await env.ASSETS.fetch(request)), "x-robots-tag", "noindex");
+    }
+
+    if (request.method === "GET") {
+      const seoPage = seoPageForPath(url.pathname);
+      if (seoPage) return handleSeoPage(seoPage, request, env);
     }
 
     return env.ASSETS.fetch(request);

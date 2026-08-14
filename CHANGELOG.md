@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.32.0 - 2026-08-14
+
+**Search-engine landing pages for the website.** Google previously saw a page
+with a title of "CYDI", no description and no text at all - the whole game is
+drawn by JavaScript into an empty `<div>`. The homepage and three new URLs now
+serve real metadata and a short block of readable copy, so the game can actually
+be found by people searching for a drawing accuracy game:
+
+- `/drawing-accuracy-test` and `/draw-a-perfect-circle` open straight on the
+  Circle challenge.
+- `/draw-shapes-online` opens on the Shape Challenge map.
+- Each page has its own title, description, canonical URL, `<h1>`, ~200 words of
+  copy, links to the other pages, a "Play More Drawing Challenges" link and a
+  quiet Google Play line. Plus `/robots.txt` and `/sitemap.xml`.
+
+**The game still comes first.** All of that copy is appended after the
+full-height game container, so it sits below the first screen on every viewport:
+someone opening playcydi.com still lands directly in the game, exactly as before.
+
+This is a website-only change and the Android app is untouched by construction -
+the copy and metadata are injected by the Cloudflare Worker (`worker/seoPages.ts`),
+which Capacitor never talks to, since the app loads its HTML from inside the APK.
+Nothing was added to `public/`, so the APK is byte-identical. The one thing the
+landing pages ask of the app is which challenge to open, and that request is
+re-checked against the player's own unlock state before it is honoured
+(`resolveInitialSelection` in `ShapeChallengeScreen.tsx`) - it can never unlock a
+shape, pay coins or advance progression. Scoring, coins, progression, unlocks,
+achievements, analytics and ads are all unchanged.
+
+Note for future work: `wrangler.jsonc` now sets `assets.run_worker_first`,
+because a request for `/` was being answered by the asset server without ever
+reaching the Worker. That list *replaces* the default routing rather than adding
+to it, so it is written as "everything except the static directories" - a
+positive-only list silently swallows `/api/*` the moment a route is forgotten.
+
 ## 0.31.0 - 2026-08-12
 
 **Sharing on Android now opens the real Android share sheet.** Every share point

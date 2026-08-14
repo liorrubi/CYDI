@@ -24,7 +24,7 @@ import SharedArtistResultScreen from "./screens/SharedArtistResultScreen";
 import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import ArtistPackScreen from "./screens/ArtistPackScreen";
-import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toSharedArtistResult, toSharedResult } from "./app/routes";
+import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toShapeChallenge, toSharedArtistResult, toSharedResult } from "./app/routes";
 import { resolveIncomingAppLinkId, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
@@ -39,6 +39,7 @@ import { getChallenge, updateChallenge } from "./services/challengeStorage";
 import { decodeArtistResultHash, decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
 import { fetchSharedById } from "./services/shareApi";
 import { isDailyChallengeSharePath } from "./services/dailyChallengeShare";
+import type { LandingPage } from "./seo/landingPages";
 import { initializeNativeAds } from "./services/ads/nativeAdsSetup";
 import { maybePromptAppUpdate } from "./services/appUpdate";
 import type { Screen } from "./types/GameMode";
@@ -96,7 +97,15 @@ async function importSharedScreenFromShortId(id: string): Promise<Screen | null>
   return toSharedResult(shared.data);
 }
 
-export default function App() {
+type AppProps = {
+  /** Web-only: set by main.tsx when the URL is an SEO landing path, so the page
+   * opens on the challenge it describes instead of the home screen. Always
+   * undefined on Android (and on every non-landing web path), where every branch
+   * below is skipped and behaviour is unchanged. */
+  landing?: LandingPage;
+};
+
+export default function App({ landing }: AppProps) {
   const [screen, setScreen] = useState<Screen>(() => {
     const shared = importSharedScreenFromHash();
     if (shared) {
@@ -107,6 +116,9 @@ export default function App() {
       history.replaceState(null, "", "/" + location.search);
       return toDailyChallenge();
     }
+    // Landing pages keep their URL (unlike the share paths above) - it is the
+    // canonical, indexed address of this page, not a payload to consume.
+    if (landing) return toShapeChallenge();
     return { name: "home" };
   });
   const [showAchievementsTutorial, setShowAchievementsTutorial] = useState(() => shouldShowAchievementsTutorial());
@@ -120,8 +132,13 @@ export default function App() {
   screenRef.current = screen;
   const screenHistoryRef = useRef<Screen[]>([]);
   const lastHandledAppLinkUrlRef = useRef<string | null>(null);
+  // A landing page's deep link applies to the first view only. Once the player
+  // navigates anywhere themselves, coming back to Shape Challenge shows the map
+  // like it always does, instead of dropping them into the same shape again.
+  const landingShapeRef = useRef(landing?.shape);
 
   function navigate(next: Screen) {
+    landingShapeRef.current = undefined;
     screenHistoryRef.current.push(screenRef.current);
     setScreen(next);
   }
@@ -265,7 +282,7 @@ export default function App() {
           case "friendChallengeIntro":
             return <FriendChallengeIntroScreen challengeId={screen.challengeId} onNavigate={navigate} />;
           case "shapeChallenge":
-            return <ShapeChallengeScreen onNavigate={navigate} />;
+            return <ShapeChallengeScreen onNavigate={navigate} initialShape={landingShapeRef.current} />;
           case "dailyChallenge":
             return <DailyChallengeScreen onNavigate={navigate} />;
           case "dailyChallengeHistory":

@@ -6,6 +6,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/global.css'
 import { applyThemeMode, getThemeMode } from './services/themeStore'
+import { landingPageForPath } from './seo/landingPages'
 
 // Stamp the saved theme onto <html> before anything renders, so there's no
 // flash of the wrong theme on load.
@@ -36,9 +37,12 @@ if (path === '/privacy') {
   import('./content/hydrateContent.ts').then(async ({ applyCachedCatalog, refreshCatalogInBackground }) => {
     applyCachedCatalog()
     const { default: App } = await import('./App.tsx')
+    // Web-only SEO landing paths (see seo/landingPages.ts). Undefined for every
+    // other path, and always undefined in the Android WebView, which loads from
+    // the APK at "/" - so the app boots exactly as it did before.
     root.render(
       <StrictMode>
-        <App />
+        <App landing={landingPageForPath(path)} />
       </StrictMode>,
     )
     void refreshCatalogInBackground()

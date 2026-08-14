@@ -1,0 +1,44 @@
+/*
+ * © 2026 Lior Rubinovich. All rights reserved.
+ * Unauthorized copying, modification, distribution, or commercial use is prohibited.
+ */
+// Web-only: maps an SEO landing path to where in the game that page should open.
+// The visible copy and metadata for these paths are NOT here - the Worker injects
+// them server-side (worker/seoPages.ts), and landingPages.test.ts asserts the two
+// path lists stay identical.
+//
+// Android reaches none of this: Capacitor loads index.html from the APK at path
+// "/", which is not a landing path, so `landingPageForPath` returns undefined and
+// App gets `landing={undefined}` - byte-identical behaviour to before.
+//
+// `shape` names a destination only. It grants nothing: ShapeChallengeScreen
+// re-checks the player's real category/shape unlock state before honouring it and
+// falls back to the map otherwise, so a landing page can never bypass unlocks,
+// coins or progression.
+
+import type { CategoryId } from "../content/contentRepository";
+
+export type LandingPage = {
+  path: string;
+  /** Shape to open directly. Omitted = land on the Shape Challenge category map. */
+  shape?: { category: CategoryId; shapeId: string };
+};
+
+// "circle" is the first shape of the first category, so it is unlocked for a
+// brand-new player (frontier) and stays unlocked afterwards (completed) - the one
+// deep link that needs no unlock exception.
+const CIRCLE = { category: "geometric" as CategoryId, shapeId: "circle" };
+
+const LANDING_PAGES: LandingPage[] = [
+  { path: "/drawing-accuracy-test", shape: CIRCLE },
+  { path: "/draw-a-perfect-circle", shape: CIRCLE },
+  { path: "/draw-shapes-online" },
+];
+
+export const LANDING_PATHS: string[] = LANDING_PAGES.map((page) => page.path);
+
+/** Trailing slashes are stripped so "/draw-shapes-online/" resolves the same way the Worker resolves it. */
+export function landingPageForPath(pathname: string): LandingPage | undefined {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  return LANDING_PAGES.find((page) => page.path === normalized);
+}

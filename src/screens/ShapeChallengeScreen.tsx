@@ -89,7 +89,27 @@ type Phase = "preview" | "drawing" | "analyzing" | "result";
 
 type ShapeChallengeScreenProps = {
   onNavigate: (screen: Screen) => void;
+  /** Web-only: a shape an SEO landing page asks to open on first render (see
+   * seo/landingPages.ts). Purely a request - `resolveInitialSelection` honours it
+   * only if the player's existing unlock state already allows that shape, so it
+   * grants nothing and can never bypass unlocks, coins or progression. Always
+   * undefined on Android. */
+  initialShape?: { category: CategoryId; shapeId: string };
 };
+
+/** Turns a landing page's requested shape into the same `{category, index}` selection a tap on its tile would produce - or null (land on the map) if the category or the shape is not already unlocked for this player, or the shape no longer exists in the active catalog. */
+function resolveInitialSelection(
+  initialShape: ShapeChallengeScreenProps["initialShape"],
+  progress: ShapeChallengeProgress,
+): { category: CategoryId; index: number } | null {
+  if (!initialShape) return null;
+  if (!getUnlockedCategoryIds().includes(initialShape.category)) return null;
+  const shapes = getShapesForCategory(initialShape.category);
+  const index = shapes.findIndex((shape) => shape.id === initialShape.shapeId);
+  if (index === -1) return null;
+  if (!isShapeUnlockedAt(progress, initialShape.category, shapes, index)) return null;
+  return { category: initialShape.category, index };
+}
 
 /** Marks newly-unlocked achievements as unlocked and safely credits their coins to the real balance right away - the achievement queue passed back just controls when the celebratory banner/sound/counter-reveal happens, never whether the reward is actually paid out. */
 function detectAndBankNewAchievements(progress: ShapeChallengeProgress): Achievement[] {
@@ -103,10 +123,13 @@ function detectAndBankNewAchievements(progress: ShapeChallengeProgress): Achieve
   return newlyUnlocked;
 }
 
-export default function ShapeChallengeScreen({ onNavigate }: ShapeChallengeScreenProps) {
+export default function ShapeChallengeScreen({ onNavigate, initialShape }: ShapeChallengeScreenProps) {
   const [progress, setProgress] = useState<ShapeChallengeProgress>(() => getProgress());
-  const [selectedCategory, setSelectedCategory] = useState<CategoryId | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // Resolved once, against this player's real unlock state. Pure (no side
+  // effects), so StrictMode's double-invoke is harmless.
+  const [initialSelection] = useState(() => resolveInitialSelection(initialShape, progress));
+  const [selectedCategory, setSelectedCategory] = useState<CategoryId | null>(initialSelection?.category ?? null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(initialSelection?.index ?? null);
   const [justUnlockedIndex, setJustUnlockedIndex] = useState<number | null>(null);
   const [pendingAchievements, setPendingAchievements] = useState<Achievement[]>([]);
 

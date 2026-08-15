@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.32.0 - 2026-08-14
+## 0.32.1 - 2026-08-15
+
+Added the AdSense site-ownership meta tag to `index.html`. It is a passive
+identifier only: no ad script is loaded, no ad is requested, and nothing changes
+for players on either the website or Android. Serving ads on the web remains
+inactive and is a separate, deliberate step.
+
+## 0.32.0 - 2026-08-15
 
 **Search-engine landing pages for the website.** Google previously saw a page
 with a title of "CYDI", no description and no text at all - the whole game is

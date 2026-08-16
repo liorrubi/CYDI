@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
@@ -8,6 +8,8 @@ import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import { CANVAS_SIZE, MIN_POINTS_TO_SAVE, penInkGlyphColor, type PenColorId, type PenSkinId } from "../app/constants";
 import { saveChallenge } from "../services/challengeStorage";
+import { markCreateFeatureDiscovered } from "../services/tutorialStore";
+import { trackEvent } from "../services/analytics";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { markDrawingTutorialShown, shouldShowDrawingTutorial } from "../services/tutorialStore";
@@ -77,6 +79,13 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
     canvasRef.current?.undoLastStroke();
   }
 
+  // Reaching this screen at all - from the home card, the discovery prompt, or an
+  // empty My Challenges list - means the player now knows the feature exists, so the
+  // discovery prompts stop. Abandoning without saving still counts.
+  useEffect(() => {
+    markCreateFeatureDiscovered();
+  }, []);
+
   function handleSaveClick() {
     if (!currentPath || currentPath.points.length < MIN_POINTS_TO_SAVE) {
       setError("Draw a longer shape first.");
@@ -98,6 +107,10 @@ export default function CreateChallengeScreen({ onNavigate }: CreateChallengeScr
       updatedAt: Date.now(),
       attempts: 0,
     });
+    // Fired only after a save actually succeeded, and only here - the single place a
+    // challenge is created - so it can never double-count. Deliberately source-blind:
+    // it measures challenges created overall, from the discovery prompt or elsewhere.
+    trackEvent("challenge_created", {});
 
     onNavigate(toList());
   }

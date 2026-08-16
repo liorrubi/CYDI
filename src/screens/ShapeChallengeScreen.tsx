@@ -51,8 +51,19 @@ import { getDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive } from "../services/unlockOverrideStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
-import { markDrawingTutorialShown, recordRoundCompleted, shouldShowAchievementsTutorial, shouldShowDrawingTutorial } from "../services/tutorialStore";
+import {
+  createDiscoveryVariant,
+  markCreateDiscoveryShown,
+  markDrawingTutorialShown,
+  markResultActionsTutorialShown,
+  recordRoundCompleted,
+  shouldShowAchievementsTutorial,
+  shouldShowDrawingTutorial,
+  shouldShowResultActionsTutorial,
+} from "../services/tutorialStore";
 import { recordSuccessfulDrawing } from "../services/successfulDrawingsStore";
+import { recordOfferSkipped } from "../app/rewardOfferNudge";
+import { isRewardedAdAvailable } from "../services/ads";
 import { trackEvent } from "../services/analytics";
 import {
   clearProgress,
@@ -73,6 +84,7 @@ import { getArtistPackCompletedCount } from "../services/artistPackStore";
 import {
   toAchievements,
   toArtistPack,
+  toCreate,
   toHome,
   toInstructions,
   toMegaChallenge,
@@ -267,6 +279,7 @@ export default function ShapeChallengeScreen({ onNavigate, initialShape }: Shape
         onBackToMap={() => setSelectedIndex(null)}
         onNavigateToAchievements={goToAchievements}
         onNavigateToInstructions={goToInstructions}
+        onNavigateToCreate={() => onNavigate(toCreate())}
         onNavigateToShop={(highlightPenColorId, highlightPenSkinId) =>
           onNavigate(toShop(toShapeChallenge(), highlightPenColorId, highlightPenSkinId))
         }
@@ -707,6 +720,7 @@ type ShapePlayProps = {
   onBackToMap: () => void;
   onNavigateToAchievements: () => void;
   onNavigateToInstructions: () => void;
+  onNavigateToCreate: () => void;
   onNavigateToShop: (highlightPenColorId?: PenColorId, highlightPenSkinId?: PenSkinId) => void;
   onNavigateToSpecialChallenge: () => void;
   onNavigateToShapeChallenge: () => void;
@@ -723,6 +737,7 @@ function ShapePlay({
   onBackToMap,
   onNavigateToAchievements,
   onNavigateToInstructions,
+  onNavigateToCreate,
   onNavigateToShop,
   onNavigateToSpecialChallenge,
   onNavigateToShapeChallenge,
@@ -744,6 +759,16 @@ function ShapePlay({
   const [guideEnabled, setGuideEnabled] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [previousBest, setPreviousBest] = useState<number | undefined>(undefined);
+  // One-time "here is how you continue" callout on the result screen. Held in state
+  // rather than recomputed per render so it can't appear or vanish mid-screen, and
+  // only ever marked as seen when it actually renders (see the effect below).
+  // Re-read when a retry starts (handleTryAgain), which is the only way back into a
+  // result within one mount - Next Shape remounts ShapePlay via its key - so the
+  // callout really is one-time instead of returning on every retry of the same shape.
+  const [resultTutorialPending, setResultTutorialPending] = useState(() => shouldShowResultActionsTutorial());
+  // Create Challenge discovery. Re-read per round rather than frozen once, so the
+  // round-count thresholds and the "already discovered" checks stay current.
+  const [createDiscovery, setCreateDiscovery] = useState<ReturnType<typeof createDiscoveryVariant>>(null);
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
@@ -786,6 +811,45 @@ function ShapePlay({
     return () => window.clearTimeout(timeoutId);
   }, [phase, category, shape]);
 
+  // Shown on the result screen only, and only while the round is actually resolved.
+  const showResultTutorial = phase === "result" && resultTutorialPending;
+
+  useEffect(() => {
+    if (phase !== "result") return;
+    setCreateDiscovery(createDiscoveryVariant());
+  }, [phase]);
+
+  // One feature-discovery message at a time. The result-actions tutorial teaches how
+  // to continue at all and the ×2 offer is a live decision, so both outrank a
+  // discovery nudge - and deferring it here does NOT mark it shown, so it simply
+  // returns on the next round.
+  const showCreateDiscovery = phase === "result" && createDiscovery !== null && !showResultTutorial && doubleOfferAmount === null;
+
+  // Remembers WHICH prompt was already logged, not merely that one was: a player who
+  // reaches the reminder threshold through retries of a single shape - no remount in
+  // between - must still have the reminder marked, or it would reappear later and
+  // break the "exactly one reminder" rule. A plain boolean would swallow that.
+  const createDiscoveryLoggedRef = useRef<ReturnType<typeof createDiscoveryVariant>>(null);
+  useEffect(() => {
+    if (!showCreateDiscovery || !createDiscovery) return;
+    if (createDiscoveryLoggedRef.current === createDiscovery) return;
+    createDiscoveryLoggedRef.current = createDiscovery;
+    markCreateDiscoveryShown(createDiscovery);
+    trackEvent("create_discovery_shown", {});
+  }, [showCreateDiscovery, createDiscovery]);
+
+  function handleCreateDiscoveryAccepted() {
+    trackEvent("create_discovery_accepted", {});
+    onNavigateToCreate();
+  }
+  const resultTutorialLoggedRef = useRef(false);
+  useEffect(() => {
+    if (!showResultTutorial || resultTutorialLoggedRef.current) return;
+    resultTutorialLoggedRef.current = true;
+    markResultActionsTutorialShown();
+    trackEvent("result_actions_tutorial_shown", { placement: "shape_challenge_double_reward" });
+  }, [showResultTutorial]);
+
   /** The base reward is already credited where `doubleOfferAmount` is set below - only the extra half of a successful double is new (mirrors ChestRewardOverlay), so navigating away before resolving the offer can never forfeit the coins already earned. */
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
     if (doubleOfferAmount !== null && finalAmount > doubleOfferAmount) {
@@ -793,6 +857,39 @@ function ShapePlay({
     }
     triggerCoinFlight(anchorEl ?? document.querySelector(".score-total"));
     setDoubleOfferAmount(null);
+  }
+
+  /**
+   * Continuing while the ×2 offer is still open forfeits it: the base coins were
+   * already credited when the round scored, so nothing is lost, but the doubling
+   * opportunity ends here and the offer must not survive the transition.
+   *
+   * Recorded through the SAME reward_skipped event the offer's own Skip button
+   * uses - not a parallel "abandoned" event - and only while the offer is actually
+   * open, so a player who already pressed Skip can never be counted twice.
+   */
+  function forfeitDoubleOffer() {
+    if (doubleOfferAmount === null) return;
+    // Same rule the offer's own Skip button uses: the streak only counts a double the
+    // player could really have watched an ad for (see recordOfferSkipped).
+    recordOfferSkipped(isRewardedAdAvailable());
+    trackEvent("reward_skipped", { placement: "shape_challenge_double_reward" });
+    setDoubleOfferAmount(null);
+  }
+
+  function handleNextShapeFromResult() {
+    forfeitDoubleOffer();
+    onNextShape(nextIndex);
+  }
+
+  function handleTryAgainFromResult() {
+    forfeitDoubleOffer();
+    handleTryAgain();
+  }
+
+  function handleBackToMapFromResult() {
+    forfeitDoubleOffer();
+    onBackToMap();
   }
 
   function handleDone() {
@@ -852,6 +949,9 @@ function ShapePlay({
     setIsNewBest(false);
     setFeedbackMessage(null);
     setDoubleOfferAmount(null);
+    // The callout was already marked as seen when it rendered, so this resolves to
+    // false after the first showing - a retry does not repeat it.
+    setResultTutorialPending(shouldShowResultActionsTutorial());
     setPhase("preview");
   }
 
@@ -866,8 +966,10 @@ function ShapePlay({
     const passed = result.total >= passScore;
     return (
       <div className="screen">
+        {/* The header's back arrow takes the same exit as the Back to Map button below -
+            it must not be a side door that leaves the ×2 offer unresolved and uncounted. */}
         <AppHeader
-          onBack={onBackToMap}
+          onBack={handleBackToMapFromResult}
           onNavigateToHome={onNavigateToHome}
           onNavigateToInstructions={onNavigateToInstructions}
           onNavigateToAchievements={onNavigateToAchievements}
@@ -876,9 +978,7 @@ function ShapePlay({
           onNavigateToShapeChallenge={onNavigateToShapeChallenge}
           onNavigateToSettings={onNavigateToSettings}
         />
-        {!canGoToNextShape && nextIndex < shapes.length && (
-          <p className="form-error">Score {passScore}+ to unlock the next shape.</p>
-        )}
+
         {feedbackMessage && (
           <div className={passed ? "celebration-banner" : "encourage-banner"}>
             {passed ? "🎉 " : "💪 "}
@@ -895,20 +995,52 @@ function ShapePlay({
         {doubleOfferAmount !== null && (
           <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} placement="shape_challenge_double_reward" />
         )}
-        <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
-        {doubleOfferAmount === null && (
-          <>
-            <div className="button-row">
-              <Button variant="secondary" onClick={handleTryAgain}>
+        {/* The continue actions sit ABOVE the comparison canvas and are no longer
+            gated on the ×2 offer being resolved: doubling is a bonus, never a step
+            that blocks play. Leaving the offer by continuing forfeits it - see
+            forfeitDoubleOffer. */}
+        <div className="button-row result-actions">
+          {canGoToNextShape ? (
+            <>
+              <Button variant="secondary" onClick={handleTryAgainFromResult}>
                 Try Again
               </Button>
-              {canGoToNextShape && <Button onClick={() => onNextShape(nextIndex)}>Next Shape</Button>}
-            </div>
-            <Button variant="secondary" onClick={onBackToMap}>
-              Back to Map
-            </Button>
-          </>
+              <Button onClick={handleNextShapeFromResult}>Next Shape</Button>
+            </>
+          ) : (
+            /* No next shape to offer yet, so retrying IS the way forward - it becomes
+               the primary button rather than a secondary one beside a missing CTA. */
+            <Button onClick={handleTryAgainFromResult}>Try Again</Button>
+          )}
+        </div>
+        {!canGoToNextShape && nextIndex < shapes.length && (
+          <p className="result-actions-note">Score {passScore}+ to unlock the next shape.</p>
         )}
+        {showResultTutorial && (
+          /* Mirrors .button-row's own flex geometry so the finger sits under the
+             PRIMARY button rather than under the middle of the row: with two buttons
+             the empty cell takes the left half and the hint lands under Next Shape;
+             with only Try Again the hint spans the same full width the button does. */
+          <div className="result-actions-hint-row">
+            {canGoToNextShape && <span aria-hidden="true" />}
+            <p className="result-actions-tutorial">
+              {canGoToNextShape ? "👆 Tap Next Shape to continue." : "👆 Tap Try Again to beat the pass score."}
+            </p>
+          </div>
+        )}
+        {showCreateDiscovery && (
+          <div className="create-discovery-card">
+            <p className="create-discovery-title">✏️ Make your own challenge</p>
+            <p className="create-discovery-text">Draw any shape and send it to a friend to see who copies it best.</p>
+            <Button variant="secondary" onClick={handleCreateDiscoveryAccepted}>
+              Create a Challenge
+            </Button>
+          </div>
+        )}
+        <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
+        <Button variant="secondary" onClick={handleBackToMapFromResult}>
+          Back to Map
+        </Button>
       </div>
     );
   }

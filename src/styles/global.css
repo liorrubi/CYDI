@@ -1245,17 +1245,28 @@ body {
   margin-bottom: var(--space-4);
 }
 
+/* One row of four compact metrics instead of a 2x2 block: same four numbers, about
+   half the height, which is what lifts the result screen's continue button above the
+   fold on a 375px phone. Falls back to the original 2x2 only if the row would get
+   too tight to read. */
 .score-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-3);
-  text-align: left;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  text-align: center;
+}
+
+@media (max-width: 340px) {
+  .score-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+  }
 }
 
 .score-grid span {
   display: block;
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .score-grid strong {
@@ -4260,4 +4271,66 @@ body {
   font-size: 13px;
   text-align: center;
   word-break: break-all;
+}
+
+/* Result-screen continue actions. They now sit above the comparison canvas and stay
+   visible while the ×2 offer is open, so the primary action lands above the fold on a
+   375px phone instead of ~200px below it. */
+.result-actions {
+  margin-top: var(--space-2);
+}
+
+/* Same flex/gap/max-width as .button-row, so each cell lines up with the button
+   above it and the hint tracks the primary action. */
+.result-actions-hint-row {
+  display: flex;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 420px;
+}
+
+.result-actions-hint-row > * {
+  flex: 1;
+}
+
+.result-actions-note,
+.result-actions-tutorial {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.result-actions-note {
+  color: var(--color-text-muted);
+}
+
+.result-actions-tutorial {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Create Challenge discovery card - a small in-flow card below the continue actions,
+   never a modal: the player can ignore it entirely and Next Shape stays right above. */
+.create-discovery-card {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.create-discovery-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.create-discovery-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
 }

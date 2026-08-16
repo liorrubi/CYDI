@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.32.2 - 2026-08-16
+
+**Rewarded-ad requests that never fill are now visible in analytics.** A background
+preload that failed to return an ad used to fail completely silently — nothing was
+recorded anywhere — so a drop in fill rate would have stayed invisible until the
+revenue showed it. Those failures now report as `rewarded_ad_unavailable` with the
+existing `timeout` / `sdk_error` reason.
+
+No player-facing change: a failed preload still resolves quietly and gameplay is
+untouched. The failure is reported exactly once — a load started by `showRewardedAd`
+stays silent, because that call already emits its own `unavailable` for the same
+failure, so nothing is double-counted.
+
+Note when reading the numbers afterwards: `rewarded_ad_unavailable` will rise from
+near zero, because these events were never counted before. That is the start of
+measurement, not a regression.
+
 ## 0.32.1 - 2026-08-15
 
 Added the AdSense site-ownership meta tag to `index.html`. It is a passive

@@ -181,7 +181,20 @@ async function ensureInitialized(adapter: AdAdapter): Promise<void> {
   initialized = true;
 }
 
-function startLoad(adapter: AdAdapter, placement: RewardedAdPlacement, onEvent?: RewardedAdListener): Promise<void> {
+/**
+ * `reportFailure` decides who owns the analytics record for a failed load, so one
+ * failure is never counted twice. A background preload owns its own failure (nobody
+ * else will ever hear about it - that path used to fail completely silently, leaving
+ * fill failures invisible). A load started by showRewardedAd does NOT, because that
+ * call already emits its own "unavailable" with the same reason once it finds no ad
+ * ready.
+ */
+function startLoad(
+  adapter: AdAdapter,
+  placement: RewardedAdPlacement,
+  onEvent?: RewardedAdListener,
+  reportFailure = false,
+): Promise<void> {
   state = "loading";
   emit("loading", placement, undefined, onEvent);
   loadPromise = (async () => {
@@ -193,6 +206,7 @@ function startLoad(adapter: AdAdapter, placement: RewardedAdPlacement, onEvent?:
     } catch (err) {
       state = "idle";
       lastLoadFailure = err instanceof Error && err.message.includes("timed out") ? "timeout" : "sdk_error";
+      if (reportFailure) emit("unavailable", placement, lastLoadFailure, onEvent);
     } finally {
       loadPromise = null;
     }
@@ -205,11 +219,15 @@ function startLoad(adapter: AdAdapter, placement: RewardedAdPlacement, onEvent?:
  * safe: resolves quietly (no throw, no game impact) whether it loads or not.
  * `placement` names the trigger point this preload is for (lifecycle/analytics
  * attribution) and must be one of the closed REWARDED_AD_PLACEMENTS values.
+ *
+ * A failure here still resolves silently to the caller, but is now REPORTED to the
+ * lifecycle stream (and so to analytics) - otherwise ad requests that never fill
+ * leave no trace anywhere, and fill-rate problems are invisible until revenue drops.
  */
 export async function preloadRewardedAd(placement: RewardedAdPlacement, onEvent?: RewardedAdListener): Promise<void> {
   if (!isRewardedAdPlacement(placement)) return;
   if (rewardedBlockReason() !== null || state !== "idle") return loadPromise ?? Promise.resolve();
-  return startLoad(activeAdapter()!, placement, onEvent);
+  return startLoad(activeAdapter()!, placement, onEvent, true);
 }
 
 /**

@@ -151,6 +151,63 @@ test("no adapter registered: everything resolves instantly as unavailable", asyn
   assert.deepEqual(await showRewardedAd(PLACEMENT), { status: "unavailable", reason: "no_adapter" });
 });
 
+// --- Preload failure reporting -----------------------------------------------------
+// A background preload that never fills used to fail completely silently, so ad
+// requests that don't return an ad left no trace in analytics at all. It must now
+// report - without double-counting the failure when a show is what triggered the load.
+
+test("a preload whose load fails reports it as unavailable", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  registerAdAdapter({
+    name: "failing-load",
+    initialize: async () => {},
+    loadRewarded: async () => {
+      throw new Error("no fill");
+    },
+    showRewarded: async () => null,
+  });
+  const events = recordEvents();
+
+  await preloadRewardedAd(PLACEMENT);
+
+  assert.ok(events.includes("unavailable"), "a failed preload must emit unavailable");
+  assert.ok(!events.includes("loaded"), "a failed preload must not report a loaded ad");
+  assert.equal(isRewardedAdReady(), false);
+});
+
+test("a successful preload reports loaded and never unavailable", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  makeSpyAdapter(async () => ({ type: "coins", amount: 5 }));
+  const events = recordEvents();
+
+  await preloadRewardedAd(PLACEMENT);
+
+  assert.ok(events.includes("loaded"));
+  assert.ok(!events.includes("unavailable"));
+});
+
+test("a load started by showRewardedAd reports the failure exactly once", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  registerAdAdapter({
+    name: "failing-load",
+    initialize: async () => {},
+    loadRewarded: async () => {
+      throw new Error("no fill");
+    },
+    showRewarded: async () => null,
+  });
+  const events = recordEvents();
+
+  const result = await showRewardedAd(PLACEMENT);
+
+  assert.deepEqual(result, { status: "unavailable", reason: "sdk_error" });
+  assert.equal(
+    events.filter((e) => e === "unavailable").length,
+    1,
+    "showRewardedAd already reports its own failure - the load must not report it a second time",
+  );
+});
+
 // --- Consent gate (fail-closed) ----------------------------------------------------
 
 test("consent gate blocking is checked before the adapter, with no SDK calls", async () => {

@@ -97,8 +97,14 @@ android {
         // Sharesheet on real hardware), so a future DEVICE test build needs 17+.
         // Play is unaffected - its highest upload is 14, so 15 is the next release.
         // Ships as 0.31.0 (the public release before it is 0.30.0 / versionCode 14).
-        versionCode 15
-        versionName "0.31.0"
+        // 17 = 0.33.0, the unified release: rewarded-offer nudges (concrete x2
+        // amounts, one-time explainer, 3-skip reminder), the reworked result screen
+        // (actions above the comparison canvas, usable during the x2 offer), and
+        // Create Challenge discovery. 17 rather than 16+1-per-Play because the MIUI
+        // device already carries the debug vc16 noted above - 17 clears both Play
+        // (<=15) and the device in one bump, for the QA build and the AAB alike.
+        versionCode 17
+        versionName "0.33.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

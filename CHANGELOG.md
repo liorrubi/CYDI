@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.33.0 - 2026-08-16
+
+The unified release of the three features already live on the website since
+today's Web/Worker deployment, now packaged for Android (versionCode 17).
+
+**Rewarded offer, Android only.** The ×2 offer now states the concrete amounts -
+"You earned 35 coins - watch an ad to get 70" - instead of an abstract "double
+it?", and the skip button names what it keeps ("Keep 35"). A one-time explainer
+appears the first time a rewarded ad is genuinely available, and after three real
+refusals of a watchable ad a single per-session reminder appears once. Passing an
+offer with no watchable ad behind it is not a refusal and never counts. The
+reward mechanism is untouched: doubling still happens only on the SDK's confirmed
+reward callback, and the web offer renders exactly as before.
+
+**Shape result screen.** Try Again / Next Shape now sit above the comparison
+canvas and stay available while the ×2 offer is open - continuing simply forfeits
+the offer (recorded as the same reward_skipped, once, including via the header
+back arrow). Try Again becomes the primary button while the shape is still
+locked, the score grid compacts to one row so the actions land above the fold on
+a typical phone, and a one-time callout points at whichever button continues the
+game.
+
+**Create Challenge discovery.** Players who live inside the Shape Challenge loop
+never see the home screen's Create Challenge card, so the result screen now
+offers it once after 3 completed rounds, with a single follow-up at 8 rounds if
+the first was ignored - never a third time. Reaching the Create screen by any
+route, or already owning a challenge, stops the prompts for good. A prompt
+deferred because another tutorial owned the screen is not burned.
+
+**New analytics events** (already accepted by the production Worker):
+`reward_reminder_shown`, `reward_double_tutorial_shown`,
+`result_actions_tutorial_shown`, `create_discovery_shown`,
+`create_discovery_accepted`, `challenge_created`.
+
 ## 0.32.2 - 2026-08-16
 
 **Rewarded-ad requests that never fill are now visible in analytics.** A background

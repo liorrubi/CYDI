@@ -68,6 +68,20 @@ export type EventParamsMap = {
   reward_ad_failed: { placement: RewardedAdPlacement };
   reward_skipped: { placement: RewardedAdPlacement };
   reward_fallback_used: { placement: RewardedAdPlacement };
+  /** The one-per-session nudge after 3 consecutive skips actually rendered. */
+  reward_reminder_shown: { placement: RewardedAdPlacement };
+  /** The one-time "watch a short ad to double" explainer actually rendered - fires at
+   * most once per player, on whichever reward offer they met first. */
+  reward_double_tutorial_shown: { placement: RewardedAdPlacement };
+  /** The one-time result-screen callout pointing at the continue action rendered. */
+  result_actions_tutorial_shown: { placement: RewardedAdPlacement };
+  /** Create Challenge feature discovery. No params: the prompt has no placement of
+   * its own and we deliberately add no attribution plumbing for it. */
+  create_discovery_shown: Record<string, never>;
+  create_discovery_accepted: Record<string, never>;
+  /** A challenge was created and saved - from the discovery prompt or anywhere else,
+   * so this doubles as the overall "challenges created" measure. */
+  challenge_created: Record<string, never>;
 };
 
 export type AnalyticsEventName = keyof EventParamsMap;
@@ -95,6 +109,12 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "reward_ad_failed",
   "reward_skipped",
   "reward_fallback_used",
+  "reward_reminder_shown",
+  "reward_double_tutorial_shown",
+  "result_actions_tutorial_shown",
+  "create_discovery_shown",
+  "create_discovery_accepted",
+  "challenge_created",
 ];
 
 export type ValidationResult<E extends AnalyticsEventName> =
@@ -211,7 +231,21 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   reward_ad_failed: (p) => validateAdEvent(p),
   reward_skipped: (p) => validateAdEvent(p),
   reward_fallback_used: (p) => validateAdEvent(p),
+  reward_reminder_shown: (p) => validateAdEvent(p),
+  reward_double_tutorial_shown: (p) => validateAdEvent(p),
+  result_actions_tutorial_shown: (p) => validateAdEvent(p),
+  create_discovery_shown: (p) => validateNoParams(p),
+  create_discovery_accepted: (p) => validateNoParams(p),
+  challenge_created: (p) => validateNoParams(p),
 };
+
+/** Events that carry no params at all - same rule app_open uses. */
+function validateNoParams<E extends "create_discovery_shown" | "create_discovery_accepted" | "challenge_created">(
+  p: unknown,
+): ValidationResult<E> {
+  if (!isRecord(p) || Object.keys(p).length !== 0) return { valid: false };
+  return { valid: true, params: {} as EventParamsMap[E] };
+}
 
 function validateAdEvent<
   E extends
@@ -225,7 +259,10 @@ function validateAdEvent<
     | "reward_ad_completed"
     | "reward_ad_failed"
     | "reward_skipped"
-    | "reward_fallback_used",
+    | "reward_fallback_used"
+    | "reward_reminder_shown"
+    | "reward_double_tutorial_shown"
+    | "result_actions_tutorial_shown",
 >(p: unknown): ValidationResult<E> {
   if (!isRecord(p) || !hasExactKeys(p, ["placement"])) return { valid: false };
   if (!isRewardedAdPlacement(p.placement)) return { valid: false };

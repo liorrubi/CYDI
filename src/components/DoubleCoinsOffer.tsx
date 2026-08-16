@@ -3,7 +3,15 @@ import { playChipSound, playCoinsSound, playDangerSound, playSelectSound, playSu
 import { MAX_PAID_CHEST_DOUBLES_PER_DAY } from "../services/chestDoubleLimitStore";
 import { isRewardedAdAvailable, preloadRewardedAd, showRewardedAd, type RewardedAdPlacement } from "../services/ads";
 import { trackEvent } from "../services/analytics";
+import { markDoubleRewardTutorialShown, shouldShowDoubleRewardTutorial } from "../services/tutorialStore";
 import { consumesDoubleAttempt, resolveAdOutcome } from "./doubleOfferAdFlow";
+import {
+  areRewardNudgesEnabled,
+  markReminderShown,
+  recordOfferSkipped,
+  recordRewardGranted,
+  shouldShowReminder,
+} from "../app/rewardOfferNudge";
 
 type DoubleCoinsOfferProps = {
   /** The coin reward already earned and guaranteed - doubling only ever adds on top of this, never takes it away. */
@@ -83,6 +91,37 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   const canAttemptDouble = doublingAvailable && (adAvailable || mathFallbackEnabled);
   // No ad, and no dev math route: say so quietly rather than offering a dead button.
   const showNoAdNotice = doublingAvailable && (adUnavailableNotice || (!adAvailable && !mathFallbackEnabled));
+  // Was there a REAL double on the table that leaving now gives up? Only a watchable
+  // rewarded ad counts: not the dev math route (which must never touch production
+  // nudge semantics), not a used-up daily cap, and not an offer whose ad attempt has
+  // already failed - that player tried, they did not refuse. Drives the skip streak
+  // only; the reward_skipped event keeps firing exactly as it always has.
+  const skipForfeitsRealDouble = doublingAvailable && adAvailable && !adUnavailableNotice;
+
+  // Android-only offer nudges. False on web (and any non-Android platform), where
+  // every branch below falls back to exactly what shipped before.
+  const [nudgesEnabled] = useState(() => areRewardNudgesEnabled());
+
+  // First-time explainer, gated on `adAvailable` - the STABLE capability check
+  // (format flags + remote kill switch + consent + a registered adapter + a
+  // configured ad unit), NOT isRewardedAdReady(), which only says whether an ad
+  // happens to be preloaded right now and flips constantly. So the text never
+  // promises an ad the platform cannot serve: Android yes, web no today, and the
+  // moment H5 is merged and configured the same code lights up on the web.
+  //
+  // Only "was it still unseen?" is frozen at mount. Visibility itself is DERIVED
+  // from the same fresh `adAvailable` the Watch Ad button uses, because ad setup is
+  // asynchronous (consent -> SDK init -> registerAdAdapter) and nothing notifies
+  // React when it finishes: an offer opened seconds after launch - the daily chest
+  // is reachable that fast - can render while availability is still false and then
+  // re-render true. Freezing this at mount would show the button with no
+  // explanation. Tying both to one value makes that impossible.
+  const [tutorialPending] = useState(() => shouldShowDoubleRewardTutorial());
+  const [reminderPending] = useState(() => shouldShowReminder());
+  const showTutorial = adAvailable && tutorialPending;
+  // The tutorial wins - never both at once - and the reminder is pointless when no
+  // ad can be served, so it shares the same gate.
+  const showReminder = adAvailable && !showTutorial && reminderPending;
 
   useEffect(() => {
     preloadRewardedAd(placement);
@@ -90,8 +129,28 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Marked and counted only once the text is genuinely on screen - which may be a
+  // later render than the first, if ad setup finished after this offer opened. The
+  // refs keep that to exactly one mark/event even if availability flickers.
+  const tutorialLoggedRef = useRef(false);
+  useEffect(() => {
+    if (!showTutorial || tutorialLoggedRef.current) return;
+    tutorialLoggedRef.current = true;
+    markDoubleRewardTutorialShown();
+    trackEvent("reward_double_tutorial_shown", { placement });
+  }, [showTutorial, placement]);
+
+  const reminderLoggedRef = useRef(false);
+  useEffect(() => {
+    if (!showReminder || reminderLoggedRef.current) return;
+    reminderLoggedRef.current = true;
+    markReminderShown();
+    trackEvent("reward_reminder_shown", { placement });
+  }, [showReminder, placement]);
+
   function handleSkip() {
     playSelectSound();
+    recordOfferSkipped(skipForfeitsRealDouble);
     trackEvent("reward_skipped", { placement });
     onResolved(amount, anchorRef.current);
   }
@@ -118,6 +177,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       playCoinsSound();
       setGrantSource("ad");
       setWasCorrect(true);
+      // The player did the thing the nudge was for - the skip streak starts over.
+      recordRewardGranted();
       trackEvent("reward_ad_completed", { placement });
     } else {
       trackEvent("reward_ad_failed", { placement });
@@ -151,9 +212,24 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     <div ref={anchorRef} className="double-offer-banner">
       {phase === "offer" && (
         <>
-          <p className="double-offer-headline">
-            {canAttemptDouble ? `🪙 +${amount} coins - double it?` : `🪙 +${amount} coins`}
-          </p>
+          {/* Android only: spell out the concrete before/after amounts, both derived
+              from the real `amount` prop - never hard-coded. `nudgesEnabled` is false
+              on web, so the website always renders the original line. */}
+          {nudgesEnabled && canAttemptDouble ? (
+            <p className="double-offer-headline">
+              🪙 You earned {amount} coins - watch an ad to get {amount * 2}
+            </p>
+          ) : (
+            <p className="double-offer-headline">
+              {canAttemptDouble ? `🪙 +${amount} coins - double it?` : `🪙 +${amount} coins`}
+            </p>
+          )}
+          {showTutorial && (
+            <p className="double-offer-limit-note">
+              Watch a short ad to get 2× coins - completely optional.
+            </p>
+          )}
+          {showReminder && <p className="double-offer-limit-note">Tip: one short ad doubles your coins.</p>}
           {remainingDoubles !== undefined && (
             <p className="double-offer-limit-note">
               Chest doubles left today: {remainingDoubles}/{MAX_PAID_CHEST_DOUBLES_PER_DAY}
@@ -172,8 +248,10 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
                 🧮 Solve Math (dev)
               </button>
             )}
+            {/* On Android the skip button names what it keeps; the web keeps the plain
+                "Skip". Skipping stays exactly as easy either way - same button, same place. */}
             <button type="button" className="double-offer-skip" onClick={handleSkip} disabled={adPending}>
-              {canAttemptDouble ? "Skip" : "Continue"}
+              {!canAttemptDouble ? "Continue" : nudgesEnabled ? `Keep ${amount}` : "Skip"}
             </button>
           </div>
         </>

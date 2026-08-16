@@ -65,6 +65,19 @@ export type SaveData = {
     myChallengesTutorialShown: boolean;
     onboardingTutorialShown: boolean;
     drawingTutorialShown: boolean;
+    /** The one-time "you can double this by watching a short ad" explainer on the
+     * reward offer. One global flag, not one per reward type: every entry point
+     * (shape/special/mega/artist challenge and the chest) renders the same
+     * DoubleCoinsOffer, so seeing it once is seeing it everywhere. */
+    doubleRewardTutorialShown: boolean;
+    /** One-time result-screen callout pointing at the continue action. */
+    resultActionsTutorialShown: boolean;
+    /** Create Challenge feature discovery: whether the in-result prompt has been
+     * shown once, whether its single follow-up reminder has been shown, and whether
+     * the player has actually reached the Create screen (by any route). */
+    createDiscoveryShown: boolean;
+    createDiscoveryReminderShown: boolean;
+    createFeatureDiscovered: boolean;
     challenges: Challenge[];
     sharedChallengeIds: string[];
   };
@@ -111,6 +124,11 @@ export function createDefaultSaveData(): SaveData {
       myChallengesTutorialShown: false,
       onboardingTutorialShown: false,
       drawingTutorialShown: false,
+      doubleRewardTutorialShown: false,
+      resultActionsTutorialShown: false,
+      createDiscoveryShown: false,
+      createDiscoveryReminderShown: false,
+      createFeatureDiscovered: false,
       challenges: [],
       sharedChallengeIds: [],
     },

@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateEventParams, weeklyRange, monthlyRange, isAnalyticsEventName, normalizeAnalyticsPlatform } from "./analyticsSchema.ts";
+import {
+  validateEventParams,
+  weeklyRange,
+  monthlyRange,
+  isAnalyticsEventName,
+  normalizeAnalyticsPlatform,
+  ANALYTICS_EVENT_NAMES,
+} from "./analyticsSchema.ts";
 import { sanitizeParams } from "./analytics.ts";
 
 // --- Each of the 8 events' real observed param shapes validates successfully ---
@@ -222,4 +229,17 @@ test("normalizeAnalyticsPlatform coerces anything else to 'unknown' rather than 
 test("a platform sent inside params is still rejected - it is a sibling of params, never a param", () => {
   const result = validateEventParams("app_open", { platform: "android" });
   assert.equal(result.valid, false);
+});
+
+// --- The reminder event -------------------------------------------------------------
+
+test("reward_reminder_shown is a real event and follows the same placement rules", () => {
+  assert.ok(ANALYTICS_EVENT_NAMES.includes("reward_reminder_shown"));
+  assert.equal(validateEventParams("reward_reminder_shown", { placement: "daily_retry" }).valid, true);
+  assert.equal(validateEventParams("reward_reminder_shown", { placement: "nope" }).valid, false);
+  assert.equal(
+    validateEventParams("reward_reminder_shown", { placement: "daily_retry", extra: 1 }).valid,
+    false,
+    "no stray params - the event keeps the exact placement-only shape",
+  );
 });

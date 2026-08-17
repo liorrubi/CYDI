@@ -1745,6 +1745,62 @@ body {
   }
 }
 
+/* Periodic 3× bonus round. Swaps the offer's pink/violet for gold/amber so it reads
+   as a distinctly rarer event than the everyday ×2, without changing the banner's
+   size, position or layout - it stays inline in the result screen, never a modal. */
+.double-offer-banner-bonus {
+  background: linear-gradient(135deg, #fbbf24, #b45309);
+  box-shadow: 0 10px 30px rgba(180, 83, 9, 0.5);
+  animation:
+    banner-pop 400ms ease,
+    double-offer-bonus-glow 1.6s ease-in-out infinite;
+}
+
+.double-offer-bonus-badge {
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.5px;
+  color: #fffbeb;
+  text-shadow: 0 2px 8px rgba(120, 53, 15, 0.85);
+  margin-bottom: var(--space-2);
+  animation: double-offer-bonus-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes double-offer-bonus-glow {
+  0%,
+  100% {
+    box-shadow: 0 10px 30px rgba(180, 83, 9, 0.5);
+  }
+  50% {
+    box-shadow: 0 10px 44px rgba(251, 191, 36, 0.8);
+  }
+}
+
+/* Gentle - a slow breath, not a bounce. Transform/opacity only, so it composites on
+   the GPU and never reflows the result screen underneath it. */
+@keyframes double-offer-bonus-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.92;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The gold still marks the bonus; only the movement goes away. */
+  .double-offer-banner-bonus {
+    animation: none;
+  }
+
+  .double-offer-bonus-badge {
+    animation: none;
+  }
+}
+
 .best-summary {
   display: flex;
   align-items: center;

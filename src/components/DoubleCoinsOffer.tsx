@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { playChipSound, playCoinsSound, playDangerSound, playSelectSound, playSuccessSound } from "../engine/soundEngine";
+import {
+  playAchievementUnlockedSound,
+  playChipSound,
+  playCoinsSound,
+  playDangerSound,
+  playSelectSound,
+  playSuccessSound,
+} from "../engine/soundEngine";
 import { MAX_PAID_CHEST_DOUBLES_PER_DAY } from "../services/chestDoubleLimitStore";
 import { isRewardedAdAvailable, preloadRewardedAd, showRewardedAd, type RewardedAdPlacement } from "../services/ads";
 import { trackEvent } from "../services/analytics";
 import { markDoubleRewardTutorialShown, shouldShowDoubleRewardTutorial } from "../services/tutorialStore";
 import { consumesDoubleAttempt, resolveAdOutcome } from "./doubleOfferAdFlow";
+import {
+  isBonusRewardRound,
+  resolveBonusRewardRound,
+  rewardMultiplier,
+  STANDARD_REWARD_MULTIPLIER,
+} from "../app/bonusRewardRound";
 import {
   areRewardNudgesEnabled,
   markReminderShown,
@@ -83,6 +96,15 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   const [adUnavailableNotice, setAdUnavailableNotice] = useState(false);
   const anchorRef = useRef<HTMLDivElement | null>(null);
 
+  // Frozen at mount from a PURE read, so a re-render can never flip the offer's
+  // identity halfway through (and StrictMode's double invocation is harmless).
+  const [isBonusRound] = useState(() => isBonusRewardRound(placement));
+  /** What this offer advertises: 3 on a bonus round, otherwise the usual 2. */
+  const multiplier = rewardMultiplier(isBonusRound);
+  /** What actually gets PAID. The 3× is reserved for a confirmed rewarded-ad
+   *  completion, so the dev-only math route always settles at the standard ×2. */
+  const paidMultiplier = grantSource === "ad" ? multiplier : STANDARD_REWARD_MULTIPLIER;
+
   const doublingAvailable = remainingDoubles === undefined || remainingDoubles > 0;
   const adAvailable = isRewardedAdAvailable();
   const mathFallbackEnabled = isMathFallbackEnabled();
@@ -125,7 +147,10 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
 
   useEffect(() => {
     preloadRewardedAd(placement);
-    trackEvent("reward_offer_shown", { placement });
+    // A ×3 round reports on its own event names so the two offer types can be compared
+    // in the report; see the reward_bonus_* block in analyticsSchema.ts for why this is
+    // a separate name rather than a param. Same funnel, same placement, either way.
+    trackEvent(isBonusRound ? "reward_bonus_offer_shown" : "reward_offer_shown", { placement });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -140,6 +165,18 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     trackEvent("reward_double_tutorial_shown", { placement });
   }, [showTutorial, placement]);
 
+  // One short celebratory flourish the first time the bonus is actually on screen.
+  // Same ref-guard shape as the logging effects below, so a re-render (or StrictMode
+  // remounting effects) can't retrigger it. playAchievementUnlockedSound() already
+  // returns immediately when sound effects are switched off, so the setting is
+  // honoured without a second check here.
+  const bonusSoundedRef = useRef(false);
+  useEffect(() => {
+    if (!isBonusRound || phase !== "offer" || bonusSoundedRef.current) return;
+    bonusSoundedRef.current = true;
+    playAchievementUnlockedSound();
+  }, [isBonusRound, phase]);
+
   const reminderLoggedRef = useRef(false);
   useEffect(() => {
     if (!showReminder || reminderLoggedRef.current) return;
@@ -151,7 +188,11 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   function handleSkip() {
     playSelectSound();
     recordOfferSkipped(skipForfeitsRealDouble);
-    trackEvent("reward_skipped", { placement });
+    // Walking away from a bonus offer that had a real ad behind it spends it; walking
+    // away from one whose ad could not be served does not - `skipForfeitsRealDouble`
+    // already draws exactly that line for the skip-streak nudge.
+    resolveBonusRewardRound({ wasBonusRound: isBonusRound, granted: false, forfeitedRealOffer: skipForfeitsRealDouble });
+    trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", { placement });
     onResolved(amount, anchorRef.current);
   }
 
@@ -163,7 +204,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
 
   async function handleWatchAd() {
     playChipSound();
-    trackEvent("reward_ad_started", { placement });
+    trackEvent(isBonusRound ? "reward_bonus_ad_started" : "reward_ad_started", { placement });
     setAdPending(true);
     const result = await showRewardedAd(placement);
     setAdPending(false);
@@ -179,9 +220,9 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       setWasCorrect(true);
       // The player did the thing the nudge was for - the skip streak starts over.
       recordRewardGranted();
-      trackEvent("reward_ad_completed", { placement });
+      trackEvent(isBonusRound ? "reward_bonus_ad_completed" : "reward_ad_completed", { placement });
     } else {
-      trackEvent("reward_ad_failed", { placement });
+      trackEvent(isBonusRound ? "reward_bonus_ad_failed" : "reward_ad_failed", { placement });
       // No substitute route is offered - just a quiet notice back on the offer screen.
       if (outcome.adUnavailable) setAdUnavailableNotice(true);
     }
@@ -205,31 +246,42 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   }
 
   function handleContinue() {
-    onResolved(wasCorrect ? amount * 2 : amount, anchorRef.current);
+    const granted = wasCorrect && grantSource === "ad";
+    resolveBonusRewardRound({ wasBonusRound: isBonusRound, granted, forfeitedRealOffer: false });
+    onResolved(wasCorrect ? amount * paidMultiplier : amount, anchorRef.current);
   }
 
   return (
-    <div ref={anchorRef} className="double-offer-banner">
+    <div ref={anchorRef} className={isBonusRound ? "double-offer-banner double-offer-banner-bonus" : "double-offer-banner"}>
       {phase === "offer" && (
         <>
+          {/* Replaces the ×2 framing outright on a bonus round - inline in the existing
+              banner, never a modal or popup over the screen. */}
+          {isBonusRound && canAttemptDouble && <p className="double-offer-bonus-badge">✨ 3× BONUS!</p>}
           {/* Android only: spell out the concrete before/after amounts, both derived
               from the real `amount` prop - never hard-coded. `nudgesEnabled` is false
               on web, so the website always renders the original line. */}
           {nudgesEnabled && canAttemptDouble ? (
             <p className="double-offer-headline">
-              🪙 You earned {amount} coins - watch an ad to get {amount * 2}
+              🪙 You earned {amount} coins - watch an ad to get {amount * multiplier}
             </p>
           ) : (
             <p className="double-offer-headline">
-              {canAttemptDouble ? `🪙 +${amount} coins - double it?` : `🪙 +${amount} coins`}
+              {canAttemptDouble
+                ? `🪙 +${amount} coins - ${isBonusRound ? "triple it?" : "double it?"}`
+                : `🪙 +${amount} coins`}
             </p>
           )}
           {showTutorial && (
             <p className="double-offer-limit-note">
-              Watch a short ad to get 2× coins - completely optional.
+              Watch a short ad to get {multiplier}× coins - completely optional.
             </p>
           )}
-          {showReminder && <p className="double-offer-limit-note">Tip: one short ad doubles your coins.</p>}
+          {showReminder && (
+            <p className="double-offer-limit-note">
+              Tip: one short ad {isBonusRound ? "triples" : "doubles"} your coins.
+            </p>
+          )}
           {remainingDoubles !== undefined && (
             <p className="double-offer-limit-note">
               Chest doubles left today: {remainingDoubles}/{MAX_PAID_CHEST_DOUBLES_PER_DAY}
@@ -239,7 +291,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
           <div className="double-offer-buttons">
             {doublingAvailable && adAvailable && (
               <button type="button" className="double-offer-double double-offer-ad-primary" onClick={handleWatchAd} disabled={adPending}>
-                {adPending ? "Loading ad…" : "🎬 Watch Ad to Double"}
+                {adPending ? "Loading ad…" : isBonusRound ? "🎬 Watch Ad for 3×" : "🎬 Watch Ad to Double"}
               </button>
             )}
             {/* Dev-only: never rendered in a user-facing build (see isMathFallbackEnabled). */}
@@ -280,10 +332,12 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       )}
       {phase === "feedback" && (
         <>
-          {wasCorrect && grantSource === "ad" ? (
-            <p className="double-offer-headline">✅ Ad watched! You doubled your coins: 🪙 +{amount * 2}</p>
+          {wasCorrect && grantSource === "ad" && isBonusRound ? (
+            <p className="double-offer-headline">✨ 3× BONUS! You tripled your coins: 🪙 +{amount * paidMultiplier}</p>
+          ) : wasCorrect && grantSource === "ad" ? (
+            <p className="double-offer-headline">✅ Ad watched! You doubled your coins: 🪙 +{amount * paidMultiplier}</p>
           ) : wasCorrect ? (
-            <p className="double-offer-headline">✅ Correct! You doubled your coins: 🪙 +{amount * 2}</p>
+            <p className="double-offer-headline">✅ Correct! You doubled your coins: 🪙 +{amount * paidMultiplier}</p>
           ) : (
             <p className="double-offer-headline">
               ❌ Not quite - {question.a} × {question.b} = {question.a * question.b}. You keep your original 🪙 +{amount}.

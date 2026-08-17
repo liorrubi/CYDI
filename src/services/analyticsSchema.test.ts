@@ -243,3 +243,23 @@ test("reward_reminder_shown is a real event and follows the same placement rules
     "no stray params - the event keeps the exact placement-only shape",
   );
 });
+
+test("the reward_bonus_* funnel mirrors the plain one, so ×2 and ×3 offers stay comparable", () => {
+  const plain = ["reward_offer_shown", "reward_ad_started", "reward_ad_completed", "reward_ad_failed", "reward_skipped"] as const;
+  for (const name of plain) {
+    const bonus = name.replace("reward_", "reward_bonus_");
+    assert.ok(ANALYTICS_EVENT_NAMES.includes(bonus as never), `${bonus} is a real event`);
+    // Same placement-only shape as its ×2 twin - the bonus is carried by the event
+    // NAME, never by an extra param the Worker would drop on ingest.
+    assert.equal(validateEventParams(bonus as never, { placement: "shape_challenge_double_reward" }).valid, true, bonus);
+    assert.equal(validateEventParams(bonus as never, { placement: "nope" }).valid, false, bonus);
+    assert.equal(validateEventParams(bonus as never, { placement: "daily_retry", multiplier: 3 }).valid, false, `${bonus} rejects stray params`);
+  }
+});
+
+test("the bonus events are a distinct namespace - no collision with the plain funnel", () => {
+  for (const name of ANALYTICS_EVENT_NAMES.filter((n) => n.startsWith("reward_bonus_"))) {
+    assert.equal(ANALYTICS_EVENT_NAMES.filter((n) => n === name).length, 1, `${name} appears exactly once`);
+  }
+  assert.equal(ANALYTICS_EVENT_NAMES.filter((n) => n.startsWith("reward_bonus_")).length, 5);
+});

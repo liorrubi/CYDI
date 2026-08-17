@@ -68,6 +68,18 @@ export type EventParamsMap = {
   reward_ad_failed: { placement: RewardedAdPlacement };
   reward_skipped: { placement: RewardedAdPlacement };
   reward_fallback_used: { placement: RewardedAdPlacement };
+  // The SAME offer funnel, for the periodic 3× bonus round only (app/bonusRewardRound.ts).
+  // Mirrored EVENT NAMES rather than a `multiplier`/`rewardType` param, because the
+  // Worker aggregates by event name and keeps only total + byPlatform for these events -
+  // params never reach storage (even `placement` is validated and then dropped), so a
+  // new field would be silently discarded and could never be reported on. A ×3 round
+  // emits only these, never the plain ones, so the two sets stay disjoint and the
+  // existing reward_* counts remain a clean ×2-only baseline.
+  reward_bonus_offer_shown: { placement: RewardedAdPlacement };
+  reward_bonus_ad_started: { placement: RewardedAdPlacement };
+  reward_bonus_ad_completed: { placement: RewardedAdPlacement };
+  reward_bonus_ad_failed: { placement: RewardedAdPlacement };
+  reward_bonus_skipped: { placement: RewardedAdPlacement };
   /** The one-per-session nudge after 3 consecutive skips actually rendered. */
   reward_reminder_shown: { placement: RewardedAdPlacement };
   /** The one-time "watch a short ad to double" explainer actually rendered - fires at
@@ -109,6 +121,11 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "reward_ad_failed",
   "reward_skipped",
   "reward_fallback_used",
+  "reward_bonus_offer_shown",
+  "reward_bonus_ad_started",
+  "reward_bonus_ad_completed",
+  "reward_bonus_ad_failed",
+  "reward_bonus_skipped",
   "reward_reminder_shown",
   "reward_double_tutorial_shown",
   "result_actions_tutorial_shown",
@@ -231,6 +248,11 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   reward_ad_failed: (p) => validateAdEvent(p),
   reward_skipped: (p) => validateAdEvent(p),
   reward_fallback_used: (p) => validateAdEvent(p),
+  reward_bonus_offer_shown: (p) => validateAdEvent(p),
+  reward_bonus_ad_started: (p) => validateAdEvent(p),
+  reward_bonus_ad_completed: (p) => validateAdEvent(p),
+  reward_bonus_ad_failed: (p) => validateAdEvent(p),
+  reward_bonus_skipped: (p) => validateAdEvent(p),
   reward_reminder_shown: (p) => validateAdEvent(p),
   reward_double_tutorial_shown: (p) => validateAdEvent(p),
   result_actions_tutorial_shown: (p) => validateAdEvent(p),
@@ -260,6 +282,11 @@ function validateAdEvent<
     | "reward_ad_failed"
     | "reward_skipped"
     | "reward_fallback_used"
+    | "reward_bonus_offer_shown"
+    | "reward_bonus_ad_started"
+    | "reward_bonus_ad_completed"
+    | "reward_bonus_ad_failed"
+    | "reward_bonus_skipped"
     | "reward_reminder_shown"
     | "reward_double_tutorial_shown"
     | "result_actions_tutorial_shown",

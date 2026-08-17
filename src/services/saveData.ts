@@ -61,6 +61,11 @@ export type SaveData = {
     shopChestCooldowns: Partial<Record<ChestTierId, number>>;
     successfulDrawings: number;
     completedRounds: number;
+    /** `completedRounds` as of the last 3× bonus that was actually settled. The next
+     * bonus is due one interval after it, so a bonus that was never collected - no ad
+     * could be served, or the round paid no coins and showed no offer at all - simply
+     * stays due instead of being skipped. See app/bonusRewardRound.ts. */
+    lastBonusRewardRound: number;
     achievementsTutorialShown: boolean;
     myChallengesTutorialShown: boolean;
     onboardingTutorialShown: boolean;
@@ -120,6 +125,7 @@ export function createDefaultSaveData(): SaveData {
       shopChestCooldowns: {},
       successfulDrawings: 0,
       completedRounds: 0,
+      lastBonusRewardRound: 0,
       achievementsTutorialShown: false,
       myChallengesTutorialShown: false,
       onboardingTutorialShown: false,

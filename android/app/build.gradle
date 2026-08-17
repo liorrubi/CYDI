@@ -95,14 +95,20 @@ android {
         // platform split in analytics. NOTE: the MIUI test device now carries a
         // debug-signed verification build at versionCode 16 (used to verify the
         // Sharesheet on real hardware), so a future DEVICE test build needs 17+.
-        // Play is unaffected - its highest upload is 14, so 15 is the next release.
-        // Ships as 0.31.0 (the public release before it is 0.30.0 / versionCode 14).
+        // Play's highest upload was 14 at that point, so 15 was the next release,
+        // shipping as 0.31.0 (the public release before it was 0.30.0 / versionCode
+        // 14). 15 then went live on Production on 12 Aug 2026.
         // 17 = 0.33.0, the unified release: rewarded-offer nudges (concrete x2
         // amounts, one-time explainer, 3-skip reminder), the reworked result screen
         // (actions above the comparison canvas, usable during the x2 offer), and
-        // Create Challenge discovery. 17 rather than 16+1-per-Play because the MIUI
-        // device already carries the debug vc16 noted above - 17 clears both Play
-        // (<=15) and the device in one bump, for the QA build and the AAB alike.
+        // Create Challenge discovery. 17 rather than 16 because the MIUI device
+        // already carries the debug vc16 noted above - 17 cleared both Play (<=15)
+        // and the device in one bump, for the QA build and the AAB alike.
+        //
+        // CURRENT STATE: versionCode 17 / versionName 0.33.0 is LIVE on Google Play
+        // Production (released 16 Aug 2026, all 177 countries). The next release
+        // must therefore use versionCode 18 or higher - Play permanently rejects a
+        // re-used code, and a device silently refuses a same-or-lower one.
         versionCode 17
         versionName "0.33.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

@@ -101,6 +101,23 @@ body {
   flex-direction: column;
   align-items: center;
   padding: var(--space-6) var(--space-4) var(--space-6);
+  /* Every screen is this container, and its last child (e.g. Back to Map) sits
+     directly on the bottom edge of it. Under Android edge-to-edge - forced for
+     targetSdk 35+, which we are - the WebView spans the whole display, so the
+     navigation bar is painted OVER that edge and swallows the last control
+     unless the system inset is added on top of the visual padding.
+     calc() rather than max(): the inset must be added to the breathing room,
+     not compete with it, or a 48dp 3-button bar leaves the button flush
+     against the bar with no gap at all. env() is 0 in a normal browser and on
+     WebViews where Capacitor insets the WebView itself instead, so the web
+     layout is byte-identical to before. Longhands, because the breakpoints
+     below re-declare `padding` and a shorthand there resets it.
+     Bottom only, deliberately: on Android <=14 the window is already laid out
+     below the status bar, yet env(safe-area-inset-top) still reports it (~33px
+     on the MIUI test device), so adding the top inset would push the header
+     down by that much for nothing. The bottom inset has no such ambiguity - it
+     reads 0 on exactly the devices where the nav bar does not overlap. */
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
   gap: var(--space-5);
 }
 
@@ -2576,7 +2593,7 @@ body {
     padding: var(--space-4) var(--space-3) var(--space-5);
     gap: var(--space-3);
     padding-top: max(var(--space-4), env(safe-area-inset-top, 0px));
-    padding-bottom: max(var(--space-5), env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
   }
 
   .app-header {
@@ -2746,6 +2763,13 @@ body {
   .screen {
     padding: var(--space-3) var(--space-3) var(--space-5);
     gap: var(--space-2);
+    /* This block matches together with the 768px one above and comes later, so
+       its `padding` shorthand was resetting that block's safe-area padding back
+       to a flat 12px/24px - which is why the Android navigation bar covered the
+       bottom button on phones (nearly all phones are <=480 CSS px) while
+       tablets in the 481-768px band were fine. Re-stating the longhand keeps
+       the tighter phone spacing without dropping the inset. */
+    padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
   }
 
   .app-header-text h1 {

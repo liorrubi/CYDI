@@ -2567,6 +2567,37 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
+/* Android in-app update notice. Deliberately the same pill as .shop-mega-toast,
+   just anchored to the viewport instead of a screen, because it can appear on any
+   screen. pointer-events:none is what makes it non-blocking - it is purely a
+   message and must never swallow a tap meant for the game underneath. Sits above
+   the system navigation bar via the same safe-area inset every screen uses. */
+.app-update-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(90vw, 360px);
+  text-align: center;
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  background: var(--color-primary-dark);
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  animation: banner-pop 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-update-toast {
+    animation: none;
+  }
+}
+
 .achievement-list {
   display: flex;
   flex-direction: column;

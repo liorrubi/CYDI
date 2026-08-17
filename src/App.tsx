@@ -123,6 +123,8 @@ export default function App({ landing }: AppProps) {
   });
   const [showAchievementsTutorial, setShowAchievementsTutorial] = useState(() => shouldShowAchievementsTutorial());
   const [showOnboardingTutorial, setShowOnboardingTutorial] = useState(() => shouldShowOnboardingTutorial());
+  /** Transient in-app update notice (Android only); null whenever there is nothing to say. */
+  const [updateNotice, setUpdateNotice] = useState<string | null>(null);
 
   // Screen navigation is plain React state, not browser history, so there's
   // nothing for the Android hardware back button to pop by default (it would
@@ -152,8 +154,22 @@ export default function App({ landing }: AppProps) {
 
   // Google Play flexible in-app update - asked once per cold start, Android app
   // only, and a silent no-op anywhere Play can't answer. See appUpdate.ts.
+  //
+  // The notice exists only because a flexible update downloads silently: accepting
+  // Play's dialog otherwise looks like nothing happened. Both messages are driven
+  // by state Play reports, so a declined or failed update still says nothing.
   useEffect(() => {
-    maybePromptAppUpdate();
+    let timer = 0;
+    maybePromptAppUpdate((notice) => {
+      setUpdateNotice(
+        notice === "downloading" ? "Downloading update…" : "Update ready - restart the app to finish",
+      );
+      // Transient: it never needs dismissing and never waits for input. The
+      // "ready" message lingers longer because it asks something of the player.
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setUpdateNotice(null), notice === "downloading" ? 5000 : 10000);
+    });
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -328,6 +344,14 @@ export default function App({ landing }: AppProps) {
           onNavigateToAchievements={handleTutorialNavigateToAchievements}
           onDismiss={dismissAchievementsTutorial}
         />
+      )}
+      {/* Non-blocking: pointer-events are off in CSS, so it can never intercept a
+          tap on the game or the navigation underneath it. role="status" announces
+          it once without stealing focus. */}
+      {updateNotice && (
+        <div className="app-update-toast" role="status">
+          {updateNotice}
+        </div>
       )}
     </>
   );

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.34.1 - 2026-08-17
+
+Fixes only - no new features and no visual changes.
+
+**Touch scrolling on the result screen.** The read-only comparison canvas carried
+the drawing canvas's `touch-action: none`, so a 320px-tall block in the middle of
+a scrollable screen swallowed every touch gesture that started on it: the result
+screen scrolled down (the canvas starts below the fold) but could not be scrolled
+back up once the canvas filled the middle of the viewport. Read-only canvases now
+scroll normally; the drawing canvas is unchanged and still refuses gestures so a
+stroke is never stolen by the page panning under the finger.
+
+**Clearer feedback for Google Play updates.** A flexible update downloads silently
+in the background, so accepting Play's dialog looked like it had done nothing. A
+short, non-blocking notice now reports what Play itself reports - "Downloading
+update…" once the update is accepted, and "Update ready - restart the app to
+finish" when the download completes. A declined or failed update still says
+nothing, and the update mechanism itself is unchanged.
+
 ## 0.34.0 - 2026-08-17
 
 **Android bottom safe area.** Under edge-to-edge (enforced for targetSdk 35+) the

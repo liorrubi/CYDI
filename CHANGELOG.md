@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.34.0 - 2026-08-17
+
+**Android bottom safe area.** Under edge-to-edge (enforced for targetSdk 35+) the
+system navigation bar was painted over the bottom edge of every screen, leaving
+the last control - `Back to Map` on the result screen - almost entirely covered.
+Every screen's bottom padding now adds the real `env(safe-area-inset-bottom)` on
+top of its visual padding, so the last button clears the bar with the same gap it
+always had. The inset is added rather than max()'d, so a 48dp 3-button bar leaves
+real breathing room instead of sitting flush; gesture navigation reports a smaller
+inset and gets the same treatment. Web layout is unchanged - `env()` is 0 there,
+and the computed padding is identical at every breakpoint.
+
+**Periodic 3× reward bonus.** Every 7th completed Shape Challenge round, the usual
+×2 coin offer becomes a ×3 one, marked with a gold "3× BONUS!" banner, a short
+pulse and a single celebratory sound (silent when sound effects are off) - inline
+in the result screen, never a popup, and with no countdown to the next one. The
+×3 is paid only for a confirmed rewarded-ad completion; an ad that is unavailable,
+fails or is closed early grants nothing and does NOT cost the bonus, which stays
+due for the next offer. A round that pays no coins shows no offer and likewise
+cannot swallow the bonus. Chest, shop, mega, special and artist-pack rewards are
+untouched and keep their ×2. Bonus offers report on their own `reward_bonus_*`
+analytics events so ×2 and ×3 can be compared without disturbing the ×2 baseline.
+
 ## 0.33.0 - 2026-08-16
 
 The unified release of the three features already live on the website since

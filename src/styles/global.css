@@ -680,6 +680,17 @@ body {
 
 .drawing-canvas-disabled {
   cursor: default;
+  /* `.drawing-canvas` above sets touch-action:none so a stroke is never stolen by
+     the page panning under the finger. A canvas that cannot be drawn on has no use
+     for that, and it actively breaks the result screen: ShapeOverlayCanvas renders
+     the comparison with these same classes, so a 320px-tall block in the middle of
+     a scrollable screen swallowed every touch gesture that began on it - the page
+     could be scrolled down (the canvas starts below the fold) but not back up.
+     Restoring the default only affects genuinely read-only canvases: DrawingCanvas
+     sets touch-action inline, and an inline style wins over this rule, so drawing
+     itself - active or mid-attempt - is untouched. Mouse wheel was never affected,
+     which is why this only ever showed up on touch devices. */
+  touch-action: auto;
 }
 
 /* Wraps the canvas so the cosmetic drawing-pen overlay can be positioned over it. */

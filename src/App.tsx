@@ -24,11 +24,12 @@ import SharedArtistResultScreen from "./screens/SharedArtistResultScreen";
 import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import ArtistPackScreen from "./screens/ArtistPackScreen";
-import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toShapeChallenge, toSharedArtistResult, toSharedResult } from "./app/routes";
+import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toHome, toShapeChallenge, toSharedArtistResult, toSharedResult } from "./app/routes";
 import { resolveIncomingAppLinkId, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
 import {
+  armTutorialReplay,
   markAchievementsTutorialShown,
   markOnboardingTutorialShown,
   onRoundCompleted,
@@ -272,6 +273,20 @@ export default function App({ landing }: AppProps) {
     setShowOnboardingTutorial(false);
   }
 
+  /** The "Start here" spotlight was accepted - drop straight into Shape Challenge. */
+  function startOnboardingTutorial() {
+    markOnboardingTutorialShown();
+    setShowOnboardingTutorial(false);
+    navigate(toShapeChallenge());
+  }
+
+  /** Instructions -> Start Tutorial: re-arm one coached round and show the Start here spotlight again. */
+  function handleStartTutorialFromInstructions() {
+    armTutorialReplay();
+    setShowOnboardingTutorial(true);
+    navigate(toHome());
+  }
+
   function dismissAchievementsTutorial() {
     markAchievementsTutorialShown();
     setShowAchievementsTutorial(false);
@@ -323,7 +338,7 @@ export default function App({ landing }: AppProps) {
               <InstructionsScreen
                 from={screen.from}
                 onNavigate={navigate}
-                onStartTutorial={() => setShowOnboardingTutorial(true)}
+                onStartTutorial={handleStartTutorialFromInstructions}
               />
             );
           case "sharedResult":
@@ -338,7 +353,10 @@ export default function App({ landing }: AppProps) {
             return <ArtistPackScreen packId={screen.packId} from={screen.from} replyTo={screen.replyTo} onNavigate={navigate} />;
         }
       })()}
-      {showOnboardingTutorial && <OnboardingTutorialOverlay onDismiss={dismissOnboardingTutorial} />}
+      {/* Spotlights the home screen's Shape Challenge card, so it only renders where that card exists. */}
+      {showOnboardingTutorial && screen.name === "home" && (
+        <OnboardingTutorialOverlay onStart={startOnboardingTutorial} onDismiss={dismissOnboardingTutorial} />
+      )}
       {showAchievementsTutorial && !showOnboardingTutorial && (
         <AchievementsTutorialOverlay
           onNavigateToAchievements={handleTutorialNavigateToAchievements}

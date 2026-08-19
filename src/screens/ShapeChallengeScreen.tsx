@@ -16,6 +16,7 @@ import {
   ANALYZING_MIN_MS,
   CANVAS_SIZE,
   CATEGORY_UNLOCK_COST,
+  FIRST_ROUND_PREVIEW_DURATION_MS,
   PREVIEW_DURATION_MS,
   coinsForStars,
   journeyRankForPercent,
@@ -59,6 +60,7 @@ import {
   recordRoundCompleted,
   shouldShowAchievementsTutorial,
   shouldShowDrawingTutorial,
+  shouldShowFirstRoundCoach,
   shouldShowResultActionsTutorial,
 } from "../services/tutorialStore";
 import { recordSuccessfulDrawing } from "../services/successfulDrawingsStore";
@@ -773,14 +775,24 @@ function ShapePlay({
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
+  // The inline first-round coach (countdown, "Draw it", "Tap Done", "Tap Next").
+  // Frozen at mount: recordRoundCompleted() flips the underlying condition mid-round,
+  // but this round stays coached until Next Shape remounts ShapePlay.
+  const [firstRoundCoach] = useState(() => shouldShowFirstRoundCoach());
+  const previewDurationMs = firstRoundCoach ? FIRST_ROUND_PREVIEW_DURATION_MS : PREVIEW_DURATION_MS;
+  const [previewSecondsLeft, setPreviewSecondsLeft] = useState(() => Math.ceil(previewDurationMs / 1000));
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
 
   // First time a genuinely new player reaches the canvas, walk them through
   // the drawing controls (pen, guide, undo, done) - shown once, ever.
   useEffect(() => {
-    if (phase === "drawing" && shouldShowDrawingTutorial()) {
+    // The coach teaches draw/finish inline this round, so the blocking modal stays
+    // out of its way. The flag is NOT burned: a player whose first canvas is
+    // elsewhere (Create, Daily) still gets the modal there.
+    if (phase === "drawing" && !firstRoundCoach && shouldShowDrawingTutorial()) {
       setShowDrawingTutorial(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   function dismissDrawingTutorial() {
@@ -807,12 +819,26 @@ function ShapePlay({
     const timeoutId = window.setTimeout(() => {
       trackEvent("game_started", { gameType: "shapeChallenge", category, contentKey: shape.id });
       setPhase("drawing");
-    }, PREVIEW_DURATION_MS);
+    }, previewDurationMs);
     return () => window.clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, category, shape]);
 
+  // Coached rounds show a small countdown next to "Look at the shape".
+  useEffect(() => {
+    if (phase !== "preview" || !firstRoundCoach) return;
+    setPreviewSecondsLeft(Math.ceil(previewDurationMs / 1000));
+    const intervalId = window.setInterval(() => {
+      setPreviewSecondsLeft((seconds) => Math.max(seconds - 1, 0));
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
   // Shown on the result screen only, and only while the round is actually resolved.
-  const showResultTutorial = phase === "result" && resultTutorialPending;
+  // A coached round always gets it (that's how Instructions -> Start Tutorial can
+  // replay it for veterans); the persisted flag still covers the plain first-result case.
+  const showResultTutorial = phase === "result" && (resultTutorialPending || firstRoundCoach);
 
   useEffect(() => {
     if (phase !== "result") return;
@@ -960,6 +986,7 @@ function ShapePlay({
   // or because it was already unlocked from a previous pass (replaying an old shape).
   const canGoToNextShape = nextIndex < shapes.length && nextIndex <= frontierIndex;
   const bestLabel = bestScore === undefined ? "—" : String(bestScore);
+  const hasStroke = attemptPath !== null && attemptPath.points.length > 0;
   const showTargetGhost = phase === "preview" || (phase === "drawing" && guideEnabled);
 
   if (phase === "result" && result && attemptPath) {
@@ -993,7 +1020,12 @@ function ShapePlay({
           </p>
         )}
         {doubleOfferAmount !== null && (
-          <DoubleCoinsOffer amount={doubleOfferAmount} onResolved={handleDoubleOfferResolved} placement="shape_challenge_double_reward" />
+          <DoubleCoinsOffer
+            amount={doubleOfferAmount}
+            onResolved={handleDoubleOfferResolved}
+            placement="shape_challenge_double_reward"
+            deferExplainer={showResultTutorial}
+          />
         )}
         {/* The continue actions sit ABOVE the comparison canvas and are no longer
             gated on the ×2 offer being resolved: doubling is a bonus, never a step
@@ -1005,7 +1037,9 @@ function ShapePlay({
               <Button variant="secondary" onClick={handleTryAgainFromResult}>
                 Try Again
               </Button>
-              <Button onClick={handleNextShapeFromResult}>Next Shape</Button>
+              <Button onClick={handleNextShapeFromResult} className={showResultTutorial ? "coach-pulse" : undefined}>
+                Next Shape
+              </Button>
             </>
           ) : (
             /* No next shape to offer yet, so retrying IS the way forward - it becomes
@@ -1024,7 +1058,7 @@ function ShapePlay({
           <div className="result-actions-hint-row">
             {canGoToNextShape && <span aria-hidden="true" />}
             <p className="result-actions-tutorial">
-              {canGoToNextShape ? "👆 Tap Next Shape to continue." : "👆 Tap Try Again to beat the pass score."}
+              {canGoToNextShape ? "👆 Tap Next to continue." : "👆 Tap Try Again to beat the pass score."}
             </p>
           </div>
         )}
@@ -1059,11 +1093,20 @@ function ShapePlay({
         onNavigateToHome={onNavigateToHome}
         onNavigateToSettings={onNavigateToSettings}
       />
-      <p className="status-text canvas-instruction-text">
-        {phase === "preview" && "Study the shape"}
-        {phase === "drawing" && "Now draw it"}
-        {phase === "analyzing" && "Analyzing..."}
-      </p>
+      {firstRoundCoach ? (
+        /* Coached round: same single status line, never a blocking overlay. */
+        <p className={`status-text canvas-instruction-text${phase !== "analyzing" ? " coach-hint" : ""}`}>
+          {phase === "preview" && `👀 Look at the shape · ${previewSecondsLeft}`}
+          {phase === "drawing" && (hasStroke ? "👆 Tap Done when you finish" : "✏️ Draw it!")}
+          {phase === "analyzing" && "Analyzing..."}
+        </p>
+      ) : (
+        <p className="status-text canvas-instruction-text">
+          {phase === "preview" && "Study the shape"}
+          {phase === "drawing" && "Now draw it"}
+          {phase === "analyzing" && "Analyzing..."}
+        </p>
+      )}
       <div className="canvas-wrapper">
         <DrawingCanvas
           ref={canvasRef}
@@ -1096,7 +1139,9 @@ function ShapePlay({
             <Button variant="secondary" onClick={handleUndo} disabled={!attemptPath || attemptPath.points.length === 0}>
               Undo
             </Button>
-            <Button onClick={handleDone}>Done</Button>
+            <Button onClick={handleDone} className={firstRoundCoach && hasStroke ? "coach-pulse" : undefined}>
+              Done
+            </Button>
           </div>
         </>
       )}

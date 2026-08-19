@@ -37,6 +37,8 @@ type DoubleCoinsOfferProps = {
   remainingDoubles?: number;
   /** Called once, ONLY after a double has actually been granted, so the caller can count it against its daily cap. A failed, blocked, unavailable or early-closed ad grants nothing and must therefore cost nothing. Only meaningful alongside `remainingDoubles`. */
   onDoubleAttempted?: () => void;
+  /** True while the screen is running a higher-priority coach hint (the first-round "Tap Next"). Hides the one-time ×2 explainer and reminder WITHOUT burning their flags - they simply return on a later, quieter offer. The offer itself stays fully usable. */
+  deferExplainer?: boolean;
 };
 
 type Phase = "offer" | "quiz" | "feedback";
@@ -86,7 +88,7 @@ function isMathFallbackEnabled(): boolean {
  * once the cap is hit, the double option disappears and only the base reward remains
  * collectible, with the current count shown to the player.
  */
-export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted }: DoubleCoinsOfferProps) {
+export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted, deferExplainer = false }: DoubleCoinsOfferProps) {
   const [phase, setPhase] = useState<Phase>("offer");
   const [question] = useState(() => ({ a: randomFactor(), b: randomFactor() }));
   const [answer, setAnswer] = useState("");
@@ -140,10 +142,10 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   // explanation. Tying both to one value makes that impossible.
   const [tutorialPending] = useState(() => shouldShowDoubleRewardTutorial());
   const [reminderPending] = useState(() => shouldShowReminder());
-  const showTutorial = adAvailable && tutorialPending;
+  const showTutorial = adAvailable && tutorialPending && !deferExplainer;
   // The tutorial wins - never both at once - and the reminder is pointless when no
   // ad can be served, so it shares the same gate.
-  const showReminder = adAvailable && !showTutorial && reminderPending;
+  const showReminder = adAvailable && !showTutorial && reminderPending && !deferExplainer;
 
   useEffect(() => {
     preloadRewardedAd(placement);

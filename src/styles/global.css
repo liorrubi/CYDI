@@ -2958,6 +2958,73 @@ body {
   margin-top: var(--space-4);
 }
 
+/* --- First-round coach ---------------------------------------------------- */
+
+/* Spotlight clone of the home screen's Shape Challenge card (Start here). */
+.tutorial-spotlight-card {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  padding: var(--space-4);
+  text-align: left;
+  background: var(--color-card);
+  border: 3px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 8px rgba(245, 180, 0, 0.25), 0 12px 30px rgba(0, 0, 0, 0.4);
+  animation: tutorial-fade-in 350ms ease both;
+  cursor: pointer;
+  z-index: 2001;
+}
+
+.tutorial-spotlight-card-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.tutorial-spotlight-card-sub {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+/* Inline, non-blocking hint text (countdown / Draw it / Tap Done). */
+.coach-hint {
+  color: var(--color-primary);
+  font-weight: 700;
+  animation: coach-hint-in 300ms ease both;
+}
+
+@keyframes coach-hint-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Gentle attention pulse on the one button the coach points at (Done / Next Shape). */
+.coach-pulse {
+  animation: coach-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes coach-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 180, 0, 0.55);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(245, 180, 0, 0);
+    transform: scale(1.04);
+  }
+}
+
 .onboarding-overlay {
   position: fixed;
   inset: 0;

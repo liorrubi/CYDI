@@ -19,6 +19,8 @@ export const RESAMPLE_POINT_COUNT = 128;
 export const MIN_POINTS_TO_SAVE = 8;
 
 export const PREVIEW_DURATION_MS = 2000;
+/** First coached round only: a slightly longer look at the shape, with a visible countdown. */
+export const FIRST_ROUND_PREVIEW_DURATION_MS = 3000;
 export const ANALYZING_MIN_MS = 800;
 export const ANALYZING_MAX_MS = 1200;
 

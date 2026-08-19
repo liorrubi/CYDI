@@ -2,7 +2,9 @@ import { getSaveData, updateSaveData } from "./saveStore";
 
 const ROUND_COMPLETED_EVENT = "cydi:round-completed";
 
-export const ACHIEVEMENTS_TUTORIAL_ROUND_THRESHOLD = 1;
+// Round 2, not round 1: the first result screen belongs to the first-round coach
+// ("Tap Next") and must not compete with a spotlight overlay on top of it.
+export const ACHIEVEMENTS_TUTORIAL_ROUND_THRESHOLD = 2;
 
 function getCompletedRoundCount(): number {
   return getSaveData().progress.completedRounds;
@@ -13,7 +15,26 @@ export function recordRoundCompleted(): void {
   updateSaveData((data) => {
     data.progress.completedRounds += 1;
   });
+  // A replayed tutorial covers one round only - the one that just finished.
+  tutorialReplayArmed = false;
   window.dispatchEvent(new Event(ROUND_COMPLETED_EVENT));
+}
+
+// --- First-round coach --------------------------------------------------------
+// The inline, non-blocking hints of the first Shape Challenge round (preview
+// countdown, "Draw it", "Tap Done", "Tap Next"). Session-only state: a genuinely
+// new player gets them via completedRounds === 0, and "Start Tutorial" in
+// Instructions re-arms them once for veterans without touching persisted flags.
+
+let tutorialReplayArmed = false;
+
+/** Arms one full round of first-round coach hints (Instructions -> Start Tutorial). Not persisted. */
+export function armTutorialReplay(): void {
+  tutorialReplayArmed = true;
+}
+
+export function shouldShowFirstRoundCoach(): boolean {
+  return tutorialReplayArmed || getSaveData().progress.completedRounds === 0;
 }
 
 export function onRoundCompleted(listener: () => void): () => void {

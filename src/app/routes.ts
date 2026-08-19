@@ -17,8 +17,11 @@ export function toList(): Screen {
   return { name: "list" };
 }
 
-export function toPlay(challengeId: string): Screen {
-  return { name: "play", challengeId };
+/** `from` is the screen Back should return to. Omitted means My Challenges, which is where
+ * a challenge is normally opened from; a challenge opened from a friend's link passes home,
+ * since a first-time player has no My Challenges list of their own to go back to. */
+export function toPlay(challengeId: string, from?: Screen): Screen {
+  return { name: "play", challengeId, from };
 }
 
 export function toFriendChallengeIntro(challengeId: string): Screen {

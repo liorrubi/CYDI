@@ -78,6 +78,17 @@ function importSharedScreenFromHash(): Screen | null {
   return null;
 }
 
+/** A /c/<id> link that can't be resolved - expired, deleted, or simply offline. Without
+ * saying so the player just lands on the home screen and never learns their friend's link
+ * failed. */
+const SHARED_LINK_UNAVAILABLE = "That challenge link isn't available - ask your friend for a new one.";
+
+/** True while the URL still carries a challenge payload. A decodable one is consumed and
+ * stripped from the URL by the import above, so anything left here failed to decode. */
+function hasUndecodableChallengeHash(): boolean {
+  return location.hash.startsWith("#c.");
+}
+
 function shortLinkIdFromPath(): string | null {
   const match = location.pathname.match(SHORT_LINK_PATH_PATTERN);
   return match ? match[1] : null;
@@ -126,6 +137,27 @@ export default function App({ landing }: AppProps) {
   const [showOnboardingTutorial, setShowOnboardingTutorial] = useState(() => shouldShowOnboardingTutorial());
   /** Transient in-app update notice (Android only); null whenever there is nothing to say. */
   const [updateNotice, setUpdateNotice] = useState<string | null>(null);
+  /** Transient notice for a share link that could not be opened. */
+  const [linkNotice, setLinkNotice] = useState<string | null>(null);
+  /**
+   * True while a /c/<id> link is still being resolved. Unlike a hash link - which carries its
+   * own payload and is decoded synchronously before the first render - a short link needs a
+   * round trip, so the app renders home first. Without this the very first thing a new player
+   * sees when they open a friend's link is the home screen's "Start here" spotlight, which
+   * then vanishes when the challenge loads. On native the launch URL is itself async, so the
+   * check starts pending there and clears as soon as Capacitor answers.
+   */
+  const [sharedLinkPending, setSharedLinkPending] = useState(
+    () => shortLinkIdFromPath() !== null || Capacitor.isNativePlatform(),
+  );
+  /**
+   * Narrower than the flag above: true only once a link is actually being fetched, and it
+   * replaces the whole UI with a neutral notice. The home screen must not be reachable in
+   * that window - a resolve takes long enough on a phone connection for someone to start
+   * tapping a card and be yanked into a challenge mid-tap. The broader flag still covers
+   * native's launch-URL check, which is too short to be worth blanking the screen for.
+   */
+  const [resolvingSharedLink, setResolvingSharedLink] = useState(() => shortLinkIdFromPath() !== null);
 
   // Screen navigation is plain React state, not browser history, so there's
   // nothing for the Android hardware back button to pop by default (it would
@@ -203,18 +235,32 @@ export default function App({ landing }: AppProps) {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
-    function handleIncomingUrl(rawUrl: string) {
+    /** Returns whether this URL was taken on - the caller uses that to stop waiting. */
+    function handleIncomingUrl(rawUrl: string): boolean {
       const id = resolveIncomingAppLinkId(rawUrl, lastHandledAppLinkUrlRef.current);
-      if (!id) return;
+      if (!id) return false;
       lastHandledAppLinkUrlRef.current = rawUrl;
-      importSharedScreenFromShortId(id).then((shared) => {
-        if (shared) setScreen(shared);
-      });
+      setResolvingSharedLink(true);
+      importSharedScreenFromShortId(id)
+        .then((shared) => {
+          if (shared) setScreen(shared);
+          else setLinkNotice(SHARED_LINK_UNAVAILABLE);
+        })
+        .catch(() => setLinkNotice(SHARED_LINK_UNAVAILABLE))
+        .finally(() => {
+          setSharedLinkPending(false);
+          setResolvingSharedLink(false);
+        });
+      return true;
     }
 
-    CapacitorApp.getLaunchUrl().then((result) => {
-      if (result?.url) handleIncomingUrl(result.url);
-    });
+    CapacitorApp.getLaunchUrl()
+      .then((result) => {
+        // No launch URL, or one this app doesn't own: nothing is coming, stop holding
+        // the onboarding spotlight back.
+        if (!result?.url || !handleIncomingUrl(result.url)) setSharedLinkPending(false);
+      })
+      .catch(() => setSharedLinkPending(false));
     const listenerPromise = CapacitorApp.addListener("appUrlOpen", ({ url }) => handleIncomingUrl(url));
     return () => {
       listenerPromise.then((listener) => listener.remove());
@@ -235,7 +281,10 @@ export default function App({ landing }: AppProps) {
   useEffect(() => {
     function handleHashChange() {
       const shared = importSharedScreenFromHash();
-      if (!shared) return;
+      if (!shared) {
+        if (hasUndecodableChallengeHash()) setLinkNotice(SHARED_LINK_UNAVAILABLE);
+        return;
+      }
       history.replaceState(null, "", location.pathname + location.search);
       setScreen(shared);
     }
@@ -250,15 +299,38 @@ export default function App({ landing }: AppProps) {
     const id = shortLinkIdFromPath();
     if (!id) return;
     let cancelled = false;
-    importSharedScreenFromShortId(id).then((shared) => {
-      if (cancelled || !shared) return;
-      history.replaceState(null, "", "/" + location.search);
-      setScreen(shared);
-    });
+    importSharedScreenFromShortId(id)
+      .then((shared) => {
+        if (cancelled) return;
+        if (!shared) {
+          setLinkNotice(SHARED_LINK_UNAVAILABLE);
+          return;
+        }
+        history.replaceState(null, "", "/" + location.search);
+        setScreen(shared);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkNotice(SHARED_LINK_UNAVAILABLE);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setSharedLinkPending(false);
+        setResolvingSharedLink(false);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (hasUndecodableChallengeHash()) setLinkNotice(SHARED_LINK_UNAVAILABLE);
+  }, []);
+
+  useEffect(() => {
+    if (!linkNotice) return;
+    const timer = window.setTimeout(() => setLinkNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [linkNotice]);
 
   useEffect(
     () =>
@@ -301,6 +373,18 @@ export default function App({ landing }: AppProps) {
   return (
     <>
       {(() => {
+        // A share link still being fetched owns the screen. Rendering home here instead
+        // would put a full, tappable menu in front of someone who is about to be moved to
+        // a challenge - long enough on a phone connection to start a tap and lose it.
+        if (resolvingSharedLink) {
+          return (
+            <div className="screen">
+              <p className="status-text" role="status">
+                Opening challenge…
+              </p>
+            </div>
+          );
+        }
         switch (screen.name) {
           case "home":
             return <HomeScreen onNavigate={navigate} />;
@@ -309,7 +393,7 @@ export default function App({ landing }: AppProps) {
           case "list":
             return <MyChallengesScreen onNavigate={navigate} />;
           case "play":
-            return <PlayChallengeScreen challengeId={screen.challengeId} onNavigate={navigate} />;
+            return <PlayChallengeScreen challengeId={screen.challengeId} from={screen.from} onNavigate={navigate} />;
           case "friendChallengeIntro":
             return <FriendChallengeIntroScreen challengeId={screen.challengeId} onNavigate={navigate} />;
           case "shapeChallenge":
@@ -354,7 +438,7 @@ export default function App({ landing }: AppProps) {
         }
       })()}
       {/* Spotlights the home screen's Shape Challenge card, so it only renders where that card exists. */}
-      {showOnboardingTutorial && screen.name === "home" && (
+      {showOnboardingTutorial && !sharedLinkPending && screen.name === "home" && (
         <OnboardingTutorialOverlay onStart={startOnboardingTutorial} onDismiss={dismissOnboardingTutorial} />
       )}
       {showAchievementsTutorial && !showOnboardingTutorial && (
@@ -366,9 +450,9 @@ export default function App({ landing }: AppProps) {
       {/* Non-blocking: pointer-events are off in CSS, so it can never intercept a
           tap on the game or the navigation underneath it. role="status" announces
           it once without stealing focus. */}
-      {updateNotice && (
+      {(updateNotice || linkNotice) && (
         <div className="app-update-toast" role="status">
-          {updateNotice}
+          {updateNotice ?? linkNotice}
         </div>
       )}
     </>

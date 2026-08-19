@@ -10,7 +10,7 @@ type FriendChallengeIntroScreenProps = {
 /** Landing screen shown every time a player opens a challenge link a friend sent them - explains the invite, then either starts the challenge or lets them explore the rest of CYDI first. */
 export default function FriendChallengeIntroScreen({ challengeId, onNavigate }: FriendChallengeIntroScreenProps) {
   function handleStart() {
-    onNavigate(toPlay(challengeId));
+    onNavigate(toPlay(challengeId, toHome()));
   }
 
   function handleExplore() {

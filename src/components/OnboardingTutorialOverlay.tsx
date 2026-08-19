@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import FeaturedShapePreviews from "./FeaturedShapePreviews";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 
 type OnboardingTutorialOverlayProps = {
@@ -54,9 +55,10 @@ export default function OnboardingTutorialOverlay({ onStart, onDismiss }: Onboar
       >
         <span className="tutorial-spotlight-card-title">Shape Challenge</span>
         <span className="tutorial-spotlight-card-sub">Draw what the game shows you</span>
+        <FeaturedShapePreviews />
       </button>
       <div className="tutorial-tooltip" style={{ left: rect.left + rect.width / 2, top: rect.bottom + 12 }} onClick={handleStart}>
-        👆 Start here — draw your first shape!
+        👆 Start here — try Shape Challenge!
       </div>
     </div>
   );

@@ -1,6 +1,5 @@
 import AppHeader from "../components/AppHeader";
-import ShapePreviewIcon from "../components/ShapePreviewIcon";
-import { getShapeById, type ShapeDefinition } from "../content/contentRepository";
+import FeaturedShapePreviews from "../components/FeaturedShapePreviews";
 import { APP_NAME, APP_TAGLINE } from "../app/constants";
 import {
   toAchievements,
@@ -22,16 +21,6 @@ type HomeScreenProps = {
   onNavigate: (screen: Screen) => void;
 };
 
-/**
- * Three shapes from the regular catalog, drawn on the Shape Challenge card so the home
- * screen shows what the game is before you tap into it. Picked for silhouette contrast
- * (a drawn gesture / an everyday object / an organic form), for reading clearly at icon
- * size, and for not combining into a single scene the way e.g. a house and a cloud would.
- * Ids are looked up rather than hardcoded paths, so a content source that lacks one just
- * drops it.
- */
-const FEATURED_PREVIEW_SHAPE_IDS = ["spiral-2", "home-mug", "nat-mushroom"];
-
 export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   function handleSelect(screen: Screen) {
     playSelectSound();
@@ -41,10 +30,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   // Hidden inside the Android app itself, where "get the app" is meaningless -
   // this is the website's install CTA only.
   const showGetTheApp = !isAndroidApp();
-
-  const previewShapes = FEATURED_PREVIEW_SHAPE_IDS.map(getShapeById).filter(
-    (shape): shape is ShapeDefinition => shape !== undefined,
-  );
 
   function handleGetTheApp() {
     playSelectSound();
@@ -71,13 +56,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         >
           <h2>Shape Challenge</h2>
           <p>Draw what the game shows you</p>
-          {previewShapes.length > 0 && (
-            <div className="home-card-preview">
-              {previewShapes.map((shape) => (
-                <ShapePreviewIcon key={shape.id} shape={shape} size={52} />
-              ))}
-            </div>
-          )}
+          <FeaturedShapePreviews />
         </button>
         <button
           type="button"

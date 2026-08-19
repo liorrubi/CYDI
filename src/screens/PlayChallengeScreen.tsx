@@ -10,6 +10,7 @@ import {
   ANALYZING_MAX_MS,
   ANALYZING_MIN_MS,
   CANVAS_SIZE,
+  FIRST_ROUND_PREVIEW_DURATION_MS,
   PREVIEW_DURATION_MS,
   penInkGlyphColor,
   type PenColorId,
@@ -44,10 +45,12 @@ type Phase = "preview" | "drawing" | "analyzing" | "result";
 
 type PlayChallengeScreenProps = {
   challengeId: string;
+  /** Where Back goes - see toPlay(). Undefined keeps the historical My Challenges target. */
+  from?: Screen;
   onNavigate: (screen: Screen) => void;
 };
 
-export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayChallengeScreenProps) {
+export default function PlayChallengeScreen({ challengeId, from, onNavigate }: PlayChallengeScreenProps) {
   const [challenge, setChallenge] = useState<Challenge | null>(() => getChallenge(challengeId));
   const [phase, setPhase] = useState<Phase>("preview");
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
@@ -57,16 +60,22 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
-  const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
 
-  // First time a genuinely new player reaches the canvas, walk them through
-  // the drawing controls (pen, guide, undo, done) - shown once, ever.
-  useEffect(() => {
-    if (phase === "drawing" && shouldShowDrawingTutorial()) {
-      setShowDrawingTutorial(true);
-    }
-  }, [phase]);
+  // Opened before the preview rather than when drawing starts: the target is only ever
+  // visible during the preview (there is no guide to fall back on here), so a walkthrough
+  // that interrupts afterwards costs a first-time player their one look at the shape.
+  // The preview timer below waits for this to close, so the sequence is explain -> full
+  // preview -> draw.
+  const [showDrawingTutorial, setShowDrawingTutorial] = useState(() => shouldShowDrawingTutorial());
+  // The whole first-visit treatment - longer preview and inline hints - hangs off the same
+  // one-shot flag as the tutorial above, deliberately NOT off completedRounds: that counter
+  // is only ever advanced by Shape Challenge, so a player who only ever opens friends'
+  // challenges would sit at 0 forever and be coached again every single time.
+  const [isCoachedFirstVisit] = useState(() => shouldShowDrawingTutorial());
+  const previewDurationMs = isCoachedFirstVisit ? FIRST_ROUND_PREVIEW_DURATION_MS : PREVIEW_DURATION_MS;
+  const backTarget = from ?? toList();
+  const hasStroke = attemptPath !== null && attemptPath.points.length > 0;
 
   function dismissDrawingTutorial() {
     markDrawingTutorialShown();
@@ -79,7 +88,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   }
 
   function handleLockedColorClick(id: PenColorId) {
-    onNavigate(toShop(toPlay(challengeId), id));
+    onNavigate(toShop(toPlay(challengeId, from), id));
   }
 
   function handleSelectPenSkin(id: PenSkinId) {
@@ -88,7 +97,7 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   }
 
   function handleLockedSkinClick(id: PenSkinId) {
-    onNavigate(toShop(toPlay(challengeId), undefined, id));
+    onNavigate(toShop(toPlay(challengeId, from), undefined, id));
   }
 
   function handleUndo() {
@@ -96,13 +105,13 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
   }
 
   useEffect(() => {
-    if (!challenge || phase !== "preview") return;
+    if (!challenge || phase !== "preview" || showDrawingTutorial) return;
     const timeoutId = window.setTimeout(() => {
       trackEvent("game_started", { gameType: "customChallenge", category: "custom", contentKey: challenge.id });
       setPhase("drawing");
-    }, PREVIEW_DURATION_MS);
+    }, previewDurationMs);
     return () => window.clearTimeout(timeoutId);
-  }, [challenge, phase]);
+  }, [challenge, phase, showDrawingTutorial, previewDurationMs]);
 
   function handleDone() {
     if (!attemptPath || !challenge) return;
@@ -169,16 +178,16 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
       <div className="screen">
         <AppHeader
           title="Challenge not found"
-          onBack={() => onNavigate(toList())}
-          onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
-          onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
-          onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
+          onBack={() => onNavigate(backTarget)}
+          onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId, from)))}
+          onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId, from)))}
+          onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId, from)))}
           onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
           onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
           onNavigateToHome={() => onNavigate(toHome())}
           onNavigateToSettings={() => onNavigate(toSettings())}
         />
-        <Button onClick={() => onNavigate(toList())}>Back to My Challenges</Button>
+        <Button onClick={() => onNavigate(backTarget)}>{from ? "Back" : "Back to My Challenges"}</Button>
       </div>
     );
   }
@@ -194,12 +203,12 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
         attempt={attemptPath}
         attemptColor={penColor}
         onRetry={handleRetry}
-        onBack={() => onNavigate(toList())}
+        onBack={() => onNavigate(backTarget)}
         onShareResult={handleShareResult}
         shareFeedback={shareFeedback}
-        onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
-        onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
-        onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
+        onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId, from)))}
+        onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId, from)))}
+        onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId, from)))}
         onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
         onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
@@ -213,20 +222,30 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
     <div className="screen">
       <AppHeader
         title={challenge.name}
-        onBack={() => onNavigate(toList())}
-        onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId)))}
-        onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId)))}
-        onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId)))}
+        onBack={() => onNavigate(backTarget)}
+        onNavigateToAchievements={() => onNavigate(toAchievements(toPlay(challengeId, from)))}
+        onNavigateToInstructions={() => onNavigate(toInstructions(toPlay(challengeId, from)))}
+        onNavigateToShop={() => onNavigate(toShop(toPlay(challengeId, from)))}
         onNavigateToSpecialChallenge={() => onNavigate(toSpecialChallenge())}
         onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />
-      <p className="status-text canvas-instruction-text">
-        {phase === "preview" && "Study the shape"}
-        {phase === "drawing" && "Now draw it"}
-        {phase === "analyzing" && "Analyzing..."}
-      </p>
+      {isCoachedFirstVisit ? (
+        /* Same inline, non-blocking coach Shape Challenge's first round uses - it is the
+           only place "Tap Done" is ever taught, and this screen has no Next Shape. */
+        <p className={`status-text canvas-instruction-text${phase !== "analyzing" ? " coach-hint" : ""}`}>
+          {phase === "preview" && "👀 Look at the shape"}
+          {phase === "drawing" && (hasStroke ? "👆 Tap Done when you finish" : "✏️ Draw it!")}
+          {phase === "analyzing" && "Analyzing..."}
+        </p>
+      ) : (
+        <p className="status-text canvas-instruction-text">
+          {phase === "preview" && "Study the shape"}
+          {phase === "drawing" && "Now draw it"}
+          {phase === "analyzing" && "Analyzing..."}
+        </p>
+      )}
       <div className="canvas-wrapper">
         <DrawingCanvas
           ref={canvasRef}
@@ -253,10 +272,12 @@ export default function PlayChallengeScreen({ challengeId, onNavigate }: PlayCha
             />
           </div>
           <div className="button-row">
-            <Button variant="secondary" onClick={handleUndo} disabled={!attemptPath || attemptPath.points.length === 0}>
+            <Button variant="secondary" onClick={handleUndo} disabled={!hasStroke}>
               Undo
             </Button>
-            <Button onClick={handleDone}>Done</Button>
+            <Button onClick={handleDone} className={isCoachedFirstVisit && hasStroke ? "coach-pulse" : undefined}>
+              Done
+            </Button>
           </div>
         </>
       )}

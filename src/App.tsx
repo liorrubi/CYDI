@@ -438,7 +438,7 @@ export default function App({ landing }: AppProps) {
         }
       })()}
       {/* Spotlights the home screen's Shape Challenge card, so it only renders where that card exists. */}
-      {showOnboardingTutorial && !sharedLinkPending && screen.name === "home" && (
+      {showOnboardingTutorial && !sharedLinkPending && !resolvingSharedLink && screen.name === "home" && (
         <OnboardingTutorialOverlay onStart={startOnboardingTutorial} onDismiss={dismissOnboardingTutorial} />
       )}
       {showAchievementsTutorial && !showOnboardingTutorial && (

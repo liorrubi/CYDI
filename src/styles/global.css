@@ -4552,3 +4552,38 @@ body {
   font-size: 13px;
   color: var(--color-text-muted);
 }
+
+/* --- Phone-only result-screen compaction ----------------------------------
+   Purely spacing and one headline size: every score component, the stars, the
+   reward offer and the tip all still render, with the same wording. The point is
+   to lift Next Shape / Try Again above the fold on a ~740px-tall phone viewport
+   when the x2 offer is on screen, which costs about 65px of padding and margin.
+   Scoped to <=480px, so desktop and tablet keep the roomier spacing. */
+@media (max-width: 480px) {
+  .score-card {
+    padding: var(--space-4);
+  }
+
+  /* Still by far the largest text on the screen - this only takes it off the
+     ceiling, it does not make the number harder to read. */
+  .score-total {
+    font-size: 46px;
+  }
+
+  .score-message {
+    margin-bottom: var(--space-2);
+  }
+
+  .score-card .record-banner {
+    margin-bottom: var(--space-2);
+  }
+
+  .double-offer-banner {
+    margin-top: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .result-actions {
+    margin-top: var(--space-1);
+  }
+}

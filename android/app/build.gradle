@@ -117,21 +117,22 @@ android {
         // (the read-only comparison canvas no longer swallows touch gestures) and a
         // short notice while a Play flexible update downloads / is ready to install.
         //
-        // 20 = a DEBUG device-test build only (never uploaded): the contextual
-        // onboarding rework - "Start here" spotlight instead of the 5-step intro
-        // modal, inline first-round coach (preview countdown, "Draw it", "Tap Done",
-        // "Tap Next"), the improvement tip moved below the continue actions, and the
-        // phone-only result-screen compaction. Needed 20 because the MIUI test device
-        // already carries a debug 19, and a device silently refuses a same-or-lower
-        // code (it offers "Open" instead of updating, so the old build keeps running
-        // with no error anywhere).
+        // 19 = 0.34.1 went LIVE on Google Play (Play's highest upload to date).
+        // 20 = 0.35.0, the contextual onboarding release: the "Start here" spotlight
+        // replaces the 5-step intro modal, an inline first-round coach (preview
+        // countdown, "Draw it", "Tap Done", "Tap Next") replaces the blocking drawing
+        // modal, the improvement tip moves below the continue actions, and the result
+        // screen is compacted on phones so Next Shape clears the fold. 20 was first
+        // used for the debug device-test builds of this same work, which is why the
+        // MIUI test device carries a debug-signed 20 - it cannot take this release
+        // build over it (same code, and a different signature); wipe the debug build
+        // first if that device ever needs the release one.
         //
-        // CURRENT STATE: the device carries debug 20; Play's highest upload is 18 and
-        // 19 = 0.34.1 is the pending release code. The next build that goes to a
-        // DEVICE needs 21+, and the next Play upload needs 19 or higher - Play
-        // permanently rejects a re-used code.
+        // CURRENT STATE: 20 clears Play (highest upload 19). The NEXT release must use
+        // 21 or higher - Play permanently rejects a re-used code, and a device
+        // silently refuses a same-or-lower one.
         versionCode 20
-        versionName "0.34.1"
+        versionName "0.35.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

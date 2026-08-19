@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.35.0 - 2026-08-19
+
+**Contextual onboarding.** The five-step intro modal that opened over the home
+screen is gone. A new player now gets a single "Start here" spotlight on the Shape
+Challenge card, and one tap goes straight into the game - the other modes are
+explained by their own existing tutorials the first time the player actually meets
+them. The first round is coached inline instead of by a blocking dialog: the shape
+preview runs 3 seconds with a visible countdown ("Look at the shape - 3"), then
+"Draw it!", then "Tap Done when you finish" with a gentle pulse on Done once the
+first stroke lands, and "Tap Next to continue" with the same pulse on Next Shape.
+From the second round on there is no coaching at all and no extra modal. Nothing is
+persisted beyond the existing flags, so no save data changes and no existing
+progress is touched; "Start Tutorial" in How to Play replays the spotlight and one
+coached round for anyone who wants it again.
+
+**A first result screen that isn't crowded.** The achievements coach-mark moved to
+after the second round, so the first result screen carries the score, the stars, the
+reward and one hint and nothing else. The ×2 coin offer still appears on the first
+round exactly as before, but its one-time explainer defers to the "Tap Next" hint
+rather than stacking on top of it - deferred, not spent, so it still appears on a
+later offer.
+
+**Result screen reachable without scrolling on a phone.** The "how to improve" tip
+moved out of the score card to below the continue actions, and the score card, the
+reward offer and the spacing around them are tighter on screens up to 480px wide.
+On a 392x738 phone viewport that is about 145px: the reward offer and Next Shape /
+Try Again are now fully visible without scrolling even when the ×2 offer is on
+screen, where Next Shape used to sit past the fold. Every score component, the
+stars, the offer and the tip still render with the same wording, and desktop and
+tablet spacing is unchanged.
+
 ## 0.34.1 - 2026-08-17
 
 Fixes only - no new features and no visual changes.

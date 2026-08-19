@@ -2974,9 +2974,23 @@ body {
   border: 3px solid var(--color-accent);
   border-radius: var(--radius-md);
   box-shadow: 0 0 0 8px rgba(245, 180, 0, 0.25), 0 12px 30px rgba(0, 0, 0, 0.4);
-  animation: tutorial-fade-in 350ms ease both;
+  /* Own keyframes on purpose: tutorial-fade-in carries a translate(-50%) for
+     centred elements like the tooltip, which would drag this card - positioned by
+     its own left/top - half its width off screen. */
+  animation: coach-card-in 350ms ease both;
   cursor: pointer;
   z-index: 2001;
+}
+
+@keyframes coach-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .tutorial-spotlight-card-title {

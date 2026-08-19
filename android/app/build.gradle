@@ -128,11 +128,22 @@ android {
         // build over it (same code, and a different signature); wipe the debug build
         // first if that device ever needs the release one.
         //
-        // CURRENT STATE: 20 clears Play (highest upload 19). The NEXT release must use
-        // 21 or higher - Play permanently rejects a re-used code, and a device
+        //
+        // 20 = 0.35.0 went LIVE on Google Play Production on 19 Aug 2026 (full
+        // rollout, 177 countries), built from the pre-fix tree.
+        // 21 = 0.35.1, a fixes-only follow-up to that release: WCAG AA contrast in
+        // the colour tokens, the home screen's Shape Challenge card carrying real
+        // shapes, the friend-challenge first-run flow (walkthrough before the
+        // preview, longer preview, "Tap Done" coach, Back to home), and the loading
+        // state that keeps the onboarding spotlight off a resolving challenge link.
+        // 0.35.0 could not carry them: its code was already published, and Play
+        // permanently rejects a re-used versionCode.
+        //
+        // CURRENT STATE: 21 clears Play (highest upload 20). The NEXT release must use
+        // 22 or higher - Play permanently rejects a re-used code, and a device
         // silently refuses a same-or-lower one.
-        versionCode 20
-        versionName "0.35.0"
+        versionCode 21
+        versionName "0.35.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

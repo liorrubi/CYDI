@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.35.1 - 2026-08-19
+
+A fixes-only follow-up to 0.35.0, all of it verified on a real device.
+
+**Readable colour everywhere.** Eight colour pairs sat below the WCAG AA contrast
+minimum, all of them in the shared tokens rather than in one screen: the "New
+personal best!" banner put light text on gold in dark mode (1.35:1), the primary
+button's white label sat on too light a purple in dark mode, the green success
+fills and the small "FREE" badges were unreadable in both themes, and form fields
+were outlined by a hairline no eye could find. The tokens now carry their own ink
+colours, so every screen was fixed at once, and the smallest badges went from 8px
+to 11px.
+
+**A home screen that shows the game.** Shape Challenge is the primary action and
+now looks like it: the card is the only one carrying artwork - three shapes from
+the regular catalog that draw themselves on - and it stands nearly twice as tall
+as its neighbours. The other five cards are untouched.
+
+**A friend's challenge makes sense to a first-time player.** The drawing
+walkthrough used to open after the target had already flashed past, spending the
+one look at the shape a player gets on this screen. It now opens first and the
+preview waits for it, the first visit gets the longer preview and the same inline
+coach Shape Challenge uses (including "Tap Done"), and Back returns home instead
+of dropping a brand-new player into My Challenges. The home spotlight no longer
+claims they have never drawn.
+
+**Challenge links open cleanly.** A short link resolves behind an "Opening
+challenge…" notice instead of a live, tappable home screen, and a link that can't
+be opened says so rather than silently landing on the home screen.
+
 ## 0.35.0 - 2026-08-19
 
 **Contextual onboarding.** The five-step intro modal that opened over the home

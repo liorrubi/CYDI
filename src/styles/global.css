@@ -3,8 +3,11 @@
   --color-primary: #5b5bf7;
   --color-primary-dark: #4444d6;
   --color-accent: #f5b400;
-  --color-success: #2fb673;
-  --color-danger: #e0455a;
+  /* Darkened from #2fb673 / #e0455a: both are used BOTH as text on a white card and as a
+     fill behind white text, and at the old values every one of those uses sat at 2.6-4.1:1.
+     These values clear 4.5:1 in both directions (5.10:1 and 5.93:1 on --color-card). */
+  --color-success: #1d7d54;
+  --color-danger: #c02338;
   --color-text: #1e202e;
   --color-text-muted: #6b6f80;
   --color-bg: #f4f5fb;
@@ -14,6 +17,19 @@
      --color-card because in light mode the body is pure white while cards float on
      top of the slightly-tinted --color-bg; dark mode needs the same separation. */
   --color-page-bg: #ffffff;
+
+  /* Fill that always carries white text. Pinned here rather than taken from
+     --color-primary because that one brightens in dark mode (for use as a text color),
+     which drops white-on-primary to 3.47:1. White on this: 4.90:1 in both themes. */
+  --color-primary-fill: #5b5bf7;
+  /* Text/ink colors for the tinted fills. --color-success and --color-accent move between
+     themes, so the ink on top of them has to move the other way. */
+  --color-on-success: #ffffff;
+  --color-on-accent: #3a2a05;
+  --color-on-muted: #ffffff;
+  /* --color-border is a 1.26:1 hairline - fine for decorative card edges, but the visible
+     boundary of a form control needs 3:1 (WCAG 1.4.11). 4.54:1 on --color-card. */
+  --color-control-border: #767676;
 
   --accent-blue: #7fa8d9;
   --accent-purple: #a794e8;
@@ -54,6 +70,12 @@
   --color-card: #1e2030;
   --color-border: #33354a;
   --color-page-bg: #14151f;
+
+  /* Dark mode keeps the bright green/gold fills, so the ink on them flips to near-black:
+     7.84:1 on --color-success, 9.06:1 on --color-accent, 6.83:1 on --color-text-muted. */
+  --color-on-success: #0f2419;
+  --color-on-muted: #1e2030;
+  --color-control-border: #8b90a8;
 
   --color-primary-text: #a3a0ff;
   --accent-blue-text: #8fb8e8;
@@ -426,31 +448,32 @@ body {
 .daily-chest-badge-free,
 .special-challenge-badge-free {
   background: var(--color-success);
-  color: white;
-  font-size: 8px;
+  color: var(--color-on-success);
+  font-size: 11px;
   font-weight: 800;
   padding: 2px 4px;
 }
 
 .daily-chest-badge-shop,
 .special-challenge-badge-retry {
-  background: var(--color-primary);
-  font-size: 10px;
+  background: var(--color-primary-fill);
+  color: white;
+  font-size: 11px;
   padding: 1px 3px;
 }
 
 .daily-chest-badge-locked,
 .special-challenge-badge-locked {
   background: var(--color-text-muted);
-  color: white;
-  font-size: 8px;
+  color: var(--color-on-muted);
+  font-size: 11px;
   font-weight: 800;
   padding: 2px 4px;
 }
 
 .celebration-banner {
   background: var(--color-success);
-  color: white;
+  color: var(--color-on-success);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   font-weight: 600;
@@ -629,7 +652,7 @@ body {
 }
 
 .btn-primary {
-  background: var(--color-primary);
+  background: var(--color-primary-fill);
   color: white;
 }
 
@@ -990,7 +1013,7 @@ body {
 .name-form input {
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   font-size: 16px;
 }
 
@@ -1037,7 +1060,7 @@ body {
   max-width: 260px;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   font-size: 14px;
   text-align: center;
 }
@@ -1113,7 +1136,7 @@ body {
 .password-prompt-input {
   padding: var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   font-size: 16px;
 }
 
@@ -1327,7 +1350,7 @@ body {
 
 .record-banner {
   background: var(--color-accent);
-  color: var(--color-text);
+  color: var(--color-on-accent);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   font-weight: 600;
@@ -3886,7 +3909,7 @@ body {
   border-radius: 50%;
   font-size: 12px;
   font-weight: 900;
-  color: #fff;
+  color: var(--color-on-success);
   background: var(--color-success);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   z-index: 2;

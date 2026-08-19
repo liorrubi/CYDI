@@ -57,6 +57,17 @@ export function shouldShowAchievementsTutorial(): boolean {
 }
 
 /**
+ * Whether the achievements coach-mark is still owed, regardless of whether this
+ * round is the one that fires it. The "First Steps" banner defers to it, and that
+ * deferral must hold from the very first round - not only on the round the
+ * threshold is reached - or the first result screen gets a full-screen
+ * celebration card on top of the first-round coach.
+ */
+export function isAchievementsTutorialPending(): boolean {
+  return !hasShownAchievementsTutorial();
+}
+
+/**
  * The onboarding tutorial targets genuinely new players: never shown once dismissed, and the
  * `completedRounds === 0` guard keeps it from popping up for veterans whose older saves
  * predate the `onboardingTutorialShown` field.

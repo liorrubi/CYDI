@@ -58,7 +58,7 @@ import {
   markDrawingTutorialShown,
   markResultActionsTutorialShown,
   recordRoundCompleted,
-  shouldShowAchievementsTutorial,
+  isAchievementsTutorialPending,
   shouldShowDrawingTutorial,
   shouldShowFirstRoundCoach,
   shouldShowResultActionsTutorial,
@@ -161,7 +161,7 @@ export default function ShapeChallengeScreen({ onNavigate, initialShape }: Shape
     let newlyUnlocked = detectAndBankNewAchievements(progress);
     // Same "let the tutorial cover it" rule as handleProgressChange, for a
     // returning player whose first round already qualifies at app boot.
-    if (shouldShowAchievementsTutorial()) {
+    if (isAchievementsTutorialPending()) {
       newlyUnlocked = newlyUnlocked.filter((achievement) => achievement.id !== "first-steps");
     }
     setPendingAchievements((prev) => [...prev, ...newlyUnlocked]);
@@ -186,7 +186,11 @@ export default function ShapeChallengeScreen({ onNavigate, initialShape }: Shape
     // celebratory banner and the tutorial back-to-back would be redundant, so
     // this one case defers to the tutorial instead. Its coins are still
     // banked above regardless; only the banner is skipped.
-    if (shouldShowAchievementsTutorial()) {
+    //
+    // Gated on "still owed" rather than "due this round": the coach-mark now
+    // fires on round 2, so checking shouldShow... here would let the banner
+    // through on round 1 and bury the first-round coach behind it.
+    if (isAchievementsTutorialPending()) {
       newlyUnlocked = newlyUnlocked.filter((achievement) => achievement.id !== "first-steps");
     }
     setPendingAchievements((prev) => [...prev, ...newlyUnlocked]);
@@ -779,6 +783,7 @@ function ShapePlay({
   // Frozen at mount: recordRoundCompleted() flips the underlying condition mid-round,
   // but this round stays coached until Next Shape remounts ShapePlay.
   const [firstRoundCoach] = useState(() => shouldShowFirstRoundCoach());
+  const resultActionsRef = useRef<HTMLDivElement | null>(null);
   const previewDurationMs = firstRoundCoach ? FIRST_ROUND_PREVIEW_DURATION_MS : PREVIEW_DURATION_MS;
   const [previewSecondsLeft, setPreviewSecondsLeft] = useState(() => Math.ceil(previewDurationMs / 1000));
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
@@ -868,6 +873,15 @@ function ShapePlay({
     trackEvent("create_discovery_accepted", {});
     onNavigateToCreate();
   }
+  // The coached result screen must not point at a button below the fold. On a
+  // short phone viewport (~740px) the score card plus the x2 offer push the
+  // continue actions off screen, so the round that says "Tap Next" scrolls them
+  // into view itself rather than relying on the player to go looking.
+  useEffect(() => {
+    if (!showResultTutorial) return;
+    resultActionsRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [showResultTutorial]);
+
   const resultTutorialLoggedRef = useRef(false);
   useEffect(() => {
     if (!showResultTutorial || resultTutorialLoggedRef.current) return;
@@ -1031,7 +1045,7 @@ function ShapePlay({
             gated on the ×2 offer being resolved: doubling is a bonus, never a step
             that blocks play. Leaving the offer by continuing forfeits it - see
             forfeitDoubleOffer. */}
-        <div className="button-row result-actions">
+        <div className="button-row result-actions" ref={resultActionsRef}>
           {canGoToNextShape ? (
             <>
               <Button variant="secondary" onClick={handleTryAgainFromResult}>

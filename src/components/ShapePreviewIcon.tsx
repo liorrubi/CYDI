@@ -25,9 +25,13 @@ export default function ShapePreviewIcon({ shape, size = 40 }: ShapePreviewIconP
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shape-icon" aria-hidden="true">
       {sliceIntoSegments(path.points, path.breaks).map((segment, i) => (
+        // pathLength normalises the stroke to 1 unit, so a caller can animate it with
+        // stroke-dashoffset: 1 -> 0 whatever the shape's real length (see .home-card-preview).
+        // Inert on its own: nothing renders differently unless dash properties are set.
         <polyline
           key={i}
           points={segment.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+          pathLength={1}
           fill="none"
           stroke="currentColor"
           strokeWidth="2.5"

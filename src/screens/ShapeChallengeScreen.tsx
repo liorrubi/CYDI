@@ -18,6 +18,7 @@ import {
   CATEGORY_UNLOCK_COST,
   FIRST_ROUND_PREVIEW_DURATION_MS,
   PREVIEW_DURATION_MS,
+  improvementTip,
   coinsForStars,
   journeyRankForPercent,
   passScoreForDifficulty,
@@ -1005,6 +1006,7 @@ function ShapePlay({
 
   if (phase === "result" && result && attemptPath) {
     const passed = result.total >= passScore;
+    const resultTip = improvementTip(result);
     return (
       <div className="screen">
         {/* The header's back arrow takes the same exit as the Back to Map button below -
@@ -1026,7 +1028,9 @@ function ShapePlay({
             {feedbackMessage}
           </div>
         )}
-        <ScoreCard score={result} isNewBest={isNewBest} />
+        {/* The tip moves below the continue actions (see below) so the reward and
+            Next Shape / Try Again stay reachable without scrolling on a phone. */}
+        <ScoreCard score={result} isNewBest={isNewBest} showTip={false} />
         <StarRating score={result.total} size={44} />
         {previousBest !== undefined && bestScore !== undefined && (
           <p className="best-summary">
@@ -1086,6 +1090,7 @@ function ShapePlay({
           </div>
         )}
         <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
+        {resultTip && <p className="score-improvement-tip score-improvement-tip-standalone">💡 {resultTip}</p>}
         <Button variant="secondary" onClick={handleBackToMapFromResult}>
           Back to Map
         </Button>

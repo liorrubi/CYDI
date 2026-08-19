@@ -6,10 +6,12 @@ type ScoreCardProps = {
   isNewBest?: boolean;
   /** Appends a "%" to the headline number - for screens (like Daily Challenge) that drop the star rating and need the number to read as a percentage on its own. */
   showPercentSign?: boolean;
+  /** Set false to omit the "how to improve" tip, so the caller can place it lower down itself - Shape Challenge does this to keep the reward and the continue buttons above the fold on a phone. Defaults to true, so every other screen keeps the tip inside the card. */
+  showTip?: boolean;
 };
 
-export default function ScoreCard({ score, isNewBest, showPercentSign }: ScoreCardProps) {
-  const tip = improvementTip(score);
+export default function ScoreCard({ score, isNewBest, showPercentSign, showTip = true }: ScoreCardProps) {
+  const tip = showTip ? improvementTip(score) : undefined;
   return (
     <div className="card score-card">
       {isNewBest && <div className="record-banner">New personal best!</div>}

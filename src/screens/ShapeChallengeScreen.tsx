@@ -19,7 +19,6 @@ import {
   FIRST_ROUND_PREVIEW_DURATION_MS,
   PREVIEW_DURATION_MS,
   improvementTip,
-  coinsForStars,
   journeyRankForPercent,
   passScoreForDifficulty,
   penInkGlyphColor,
@@ -58,13 +57,11 @@ import {
   markCreateDiscoveryShown,
   markDrawingTutorialShown,
   markResultActionsTutorialShown,
-  recordRoundCompleted,
   isAchievementsTutorialPending,
   shouldShowDrawingTutorial,
   shouldShowFirstRoundCoach,
   shouldShowResultActionsTutorial,
 } from "../services/tutorialStore";
-import { recordSuccessfulDrawing } from "../services/successfulDrawingsStore";
 import { recordOfferSkipped } from "../app/rewardOfferNudge";
 import { isRewardedAdAvailable } from "../services/ads";
 import { trackEvent } from "../services/analytics";
@@ -75,10 +72,14 @@ import {
   getProgress,
   getTotalCompletedCount,
   isShapeUnlockedAt,
-  markShapeCompleted,
-  saveProgress,
   type ShapeChallengeProgress,
 } from "../services/shapeChallengeProgress";
+import {
+  applyShapeRoundOutcome,
+  resolveShapeRound,
+  roundCompletedEvent,
+  roundGameType,
+} from "../app/shapeRoundOutcome";
 import { collectedMegaCardCount, isMegaChallengeUnlocked, unlockMegaChallenge } from "../services/megaChallengeStore";
 import { getMegaAlbumSize, getPlayerFacingPacks } from "../content/contentRepository";
 import { MEGA_CHALLENGE_UNLOCK_COST } from "../app/constants";
@@ -106,24 +107,51 @@ type ShapeChallengeScreenProps = {
   onNavigate: (screen: Screen) => void;
   /** Web-only: a shape an SEO landing page asks to open on first render (see
    * seo/landingPages.ts). Purely a request - `resolveInitialSelection` honours it
-   * only if the player's existing unlock state already allows that shape, so it
-   * grants nothing and can never bypass unlocks, coins or progression. Always
-   * undefined on Android. */
-  initialShape?: { category: CategoryId; shapeId: string };
+   * only if the player's existing unlock state already allows that shape, or if
+   * the page asked for a `practice` round, which grants nothing (see below).
+   * Always undefined on Android. */
+  initialShape?: { category: CategoryId; shapeId: string; practice?: boolean };
 };
 
-/** Turns a landing page's requested shape into the same `{category, index}` selection a tap on its tile would produce - or null (land on the map) if the category or the shape is not already unlocked for this player, or the shape no longer exists in the active catalog. */
+/**
+ * Turns a landing page's requested shape into the same `{category, index}`
+ * selection a tap on its tile would produce - or null (land on the map) if the
+ * category or the shape is not already unlocked for this player, or the shape no
+ * longer exists in the active catalog.
+ *
+ * `practice` is the one exception: a page dedicated to a single shape may open
+ * that shape even when the player has not reached it, because dropping such a
+ * visitor on the map instead means the page does not do what it says. It buys
+ * that with `practiceRound` below - the round is scored and shown for real, but
+ * persists nothing at all (see app/shapeRoundOutcome.ts) - so it still cannot
+ * bypass unlocks, coins or progression.
+ */
 function resolveInitialSelection(
   initialShape: ShapeChallengeScreenProps["initialShape"],
   progress: ShapeChallengeProgress,
-): { category: CategoryId; index: number } | null {
+): { category: CategoryId; index: number; practice: boolean } | null {
   if (!initialShape) return null;
-  if (!getUnlockedCategoryIds().includes(initialShape.category)) return null;
   const shapes = getShapesForCategory(initialShape.category);
   const index = shapes.findIndex((shape) => shape.id === initialShape.shapeId);
   if (index === -1) return null;
+  if (initialShape.practice) return { category: initialShape.category, index, practice: true };
+  if (!getUnlockedCategoryIds().includes(initialShape.category)) return null;
   if (!isShapeUnlockedAt(progress, initialShape.category, shapes, index)) return null;
-  return { category: initialShape.category, index };
+  return { category: initialShape.category, index, practice: false };
+}
+
+/**
+ * Whether the player may browse this category's shape map. Mirrors the rule the
+ * category list applies to its own tiles - purchased, or already played under
+ * the pre-paywall rules - but takes the unlocked list as an argument so the
+ * category list can keep feeding it the state that paces its unlock animation.
+ */
+function isCategoryAccessible(
+  progress: ShapeChallengeProgress,
+  category: CategoryId,
+  unlockedCategoryIds: CategoryId[],
+): boolean {
+  return unlockedCategoryIds.includes(category) || getCategoryCompletedCount(progress, category) > 0;
 }
 
 /** Marks newly-unlocked achievements as unlocked and safely credits their coins to the real balance right away - the achievement queue passed back just controls when the celebratory banner/sound/counter-reveal happens, never whether the reward is actually paid out. */
@@ -145,6 +173,8 @@ export default function ShapeChallengeScreen({ onNavigate, initialShape }: Shape
   const [initialSelection] = useState(() => resolveInitialSelection(initialShape, progress));
   const [selectedCategory, setSelectedCategory] = useState<CategoryId | null>(initialSelection?.category ?? null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(initialSelection?.index ?? null);
+  /** True only while the landing page's own practice round is on screen; cleared the moment the player moves anywhere themselves. */
+  const [practiceRound, setPracticeRound] = useState(initialSelection?.practice ?? false);
   const [justUnlockedIndex, setJustUnlockedIndex] = useState<number | null>(null);
   const [pendingAchievements, setPendingAchievements] = useState<Achievement[]>([]);
 
@@ -227,7 +257,14 @@ export default function ShapeChallengeScreen({ onNavigate, initialShape }: Shape
     />
   );
 
-  if (selectedCategory === null) {
+  // A practice round may sit in a category the player has not unlocked, so leaving
+  // that round must not hand them its map: the category's frontier shape would be
+  // free to play there, and clearing it would open the whole paid category. Every
+  // other route into a map already passes the category list's own gate.
+  const canBrowseSelectedCategory =
+    selectedCategory !== null && isCategoryAccessible(progress, selectedCategory, getUnlockedCategoryIds());
+
+  if (selectedCategory === null || (selectedIndex === null && !canBrowseSelectedCategory)) {
     return (
       <>
         {achievementBanner}
@@ -281,9 +318,20 @@ export default function ShapeChallengeScreen({ onNavigate, initialShape }: Shape
         category={selectedCategory}
         levelIndex={selectedIndex}
         progress={progress}
+        practice={practiceRound}
         onProgressChange={(updated) => handleProgressChange(selectedCategory, updated)}
-        onNextShape={setSelectedIndex}
-        onBackToMap={() => setSelectedIndex(null)}
+        onNextShape={(index) => {
+          setPracticeRound(false);
+          setSelectedIndex(index);
+        }}
+        onBackToMap={() => {
+          setPracticeRound(false);
+          setSelectedIndex(null);
+          // Leaving a practice round whose category is still locked drops the
+          // stale category too, so the exit lands on the category list rather
+          // than on a map the guard above would only have to take away again.
+          if (!canBrowseSelectedCategory) setSelectedCategory(null);
+        }}
         onNavigateToAchievements={goToAchievements}
         onNavigateToInstructions={goToInstructions}
         onNavigateToCreate={() => onNavigate(toCreate())}
@@ -384,9 +432,10 @@ function CategoryListScreen({
   // A category with progress already made under the old (pre-paywall) rules
   // stays accessible - the gate only applies to categories the player hasn't
   // touched yet, so this change can never retroactively lock out shapes
-  // someone already unlocked by playing.
-  function isCategoryAccessible(category: CategoryId): boolean {
-    return unlockedCategoryIds.includes(category) || getCategoryCompletedCount(progress, category) > 0;
+  // someone already unlocked by playing. Reads the local unlocked-id state, not
+  // the store, so a purchase still reveals only after its lock animation.
+  function categoryAccessible(category: CategoryId): boolean {
+    return isCategoryAccessible(progress, category, unlockedCategoryIds);
   }
 
   function handleUnlockCategory(category: CategoryId) {
@@ -499,7 +548,7 @@ function CategoryListScreen({
           const unlocked = Math.min(getCategoryCompletedCount(progress, category.id), shapes.length);
           const percent = Math.round((unlocked / shapes.length) * 100);
           const hue = Math.round((index / categories.length) * 360);
-          const accessible = isCategoryAccessible(category.id);
+          const accessible = categoryAccessible(category.id);
           const isUnlocking = unlockingCategory === category.id;
           const showAsLocked = !accessible && !isUnlocking;
           const canAffordUnlock = coins >= CATEGORY_UNLOCK_COST;
@@ -722,6 +771,8 @@ type ShapePlayProps = {
   category: CategoryId;
   levelIndex: number;
   progress: ShapeChallengeProgress;
+  /** A landing page's one-off round (see resolveInitialSelection): scored and shown for real, but it persists nothing. */
+  practice?: boolean;
   onProgressChange: (progress: ShapeChallengeProgress) => void;
   onNextShape: (index: number) => void;
   onBackToMap: () => void;
@@ -739,6 +790,7 @@ function ShapePlay({
   category,
   levelIndex,
   progress,
+  practice = false,
   onProgressChange,
   onNextShape,
   onBackToMap,
@@ -823,7 +875,7 @@ function ShapePlay({
   useEffect(() => {
     if (phase !== "preview") return;
     const timeoutId = window.setTimeout(() => {
-      trackEvent("game_started", { gameType: "shapeChallenge", category, contentKey: shape.id });
+      trackEvent("game_started", { gameType: roundGameType(practice), category, contentKey: shape.id });
       setPhase("drawing");
     }, previewDurationMs);
     return () => window.clearTimeout(timeoutId);
@@ -886,10 +938,17 @@ function ShapePlay({
   const resultTutorialLoggedRef = useRef(false);
   useEffect(() => {
     if (!showResultTutorial || resultTutorialLoggedRef.current) return;
+    // A practice round's result screen has no Next Shape - the very step this
+    // one-time callout exists to teach - so seeing the reduced version here must
+    // not spend the player's one showing of the real thing. The hint still renders
+    // (it points at the only action there is); it simply is not counted as the
+    // tutorial having been given, which is also why it emits no event: that event
+    // is defined as at most one per player.
+    if (practice) return;
     resultTutorialLoggedRef.current = true;
     markResultActionsTutorialShown();
     trackEvent("result_actions_tutorial_shown", { placement: "shape_challenge_double_reward" });
-  }, [showResultTutorial]);
+  }, [showResultTutorial, practice]);
 
   /** The base reward is already credited where `doubleOfferAmount` is set below - only the extra half of a successful double is new (mirrors ChestRewardOverlay), so navigating away before resolving the offer can never forfeit the coins already earned. */
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
@@ -942,43 +1001,38 @@ function ShapePlay({
     const delay = ANALYZING_MIN_MS + Math.random() * (ANALYZING_MAX_MS - ANALYZING_MIN_MS);
     window.setTimeout(() => {
       const scoreResult = scoreAttempt(target, attemptPath);
-      const beatBest = bestScore === undefined || scoreResult.total > bestScore;
-      const passedNow = scoreResult.total >= passScore;
-      const advancesFrontier = passedNow && levelIndex === frontierIndex;
+      // What this round earned, and what it may write - see app/shapeRoundOutcome.ts.
+      // A practice round resolves to `persist: null`, which is what keeps it out of
+      // progression, coins, counters and achievements entirely.
+      const outcome = resolveShapeRound({
+        progress,
+        category,
+        shapeId: shape.id,
+        levelIndex,
+        frontierIndex,
+        score: scoreResult.total,
+        passScore,
+        practice,
+      });
+      const offerAmount = applyShapeRoundOutcome(outcome, onProgressChange);
+      if (offerAmount > 0) setDoubleOfferAmount(offerAmount);
 
-      const progressAfterPass = advancesFrontier ? markShapeCompleted(progress, category, shape.id) : progress;
-      const updatedProgress: ShapeChallengeProgress = {
-        ...progressAfterPass,
-        bestScores: { ...progressAfterPass.bestScores, [shape.id]: beatBest ? scoreResult.total : bestScore! },
-      };
-      saveProgress(updatedProgress);
-      // Recorded before onProgressChange so that achievement detection (which
-      // reads shouldShowAchievementsTutorial to decide whether to suppress the
-      // "First Steps" banner in favor of the achievements tutorial) already
-      // sees this round counted.
-      recordRoundCompleted();
-      if (passedNow) recordSuccessfulDrawing();
-      onProgressChange(updatedProgress);
-      // Pay out only the improvement over the shape's previous best - not the full
-      // reward for the new star tier every time. Otherwise climbing 3 stars, then
-      // 5 stars, on the same shape would pay both tiers in full (35 + 80), more
-      // than acing it in one attempt (80) ever would. Replaying at the same or a
-      // lower star count earns nothing, since the delta is zero or negative.
-      const previousStars = bestScore !== undefined ? starRatingForScore(bestScore) : -1;
+      // Practice rounds are reported, never suppressed - but under their own game
+      // type and their own completion event, so they can never be counted as
+      // normal play (see app/shapeRoundOutcome.ts).
       const newStars = starRatingForScore(scoreResult.total);
-      const starCoins = coinsForStars(newStars) - coinsForStars(previousStars);
-      if (starCoins > 0) {
-        addCoins(starCoins);
-        setDoubleOfferAmount(starCoins);
-      }
-
-      trackEvent("shape_completed", { category, starRating: newStars, passed: passedNow, isNewBest: beatBest });
-      trackEvent("game_completed", { gameType: "shapeChallenge", category, contentKey: shape.id });
+      trackEvent(roundCompletedEvent(practice), {
+        category,
+        starRating: newStars,
+        passed: outcome.passed,
+        isNewBest: outcome.isNewBest,
+      });
+      trackEvent("game_completed", { gameType: roundGameType(practice), category, contentKey: shape.id });
 
       setResult(scoreResult);
-      setIsNewBest(beatBest);
-      setFeedbackMessage(passedNow ? randomCelebrationMessage() : randomEncouragementMessage());
-      if (passedNow) playSuccessSound();
+      setIsNewBest(outcome.isNewBest);
+      setFeedbackMessage(outcome.passed ? randomCelebrationMessage() : randomEncouragementMessage());
+      if (outcome.passed) playSuccessSound();
       else playEncourageSound();
       setPhase("result");
     }, delay);
@@ -999,7 +1053,8 @@ function ShapePlay({
   const nextIndex = levelIndex + 1;
   // Next shape is reachable either because this attempt just unlocked it (frontier pass)
   // or because it was already unlocked from a previous pass (replaying an old shape).
-  const canGoToNextShape = nextIndex < shapes.length && nextIndex <= frontierIndex;
+  // A practice round unlocks nothing, so it never offers one.
+  const canGoToNextShape = !practice && nextIndex < shapes.length && nextIndex <= frontierIndex;
   const bestLabel = bestScore === undefined ? "—" : String(bestScore);
   const hasStroke = attemptPath !== null && attemptPath.points.length > 0;
   const showTargetGhost = phase === "preview" || (phase === "drawing" && guideEnabled);
@@ -1065,8 +1120,13 @@ function ShapePlay({
             <Button onClick={handleTryAgainFromResult}>Try Again</Button>
           )}
         </div>
-        {!canGoToNextShape && nextIndex < shapes.length && (
+        {!practice && !canGoToNextShape && nextIndex < shapes.length && (
           <p className="result-actions-note">Score {passScore}+ to unlock the next shape.</p>
+        )}
+        {/* A practice round records nothing by design, so the note above would be
+            untrue here - say what actually happens instead. */}
+        {practice && (
+          <p className="result-actions-note">Practice round - this score isn&rsquo;t saved and unlocks nothing.</p>
         )}
         {showResultTutorial && (
           /* Mirrors .button-row's own flex geometry so the finger sits under the
@@ -1076,7 +1136,11 @@ function ShapePlay({
           <div className="result-actions-hint-row">
             {canGoToNextShape && <span aria-hidden="true" />}
             <p className="result-actions-tutorial">
-              {canGoToNextShape ? "👆 Tap Next to continue." : "👆 Tap Try Again to beat the pass score."}
+              {canGoToNextShape
+                ? "👆 Tap Next to continue."
+                : practice
+                  ? "👆 Tap Try Again for another go."
+                  : "👆 Tap Try Again to beat the pass score."}
             </p>
           </div>
         )}

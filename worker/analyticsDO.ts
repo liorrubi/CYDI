@@ -20,6 +20,10 @@ import {
 
 const MAX_BODY_BYTES = 1024;
 const FUNNEL_EVENTS = new Set<AnalyticsEventName>(["game_started", "game_completed", "result_shared"]);
+// Round results carrying a score: the plain one and its SEO-practice twin, which is
+// aggregated separately on purpose so the report's averageScore/passRate (computed
+// from shape_completed alone) stay a real-play baseline.
+const SCORED_EVENTS = new Set<AnalyticsEventName>(["shape_completed", "shape_practice_completed"]);
 // Hard cap for period=range so a single report read stays one multi-key storage get
 // (Durable Object storage allows up to 128 keys per get; a month is plenty for the admin page).
 const MAX_RANGE_DAYS = 31;
@@ -101,7 +105,7 @@ function incrementEvent(
       updated.byContentKey = incrementKeyMap(existing.byContentKey, contentKey);
     }
   }
-  if (eventName === "shape_completed") {
+  if (SCORED_EVENTS.has(eventName)) {
     const starRating = params.starRating as number;
     const passed = params.passed as boolean;
     updated.sumStarRating = (existing.sumStarRating ?? 0) + starRating;

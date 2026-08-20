@@ -257,6 +257,40 @@ test("the reward_bonus_* funnel mirrors the plain one, so ×2 and ×3 offers sta
   }
 });
 
+// --- SEO landing-page practice rounds must be measurable, and never countable as
+// --- normal play (src/seo/landingPages.ts, src/app/shapeRoundOutcome.ts). ---
+
+test("seoPractice is a real game type on every funnel event", () => {
+  for (const eventName of ["game_started", "game_completed", "result_shared"] as const) {
+    const result = validateEventParams(eventName, {
+      gameType: "seoPractice",
+      category: "symbols",
+      contentKey: "sym-heart",
+    });
+    assert.equal(result.valid, true, `${eventName} should accept gameType=seoPractice`);
+  }
+});
+
+test("shape_practice_completed mirrors shape_completed exactly, so the two stay comparable", () => {
+  const params = { category: "symbols", starRating: 5, passed: true, isNewBest: false };
+  assert.ok(ANALYTICS_EVENT_NAMES.includes("shape_practice_completed"), "it is a real event");
+  assert.equal(validateEventParams("shape_practice_completed", params).valid, true);
+  assert.equal(validateEventParams("shape_completed", params).valid, true);
+  // Same strictness as its twin - no extra param, nothing missing.
+  assert.equal(validateEventParams("shape_practice_completed", { ...params, practice: true }).valid, false);
+  assert.equal(validateEventParams("shape_practice_completed", { ...params, starRating: 9 }).valid, false);
+  assert.equal(validateEventParams("shape_practice_completed", { category: "symbols" }).valid, false);
+});
+
+test("the practice round-result event is a distinct name, not a variant of shape_completed", () => {
+  // The Worker aggregates by event NAME (and drops params on ingest for this
+  // event), so a separate name is the only thing that keeps practice attempts out
+  // of the real-play averageScore/passRate baseline.
+  assert.notEqual("shape_practice_completed", "shape_completed");
+  assert.equal(ANALYTICS_EVENT_NAMES.filter((n) => n === "shape_practice_completed").length, 1);
+  assert.ok(isAnalyticsEventName("shape_practice_completed"));
+});
+
 test("the bonus events are a distinct namespace - no collision with the plain funnel", () => {
   for (const name of ANALYTICS_EVENT_NAMES.filter((n) => n.startsWith("reward_bonus_"))) {
     assert.equal(ANALYTICS_EVENT_NAMES.filter((n) => n === name).length, 1, `${name} appears exactly once`);

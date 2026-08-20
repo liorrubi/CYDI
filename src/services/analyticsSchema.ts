@@ -28,13 +28,38 @@ export type GameType =
   | "megaChallenge"
   | "artistPack"
   | "specialChallenge"
-  | "customChallenge";
+  | "customChallenge"
+  /**
+   * A web SEO landing page's practice round (src/seo/landingPages.ts): the Shape
+   * Challenge experience, played and scored for real, but persisting nothing - no
+   * progression, coins or counters (see app/shapeRoundOutcome.ts).
+   *
+   * Its own game type rather than a `practice` param on top of "shapeChallenge",
+   * because the Worker stores a `byGameType` breakdown for the funnel events and
+   * would validate-then-DROP any new param (same reasoning as the mirrored
+   * reward_bonus_* names below). This keeps SEO-practice usage measurable while
+   * leaving the shapeChallenge funnel a clean real-play baseline. Web-only: the
+   * Android app has no landing pages and can never emit it.
+   */
+  | "seoPractice";
 
 export type CategoryOrCustom = CategoryId | "custom";
 
 export type EventParamsMap = {
   app_open: Record<string, never>;
   shape_completed: { category: CategoryId; starRating: number; passed: boolean; isNewBest: boolean };
+  /**
+   * The same round result, for an SEO practice round only (gameType "seoPractice"
+   * above). A mirrored NAME rather than a param for the same reason the
+   * reward_bonus_* events use one: shape_completed is not a funnel event, so the
+   * Worker keeps only total/byPlatform plus the score aggregates for it and drops
+   * every param on ingest - a `practice` flag could never be reported on.
+   *
+   * Splitting the name also keeps averageScore/passRate (both derived from
+   * shape_completed alone) as a real-play baseline that landing-page practice
+   * attempts cannot skew, while still counting those attempts here.
+   */
+  shape_practice_completed: { category: CategoryId; starRating: number; passed: boolean; isNewBest: boolean };
   purchase_completed: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
   artist_pack_link_clicked: { artistKey: string; packKey: string; hasAffiliate: boolean };
@@ -101,6 +126,7 @@ export type AnalyticsEventName = keyof EventParamsMap;
 export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "app_open",
   "shape_completed",
+  "shape_practice_completed",
   "purchase_completed",
   "mega_card_unlocked",
   "artist_pack_link_clicked",
@@ -146,6 +172,7 @@ const GAME_TYPES: GameType[] = [
   "artistPack",
   "specialChallenge",
   "customChallenge",
+  "seoPractice",
 ];
 const PRODUCT_TYPES = ["penColor", "penSkin", "chestKey", "megaCard"] as const;
 const MEGA_RARITIES = ["rare", "epic", "legendary"] as const;
@@ -197,14 +224,8 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     if (!isRecord(p) || Object.keys(p).length !== 0) return { valid: false };
     return { valid: true, params: {} };
   },
-  shape_completed: (p) => {
-    if (!isRecord(p) || !hasExactKeys(p, ["category", "starRating", "passed", "isNewBest"])) return { valid: false };
-    const { category, starRating, passed, isNewBest } = p;
-    if (typeof category !== "string" || !(CATEGORY_IDS as string[]).includes(category)) return { valid: false };
-    if (!isIntInRange(starRating, 0, 5)) return { valid: false };
-    if (!isBoolean(passed) || !isBoolean(isNewBest)) return { valid: false };
-    return { valid: true, params: { category: category as CategoryId, starRating, passed, isNewBest } };
-  },
+  shape_completed: (p) => validateRoundResultEvent(p),
+  shape_practice_completed: (p) => validateRoundResultEvent(p),
   purchase_completed: (p) => {
     if (!isRecord(p) || !hasExactKeys(p, ["productType", "tier", "price"])) return { valid: false };
     const { productType, tier, price } = p;
@@ -302,6 +323,18 @@ function validateAdFailureEvent<E extends "rewarded_ad_unavailable" | "rewarded_
   if (!isRecord(p) || !hasExactKeys(p, ["placement", "reason"])) return { valid: false };
   if (!isRewardedAdPlacement(p.placement) || !isAdFailureReason(p.reason)) return { valid: false };
   return { valid: true, params: { placement: p.placement, reason: p.reason } as EventParamsMap[E] };
+}
+
+/** shape_completed and its SEO-practice twin: one contract, so the two can never drift apart. */
+function validateRoundResultEvent<E extends "shape_completed" | "shape_practice_completed">(
+  p: unknown,
+): ValidationResult<E> {
+  if (!isRecord(p) || !hasExactKeys(p, ["category", "starRating", "passed", "isNewBest"])) return { valid: false };
+  const { category, starRating, passed, isNewBest } = p;
+  if (typeof category !== "string" || !(CATEGORY_IDS as string[]).includes(category)) return { valid: false };
+  if (!isIntInRange(starRating, 0, 5)) return { valid: false };
+  if (!isBoolean(passed) || !isBoolean(isNewBest)) return { valid: false };
+  return { valid: true, params: { category: category as CategoryId, starRating, passed, isNewBest } as EventParamsMap[E] };
 }
 
 function validateFunnelEvent<E extends "game_started" | "game_completed" | "result_shared">(

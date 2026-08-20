@@ -21,7 +21,22 @@ import type { CategoryId } from "../content/contentRepository";
 export type LandingPage = {
   path: string;
   /** Shape to open directly. Omitted = land on the Shape Challenge category map. */
-  shape?: { category: CategoryId; shapeId: string };
+  shape?: {
+    category: CategoryId;
+    shapeId: string;
+    /**
+     * A one-off practice round for a shape the player has not reached yet. Set
+     * only where the page promises that specific shape and the normal unlock
+     * order would otherwise drop the visitor on the category map instead.
+     *
+     * It grants nothing and costs nothing: the round is played, scored and shown
+     * for real, but it persists NOTHING - no best score, no coins, no
+     * completion, no category unlock, no round counters, no achievement input
+     * (see app/shapeRoundOutcome.ts, which is the single place a finished round
+     * writes anything).
+     */
+    practice?: true;
+  };
 };
 
 // "circle" is the first shape of the first category, so it is unlocked for a
@@ -29,9 +44,17 @@ export type LandingPage = {
 // deep link that needs no unlock exception.
 const CIRCLE = { category: "geometric" as CategoryId, shapeId: "circle" };
 
+// The five-point star sits deep in the geometric category and the heart is the
+// first shape of a category that costs coins, so neither is reachable for a new
+// visitor - both need the practice exception above to honour what the page says.
+const STAR = { category: "geometric" as CategoryId, shapeId: "star-5", practice: true as const };
+const HEART = { category: "symbols" as CategoryId, shapeId: "sym-heart", practice: true as const };
+
 const LANDING_PAGES: LandingPage[] = [
   { path: "/drawing-accuracy-test", shape: CIRCLE },
   { path: "/draw-a-perfect-circle", shape: CIRCLE },
+  { path: "/draw-a-perfect-star", shape: STAR },
+  { path: "/draw-a-perfect-heart", shape: HEART },
   { path: "/draw-shapes-online" },
 ];
 

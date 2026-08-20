@@ -12,6 +12,7 @@ import { getThemeMode, setThemeMode } from "../services/themeStore";
 import { isUnlockEverythingActive, setUnlockEverything } from "../services/unlockOverrideStore";
 import { exportSaveCode, importSaveCode } from "../services/saveTransfer";
 import { getPlayerId } from "../services/playerProfileStore";
+import { isInternalDevice, setInternalDevice } from "../services/analyticsIdentity";
 import { copyTextToClipboard } from "../services/clipboard";
 import { getConsentState, refreshConsentAfterPrivacyOptions, subscribeConsentState } from "../services/ads";
 import {
@@ -46,6 +47,9 @@ async function matchesLockPassword(input: string): Promise<boolean> {
 }
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.playcydi.cydi";
 
+/** Taps on the version footer that toggle this device's "internal / test device" analytics flag. High enough that no player reaches it by accident. */
+const VERSION_TAPS_FOR_INTERNAL = 7;
+
 function formatBuildTime(iso: string): string {
   const date = new Date(iso);
   const day = String(date.getDate()).padStart(2, "0");
@@ -79,6 +83,12 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const [privacyId] = useState(() => getPlayerId());
   const [copyIdFeedback, setCopyIdFeedback] = useState<string | null>(null);
   const [consentState, setConsentState] = useState(getConsentState());
+  // Hidden QA affordance (see the version footer below): the only in-app way to mark
+  // this device as ours on Android, where there is no address bar for ?internal=1.
+  // Nothing about gameplay changes - it only decides which analytics bucket this
+  // device's events are counted in.
+  const [versionTaps, setVersionTaps] = useState(0);
+  const [internalDevice, setInternalDeviceState] = useState(() => isInternalDevice());
 
   // Reactive to the async native consent init (App.tsx's initializeNativeAds()),
   // which may resolve before or after this screen mounts - subscribing (rather than
@@ -95,6 +105,20 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   function handleRateApp() {
     playChipSound();
     window.open(PLAY_STORE_URL, "_blank");
+  }
+
+  /** Silent until the 7th tap, so a player idly tapping the footer never notices anything. */
+  function handleVersionTap() {
+    const taps = versionTaps + 1;
+    if (taps < VERSION_TAPS_FOR_INTERNAL) {
+      setVersionTaps(taps);
+      return;
+    }
+    setVersionTaps(0);
+    const next = !internalDevice;
+    setInternalDevice(next);
+    setInternalDeviceState(next);
+    playChipSound();
   }
 
   function handleOpenPrivacyPolicy() {
@@ -398,7 +422,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         </div>
       </div>
 
-      <p className="settings-version-footer">
+      <p className="settings-version-footer" onClick={handleVersionTap}>
         <span className="settings-version-footer-brand">CYDI</span>
         <br />
         Can You Draw It?
@@ -406,6 +430,12 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         Version {APP_VERSION} / Build {APP_BUILD}
         <br />
         Last updated: {formatBuildTime(APP_BUILD_TIME)}
+        {internalDevice && (
+          <>
+            <br />
+            Test device — analytics counted separately (tap {VERSION_TAPS_FOR_INTERNAL}× to turn off)
+          </>
+        )}
       </p>
 
       {creditsOpen && (

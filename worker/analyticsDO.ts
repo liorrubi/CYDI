@@ -11,6 +11,20 @@ import {
   type AnalyticsEventName,
   type AnalyticsPlatform,
 } from "../src/services/analyticsSchema";
+import {
+  emptyUsageBucket,
+  isAudienceFilter,
+  mergeUsageBuckets,
+  normalizeAnalyticsAudience,
+  normalizeAnalyticsId,
+  recordUsageIds,
+  summarizeUsage,
+  type AnalyticsAudience,
+  type AudienceFilter,
+  type UsageBucket,
+  type UsageGameTotals,
+  type UsageSummary,
+} from "../src/services/analyticsUsage";
 
 // Single global Durable Object instance (see worker/index.ts's forwardToAnalyticsDO,
 // same pattern as DailyChallengeDO) so every /event write is processed one at a time -
@@ -18,6 +32,16 @@ import {
 // Storage holds ONLY running totals, never a per-event record: every write path below
 // does `counters.x += 1; storage.put(key, counters)`, never `storage.put(uniqueKey, event)`.
 
+// Storage layout (all keys hold running totals / id sets only, never an event record):
+//   day:<date>     external counters   | dayint:<date> internal counters
+//   usage:<date>   distinct installation + session ids for that day, per audience+platform
+//   alltime / alltime:internal   the same running since-launch totals, per audience
+//
+// Day buckets written BEFORE the internal/external split existed hold every event of
+// that day, internal ones included, and stay exactly as they are - nothing is
+// reconstructed or re-attributed backwards. They therefore read as "external", which
+// is the same meaning those numbers already had. Only days recorded from here on can
+// separate the two.
 const MAX_BODY_BYTES = 1024;
 const FUNNEL_EVENTS = new Set<AnalyticsEventName>(["game_started", "game_completed", "result_shared"]);
 // Round results carrying a score: the plain one and its SEO-practice twin, which is
@@ -52,6 +76,23 @@ type EventCounters = {
 };
 
 type AllCounters = Partial<Record<AnalyticsEventName, EventCounters>>;
+
+/** Everything one report range needs, read in one pass: each audience's day counters plus the range's unioned installation/session ids. */
+type RangeBuckets = {
+  external: Map<string, AllCounters>;
+  internal: Map<string, AllCounters>;
+  usage: UsageBucket;
+};
+
+/** The game-funnel side of a usage summary, pulled from counters that already exist - no new storage. */
+function gameTotals(counts: AllCounters): UsageGameTotals {
+  return {
+    gamesStarted: counts.game_started?.total ?? 0,
+    gamesCompleted: counts.game_completed?.total ?? 0,
+    gamesStartedByPlatform: counts.game_started?.byPlatform ?? {},
+    gamesCompletedByPlatform: counts.game_completed?.byPlatform ?? {},
+  };
+}
 
 type Env = {
   ANALYTICS_ADMIN_TOKEN?: string;
@@ -157,8 +198,16 @@ export class AnalyticsDO {
     this.env = env;
   }
 
-  private dayStorageKey(dateKey: string): string {
-    return `day:${dateKey}`;
+  private dayStorageKey(dateKey: string, audience: AnalyticsAudience): string {
+    return audience === "internal" ? `dayint:${dateKey}` : `day:${dateKey}`;
+  }
+
+  private usageStorageKey(dateKey: string): string {
+    return `usage:${dateKey}`;
+  }
+
+  private alltimeStorageKey(audience: AnalyticsAudience): string {
+    return audience === "internal" ? "alltime:internal" : "alltime";
   }
 
   private async recordDayIndex(dateKey: string): Promise<void> {
@@ -179,40 +228,69 @@ export class AnalyticsDO {
     if (!validated.valid) return json({ error: "invalid params" }, 400);
     const params = validated.params as unknown as Record<string, unknown>;
     // Coerced to a closed set, and never rejected: an event from an older client
-    // that sends no platform is still recorded, just as "unknown".
+    // that sends no platform is still recorded, just as "unknown". The three
+    // identity fields below behave the same way - all optional, all normalized to a
+    // safe value, none of them ever a reason to drop an event.
     const platform = normalizeAnalyticsPlatform(b?.platform);
+    const audience = normalizeAnalyticsAudience(b?.isInternal);
+    const installationId = normalizeAnalyticsId(b?.installationId);
+    const sessionId = normalizeAnalyticsId(b?.sessionId);
 
     const dateKey = israelDateKey(Date.now());
-    const [alltime, dayCounters] = await Promise.all([
-      this.state.storage.get<AllCounters>("alltime"),
-      this.state.storage.get<AllCounters>(this.dayStorageKey(dateKey)),
+    const alltimeKey = this.alltimeStorageKey(audience);
+    const dayKey = this.dayStorageKey(dateKey, audience);
+    const usageKey = this.usageStorageKey(dateKey);
+    const [alltime, dayCounters, usage] = await Promise.all([
+      this.state.storage.get<AllCounters>(alltimeKey),
+      this.state.storage.get<AllCounters>(dayKey),
+      this.state.storage.get<UsageBucket>(usageKey),
     ]);
 
     const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params, platform);
     const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params, platform);
+    const currentUsage = usage ?? emptyUsageBucket();
+    const updatedUsage = recordUsageIds(currentUsage, audience, platform, installationId, sessionId);
 
     await Promise.all([
-      this.state.storage.put("alltime", updatedAlltime),
-      this.state.storage.put(this.dayStorageKey(dateKey), updatedDay),
+      this.state.storage.put(alltimeKey, updatedAlltime),
+      this.state.storage.put(dayKey, updatedDay),
+      // Only when this event actually contributed an id nobody sent today - otherwise
+      // every single event would rewrite the whole day's id lists for nothing.
+      updatedUsage === currentUsage ? Promise.resolve() : this.state.storage.put(usageKey, updatedUsage),
       this.recordDayIndex(dateKey),
     ]);
 
     return json({ ok: true });
   }
 
-  /** One batched multi-key read of every stored day bucket in the range, keyed back by date. Report ranges are at most MAX_RANGE_DAYS / a calendar month (<=31 keys), well under Durable Object storage's 128-key limit for a single multi-key get. */
-  private async readDayBuckets(startDate: string, endDate: string): Promise<Map<string, AllCounters>> {
+  /**
+   * Two batched multi-key reads of every stored bucket in the range, keyed back by date:
+   * one for the counters (external + internal), one for the usage id sets. A range is at
+   * most MAX_RANGE_DAYS / a calendar month (<=31 days), so that's <=62 and <=31 keys -
+   * both well under Durable Object storage's 128-key limit for a single multi-key get.
+   */
+  private async readDayBuckets(startDate: string, endDate: string): Promise<RangeBuckets> {
     const days = (await this.state.storage.get<string[]>("days")) ?? [];
     const inRange = days.filter((day) => day >= startDate && day <= endDate);
-    const byDate = new Map<string, AllCounters>();
-    if (inRange.length === 0) return byDate;
+    const result: RangeBuckets = { external: new Map(), internal: new Map(), usage: emptyUsageBucket() };
+    if (inRange.length === 0) return result;
 
-    const buckets = await this.state.storage.get<AllCounters>(inRange.map((day) => this.dayStorageKey(day)));
+    const counterKeys = inRange.flatMap((day) => [this.dayStorageKey(day, "external"), this.dayStorageKey(day, "internal")]);
+    const [counters, usageBuckets] = await Promise.all([
+      this.state.storage.get<AllCounters>(counterKeys),
+      this.state.storage.get<UsageBucket>(inRange.map((day) => this.usageStorageKey(day))),
+    ]);
+
     for (const day of inRange) {
-      const bucket = buckets.get(this.dayStorageKey(day));
-      if (bucket) byDate.set(day, bucket);
+      const external = counters.get(this.dayStorageKey(day, "external"));
+      if (external) result.external.set(day, external);
+      const internal = counters.get(this.dayStorageKey(day, "internal"));
+      if (internal) result.internal.set(day, internal);
+      const usage = usageBuckets.get(this.usageStorageKey(day));
+      // Union across days, so an installation that played on three days counts once.
+      if (usage) result.usage = mergeUsageBuckets(result.usage, usage);
     }
-    return byDate;
+    return result;
   }
 
   private mergeDayBuckets(byDate: Map<string, AllCounters>): AllCounters {
@@ -223,11 +301,19 @@ export class AnalyticsDO {
     return merged;
   }
 
+  /**
+   * Selected-audience counts (external by default), plus a usage block for that
+   * audience and a side-by-side external/internal usage summary. The two audiences are
+   * always reported separately and never summed together unless audience=all was asked
+   * for explicitly.
+   */
   private buildReport(
     period: "daily" | "weekly" | "monthly" | "range" | "alltime",
     startDate: string,
     endDate: string,
+    audience: AudienceFilter,
     counts: AllCounters,
+    usage: { selected: UsageSummary; external: UsageSummary; internal: UsageSummary } | null,
   ) {
     const gameStarted = counts.game_started?.total ?? 0;
     const gameCompleted = counts.game_completed?.total ?? 0;
@@ -246,41 +332,90 @@ export class AnalyticsDO {
       period,
       startDate,
       endDate,
+      audience,
       counts,
       completionRate: gameStarted > 0 ? gameCompleted / gameStarted : 0,
       shareRate: gameCompleted > 0 ? resultShared / gameCompleted : 0,
       averageScore,
       passRate,
+      // null for period=alltime only: distinct-id sets are kept per day (and unioned
+      // per range), never as a since-launch set, which would grow without bound.
+      usage: usage?.selected ?? null,
+      usageByAudience: usage ? { external: usage.external, internal: usage.internal } : null,
     };
   }
 
+  /** Counters for the requested audience: one bucket family, or both merged for audience=all. */
+  private countsForAudience(buckets: RangeBuckets, audience: AudienceFilter): AllCounters {
+    const external = this.mergeDayBuckets(buckets.external);
+    const internal = this.mergeDayBuckets(buckets.internal);
+    if (audience === "external") return external;
+    if (audience === "internal") return internal;
+    return mergeCounters(external, internal);
+  }
+
+  private usageSummaries(buckets: RangeBuckets, audience: AudienceFilter) {
+    const external = summarizeUsage(buckets.usage, "external", gameTotals(this.mergeDayBuckets(buckets.external)));
+    const internal = summarizeUsage(buckets.usage, "internal", gameTotals(this.mergeDayBuckets(buckets.internal)));
+    const selected =
+      audience === "external"
+        ? external
+        : audience === "internal"
+          ? internal
+          : summarizeUsage(buckets.usage, "all", gameTotals(this.countsForAudience(buckets, "all")));
+    return { selected, external, internal };
+  }
+
   /** Arbitrary rolling window (max MAX_RANGE_DAYS), optionally with a per-day series for charts - the admin page's "last 7/30 days" views. Reads the same day buckets the calendar periods already use; nothing new is stored. */
-  private async handleRangeReport(url: URL): Promise<Response> {
+  private async handleRangeReport(url: URL, audience: AudienceFilter): Promise<Response> {
     const start = url.searchParams.get("start") ?? "";
     const end = url.searchParams.get("end") ?? "";
     if (!isValidDateKey(start) || !isValidDateKey(end) || start > end) return jsonNoStore({ error: "invalid range" }, 400);
     const dates = datesInRange(start, end);
     if (dates.length > MAX_RANGE_DAYS) return jsonNoStore({ error: "range too long" }, 400);
 
-    const byDate = await this.readDayBuckets(start, end);
-    const report = this.buildReport("range", start, end, this.mergeDayBuckets(byDate));
+    const buckets = await this.readDayBuckets(start, end);
+    const report = this.buildReport(
+      "range",
+      start,
+      end,
+      audience,
+      this.countsForAudience(buckets, audience),
+      this.usageSummaries(buckets, audience),
+    );
     if (url.searchParams.get("series") === "1") {
       // Every requested date appears exactly once, zero-filled when nothing was
-      // recorded, so chart clients never have to reconstruct missing days.
-      return jsonNoStore({ ...report, days: dates.map((date) => ({ date, counts: byDate.get(date) ?? {} })) });
+      // recorded, so chart clients never have to reconstruct missing days. Per-day
+      // counts follow the selected audience, same as the totals above.
+      const perDay = (date: string): AllCounters => {
+        const external = buckets.external.get(date) ?? {};
+        const internal = buckets.internal.get(date) ?? {};
+        if (audience === "external") return external;
+        if (audience === "internal") return internal;
+        return mergeCounters(external, internal);
+      };
+      return jsonNoStore({ ...report, days: dates.map((date) => ({ date, counts: perDay(date) })) });
     }
     return jsonNoStore(report);
   }
 
   /** The running since-launch totals ("alltime" bucket) that ingestion has always maintained - startDate reports the first day that ever recorded an event. */
-  private async handleAlltimeReport(): Promise<Response> {
-    const [counts, days] = await Promise.all([
-      this.state.storage.get<AllCounters>("alltime"),
+  private async handleAlltimeReport(audience: AudienceFilter): Promise<Response> {
+    const [external, internal, days] = await Promise.all([
+      this.state.storage.get<AllCounters>(this.alltimeStorageKey("external")),
+      this.state.storage.get<AllCounters>(this.alltimeStorageKey("internal")),
       this.state.storage.get<string[]>("days"),
     ]);
     const today = israelDateKey(Date.now());
     const startDate = days?.[0] ?? today;
-    return jsonNoStore(this.buildReport("alltime", startDate, today, counts ?? {}));
+    const counts =
+      audience === "external"
+        ? (external ?? {})
+        : audience === "internal"
+          ? (internal ?? {})
+          : mergeCounters(external ?? {}, internal ?? {});
+    // No usage block here on purpose - see buildReport.
+    return jsonNoStore(this.buildReport("alltime", startDate, today, audience, counts, null));
   }
 
   private async handleReport(url: URL, authHeader: string | null): Promise<Response> {
@@ -289,9 +424,15 @@ export class AnalyticsDO {
       return jsonNoStore({ error: "unauthorized" }, 401);
     }
 
+    // Defaults to real players. Internal (our own QA/dev devices) is only ever
+    // returned when asked for by name, and "all" is the only way to see them summed.
+    const audienceParam = url.searchParams.get("audience") ?? "external";
+    if (!isAudienceFilter(audienceParam)) return jsonNoStore({ error: "invalid audience" }, 400);
+    const audience: AudienceFilter = audienceParam;
+
     const period = url.searchParams.get("period") ?? "daily";
-    if (period === "range") return this.handleRangeReport(url);
-    if (period === "alltime") return this.handleAlltimeReport();
+    if (period === "range") return this.handleRangeReport(url, audience);
+    if (period === "alltime") return this.handleAlltimeReport(audience);
     if (period !== "daily" && period !== "weekly" && period !== "monthly") return jsonNoStore({ error: "invalid period" }, 400);
 
     const dateParam = url.searchParams.get("date") ?? israelDateKey(Date.now());
@@ -308,8 +449,17 @@ export class AnalyticsDO {
       ({ startDate, endDate } = monthlyRange(dateParam));
     }
 
-    const byDate = await this.readDayBuckets(startDate, endDate);
-    return jsonNoStore(this.buildReport(period, startDate, endDate, this.mergeDayBuckets(byDate)));
+    const buckets = await this.readDayBuckets(startDate, endDate);
+    return jsonNoStore(
+      this.buildReport(
+        period,
+        startDate,
+        endDate,
+        audience,
+        this.countsForAudience(buckets, audience),
+        this.usageSummaries(buckets, audience),
+      ),
+    );
   }
 
   async fetch(request: Request): Promise<Response> {

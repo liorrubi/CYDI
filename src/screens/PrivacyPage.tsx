@@ -108,6 +108,15 @@ export default function PrivacyPage() {
           of individual events. On the website, we also use Cloudflare Web Analytics for aggregate site metrics
           (such as visits, referrers, and performance). This is disabled during development.
         </p>
+        <p className="status-text">
+          So that we can tell “one person played ten rounds” from “ten people played one round each,” an analytics
+          event also carries two randomly generated numbers: one that stays the same for this installation of the
+          game, and one that identifies the current play session. They are created on your device, are not derived
+          from your identity, your account, your IP address, or anything about your device, and are not used to
+          track you across other apps or websites. On our server they are used only to count how many distinct
+          installations and sessions there were on a given day, and are kept only for the days they were counted in.
+          Clearing the app's or browser's local data starts a new random number.
+        </p>
 
         <h3>Advertising (Android app)</h3>
         <p className="status-text">
@@ -208,7 +217,9 @@ export default function PrivacyPage() {
             Only the top scores for each daily episode are kept.
           </li>
           <li>
-            <strong>Analytics</strong> is kept only as anonymous aggregate totals, with no per-person records.
+            <strong>Analytics</strong> is kept only as anonymous aggregate totals, with no per-person records. The
+            random installation and session numbers described above are kept per day, purely to count distinct
+            installations and sessions, and are never joined to any other data.
           </li>
         </ul>
 

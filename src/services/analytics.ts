@@ -10,6 +10,7 @@
 
 import { Capacitor } from "@capacitor/core";
 
+import { getInstallationId, getSessionId, isInternalDevice } from "./analyticsIdentity";
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
 import { apiFetch } from "./nativeApi";
 
@@ -144,7 +145,21 @@ const cloudflareAnalyticsProvider: AnalyticsProvider = {
         // split Android-app usage from website usage without a per-event schema
         // change. "android" | "ios" | "web" only - a coarse build-type label, not
         // a device or user identifier.
-        body: JSON.stringify({ eventName, params, platform: Capacitor.getPlatform() }),
+        //
+        // installationId/sessionId/isInternal ride in the same envelope, for the same
+        // reason: they let the server count installations and sessions (instead of only
+        // events) and keep our own QA devices out of the real-player numbers, without
+        // touching a single per-event schema. All three are locally generated and
+        // anonymous - see analyticsIdentity.ts. Every one of them is optional on the
+        // server: an app version that predates this still validates and is counted.
+        body: JSON.stringify({
+          eventName,
+          params,
+          platform: Capacitor.getPlatform(),
+          installationId: getInstallationId(),
+          sessionId: getSessionId(),
+          isInternal: isInternalDevice(),
+        }),
         keepalive: true,
       }).catch(() => {});
     } catch {

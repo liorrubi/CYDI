@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.37.0 - 2026-08-20
+
+Analytics can now tell one person playing ten rounds from ten people playing one
+round each - and can keep our own test devices out of the real numbers.
+
+**Installations and sessions.** Every analytics event now rides with three extra
+envelope fields next to the existing `platform`: a random `installationId` that
+stays with this browser/app install, a `sessionId` that rolls over after 30
+minutes of inactivity, and an `isInternal` flag
+(`src/services/analyticsIdentity.ts`). All three are generated locally from
+`crypto.getRandomValues`, are never derived from anything about the person or the
+device, and are never joined to anything server-side - the Worker keeps only "how
+many distinct ids appeared today" per audience and platform
+(`src/services/analyticsUsage.ts`). No per-event schema changed, and an older
+client that sends none of them is still counted exactly as before.
+
+**External vs. internal.** A device marked as ours - Settings, seven taps on the
+version line, or `?internal=1` on the website - has its events counted in a
+separate storage bucket. `/api/analytics/report` takes
+`audience=external|internal|all` and **defaults to external**, so the day-to-day
+numbers are real players only, with test activity reported alongside but never
+summed into them. Days recorded before this release are untouched and keep their
+existing meaning; nothing is reconstructed backwards.
+
+**New report fields.** `usage` (distinct installations, sessions, and games
+started/completed per installation and per session, split by web/android) and
+`usageByAudience`, both surfaced in a new "Installations & sessions" card on
+`/admin/analytics`. `usage` is null for the all-time view, where per-day id sets
+don't exist by design.
+
+The privacy policy's analytics section now describes the two random numbers
+directly.
+
 ## 0.36.0 - 2026-08-20
 
 SEO Wave 1: two new landing pages, and the machinery to let them open a shape

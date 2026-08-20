@@ -123,6 +123,11 @@
           <div class="table-scroll" id="gametype-table"></div>
           <p class="footnote">Custom Challenges are aggregate counts only — no per-challenge identifiers are ever recorded for them.</p>
         </div>
+        <div class="card" id="usage-card" hidden>
+          <h3 class="section-title">Installations &amp; sessions</h3>
+          <div class="table-scroll" id="usage-table"></div>
+          <p class="footnote" id="usage-note"></p>
+        </div>
         <div class="card" id="platform-card" hidden>
           <h3 class="section-title">App vs. web</h3>
           <div class="table-scroll" id="platform-table"></div>
@@ -444,6 +449,86 @@
 
       var PLATFORM_LABELS = { android: "Android app", ios: "iOS app", web: "Website", unknown: "Unknown" };
 
+      // One decimal, and an em dash when there is nothing to divide by (the server
+      // sends null rather than 0 in that case - e.g. days recorded before installation
+      // ids existed, which have plays but no installations to attribute them to).
+      function fmtRatio(value) {
+        return value === null || value === undefined ? "—" : value.toFixed(1);
+      }
+
+      /**
+       * Real players only. The report defaults to audience=external, so our own test
+       * devices are counted in a separate bucket and only ever shown on the note line
+       * below - never mixed into the numbers above.
+       */
+      function renderUsage(report) {
+        var usage = report.usage;
+        var container = byId("usage-table");
+        var note = byId("usage-note");
+        clear(container);
+        if (!usage) {
+          note.textContent = "Installations and sessions are counted per day, so they are not available for the all-time view.";
+          byId("usage-card").hidden = false;
+          return;
+        }
+
+        function row(label, summary) {
+          return [
+            label,
+            fmtInt(summary.installations),
+            fmtInt(summary.sessions),
+            fmtRatio(summary.gamesStartedPerInstallation),
+            fmtRatio(summary.gamesCompletedPerInstallation),
+            fmtRatio(summary.gamesStartedPerSession),
+            fmtRatio(summary.gamesCompletedPerSession),
+          ];
+        }
+
+        var platforms = Object.keys(usage.byPlatform).sort(function (a, b) {
+          return usage.byPlatform[b].installations - usage.byPlatform[a].installations;
+        });
+        var rows = [row("All platforms", usage)];
+        platforms.forEach(function (p) {
+          rows.push(row(PLATFORM_LABELS[p] || p, usage.byPlatform[p]));
+        });
+        container.appendChild(
+          makeTable(
+            [
+              { label: "Audience: real players" },
+              { label: "Installations", num: true },
+              { label: "Sessions", num: true },
+              { label: "Started / install", num: true },
+              { label: "Completed / install", num: true },
+              { label: "Started / session", num: true },
+              { label: "Completed / session", num: true },
+            ],
+            rows
+          )
+        );
+
+        var internal = report.usageByAudience && report.usageByAudience.internal;
+        var notes = [];
+        if (usage.installations === 0 && usage.gamesStarted > 0) {
+          notes.push("No installation ids in this period — these days were recorded before installations and sessions were counted.");
+        }
+        if (internal && (internal.installations > 0 || internal.gamesStarted > 0)) {
+          notes.push(
+            "Internal test devices, excluded from every number above — installations: " +
+              fmtInt(internal.installations) +
+              " · sessions: " +
+              fmtInt(internal.sessions) +
+              " · games started: " +
+              fmtInt(internal.gamesStarted) +
+              "."
+          );
+        } else {
+          notes.push("No internal test-device activity in this period.");
+        }
+        if (usage.truncated) notes.push("A per-day id cap was reached: installations and sessions are a floor, not an exact count.");
+        note.textContent = notes.join(" ");
+        byId("usage-card").hidden = false;
+      }
+
       function renderPlatforms(report) {
         var counts = report.counts || {};
         var opens = (counts.app_open && counts.app_open.byPlatform) || {};
@@ -576,6 +661,7 @@
         byId("kpi-card").hidden = true;
         byId("charts-card").hidden = true;
         byId("gametype-card").hidden = true;
+        byId("usage-card").hidden = true;
         byId("platform-card").hidden = true;
         byId("adsummary-card").hidden = true;
         byId("topcontent-card").hidden = true;
@@ -600,6 +686,7 @@
             renderKpis(report);
             renderCharts(report);
             renderGameTypes(report);
+            renderUsage(report);
             renderPlatforms(report);
             renderAdSummary(report);
             renderTopContent(report);

@@ -178,7 +178,13 @@ export function tweenDurationMs(ranksCrossed: number, reducedMotion: boolean): n
   return Math.min(RANK_TWEEN_MAX_MS, RANK_TWEEN_BASE_MS + Math.max(0, ranksCrossed) * RANK_TWEEN_PER_RANK_MS);
 }
 
-/** "🎖️ Challenger · 18" - the compact form for a mode header. */
-export function compactRankLabel(points: number): string {
-  return `${SOCIAL_POINTS_ICON} ${rankFor(points).name} · ${Math.max(0, Math.floor(points))}`;
+/**
+ * "🎖️ Challenger · 18" - the compact form for a mode header.
+ *
+ * `rankName` can be forced to a band the points have already left, which is
+ * what keeps the badge in step with a progress card that is still filling the
+ * old bar toward a promotion.
+ */
+export function compactRankLabel(points: number, rankName = rankFor(points).name): string {
+  return `${SOCIAL_POINTS_ICON} ${rankName} · ${Math.max(0, Math.floor(points))}`;
 }

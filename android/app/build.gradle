@@ -154,10 +154,15 @@ android {
         // flags, Social Points) the QA is meant to exercise. Never uploaded to
         // Play; the shipping build takes the next code after it.
         //
-        // CURRENT STATE: highest PLAY upload is 23 (live). 24 exists only on a
-        // test device.
-        versionCode 24
-        versionName "0.39.0-rc1"
+        // 25: rc2. Device QA on rc1 found the compact badge announcing a
+        // promotion about 400ms before the progress card did - it derived the
+        // rank from the points while the card was still completing the old
+        // band. The hold now carries the band as well as the number.
+        //
+        // CURRENT STATE: highest PLAY upload is 23 (live). 24 and 25 exist only
+        // on a test device.
+        versionCode 25
+        versionName "0.39.0-rc2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

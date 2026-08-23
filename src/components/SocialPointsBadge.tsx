@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { getSocialPoints, subscribeSocialPoints } from "../services/socialPointsStore";
 import { SOCIAL_POINTS_ICON, SOCIAL_POINTS_LABEL } from "../social/socialRewards";
-import { compactRankLabel, rankFor } from "../social/socialRank";
+import { compactRankLabel, rankFor, rankProgress } from "../social/socialRank";
 import { getSocialPointsOverride, subscribeSocialPointsOverride } from "../social/socialPointsDisplay";
 
 /**
@@ -23,11 +23,14 @@ export function SocialPointsBadge() {
   // While a progress card is counting up, the badge shows the same number it
   // does - so it can never announce a promotion the card has not reached yet.
   useEffect(() => subscribeSocialPointsOverride(setHeld), []);
-  const total = held ?? stored;
+  const total = held?.points ?? stored;
+  // While a promotion is playing out, the badge reads the rank from the same
+  // band the card is drawing - so the two never disagree about who you are.
+  const rank = held ? rankProgress(held.points, held.bandIndex ?? undefined).rank : rankFor(total);
 
   return (
-    <p className="social-badge" aria-label={`${rankFor(total).name}, ${total} ${SOCIAL_POINTS_LABEL}`}>
-      {compactRankLabel(total)}
+    <p className="social-badge" aria-label={`${rank.name}, ${total} ${SOCIAL_POINTS_LABEL}`}>
+      {compactRankLabel(total, rank.name)}
     </p>
   );
 }

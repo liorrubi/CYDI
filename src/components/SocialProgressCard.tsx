@@ -95,6 +95,13 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
 
     let cancelled = false;
     const timers: number[] = [];
+    /*
+     * The band the BAR is currently drawing, tracked locally as well as in
+     * state: the effect closes over the render's `bandIndex`, which is stale the
+     * moment the first flip happens, and the badge has to be told the same band
+     * the card is showing or it announces the promotion early.
+     */
+    let drawnBand = rankIndexFor(from);
 
     const announce = () => {
       if (promotions.length === 0 || celebratedRef.current) return;
@@ -112,7 +119,7 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
     // releases it once the card has arrived.
     const show = (value: number) => {
       setDisplayed(value);
-      setSocialPointsOverride(value);
+      setSocialPointsOverride(value, drawnBand);
     };
 
     /**
@@ -125,7 +132,10 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
       if (cancelled || band >= targetBand) return;
       announce();
       setFlipping(true);
-      setBandIndex(band + 1);
+      drawnBand = band + 1;
+      setBandIndex(drawnBand);
+      // Re-publish so the badge changes rank at the same instant the card does.
+      setSocialPointsOverride(total, drawnBand);
       timers.push(
         window.setTimeout(() => {
           if (cancelled) return;

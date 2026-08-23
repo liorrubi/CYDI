@@ -167,17 +167,20 @@ android {
         // 28: test build with the coach-mark layout fix for the first-stroke
         // jump.
         //
-        // 29: 0.39.0 as released. Everything above 23 that Play has seen is
-        // either a discarded draft (26) or never left the test device, but a
-        // used code can never be re-uploaded, so the release takes the next
-        // free one.
+        // 26: 0.39.0, live since 23 Aug - the mode selector, 2 Players and
+        // Social Points/Rank. It went out before the multiplayer drawing fixes
+        // were found, which is why those became a patch rather than part of it.
+        //
+        // 27, 28: debug test builds for that patch; never uploaded.
+        //
+        // 29: 0.39.1, the patch itself.
         //
         // DEPLOYMENT COUPLING: this client reads `gameSerial` from the room
         // snapshot, which only the Worker in this same commit sends. The Worker
         // and the web build must go out together or a rematch stops earning
         // Social Points. See worker/roomDO.ts handleStart.
         versionCode 29
-        versionName "0.39.0"
+        versionName "0.39.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

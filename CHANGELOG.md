@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.39.1 - 2026-08-23
+
+Fixes for the two drawing faults reported from real multiplayer play, plus the
+safety net that was missing around leaving a game.
+
+**A canvas could stop accepting touches while still looking live.** A pointer
+whose release never arrived - which happens when a captured pointer's element is
+re-rendered, or the system steals the gesture - was remembered forever, and
+every later touch was ignored for the life of that canvas. It now heals itself,
+and every drawing window opens able to accept a touch whatever happened in the
+last one.
+
+**The first stroke of a coached round could jump.** The hint above the canvas was
+replaced by a different one below it the instant you started drawing, moving the
+canvas 62px out from under a finger that was already on the glass. There is one
+hint now, in one place, and only its text changes. It affected the first game in
+both 2 Players and Play Together.
+
+**Leaving a live game asks first.** A room carries on without you, so a stray
+back press used to cost the round and the seat silently. The back arrow, the
+header shortcuts and the Android back button all confirm now. And if the app is
+closed mid-match, Home offers to take you back: it reconnects to wherever the
+game has actually got to rather than replaying what you missed, and offers
+nothing at all once the room is over.
+
+**Analytics.** Mode choice, leave and resume outcomes, Social Points and rank
+promotions, and tutorial outcomes - with skipping a tutorial now recorded as a
+skip rather than counted as a completion. Counts and settings only, never a
+room code, name, seat or drawing.
+
 ## 0.39.0 - 2026-08-23
 
 Three ways to play, and a reason to keep playing them with other people.
@@ -47,18 +77,6 @@ Play re-arms all of them.
 **Also.** The auto-submit fix released to the web as 0.38.1 reaches Android
 here, and a Play Together room now stamps each match with its own serial, so a
 rematch counts as the new match it is.
-
-Leaving a live multiplayer game now asks first - from the back arrow, the header
-shortcuts and the Android back button alike - and if the app is closed
-mid-match, Home offers to take you back to it, reconnecting to wherever the game
-has got to rather than replaying what you missed.
-
-Two drawing faults are fixed. A canvas could stop accepting touches while still
-looking live, because a pointer whose release never arrived was remembered
-forever; it now heals itself and every drawing window opens ready. And the first
-stroke of a coached round could jump, because the hint above the canvas was
-replaced by one below it the instant you started drawing, moving the canvas 62px
-out from under your finger mid-stroke.
 
 ## 0.38.1 - 2026-08-23
 

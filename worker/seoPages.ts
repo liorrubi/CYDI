@@ -45,6 +45,9 @@ export type SeoPage = {
    * scripts/generateSeoShapeImages.ts, so it always shows the target the page
    * actually asks the player to draw. */
   image?: { src: string; alt: string; caption: string; width: number; height: number };
+  /** Copy that belongs AFTER the link group rather than before it - used where a
+   * paragraph introduces the links that follow it. */
+  paragraphsAfterLinkGroup?: string[];
   /** A headed block of prominent internal links - the hub's "Practice individual
    * shapes" list. Same no-duplicate rule as `links` above. */
   linkGroup?: { heading: string; items: { href: string; label: string; description: string }[] };
@@ -71,6 +74,8 @@ const HOME: SeoPage = {
     { href: "/drawing-accuracy-test", label: "Take the drawing accuracy test" },
     { href: "/draw-a-perfect-circle", label: "Try to draw a perfect circle" },
     { href: "/draw-shapes-online", label: "Draw shapes online" },
+    { href: "/multiplayer-drawing-game", label: "Multiplayer drawing game with friends" },
+    { href: "/2-player-drawing-game-one-phone", label: "2 player drawing game on one phone" },
   ],
 };
 
@@ -203,7 +208,14 @@ const DRAW_SHAPES: SeoPage = {
       },
     ],
   },
-  links: [{ href: "/", label: "CYDI home" }],
+  paragraphsAfterLinkGroup: [
+    "Once a shape stops beating you, the same drawing and the same scoring work with other people: play a multiplayer drawing game against friends on their own devices, or a two-player game taking turns on one phone.",
+  ],
+  links: [
+    { href: "/multiplayer-drawing-game", label: "Multiplayer drawing game" },
+    { href: "/2-player-drawing-game-one-phone", label: "2 player drawing game on one phone" },
+    { href: "/", label: "CYDI home" },
+  ],
   // This page IS the shape map, so "play more shapes" would point at itself, and
   // the single-shape challenges are the practice list above - which leaves the
   // accuracy test as the one next step this block does not already offer.
@@ -211,8 +223,53 @@ const DRAW_SHAPES: SeoPage = {
   androidCta: true,
 };
 
+/*
+ * The two social modes get one page each, and both lead with what makes CYDI
+ * different from the draw-and-guess games that fill this SERP: nobody is
+ * guessing a word here, everybody draws the SAME shape and the scores decide it.
+ * Saying so in the first line is honest and it is also the only way a visitor
+ * who wanted Pictionary leaves quickly instead of bouncing off the game itself.
+ */
+const MULTIPLAYER: SeoPage = {
+  path: "/multiplayer-drawing-game",
+  title: "Multiplayer Drawing Game - Same Shape, Best Score Wins | CYDI",
+  description:
+    "A multiplayer drawing game where nobody guesses: 2-8 players draw the same shape from memory and the most accurate drawing wins. Free, in the browser, no account.",
+  h1: "Multiplayer Drawing Game",
+  paragraphs: [
+    "Play Together is CYDI's live multiplayer mode, and it works differently from most drawing games you will find. There is no word to guess and nothing to describe. Everyone in the room sees the same shape for three seconds, it disappears, and all of you redraw it from memory at the same time.",
+    "When the round ends, every drawing is scored against the target the same way the single-player game scores yours - how closely the outline matches, plus a bonus for finishing quickly. The scoreboard shows each player's accuracy and speed, so it is always clear why someone won. Scores add up across five, ten or fifteen rounds and the highest total is the champion.",
+    "One person creates a room and shares a link, a QR code or a six-character code. Everyone else joins in a browser on their own phone or laptop - no app, no account, nothing to install. Rooms hold two to eight players, and if someone's connection drops they keep their seat and their score and rejoin where the game has got to.",
+  ],
+  links: [
+    { href: "/2-player-drawing-game-one-phone", label: "Only have one phone? Play two-player on the same device" },
+    { href: "/drawing-accuracy-test", label: "Test your drawing accuracy on your own first" },
+  ],
+  cta: { href: "/", label: "Start a Game with Friends" },
+  androidCta: true,
+};
+
+const TWO_PLAYER: SeoPage = {
+  path: "/2-player-drawing-game-one-phone",
+  title: "2 Player Drawing Game on One Phone - Pass and Play | CYDI",
+  description:
+    "A two player drawing game for one phone: take turns, draw the same shape from memory, and compare both drawings side by side. Free, offline-friendly, no account.",
+  h1: "2 Player Drawing Game on One Phone",
+  paragraphs: [
+    "Two players, one phone, no second device and no room code. CYDI's 2 Players mode is pass and play: you hand the phone across between turns, and it tells you whose turn it is so nobody sees anything they should not.",
+    "Both players get the same shape in a round. On your turn it appears for three seconds, then vanishes and you have twenty seconds to redraw it from memory. Neither the other player's drawing nor their score is shown until you have both finished - so the second player has nothing to copy and no target score to aim at.",
+    "Once you are both done the round opens up: the shape you were given, both drawings laid over it so you can see who got closer, and the accuracy and speed behind each score. Whoever starts alternates every round, scores add up, and the highest total at the end takes it. It works the same in a browser or in the Android app, and needs no connection once the page has loaded.",
+  ],
+  links: [
+    { href: "/multiplayer-drawing-game", label: "Everyone has their own phone? Play online multiplayer" },
+    { href: "/draw-shapes-online", label: "Practise the shapes on your own" },
+  ],
+  cta: { href: "/", label: "Start a Two-Player Game" },
+  androidCta: true,
+};
+
 /** Pages the Worker rewrites the <head> of and injects copy into. */
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DRAW_SHAPES];
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list
@@ -329,6 +386,7 @@ export function renderSeoSection(page: SeoPage): string {
     `<h1>${escapeHtml(page.h1)}</h1>` +
     paragraphs +
     linkGroup +
+    (page.paragraphsAfterLinkGroup ?? []).map((text) => `<p>${escapeHtml(text)}</p>`).join("") +
     `<ul>${links}</ul>` +
     cta +
     android +

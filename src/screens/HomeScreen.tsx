@@ -106,7 +106,33 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           <h2>🪙 Shop</h2>
           <p>Spend your CYDI Coins</p>
         </button>
-        {showGetTheApp && (
+        {/*
+        Web-only, and below the cards on purpose: it is a short orientation
+        block with real internal links for the two social modes, not another
+        entry point competing with the selector above. Hidden in the Android
+        app, where crawlable links mean nothing and the tabs are right there.
+      */}
+      {showGetTheApp && (
+        <section className="home-ways" aria-labelledby="home-ways-heading">
+          <h2 id="home-ways-heading">Play CYDI your way</h2>
+          <ul>
+            <li>
+              <strong>Classic</strong> — draw a shape from memory on your own and get it scored out of 100.{" "}
+              <a href="/draw-shapes-online">Draw shapes online</a>
+            </li>
+            <li>
+              <strong>2 Players</strong> — take turns on one phone and compare both drawings afterwards.{" "}
+              <a href="/2-player-drawing-game-one-phone">2 player drawing game on one phone</a>
+            </li>
+            <li>
+              <strong>Multiplayer</strong> — two to eight people draw the same shape at once, on their own devices.{" "}
+              <a href="/multiplayer-drawing-game">Multiplayer drawing game</a>
+            </li>
+          </ul>
+        </section>
+      )}
+
+      {showGetTheApp && (
           <button type="button" className="card home-card home-card-accent-green" onClick={handleGetTheApp}>
             <h2>📱 Get the Android App</h2>
             <p>Play CYDI on your phone — free on Google Play</p>

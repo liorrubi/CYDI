@@ -197,3 +197,53 @@ test("every page is in the sitemap exactly once, with its own canonical URL", ()
     }
   }
 });
+
+// --- Wave 2: the two social modes -------------------------------------------
+// Both target intents the SERP research showed CYDI actually matches. The head
+// terms ("multiplayer drawing game", "drawing game with friends") are owned by
+// draw-and-guess sites, so these pages have to say what they are in the first
+// line rather than compete for a Pictionary intent CYDI does not serve.
+
+test("each social mode has exactly one page, and neither targets the other's intent", () => {
+  const mp = SEO_PAGES.find((p) => p.path === "/multiplayer-drawing-game");
+  const tp = SEO_PAGES.find((p) => p.path === "/2-player-drawing-game-one-phone");
+  assert.ok(mp && tp, "both social pages exist");
+
+  // No keyword-variation pages: one per mode, no near-duplicate paths.
+  const social = SEO_PAGES.filter((p) => /multiplayer|player|friends|phone/.test(p.path));
+  assert.equal(social.length, 2, `expected 2 social pages, got ${social.map((p) => p.path).join(", ")}`);
+
+  // The 2-player page must be unmistakably the same-device one, or it competes
+  // with the multiplayer page for the same searchers.
+  const tpText = `${tp!.title} ${tp!.h1} ${tp!.description}`.toLowerCase();
+  assert.ok(/one phone|same device/.test(tpText), "the 2-player page must say it is one device");
+  const mpText = `${mp!.title} ${mp!.h1} ${mp!.description}`.toLowerCase();
+  assert.ok(!/one phone/.test(mpText), "the multiplayer page must not claim the same-device intent");
+});
+
+test("both social pages disambiguate themselves from draw-and-guess games", () => {
+  for (const path of ["/multiplayer-drawing-game", "/2-player-drawing-game-one-phone"]) {
+    const page = SEO_PAGES.find((p) => p.path === path)!;
+    const opening = `${page.description} ${page.paragraphs[0]}`.toLowerCase();
+    assert.ok(/same shape|from memory|guess/.test(opening), `${path} must say what it is up front`);
+  }
+});
+
+test("the two social pages link to each other, and the hub links to both", () => {
+  const mp = SEO_PAGES.find((p) => p.path === "/multiplayer-drawing-game")!;
+  const tp = SEO_PAGES.find((p) => p.path === "/2-player-drawing-game-one-phone")!;
+  assert.ok(mp.links.some((l) => l.href === tp.path), "multiplayer links to 2 players");
+  assert.ok(tp.links.some((l) => l.href === mp.path), "2 players links to multiplayer");
+
+  const hub = SEO_PAGES.find((p) => p.path === "/draw-shapes-online")!;
+  for (const target of [mp.path, tp.path]) {
+    assert.ok(hub.links.some((l) => l.href === target), `the hub links to ${target}`);
+  }
+});
+
+test("a visitor from a social page lands in that mode, not on the shape map", () => {
+  assert.equal(landingPageForPath("/multiplayer-drawing-game")?.mode, "playTogether");
+  assert.equal(landingPageForPath("/2-player-drawing-game-one-phone")?.mode, "passPlay");
+  // And the shape pages are untouched by the new field.
+  assert.equal(landingPageForPath("/draw-a-perfect-circle")?.mode, undefined);
+});

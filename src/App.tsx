@@ -27,7 +27,8 @@ import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import ArtistPackScreen from "./screens/ArtistPackScreen";
 import PassPlayScreen from "./screens/PassPlayScreen";
 import PlayTogetherScreen from "./screens/PlayTogetherScreen";
-import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toHome, toPlayTogether, toShapeChallenge, toSharedArtistResult, toSharedResult } from "./app/routes";
+import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toHome, toPassPlay,
+  toPlayTogether, toShapeChallenge, toSharedArtistResult, toSharedResult } from "./app/routes";
 import { resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
@@ -154,6 +155,8 @@ export default function App({ landing }: AppProps) {
     }
     // Landing pages keep their URL (unlike the share paths above) - it is the
     // canonical, indexed address of this page, not a payload to consume.
+    if (landing?.mode === "playTogether") return toPlayTogether();
+    if (landing?.mode === "passPlay") return toPassPlay();
     if (landing) return toShapeChallenge();
     return { name: "home" };
   });

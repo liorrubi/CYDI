@@ -5972,3 +5972,43 @@ body {
   min-height: 44px;
   box-sizing: border-box;
 }
+
+/* ------------------------------------------------------- Play CYDI your way -- */
+/*
+ * A short orientation block under the home cards, web only. Quiet on purpose:
+ * the mode selector at the top is the real entry point, and this exists so the
+ * three modes are explained once in words and so the two social landing pages
+ * have an honest internal link from the homepage.
+ */
+.home-ways {
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+  margin: var(--space-5) 0 0;
+  color: var(--color-text-muted);
+}
+
+.home-ways h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.home-ways ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.home-ways strong {
+  color: var(--color-text);
+}
+
+.home-ways a {
+  color: var(--color-primary-fill);
+}

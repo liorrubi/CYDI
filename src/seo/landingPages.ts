@@ -20,6 +20,13 @@ import type { CategoryId } from "../content/contentRepository";
 
 export type LandingPage = {
   path: string;
+  /**
+   * Which mode the page opens. Omitted means Shape Challenge, which is what
+   * every shape-focused landing page wants. The two social pages would be
+   * actively misleading without this: someone arriving from a page about
+   * playing with friends should land in that mode, not on the shape map.
+   */
+  mode?: "playTogether" | "passPlay";
   /** Shape to open directly. Omitted = land on the Shape Challenge category map. */
   shape?: {
     category: CategoryId;
@@ -56,6 +63,8 @@ const LANDING_PAGES: LandingPage[] = [
   { path: "/draw-a-perfect-star", shape: STAR },
   { path: "/draw-a-perfect-heart", shape: HEART },
   { path: "/draw-shapes-online" },
+  { path: "/multiplayer-drawing-game", mode: "playTogether" },
+  { path: "/2-player-drawing-game-one-phone", mode: "passPlay" },
 ];
 
 export const LANDING_PATHS: string[] = LANDING_PAGES.map((page) => page.path);

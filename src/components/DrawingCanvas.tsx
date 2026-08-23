@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { DrawingPath } from "../types/Challenge";
+import { canStartStroke, hasCapture } from "./drawingCanvasPointer";
 import type { Point } from "../types/Point";
 import { CANVAS_SIZE, DEFAULT_PEN_COLOR, PEN_COLORS, penInkGlyphColor, type PenColorId, type PenSkinId } from "../app/constants";
 import PenSkinGlyph from "./PenSkinGlyph";
@@ -263,6 +264,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     if (wasDisabledRef.current && !disabled) {
       pointsRef.current = [];
       segmentBreaksRef.current = [];
+      // Becoming drawable also drops any pointer left recorded by the previous
+      // phase. Nothing from before this moment can legitimately still be
+      // mid-stroke, and a leftover id would make the whole window deaf.
+      activePointerIdRef.current = null;
+      isDrawingRef.current = false;
       clearSparkles();
       redraw();
     }
@@ -342,9 +348,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
 
   function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (disabled) return;
-    // Ignore a second finger touching down mid-stroke - only the pointer that
-    // started the stroke may add points to it.
-    if (activePointerIdRef.current !== null) return;
+    if (!canStartStroke(activePointerIdRef.current, (id) => hasCapture(event.currentTarget, id))) return;
     activePointerIdRef.current = event.pointerId;
     try {
       event.currentTarget.setPointerCapture(event.pointerId);

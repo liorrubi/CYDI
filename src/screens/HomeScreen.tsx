@@ -1,6 +1,7 @@
 import AppHeader from "../components/AppHeader";
 import FeaturedShapePreviews from "../components/FeaturedShapePreviews";
 import HomeModeTabs, { type HomeMode } from "../components/HomeModeTabs";
+import ResumeGameBanner from "../components/ResumeGameBanner";
 import { APP_NAME, APP_TAGLINE } from "../app/constants";
 import {
   toAchievements,
@@ -63,6 +64,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         onNavigateToSettings={() => handleSelect(toSettings())}
       />
       <HomeModeTabs active="classic" onSelect={handleMode} />
+      {/* Only renders once the room has been confirmed still live. */}
+      <ResumeGameBanner onResume={(roomCode) => handleSelect(toPlayTogether(roomCode))} />
       <div className="home-cards">
         <button
           type="button"

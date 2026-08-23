@@ -2,11 +2,14 @@
  * © 2026 Lior Rubinovich. All rights reserved.
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import PlayTogetherRoom from "../components/multiplayer/PlayTogetherRoom";
 import { SocialPointsBadge } from "../components/SocialPointsBadge";
+import { useDialogA11y } from "../hooks/useDialogA11y";
+import { registerNavigationGuard } from "../app/navigationGuard";
+import { clearActiveRoom, rememberActiveRoom } from "../multiplayer/resumeStore";
 import { createRoom, joinBlockedReason, lookupRoom } from "../multiplayer/roomApi";
 import { clearRoomToken, hasRoomToken, RoomSocket } from "../multiplayer/roomSocket";
 import {
@@ -59,8 +62,27 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
   const [busy, setBusy] = useState(false);
   /** Kept so Exit can release the right seat token after the session object is gone. */
   const [activeRoomCode, setActiveRoomCode] = useState<string | null>(null);
+  /** True while there is a game in progress worth protecting from an accidental exit. */
+  const [matchActive, setMatchActive] = useState(false);
+  /** The navigation being held back while the "Leave game?" question is on screen. */
+  const [pendingLeave, setPendingLeave] = useState<{ run: () => void } | null>(null);
+
+  const handleActiveChange = useCallback((active: boolean) => setMatchActive(active), []);
 
   const goHome = () => onNavigate(toHome());
+
+  /**
+   * Arriving with a code we already hold a seat token for is a RESUME, not a
+   * join: the server allows a token-bearing reconnect in any phase, so there is
+   * nothing to ask and no form to fill in. A /join/<code> invite from someone
+   * else has no token and still lands on the form.
+   */
+  useEffect(() => {
+    if (!initialJoinCode || session) return;
+    if (!isRoomCode(initialJoinCode) || !hasRoomToken(initialJoinCode)) return;
+    startSession(initialJoinCode, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A room owns timers; leaving the screen must not leave them running.
   useEffect(() => () => session?.close(), [session]);
@@ -87,6 +109,9 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
       });
     }
     setActiveRoomCode(roomCode);
+    // The breadcrumb that lets Home offer "Return to Game" if the app is closed
+    // or backgrounded away. Removed again by a deliberate Leave.
+    rememberActiveRoom(roomCode);
     setSession(socket);
   }
 
@@ -157,24 +182,56 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
     // Leaving deliberately gives up the seat: keeping the token would silently
     // put the player back into a game they chose to walk away from.
     if (activeRoomCode) clearRoomToken(activeRoomCode);
+    clearActiveRoom();
     session?.close();
     setSession(null);
     setActiveRoomCode(null);
+    setMatchActive(false);
     setView("menu");
   }
+
+  /**
+   * Every way out of a live game goes through here.
+   *
+   * A room keeps playing without you, so walking out by accident - a stray back
+   * press, a tap on the mode tabs - costs the round and the seat. The lobby and
+   * the finished champion screen are not guarded: neither has anything to lose.
+   */
+  function leave(run: () => void) {
+    if (matchActive) setPendingLeave({ run });
+    else run();
+  }
+
+  function confirmLeave() {
+    const action = pendingLeave?.run;
+    setPendingLeave(null);
+    action?.();
+  }
+
+  // The hardware back button is handled centrally, so a live game has to
+  // register its objection rather than pass a prop.
+  useEffect(() => {
+    if (!matchActive) return;
+    return registerNavigationGuard(() => {
+      setPendingLeave({ run: exitRoom });
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchActive, activeRoomCode, session]);
 
   if (session) {
     return (
       <div className="screen">
         <AppHeader
           title="Play Together"
-          onBack={exitRoom}
-          onNavigateToHome={goHome}
-          onNavigateToSettings={() => onNavigate(toSettings())}
-          onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
+          onBack={() => leave(exitRoom)}
+          onNavigateToHome={() => leave(goHome)}
+          onNavigateToSettings={() => leave(() => onNavigate(toSettings()))}
+          onNavigateToShapeChallenge={() => leave(() => onNavigate(toShapeChallenge()))}
         />
         <SocialPointsBadge />
-        <PlayTogetherRoom transport={session} onExit={exitRoom} />
+        <PlayTogetherRoom transport={session} onExit={exitRoom} onActiveChange={handleActiveChange} />
+        {pendingLeave && <LeaveConfirmation onStay={() => setPendingLeave(null)} onLeave={confirmLeave} />}
       </div>
     );
   }
@@ -331,6 +388,37 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+type LeaveConfirmationProps = {
+  onStay: () => void;
+  onLeave: () => void;
+};
+
+/** Escape and the backdrop both mean Stay: the safe answer is the one you reach by accident. */
+function LeaveConfirmation({ onStay, onLeave }: LeaveConfirmationProps) {
+  const dialogRef = useDialogA11y<HTMLDivElement>(true, { onClose: onStay });
+  return (
+    <div className="onboarding-overlay" role="presentation" onClick={onStay}>
+      <div
+        ref={dialogRef}
+        className="password-prompt-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mp-leave-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="mp-leave-title">Leave game?</h2>
+        <p className="status-text">You have an active multiplayer game. Are you sure you want to leave?</p>
+        <div className="button-row">
+          <Button onClick={onStay}>Stay in Game</Button>
+          <Button variant="secondary" onClick={onLeave}>
+            Leave Game
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

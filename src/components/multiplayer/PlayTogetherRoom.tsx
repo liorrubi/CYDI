@@ -44,6 +44,14 @@ import type { DrawingPath } from "../../types/Challenge";
 type PlayTogetherRoomProps = {
   transport: RoomTransport;
   onExit: () => void;
+  /**
+   * Whether there is a game worth protecting from an accidental exit.
+   *
+   * Reported upward rather than decided in the screen, because only the room
+   * sees the phase. True from the moment a game starts until the champion
+   * screen: the lobby is nothing to lose, and a finished game is over.
+   */
+  onActiveChange?: (active: boolean) => void;
 };
 
 const DIFFICULTY_LABELS: Record<MultiplayerDifficulty, string> = {
@@ -67,7 +75,7 @@ function toSubmittablePath(path: DrawingPath): DrawingPath {
   return { points, canvasWidth: path.canvasWidth, canvasHeight: path.canvasHeight, breaks: segmentStarts };
 }
 
-export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoomProps) {
+export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: PlayTogetherRoomProps) {
   const { snapshot, error, dismissError, send, clockOffsetMs, status } = useRoom(transport);
   const remainingMs = useDeadlineRemaining(snapshot?.phaseEndsAt ?? null, clockOffsetMs);
 
@@ -251,6 +259,11 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
     if (result.points > 0) setSocialPointsOverride(result.total - result.points);
     setAward({ points: result.points, total: result.total, previousTotal: result.total - result.points });
   }, [snapshot]);
+
+  useEffect(() => {
+    const live = phase !== "LOBBY" && phase !== "FINAL_RESULTS" && phase !== "ABANDONED";
+    onActiveChange?.(live);
+  }, [onActiveChange, phase]);
 
   const showCoach = coachArmed && roundIndex === 0;
   /** Whether there is anything on the canvas yet - gates the second coach mark and the DONE button. */

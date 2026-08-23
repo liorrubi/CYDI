@@ -40,6 +40,7 @@ import {
   shouldShowOnboardingTutorial,
 } from "./services/tutorialStore";
 import { markModeIntroShown, resetModeIntro, shouldShowModeIntro } from "./services/modeIntroStore";
+import { runNavigationGuard } from "./app/navigationGuard";
 import { resetMultiplayerTutorials } from "./services/multiplayerTutorialStore";
 import { getChallenge, updateChallenge } from "./services/challengeStorage";
 import { decodeArtistResultHash, decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
@@ -232,6 +233,10 @@ export default function App({ landing }: AppProps) {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const listenerPromise = CapacitorApp.addListener("backButton", () => {
+      // A screen in front may need to ask something first - a live multiplayer
+      // game asks before dropping the player out of the room. If it takes the
+      // press, back does nothing else.
+      if (runNavigationGuard()) return;
       const previous = screenHistoryRef.current.pop();
       if (previous) {
         setScreen(previous);

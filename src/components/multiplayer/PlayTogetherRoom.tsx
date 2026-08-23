@@ -246,6 +246,20 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
   useEffect(() => {
     if (phase !== "DRAWING" || submitted || submitting) return;
     if (remainingMs === null || remainingMs > 0) return;
+    /*
+     * Re-read the deadline instead of trusting `remainingMs`, which lags one
+     * render behind a phase change: the tick that ran it to 0 belonged to the
+     * expiring SHOW_SHAPE deadline, and the render that applies the DRAWING
+     * snapshot still closes over that stale 0.
+     *
+     * Live, this has been surviving on network timing - the snapshot normally
+     * lands before the next 200ms tick, so the 0 never happens. On a slow link
+     * it would, and the whole room would auto-submit an empty canvas the
+     * instant drawing opened. The same code path in Pass & Play, where the
+     * phase change IS caused by the tick reaching 0, failed on the first try.
+     */
+    const deadline = snapshot?.phaseEndsAt ?? null;
+    if (deadline === null || Date.now() + clockOffsetMs < deadline) return;
     handleDone(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainingMs, phase, submitted, submitting]);
@@ -535,7 +549,7 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
             />
           ) : (
             <>
-              <MultiplayerLeaderboard players={players} yourSeatId={you?.seatId ?? null} highlightSeatId={winner?.seatId ?? null} />
+              <MultiplayerLeaderboard players={players} yourSeatId={you?.seatId ?? null} highlightSeatIds={winner ? [winner.seatId] : null} />
 
               {showCoach && <RoundCoachMark text="Scores add up across every round — there's plenty of time to catch up." />}
 
@@ -577,7 +591,7 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
               <MultiplayerLeaderboard
                 players={players}
                 yourSeatId={you?.seatId ?? null}
-                highlightSeatId={champion?.seatId ?? null}
+                highlightSeatIds={champion ? [champion.seatId] : null}
                 showRoundScore={false}
               />
               <div className="button-row mp-final-actions">

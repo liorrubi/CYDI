@@ -24,6 +24,7 @@ import SharedArtistResultScreen from "./screens/SharedArtistResultScreen";
 import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import ArtistPackScreen from "./screens/ArtistPackScreen";
+import PassPlayScreen from "./screens/PassPlayScreen";
 import PlayTogetherScreen from "./screens/PlayTogetherScreen";
 import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toHome, toPlayTogether, toShapeChallenge, toSharedArtistResult, toSharedResult } from "./app/routes";
 import { resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
@@ -465,6 +466,8 @@ export default function App({ landing }: AppProps) {
             return <MegaChallengeScreen onNavigate={navigate} />;
           case "artistPack":
             return <ArtistPackScreen packId={screen.packId} from={screen.from} replyTo={screen.replyTo} onNavigate={navigate} />;
+          case "passPlay":
+            return <PassPlayScreen onNavigate={navigate} />;
           case "playTogether":
             return <PlayTogetherScreen onNavigate={navigate} initialJoinCode={screen.joinCode} />;
         }

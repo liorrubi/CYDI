@@ -5510,3 +5510,86 @@ body {
   border: 1px solid var(--color-border);
   color: var(--color-text);
 }
+
+/* ---------------------------------------------- home mode selector (tabs) -- */
+/*
+ * Small on purpose. Home already carries six cards; this sits above them as a
+ * single low-contrast strip, so it reads as "which game" and never competes
+ * with the cards themselves for attention.
+ */
+.home-mode-tabs {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  max-width: 420px;
+  padding: 3px;
+  margin-bottom: var(--space-4);
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.home-mode-tab {
+  flex: 1 1 0;
+  /* 44px minimum touch target. */
+  min-height: 40px;
+  padding: var(--space-2) var(--space-1);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-md) - 3px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.home-mode-tab-active {
+  color: var(--color-text);
+  background: var(--color-card);
+  box-shadow: 0 1px 3px rgba(30, 32, 46, 0.14);
+  cursor: default;
+}
+
+/* ------------------------------------------------- 2 Players (pass & play) -- */
+
+.pp-handoff {
+  justify-content: center;
+}
+
+.pp-handoff-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.pp-handoff-avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--color-primary-fill);
+  border-radius: 50%;
+}
+
+.pp-handoff-title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.pp-handoff-sub {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.pp-handoff-hint {
+  margin: 0;
+}

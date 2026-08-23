@@ -3,7 +3,8 @@ import { useDialogA11y } from "../../hooks/useDialogA11y";
 import { playChipSound } from "../../engine/soundEngine";
 
 type MultiplayerTutorialOverlayProps = {
-  role: "host" | "guest";
+  /** "passPlay" is the local two-player mode; the other two are the roles inside a live room. */
+  role: "host" | "guest" | "passPlay";
   onDismiss: () => void;
 };
 
@@ -33,8 +34,29 @@ const GUEST_STEPS: Step[] = [
   { icon: "🏆", title: "Highest total wins", body: "Scores add up across every round. Whoever has the most at the end is the CYDI Champion." },
 ];
 
+/**
+ * One device, taken in turns. The two things a first-timer gets wrong are
+ * watching over the other player's shoulder, and not realising the phone has to
+ * change hands - so both are said outright.
+ */
+const PASS_PLAY_STEPS: Step[] = [
+  { icon: "📱", title: "One device, two players", body: "You take it in turns on this phone. When it is not your turn, look away - no peeking at what the other player drew." },
+  { icon: "👀", title: "Remember the shape", body: "On your turn a shape appears for 3 seconds, then vanishes. You both get the same shape in a round." },
+  { icon: "✏️", title: "Draw it from memory", body: "You have 20 seconds. Tap DONE as soon as you are happy - finishing early earns a speed bonus." },
+  { icon: "🤝", title: "Scores stay hidden until you are both done", body: "Nobody sees a score or a drawing until both players have taken their turn, so the second player has nothing to aim at." },
+  { icon: "🏆", title: "Highest total wins", body: "Scores add up across every round, and whoever goes first swaps each round. The best total is the CYDI Champion." },
+];
+
+const STEPS_BY_ROLE = { host: HOST_STEPS, guest: GUEST_STEPS, passPlay: PASS_PLAY_STEPS };
+
+const LABEL_BY_ROLE = {
+  host: "How to host Play Together",
+  guest: "How to play together",
+  passPlay: "How to play 2 Players",
+};
+
 export default function MultiplayerTutorialOverlay({ role, onDismiss }: MultiplayerTutorialOverlayProps) {
-  const steps = role === "host" ? HOST_STEPS : GUEST_STEPS;
+  const steps = STEPS_BY_ROLE[role];
   const [index, setIndex] = useState(0);
   const dialogRef = useDialogA11y<HTMLDivElement>(true, { onClose: onDismiss });
 
@@ -54,7 +76,7 @@ export default function MultiplayerTutorialOverlay({ role, onDismiss }: Multipla
         className="onboarding-card onboarding-accent-purple mp-tutorial-card"
         role="dialog"
         aria-modal="true"
-        aria-label={role === "host" ? "How to host Play Together" : "How to play together"}
+        aria-label={LABEL_BY_ROLE[role]}
       >
         <button type="button" className="onboarding-skip" onClick={onDismiss}>
           Skip

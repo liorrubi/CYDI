@@ -19,6 +19,9 @@
 const HOST_TUTORIAL_KEY = "cydi.mp.tutorial.host.v1";
 const GUEST_TUTORIAL_KEY = "cydi.mp.tutorial.guest.v1";
 const ROUND_COACH_KEY = "cydi.mp.coach.round.v1";
+// Pass & Play is a different game with a different explanation (one device,
+// taken in turns), so it gets its own flag rather than reusing the guest one.
+const PASS_PLAY_TUTORIAL_KEY = "cydi.mp.tutorial.passplay.v1";
 
 function readFlag(key: string): boolean {
   try {
@@ -55,6 +58,14 @@ export function markGuestTutorialShown(): void {
   writeFlag(GUEST_TUTORIAL_KEY);
 }
 
+export function shouldShowPassPlayTutorial(): boolean {
+  return !readFlag(PASS_PLAY_TUTORIAL_KEY);
+}
+
+export function markPassPlayTutorialShown(): void {
+  writeFlag(PASS_PLAY_TUTORIAL_KEY);
+}
+
 /** The in-round coach marks ("Remember this shape!", "Draw it from memory!", ...) - shown through the first round only, once ever. */
 export function shouldShowRoundCoach(): boolean {
   return !readFlag(ROUND_COACH_KEY);
@@ -70,6 +81,7 @@ export function resetMultiplayerTutorials(): void {
     localStorage.removeItem(HOST_TUTORIAL_KEY);
     localStorage.removeItem(GUEST_TUTORIAL_KEY);
     localStorage.removeItem(ROUND_COACH_KEY);
+    localStorage.removeItem(PASS_PLAY_TUTORIAL_KEY);
   } catch {
     // Nothing to reset if storage is unavailable.
   }

@@ -21,4 +21,5 @@ export type Screen =
   | { name: "specialChallenge" }
   | { name: "megaChallenge" }
   | { name: "artistPack"; packId: string; from: Screen; replyTo?: DecodedSharedArtistResult }
-  | { name: "playTogether"; joinCode?: string };
+  | { name: "playTogether"; joinCode?: string }
+  | { name: "passPlay" };

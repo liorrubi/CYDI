@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.38.1 - 2026-08-23
+
+Web-only fix. Android stays on 0.38.0, which is unaffected in practice and
+picks this up with its next feature release.
+
+A Play Together round could open with the player's canvas already submitted,
+empty, scoring zero before they were allowed to draw. The end-of-window
+auto-submit was reading a countdown that lags one render behind a phase change:
+the tick that ran it to zero belonged to the expiring three-second look at the
+shape, and the render that opened the drawing window still saw that zero. It
+needed the DRAWING snapshot to arrive more than one 200ms tick after the
+deadline, which a normal connection never does and a congested one does, so it
+has been invisible rather than absent. The auto-submit now re-reads the actual
+deadline before firing.
+
 ## 0.38.0 - 2026-08-23
 
 Play Together: live multiplayer. Two to eight people draw the same shape at the

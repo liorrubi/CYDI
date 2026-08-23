@@ -154,15 +154,21 @@ android {
         // flags, Social Points) the QA is meant to exercise. Never uploaded to
         // Play; the shipping build takes the next code after it.
         //
-        // 25: rc2. Device QA on rc1 found the compact badge announcing a
-        // promotion about 400ms before the progress card did - it derived the
-        // rank from the points while the card was still completing the old
-        // band. The hold now carries the band as well as the number.
+        // 24, 25: release candidates for this version, debug-signed and
+        // installed only on the Mi 8 for QA. rc1 -> rc2 fixed the compact badge
+        // announcing a promotion about 400ms before the progress card did.
         //
-        // CURRENT STATE: highest PLAY upload is 23 (live). 24 and 25 exist only
-        // on a test device.
-        versionCode 25
-        versionName "0.39.0-rc2"
+        // 26: shipping 0.39.0 - the mode selector, 2 Players and Social
+        // Points/Rank. Skips nothing that Play has seen: 23 is the live release
+        // and 24/25 never left the test device, but a used code can never be
+        // re-uploaded, so this takes the next free one.
+        //
+        // DEPLOYMENT COUPLING: this client reads `gameSerial` from the room
+        // snapshot, which only the Worker in this same commit sends. The Worker
+        // and the web build must go out together or a rematch stops earning
+        // Social Points. See worker/roomDO.ts handleStart.
+        versionCode 26
+        versionName "0.39.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -3,11 +3,12 @@ import test from "node:test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-// Play Together must never touch coins, achievements, streaks, progression or
-// ads. That is a product decision for v1, and the cheapest way to keep it true
-// is structural: scan the feature's own source and fail if it so much as
-// mentions one of those modules. A future accidental import shows up here
-// rather than as a coin balance that moved during a multiplayer round.
+// Neither multiplayer mode - Play Together (live) nor 2 Players (same device) -
+// may touch coins, achievements, streaks, progression or ads. That is a product
+// decision for v1 of each, and the cheapest way to keep it true is structural:
+// scan the features' own source and fail if they so much as mention one of
+// those modules. A future accidental import shows up here rather than as a coin
+// balance that moved during a multiplayer round.
 
 const FORBIDDEN = [
   "coinsStore",
@@ -28,11 +29,13 @@ const FORBIDDEN = [
   "categoryUnlockStore",
 ];
 
-/** Every file that makes up the feature. */
+/** Every file that makes up either feature. */
 async function multiplayerSources(): Promise<{ path: string; source: string }[]> {
   const roots = [
     join(import.meta.dirname, "."), // src/multiplayer
     join(import.meta.dirname, "..", "components", "multiplayer"),
+    join(import.meta.dirname, "..", "passplay"),
+    join(import.meta.dirname, "..", "components", "passplay"),
   ];
   const files: { path: string; source: string }[] = [];
   for (const root of roots) {
@@ -42,15 +45,17 @@ async function multiplayerSources(): Promise<{ path: string; source: string }[]>
       files.push({ path: join(root, name), source: await readFile(join(root, name), "utf8") });
     }
   }
-  // The screen is the feature's entry point and belongs to the same boundary.
-  const screen = join(import.meta.dirname, "..", "screens", "PlayTogetherScreen.tsx");
-  files.push({ path: screen, source: await readFile(screen, "utf8") });
+  // The screens are the entry points and belong to the same boundary.
+  for (const name of ["PlayTogetherScreen.tsx", "PassPlayScreen.tsx"]) {
+    const screen = join(import.meta.dirname, "..", "screens", name);
+    files.push({ path: screen, source: await readFile(screen, "utf8") });
+  }
   return files;
 }
 
-test("the multiplayer feature imports nothing from coins, achievements, progression or ads", async () => {
+test("neither multiplayer mode imports coins, achievements, progression or ads", async () => {
   const files = await multiplayerSources();
-  assert.ok(files.length >= 10, `expected the whole feature, found ${files.length} files`);
+  assert.ok(files.length >= 12, `expected both features, found ${files.length} files`);
 
   const violations: string[] = [];
   for (const { path, source } of files) {
@@ -68,7 +73,7 @@ test("the multiplayer feature imports nothing from coins, achievements, progress
   assert.deepEqual(violations, []);
 });
 
-test("the multiplayer feature never calls a progression mutator", async () => {
+test("neither multiplayer mode calls a progression mutator", async () => {
   const files = await multiplayerSources();
   const CALLS = ["addCoins(", "spendCoins(", "recordRoundCompleted(", "applyShapeRoundOutcome(", "markShapeCompleted(", "recordSuccessfulDrawing(", "recordDailyVisit("];
   const violations: string[] = [];
@@ -80,7 +85,7 @@ test("the multiplayer feature never calls a progression mutator", async () => {
   assert.deepEqual(violations, []);
 });
 
-test("the multiplayer feature does not reach for an ad", async () => {
+test("neither multiplayer mode reaches for an ad", async () => {
   const files = await multiplayerSources();
   const violations: string[] = [];
   for (const { path, source } of files) {

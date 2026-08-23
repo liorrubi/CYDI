@@ -144,12 +144,31 @@ android {
         // at a temporary staging tunnel via VITE_API_ORIGIN_OVERRIDE, so it must
         // never be confused with a shippable artifact.
         //
-        // CURRENT STATE: highest PLAY upload is 21; 22 exists only on a test
-        // device. 23 is therefore the next Play release - skipping 22 removes any
-        // ambiguity about which build a device is running, and Play permanently
-        // rejects a re-used code either way.
-        versionCode 23
-        versionName "0.38.0"
+        // 23: shipped to Play as 0.38.0 (Play Together). Live.
+        //
+        // 24: release-candidate TEST build for the next version - the mode
+        // selector, 2 Players and Social Points/Rank. DEBUG-signed on purpose:
+        // the Mi 8 already carries a debug build, and a release-signed APK over
+        // it would be refused for a signature mismatch, which on a test device
+        // means uninstalling and losing the very local state (coins, tutorial
+        // flags, Social Points) the QA is meant to exercise. Never uploaded to
+        // Play; the shipping build takes the next code after it.
+        //
+        // 24, 25: release candidates for this version, debug-signed and
+        // installed only on the Mi 8 for QA. rc1 -> rc2 fixed the compact badge
+        // announcing a promotion about 400ms before the progress card did.
+        //
+        // 26: shipping 0.39.0 - the mode selector, 2 Players and Social
+        // Points/Rank. Skips nothing that Play has seen: 23 is the live release
+        // and 24/25 never left the test device, but a used code can never be
+        // re-uploaded, so this takes the next free one.
+        //
+        // DEPLOYMENT COUPLING: this client reads `gameSerial` from the room
+        // snapshot, which only the Worker in this same commit sends. The Worker
+        // and the web build must go out together or a rematch stops earning
+        // Social Points. See worker/roomDO.ts handleStart.
+        versionCode 26
+        versionName "0.39.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

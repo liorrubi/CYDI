@@ -93,6 +93,8 @@ type RoomState = {
   lastRound: RoundResult | null;
   championSeatId: string | null;
   createdAt: number;
+  /** Bumped once per Start. See RoomSnapshot.gameSerial - it is what makes a Social Points award payable exactly once per match. */
+  gameSerial: number;
   /** Set when the host disconnects; the role moves on if they are still gone when this passes. */
   hostGraceUntil: number | null;
   /** Set when the last player disconnects; the room is disposable once IDLE_TTL_MS has passed. */
@@ -209,6 +211,8 @@ export class RoomDO {
           ? room.shapeSequence[room.roundIndex] ?? null
           : null,
       players: this.publicPlayers(room),
+      // ?? 0 for a room that was persisted by a build predating this field.
+      gameSerial: room.gameSerial ?? 0,
       lastRound: room.lastRound,
       championSeatId: room.championSeatId,
       you: me ? { seatId: me.seatId, isHost: me.isHost, submitted: me.round !== null } : null,
@@ -573,6 +577,10 @@ export class RoomDO {
 
     room.shapeSequence = pickShapeSequence(room.difficulty, room.rounds);
     room.championSeatId = null;
+    // One Start, one match, one serial. handleRematch deliberately does NOT
+    // bump this: it returns the room to the lobby, and the rematch only becomes
+    // a match when somebody presses Start again.
+    room.gameSerial = (room.gameSerial ?? 0) + 1;
     for (const p of room.players) p.totalScore = 0;
     this.startRound(room, 0);
 
@@ -691,6 +699,7 @@ export class RoomDO {
       lastRound: null,
       championSeatId: null,
       createdAt: now,
+      gameSerial: 0,
       hostGraceUntil: null,
       emptySince: now,
     };

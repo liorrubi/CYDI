@@ -24,6 +24,11 @@ import { playRoundStartSound } from "../../engine/soundEngine";
 import { hapticRoundStart } from "../../services/haptics";
 import { ScreenWakeLock } from "../../services/wakeLock";
 import { trackEvent } from "../../services/analytics";
+import { awardSocialPoints } from "../../services/socialPointsStore";
+import { multiplayerAwardId, multiplayerAwards } from "../../social/socialRewards";
+import { SocialPointsAward } from "../SocialPointsBadge";
+import SocialProgressCard from "../SocialProgressCard";
+import { clearSocialPointsOverride, setSocialPointsOverride } from "../../social/socialPointsDisplay";
 import {
   DIFFICULTY_OPTIONS,
   MP_LIMITS,
@@ -106,6 +111,8 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
    * dims and locks. Released on unmount, so leaving the room - by any route,
    * including the hardware back button - always gives the lock back.
    */
+  useEffect(() => clearSocialPointsOverride, []);
+
   useEffect(() => {
     let lock: ScreenWakeLock | null = null;
     let cancelled = false;
@@ -214,6 +221,37 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
     hapticRoundStart();
   }, [phase, roundIndex]);
 
+  // ------------------------------------------------- Social Points award ----
+  /**
+   * Paid once per player, per finished match.
+   *
+   * Each client awards only ITSELF - there is no server ledger, and a client
+   * cannot be trusted to hand out points to its peers anyway. The key comes from
+   * the room's `gameSerial`, which the DO bumps once per Start, so every repeat
+   * of the final snapshot, every reconnect and every remount lands on the same
+   * key and pays nothing, while a rematch that is actually played out to the end
+   * gets a new key and earns again.
+   *
+   * Reaching FINAL_RESULTS at all is what "completed" means: a room that is
+   * abandoned, a player who only joins the lobby, a single round and a rematch
+   * that nobody finishes never get here.
+   */
+  const [award, setAward] = useState<{ points: number; total: number; previousTotal: number } | null>(null);
+  const awardedRef = useRef("");
+  useEffect(() => {
+    if (!snapshot || snapshot.phase !== "FINAL_RESULTS") return;
+    const seatId = snapshot.you?.seatId;
+    if (!seatId) return;
+    const awardId = multiplayerAwardId(snapshot.roomCode, snapshot.gameSerial, seatId);
+    if (awardedRef.current === awardId) return;
+    awardedRef.current = awardId;
+    const points = multiplayerAwards(snapshot.players.map((p) => ({ id: p.seatId, totalScore: p.totalScore }))).get(seatId) ?? 0;
+    const result = awardSocialPoints(awardId, points);
+    // Hold the header badge at the old total until the card takes over.
+    if (result.points > 0) setSocialPointsOverride(result.total - result.points);
+    setAward({ points: result.points, total: result.total, previousTotal: result.total - result.points });
+  }, [snapshot]);
+
   const showCoach = coachArmed && roundIndex === 0;
   /** Whether there is anything on the canvas yet - gates the second coach mark and the DONE button. */
   const hasDrawn = (attempt?.points.length ?? 0) >= 2;
@@ -256,7 +294,9 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
      * 200ms tick after the SHOW_SHAPE deadline auto-submits an empty canvas
      * the instant the drawing window opens - scoring 0 for the round with no
      * chance to draw. It has been invisible only because the snapshot normally
-     * beats the next tick; a slow or congested link is all it takes.
+     * beats the next tick; a slow or congested link is all it takes. It was
+     * found in Pass & Play, where the phase change IS the tick reaching 0 and
+     * so it failed on the very first run.
      */
     const deadline = snapshot?.phaseEndsAt ?? null;
     if (deadline === null || Date.now() + clockOffsetMs < deadline) return;
@@ -549,7 +589,7 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
             />
           ) : (
             <>
-              <MultiplayerLeaderboard players={players} yourSeatId={you?.seatId ?? null} highlightSeatId={winner?.seatId ?? null} />
+              <MultiplayerLeaderboard players={players} yourSeatId={you?.seatId ?? null} highlightSeatIds={winner ? [winner.seatId] : null} />
 
               {showCoach && <RoundCoachMark text="Scores add up across every round — there's plenty of time to catch up." />}
 
@@ -591,9 +631,16 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
               <MultiplayerLeaderboard
                 players={players}
                 yourSeatId={you?.seatId ?? null}
-                highlightSeatId={champion?.seatId ?? null}
+                highlightSeatIds={champion ? [champion.seatId] : null}
                 showRoundScore={false}
               />
+              {/* Local-device progression only: never sent to the room, never shown for a peer. */}
+              {award && (
+                <>
+                  <SocialPointsAward points={award.points} total={award.total} />
+                  <SocialProgressCard previousTotal={award.previousTotal} total={award.total} pointsAwarded={award.points} />
+                </>
+              )}
               <div className="button-row mp-final-actions">
                 <Button variant="secondary" onClick={onExit}>
                   Exit
@@ -602,6 +649,8 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
                   <Button
                     onClick={() => {
                       trackEvent("mp_rematch", { playerCount });
+                      setAward(null);
+                      clearSocialPointsOverride();
                       send({ type: "rematch" });
                     }}
                   >

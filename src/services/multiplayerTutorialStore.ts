@@ -19,6 +19,16 @@
 const HOST_TUTORIAL_KEY = "cydi.mp.tutorial.host.v1";
 const GUEST_TUTORIAL_KEY = "cydi.mp.tutorial.guest.v1";
 const ROUND_COACH_KEY = "cydi.mp.coach.round.v1";
+// Pass & Play is a different game with a different explanation (one device,
+// taken in turns), so it gets its own flag rather than reusing the guest one.
+const PASS_PLAY_TUTORIAL_KEY = "cydi.mp.tutorial.passplay.v1";
+// The in-round hints are split from the live-room ones too. They read almost the
+// same, but "pass the device" is a different game from "everyone draws at once",
+// and somebody who learned one has not been shown the other.
+const PASS_PLAY_COACH_KEY = "cydi.mp.coach.passplay.v1";
+// Shown once, and only when Social Points have actually been earned - never as
+// a promise before a game. After that the bar and the Rank Up teach it.
+const SOCIAL_RANK_INTRO_KEY = "cydi.mp.intro.socialRank.v1";
 
 function readFlag(key: string): boolean {
   try {
@@ -55,6 +65,14 @@ export function markGuestTutorialShown(): void {
   writeFlag(GUEST_TUTORIAL_KEY);
 }
 
+export function shouldShowPassPlayTutorial(): boolean {
+  return !readFlag(PASS_PLAY_TUTORIAL_KEY);
+}
+
+export function markPassPlayTutorialShown(): void {
+  writeFlag(PASS_PLAY_TUTORIAL_KEY);
+}
+
 /** The in-round coach marks ("Remember this shape!", "Draw it from memory!", ...) - shown through the first round only, once ever. */
 export function shouldShowRoundCoach(): boolean {
   return !readFlag(ROUND_COACH_KEY);
@@ -64,12 +82,33 @@ export function markRoundCoachShown(): void {
   writeFlag(ROUND_COACH_KEY);
 }
 
+/** The Pass & Play equivalent, on its own flag. */
+export function shouldShowPassPlayRoundCoach(): boolean {
+  return !readFlag(PASS_PLAY_COACH_KEY);
+}
+
+export function markPassPlayRoundCoachShown(): void {
+  writeFlag(PASS_PLAY_COACH_KEY);
+}
+
+/** The one-line explanation of what Social Points are, shown beside the progress card the first time a match actually pays out. */
+export function shouldShowSocialRankIntro(): boolean {
+  return !readFlag(SOCIAL_RANK_INTRO_KEY);
+}
+
+export function markSocialRankIntroShown(): void {
+  writeFlag(SOCIAL_RANK_INTRO_KEY);
+}
+
 /** Test/support hook: re-arms every Play Together tutorial. */
 export function resetMultiplayerTutorials(): void {
   try {
     localStorage.removeItem(HOST_TUTORIAL_KEY);
     localStorage.removeItem(GUEST_TUTORIAL_KEY);
     localStorage.removeItem(ROUND_COACH_KEY);
+    localStorage.removeItem(PASS_PLAY_TUTORIAL_KEY);
+    localStorage.removeItem(PASS_PLAY_COACH_KEY);
+    localStorage.removeItem(SOCIAL_RANK_INTRO_KEY);
   } catch {
     // Nothing to reset if storage is unavailable.
   }

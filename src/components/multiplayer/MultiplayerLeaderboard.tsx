@@ -1,10 +1,30 @@
-import type { PublicPlayer } from "../../multiplayer/protocol";
+/**
+ * The shape of a row, rather than PublicPlayer itself.
+ *
+ * Pass & Play has no seats, no host and no connection state, but the standings
+ * it needs are this table down to the accuracy/speed breakdown. Typing the row
+ * structurally lets both modes share one component: PublicPlayer satisfies it
+ * unchanged, and the two live-room fields are optional.
+ */
+export type LeaderboardPlayer = {
+  /** Any stable per-player key - a seat id in Play Together, a local player id in Pass & Play. */
+  seatId: string;
+  nickname: string;
+  totalScore: number;
+  roundScore: number | null;
+  roundAccuracy: number | null;
+  roundSpeed: number | null;
+  isHost?: boolean;
+  /** Omitted means present. Only a live room can have someone away. */
+  connected?: boolean;
+};
 
 type MultiplayerLeaderboardProps = {
-  players: PublicPlayer[];
+  players: readonly LeaderboardPlayer[];
+  /** The row to tag as "You", or null when everyone is sitting around the same device. */
   yourSeatId: string | null;
-  /** Highlighted with a crown - the round winner, or the champion on the final screen. */
-  highlightSeatId?: string | null;
+  /** Highlighted as the winner - the round winner(s) or the champion(s). More than one id is a tie. */
+  highlightSeatIds?: readonly string[] | null;
   /** Shows the "This round" column. Off for the final standings, where only the total matters. */
   showRoundScore?: boolean;
 };
@@ -21,9 +41,10 @@ const MEDALS = ["🥇", "🥈", "🥉"];
 export default function MultiplayerLeaderboard({
   players,
   yourSeatId,
-  highlightSeatId,
+  highlightSeatIds,
   showRoundScore = true,
 }: MultiplayerLeaderboardProps) {
+  const winners = highlightSeatIds ?? [];
   return (
     <table className="mp-leaderboard">
       <caption className="sr-only">Scores</caption>
@@ -48,7 +69,7 @@ export default function MultiplayerLeaderboard({
       <tbody>
         {players.map((player, index) => {
           const isYou = player.seatId === yourSeatId;
-          const classes = ["mp-lb-row", isYou ? "mp-lb-row-you" : "", player.seatId === highlightSeatId ? "mp-lb-row-win" : ""]
+          const classes = ["mp-lb-row", isYou ? "mp-lb-row-you" : "", winners.includes(player.seatId) ? "mp-lb-row-win" : ""]
             .filter(Boolean)
             .join(" ");
           return (
@@ -58,7 +79,7 @@ export default function MultiplayerLeaderboard({
                 <span className="mp-lb-nickname">{player.nickname}</span>
                 {isYou && <span className="mp-lb-tag">You</span>}
                 {player.isHost && <span className="mp-lb-tag mp-lb-tag-host">Host</span>}
-                {!player.connected && (
+                {player.connected === false && (
                   <span className="mp-lb-tag mp-lb-tag-away" title="Disconnected">
                     Away
                   </span>

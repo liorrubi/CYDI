@@ -9,6 +9,14 @@ type WinnerRevealProps = {
   isYou: boolean;
   /** "round" is the per-round winner beat; "champion" is the end-of-game one. */
   variant: "round" | "champion";
+  /**
+   * Two or more players finished level, so `nickname` names all of them.
+   *
+   * Only Pass & Play can reach this: Play Together breaks a tie by who
+   * submitted first, which is a fair rule when everyone draws at once and a
+   * meaningless one when turns are sequential.
+   */
+  tie?: boolean;
   /** Fires once the reveal has finished playing, so the parent can show the standings. */
   onDone?: () => void;
 };
@@ -28,7 +36,7 @@ const CHAMPION_HOLD_MS = 2800;
  * Sound goes through the existing soundEngine, which already honours the
  * player's sound setting - there is no separate multiplayer mute.
  */
-export default function WinnerReveal({ nickname, score, isYou, variant, onDone }: WinnerRevealProps) {
+export default function WinnerReveal({ nickname, score, isYou, variant, tie = false, onDone }: WinnerRevealProps) {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
@@ -73,10 +81,10 @@ export default function WinnerReveal({ nickname, score, isYou, variant, onDone }
     <div className={`mp-reveal ${isChampion ? "mp-reveal-champion" : "mp-reveal-round"}`} role="status">
       <Confetti variant={variant} />
       <span className="mp-reveal-emoji" aria-hidden="true">
-        {isChampion ? "👑" : "🎉"}
+        {tie ? "🤝" : isChampion ? "👑" : "🎉"}
       </span>
-      <p className="mp-reveal-kicker">{isChampion ? "CYDI Champion" : "Round winner"}</p>
-      <p className="mp-reveal-title">{isYou ? `${nickname} — that's you!` : nickname}</p>
+      <p className="mp-reveal-kicker">{tie ? (isChampion ? "Joint champions" : "Round tied") : isChampion ? "CYDI Champion" : "Round winner"}</p>
+      <p className="mp-reveal-title">{isYou && !tie ? `${nickname} — that's you!` : nickname}</p>
       {score !== null && <p className="mp-reveal-score">{isChampion ? `${score} points` : `+${score} this round`}</p>}
     </div>
   );

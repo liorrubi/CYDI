@@ -86,6 +86,18 @@ export type EventParamsMap = {
   mp_rematch: { playerCount: number };
   /** The connection dropped mid-session. `phase` says where it hurt. */
   mp_disconnect: { phase: MultiplayerPhaseParam };
+  // --- 2 Players (Pass & Play) ---------------------------------------------
+  // Same rule as Play Together above, and it bites harder here: both players
+  // type a name into the same device, so a name in an event would be a real
+  // person sitting next to another real person. Counts and settings only -
+  // never a name, and there is no room code or seat to leak in the first place.
+  pp_game_started: { playerCount: number; roundCount: number; difficulty: MultiplayerDifficultyParam };
+  /** One per round. `submitted` is false when at least one player let the clock run out on an empty canvas. */
+  pp_round_completed: { roundIndex: number; playerCount: number; submitted: boolean };
+  pp_game_finished: { playerCount: number; roundCount: number };
+  pp_rematch: { playerCount: number };
+  /** Quit from inside a running match. `roundIndex` is how far they got, which is the whole reason to record it. */
+  pp_abandoned: { roundIndex: number; playerCount: number; roundCount: number };
 
   purchase_completed: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
@@ -192,6 +204,11 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "mp_game_finished",
   "mp_rematch",
   "mp_disconnect",
+  "pp_game_started",
+  "pp_round_completed",
+  "pp_game_finished",
+  "pp_rematch",
+  "pp_abandoned",
 ];
 
 export type ValidationResult<E extends AnalyticsEventName> =
@@ -306,6 +323,31 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     if (!isRecord(p) || !hasExactKeys(p, ["phase"])) return { valid: false };
     if (typeof p.phase !== "string" || !(MP_PHASE_PARAMS as readonly string[]).includes(p.phase)) return { valid: false };
     return { valid: true, params: { phase: p.phase as MultiplayerPhaseParam } };
+  },
+  pp_game_started: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["playerCount", "roundCount", "difficulty"])) return { valid: false };
+    if (!isPlayerCount(p.playerCount) || !isRoundCountParam(p.roundCount) || !isDifficultyParam(p.difficulty)) return { valid: false };
+    return { valid: true, params: { playerCount: p.playerCount, roundCount: p.roundCount, difficulty: p.difficulty } };
+  },
+  pp_round_completed: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["roundIndex", "playerCount", "submitted"])) return { valid: false };
+    if (!isIntInRange(p.roundIndex, 0, 14) || !isPlayerCount(p.playerCount) || !isBoolean(p.submitted)) return { valid: false };
+    return { valid: true, params: { roundIndex: p.roundIndex, playerCount: p.playerCount, submitted: p.submitted } };
+  },
+  pp_game_finished: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["playerCount", "roundCount"])) return { valid: false };
+    if (!isPlayerCount(p.playerCount) || !isRoundCountParam(p.roundCount)) return { valid: false };
+    return { valid: true, params: { playerCount: p.playerCount, roundCount: p.roundCount } };
+  },
+  pp_rematch: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["playerCount"])) return { valid: false };
+    if (!isPlayerCount(p.playerCount)) return { valid: false };
+    return { valid: true, params: { playerCount: p.playerCount } };
+  },
+  pp_abandoned: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["roundIndex", "playerCount", "roundCount"])) return { valid: false };
+    if (!isIntInRange(p.roundIndex, 0, 14) || !isPlayerCount(p.playerCount) || !isRoundCountParam(p.roundCount)) return { valid: false };
+    return { valid: true, params: { roundIndex: p.roundIndex, playerCount: p.playerCount, roundCount: p.roundCount } };
   },
   shape_completed: (p) => validateRoundResultEvent(p),
   shape_practice_completed: (p) => validateRoundResultEvent(p),

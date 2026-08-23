@@ -1,5 +1,6 @@
 import AppHeader from "../components/AppHeader";
 import FeaturedShapePreviews from "../components/FeaturedShapePreviews";
+import HomeModeTabs, { type HomeMode } from "../components/HomeModeTabs";
 import { APP_NAME, APP_TAGLINE } from "../app/constants";
 import {
   toAchievements,
@@ -8,6 +9,7 @@ import {
   toHome,
   toInstructions,
   toList,
+  toPassPlay,
   toPlayTogether,
   toSettings,
   toShapeChallenge,
@@ -26,6 +28,17 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   function handleSelect(screen: Screen) {
     playSelectSound();
     onNavigate(screen);
+  }
+
+  /**
+   * The mode switch navigates rather than swapping content: 2 Players and
+   * Multiplayer are whole screens that already exist, and the brief was
+   * explicit that there is no intermediate page between the tab and the game.
+   * Classic is therefore always the selected tab here, because Home IS Classic.
+   */
+  function handleMode(mode: HomeMode) {
+    if (mode === "passPlay") onNavigate(toPassPlay());
+    if (mode === "multiplayer") onNavigate(toPlayTogether());
   }
 
   // Hidden inside the Android app itself, where "get the app" is meaningless -
@@ -49,6 +62,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         onNavigateToShapeChallenge={() => handleSelect(toShapeChallenge())}
         onNavigateToSettings={() => handleSelect(toSettings())}
       />
+      <HomeModeTabs active="classic" onSelect={handleMode} />
       <div className="home-cards">
         <button
           type="button"
@@ -66,14 +80,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         >
           <h2>Daily Challenge</h2>
           <p>Draw from memory, race for the top score</p>
-        </button>
-        <button
-          type="button"
-          className="card home-card home-card-accent-pink"
-          onClick={() => handleSelect(toPlayTogether())}
-        >
-          <h2>Play Together</h2>
-          <p>Draw against friends, live &mdash; 2 to 8 players</p>
         </button>
         <button
           type="button"

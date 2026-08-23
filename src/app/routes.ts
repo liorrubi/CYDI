@@ -80,6 +80,11 @@ export function toArtistPack(packId: string, from: Screen = { name: "shapeChalle
   return { name: "artistPack", packId, from, replyTo };
 }
 
+/** 2 Players - the local, same-device mode. No code and no link: everything about it lives on this one device. */
+export function toPassPlay(): Screen {
+  return { name: "passPlay" };
+}
+
 /** Play Together. `joinCode` is set when the player arrived on /join/<code>, so the join form opens prefilled. */
 export function toPlayTogether(joinCode?: string): Screen {
   return { name: "playTogether", joinCode };

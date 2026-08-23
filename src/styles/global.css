@@ -5510,3 +5510,412 @@ body {
   border: 1px solid var(--color-border);
   color: var(--color-text);
 }
+
+/* ---------------------------------------------- home mode selector (tabs) -- */
+/*
+ * Small on purpose. Home already carries six cards; this sits above them as a
+ * single low-contrast strip, so it reads as "which game" and never competes
+ * with the cards themselves for attention.
+ */
+.home-mode-tabs {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  max-width: 420px;
+  padding: 3px;
+  margin-bottom: var(--space-4);
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.home-mode-tab {
+  flex: 1 1 0;
+  /* 44px minimum touch target. */
+  min-height: 40px;
+  padding: var(--space-2) var(--space-1);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-md) - 3px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.home-mode-tab-active {
+  color: var(--color-text);
+  background: var(--color-card);
+  box-shadow: 0 1px 3px rgba(30, 32, 46, 0.14);
+  cursor: default;
+}
+
+/* ------------------------------------------------- 2 Players (pass & play) -- */
+
+.pp-handoff {
+  justify-content: center;
+}
+
+.pp-handoff-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.pp-handoff-avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--color-primary-fill);
+  border-radius: 50%;
+}
+
+.pp-handoff-title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.pp-handoff-sub {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.pp-handoff-hint {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------ Social Points -- */
+/*
+ * Prestige, not currency - so it is a quiet line inside the social modes rather
+ * than another icon in Home's status row, which is already full.
+ */
+.social-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  margin: 0 0 var(--space-3);
+  padding: 2px var(--space-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  border-radius: 999px;
+}
+
+.social-badge-value {
+  color: var(--color-text);
+}
+
+.social-award {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: var(--space-3) 0 0;
+  text-align: center;
+}
+
+.social-award-gain {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.social-award-total {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------- Social Rank card -- */
+/*
+ * The after-match motivation beat. Deliberately a card with a heavy bar, not a
+ * hairline: it has to be findable at a glance on a 320px phone, and it is the
+ * only place that says "one more game gets you somewhere".
+ */
+.social-progress {
+  width: 100%;
+  max-width: 420px;
+  /* Never wider than its column, whatever the bar is asked to hold. */
+  box-sizing: border-box;
+  margin: var(--space-4) 0 0;
+  padding: var(--space-4);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.social-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.social-progress-rank {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.social-progress-gain {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-primary-fill);
+  white-space: nowrap;
+}
+
+.social-progress-points {
+  margin: 2px 0 var(--space-3);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.social-progress-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 20px;
+  overflow: hidden;
+  /* A solid, clearly darker trough so the unfilled part is unmistakably
+     unfilled in both themes - a tinted-transparent track washes out on dark. */
+  background: color-mix(in srgb, var(--color-text-muted) 30%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+}
+
+.social-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--social-fill, 0%);
+  background: var(--color-primary-fill);
+  border-radius: 999px;
+}
+
+.social-progress-label {
+  position: relative;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text);
+  /* Legible over both the filled and unfilled halves without relying on either. */
+  text-shadow:
+    0 0 3px var(--color-card),
+    0 0 3px var(--color-card),
+    0 0 4px var(--color-card);
+}
+
+.social-progress-next {
+  margin: var(--space-2) 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.social-rankup {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-primary-fill) 18%, transparent);
+  border-radius: var(--radius-md);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .social-progress-fill {
+    transition: width 120ms linear;
+  }
+  .social-rankup {
+    animation: social-rankup-in 320ms ease-out;
+  }
+}
+
+@keyframes social-rankup-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The one frame a promotion resets the bar: a cut, never a slide backwards. */
+.social-progress-fill-cut {
+  transition: none !important;
+}
+
+/* ------------------------------------------------- mode intro + rank intro -- */
+
+.mode-intro-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.mode-intro-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--color-text);
+}
+
+.mode-intro-icon {
+  flex: 0 0 auto;
+  font-size: 1.1rem;
+}
+
+.mode-intro-hint {
+  margin: var(--space-3) 0 0;
+  text-align: center;
+}
+
+/* Shown once, under the bar, the first time a social match actually pays out. */
+.social-progress-intro {
+  margin: var(--space-2) 0 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------- 2 Players round comparison -- */
+/*
+ * The "look at yours vs mine" screen. Stacked by default: two canvases side by
+ * side on a 320px phone come out around 130px each, which is too small to judge
+ * a drawing by and defeats the point of showing them at all. They go side by
+ * side only once there is room for both to stay legible.
+ */
+.pp-compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+  margin: var(--space-3) 0 0;
+}
+
+.pp-compare-heading {
+  margin: 0 0 var(--space-1);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.pp-compare-target {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* The reference is deliberately smaller than the attempts: it is the question,
+   not the answer, and the answers are what people came to look at. */
+.pp-compare-target .drawing-canvas {
+  width: 132px;
+  height: 132px;
+}
+
+.pp-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pp-compare-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.pp-compare-card-win {
+  border-color: var(--color-primary-fill);
+  box-shadow: 0 0 0 1px var(--color-primary-fill) inset;
+}
+
+.pp-compare-card .drawing-canvas,
+.pp-compare-empty {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.pp-compare-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-text-muted) 10%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.pp-compare-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.pp-compare-score {
+  margin: var(--space-1) 0 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--color-primary-fill);
+}
+
+.pp-compare-detail {
+  display: flex;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* Both drawings fit side by side from here up without either shrinking below
+   the ~150px where a traced shape stops being readable. */
+@media (min-width: 400px) {
+  .pp-compare-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .pp-compare-card .drawing-canvas,
+  .pp-compare-empty {
+    max-width: 100%;
+  }
+}

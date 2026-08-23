@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import PlayTogetherRoom from "../components/multiplayer/PlayTogetherRoom";
+import { SocialPointsBadge } from "../components/SocialPointsBadge";
 import { createRoom, joinBlockedReason, lookupRoom } from "../multiplayer/roomApi";
 import { clearRoomToken, hasRoomToken, RoomSocket } from "../multiplayer/roomSocket";
 import {
@@ -172,6 +173,7 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
           onNavigateToSettings={() => onNavigate(toSettings())}
           onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
         />
+        <SocialPointsBadge />
         <PlayTogetherRoom transport={session} onExit={exitRoom} />
       </div>
     );
@@ -187,6 +189,8 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
         onNavigateToSettings={() => onNavigate(toSettings())}
         onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
       />
+
+      <SocialPointsBadge />
 
       {view === "menu" && (
         <div className="mp-entry">

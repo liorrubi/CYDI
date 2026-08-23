@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import AchievementsTutorialOverlay from "./components/AchievementsTutorialOverlay";
+import ModeIntroOverlay from "./components/ModeIntroOverlay";
 import OnboardingTutorialOverlay from "./components/OnboardingTutorialOverlay";
 import HomeScreen from "./screens/HomeScreen";
 import CreateChallengeScreen from "./screens/CreateChallengeScreen";
@@ -24,6 +25,7 @@ import SharedArtistResultScreen from "./screens/SharedArtistResultScreen";
 import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import ArtistPackScreen from "./screens/ArtistPackScreen";
+import PassPlayScreen from "./screens/PassPlayScreen";
 import PlayTogetherScreen from "./screens/PlayTogetherScreen";
 import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toHome, toPlayTogether, toShapeChallenge, toSharedArtistResult, toSharedResult } from "./app/routes";
 import { resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
@@ -37,6 +39,8 @@ import {
   shouldShowAchievementsTutorial,
   shouldShowOnboardingTutorial,
 } from "./services/tutorialStore";
+import { markModeIntroShown, resetModeIntro, shouldShowModeIntro } from "./services/modeIntroStore";
+import { resetMultiplayerTutorials } from "./services/multiplayerTutorialStore";
 import { getChallenge, updateChallenge } from "./services/challengeStorage";
 import { decodeArtistResultHash, decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
 import { fetchSharedById } from "./services/shareApi";
@@ -154,6 +158,7 @@ export default function App({ landing }: AppProps) {
   });
   const [showAchievementsTutorial, setShowAchievementsTutorial] = useState(() => shouldShowAchievementsTutorial());
   const [showOnboardingTutorial, setShowOnboardingTutorial] = useState(() => shouldShowOnboardingTutorial());
+  const [showModeIntro, setShowModeIntro] = useState(() => shouldShowModeIntro());
   /** Transient in-app update notice (Android only); null whenever there is nothing to say. */
   const [updateNotice, setUpdateNotice] = useState<string | null>(null);
   /** Transient notice for a share link that could not be opened. */
@@ -382,11 +387,27 @@ export default function App({ landing }: AppProps) {
     navigate(toShapeChallenge());
   }
 
-  /** Instructions -> Start Tutorial: re-arm one coached round and show the Start here spotlight again. */
+  /**
+   * Instructions -> Start Tutorial: re-arm everything first-run, not just the
+   * Classic round.
+   *
+   * There are five separate first-run explanations now (modes, Pass & Play,
+   * host, guest, and the in-round coach marks for each), and a replay button
+   * that silently skipped four of them would be the wrong kind of surprise for
+   * the person who pressed it precisely because they wanted the tour again.
+   */
   function handleStartTutorialFromInstructions() {
     armTutorialReplay();
+    resetModeIntro();
+    resetMultiplayerTutorials();
+    setShowModeIntro(true);
     setShowOnboardingTutorial(true);
     navigate(toHome());
+  }
+
+  function dismissModeIntro() {
+    markModeIntroShown();
+    setShowModeIntro(false);
   }
 
   function dismissAchievementsTutorial() {
@@ -465,12 +486,20 @@ export default function App({ landing }: AppProps) {
             return <MegaChallengeScreen onNavigate={navigate} />;
           case "artistPack":
             return <ArtistPackScreen packId={screen.packId} from={screen.from} replyTo={screen.replyTo} onNavigate={navigate} />;
+          case "passPlay":
+            return <PassPlayScreen onNavigate={navigate} />;
           case "playTogether":
             return <PlayTogetherScreen onNavigate={navigate} initialJoinCode={screen.joinCode} />;
         }
       })()}
+      {/* Which game, before which card: the mode card comes first and the Shape
+          Challenge spotlight waits for it, so a new player is never asked to
+          read two things at once. */}
+      {showModeIntro && !sharedLinkPending && !resolvingSharedLink && screen.name === "home" && (
+        <ModeIntroOverlay onDismiss={dismissModeIntro} />
+      )}
       {/* Spotlights the home screen's Shape Challenge card, so it only renders where that card exists. */}
-      {showOnboardingTutorial && !sharedLinkPending && !resolvingSharedLink && screen.name === "home" && (
+      {showOnboardingTutorial && !showModeIntro && !sharedLinkPending && !resolvingSharedLink && screen.name === "home" && (
         <OnboardingTutorialOverlay onStart={startOnboardingTutorial} onDismiss={dismissOnboardingTutorial} />
       )}
       {showAchievementsTutorial && !showOnboardingTutorial && (

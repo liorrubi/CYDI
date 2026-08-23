@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.39.0 - 2026-08-23
+
+Three ways to play, and a reason to keep playing them with other people.
+
+**A mode selector on Home.** Classic, 2 Players and Multiplayer sit in a small
+strip above the cards. Classic is the default and is unchanged; the duplicate
+Play Together card is gone, because the selector is now the way in.
+
+**2 Players.** A local mode on one device. Two people enter names, pick 5, 10 or
+15 rounds and a difficulty, then take turns: a handoff card names whose turn it
+is and waits for a tap, the shape shows for 3 seconds, and there are 20 to draw
+it from memory. Neither the drawing nor the score of the first player appears
+until both have drawn - the round reveals nothing until every turn is in.
+Whoever starts alternates each round, a level round is a real tie rather than a
+prize for going first, and the game ends on a champion with confetti.
+
+Every round then ends with both drawings shown over the shape they were given,
+with the accuracy and speed that decided it. That includes the last round, which
+shows its own results before the champion screen rather than skipping them.
+
+The mode is a pure state machine written over a player list, so three and four
+players already work in the engine and its tests; only the setup screen holds
+this version to two.
+
+**Social Points and Social Rank.** One prestige tally shared by both social
+modes, earned only by playing with other people. A finished live match pays 3 to
+first, 2 to second and 1 to everyone else; a finished local match pays a flat 2
+to the device, because both names in that mode are labels typed into the same
+phone. Ties are settled by standard competition ranking on score alone - nothing
+consults submission time, which in a live room would reward the fastest
+connection and locally would always reward whoever went first.
+
+Points climb a six-rank ladder from Rookie to CYDI Master, shown after each
+social match as a full-width bar that counts up and, on a promotion, fills the
+old rank to completion before revealing the new one. They are prestige, not
+currency: no shop, no spending, no ad grants them, and they are kept entirely
+separate from CYDI Coins.
+
+**Tutorials.** A one-off card introduces the three modes without explaining any
+of them. 2 Players and the two Play Together roles each get their own first-run
+explanation and their own in-round hints, on seven separate flags, so learning
+one mode never silently consumes another's tutorial. "Start Tutorial" in How to
+Play re-arms all of them.
+
+**Also.** The auto-submit fix released to the web as 0.38.1 reaches Android
+here, and a Play Together room now stamps each match with its own serial, so a
+rematch counts as the new match it is.
+
 ## 0.38.1 - 2026-08-23
 
 Web-only fix. Android stays on 0.38.0, which is unaffected in practice and

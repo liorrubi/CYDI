@@ -246,6 +246,20 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
   useEffect(() => {
     if (phase !== "DRAWING" || submitted || submitting) return;
     if (remainingMs === null || remainingMs > 0) return;
+    /*
+     * Re-read the deadline instead of trusting `remainingMs`, which lags one
+     * render behind a phase change: the tick that ran it to 0 belonged to the
+     * expiring SHOW_SHAPE deadline, and the render that applies the DRAWING
+     * snapshot still closes over that stale 0.
+     *
+     * Without this, a client whose DRAWING snapshot arrives more than one
+     * 200ms tick after the SHOW_SHAPE deadline auto-submits an empty canvas
+     * the instant the drawing window opens - scoring 0 for the round with no
+     * chance to draw. It has been invisible only because the snapshot normally
+     * beats the next tick; a slow or congested link is all it takes.
+     */
+    const deadline = snapshot?.phaseEndsAt ?? null;
+    if (deadline === null || Date.now() + clockOffsetMs < deadline) return;
     handleDone(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainingMs, phase, submitted, submitting]);

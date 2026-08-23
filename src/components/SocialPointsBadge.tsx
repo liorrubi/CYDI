@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { getSocialPoints, subscribeSocialPoints } from "../services/socialPointsStore";
 import { SOCIAL_POINTS_ICON, SOCIAL_POINTS_LABEL } from "../social/socialRewards";
+import { compactRankLabel, rankFor } from "../social/socialRank";
 
 /**
  * The running Social Points total, as a small pill.
@@ -19,9 +20,8 @@ export function SocialPointsBadge() {
   useEffect(() => subscribeSocialPoints((profile) => setTotal(profile.total)), []);
 
   return (
-    <p className="social-badge" aria-label={`${total} ${SOCIAL_POINTS_LABEL}`}>
-      <span aria-hidden="true">{SOCIAL_POINTS_ICON}</span>
-      <span className="social-badge-value">{total}</span>
+    <p className="social-badge" aria-label={`${rankFor(total).name}, ${total} ${SOCIAL_POINTS_LABEL}`}>
+      {compactRankLabel(total)}
     </p>
   );
 }

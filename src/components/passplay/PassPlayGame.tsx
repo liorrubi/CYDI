@@ -25,6 +25,7 @@ import {
 import { awardPassPlayMatch } from "../../services/socialPointsStore";
 import { PASS_PLAY_MATCH_POINTS } from "../../social/socialRewards";
 import { SocialPointsAward } from "../SocialPointsBadge";
+import SocialProgressCard from "../SocialProgressCard";
 import { trackEvent } from "../../services/analytics";
 import { useDeadlineRemaining } from "../../multiplayer/useRoom";
 import { MP_TIMINGS } from "../../multiplayer/protocol";
@@ -232,14 +233,14 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
    * which mints a new id, can. Nothing is awarded for quitting part-way: this
    * effect is only ever reached from FINAL_RESULTS.
    */
-  const [award, setAward] = useState<{ points: number; total: number } | null>(null);
+  const [award, setAward] = useState<{ points: number; total: number; previousTotal: number } | null>(null);
   const finishedRef = useRef("");
   useEffect(() => {
     if (phase !== "FINAL_RESULTS" || finishedRef.current === game.gameId) return;
     finishedRef.current = game.gameId;
     trackEvent("pp_game_finished", { playerCount: game.players.length, roundCount: game.rounds });
     const result = awardPassPlayMatch(game.gameId, PASS_PLAY_MATCH_POINTS);
-    setAward({ points: result.points, total: result.total });
+    setAward({ points: result.points, total: result.total, previousTotal: result.total - result.points });
   }, [phase, game.gameId, game.players.length, game.rounds]);
 
   const shapeId = visibleShapeId(game);
@@ -428,7 +429,18 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
                 highlightSeatIds={game.championIds}
                 showRoundScore={false}
               />
-              {award && <SocialPointsAward points={award.points} total={award.total} />}
+              {/*
+                The rank card is about the DEVICE, never about whichever
+                temporary name won: "Your Social Rank", not "Maya reached
+                Challenger". Maya and Tom own the champion line above; the
+                progression underneath belongs to whoever owns the phone.
+              */}
+              {award && (
+                <>
+                  <SocialPointsAward points={award.points} total={award.total} />
+                  <SocialProgressCard previousTotal={award.previousTotal} total={award.total} pointsAwarded={award.points} />
+                </>
+              )}
               <div className="button-row mp-final-actions">
                 <Button variant="secondary" onClick={onExit}>
                   Exit

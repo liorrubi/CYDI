@@ -27,6 +27,7 @@ import { trackEvent } from "../../services/analytics";
 import { awardSocialPoints } from "../../services/socialPointsStore";
 import { multiplayerAwardId, multiplayerAwards } from "../../social/socialRewards";
 import { SocialPointsAward } from "../SocialPointsBadge";
+import SocialProgressCard from "../SocialProgressCard";
 import {
   DIFFICULTY_OPTIONS,
   MP_LIMITS,
@@ -232,7 +233,7 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
    * abandoned, a player who only joins the lobby, a single round and a rematch
    * that nobody finishes never get here.
    */
-  const [award, setAward] = useState<{ points: number; total: number } | null>(null);
+  const [award, setAward] = useState<{ points: number; total: number; previousTotal: number } | null>(null);
   const awardedRef = useRef("");
   useEffect(() => {
     if (!snapshot || snapshot.phase !== "FINAL_RESULTS") return;
@@ -243,7 +244,7 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
     awardedRef.current = awardId;
     const points = multiplayerAwards(snapshot.players.map((p) => ({ id: p.seatId, totalScore: p.totalScore }))).get(seatId) ?? 0;
     const result = awardSocialPoints(awardId, points);
-    setAward({ points: result.points, total: result.total });
+    setAward({ points: result.points, total: result.total, previousTotal: result.total - result.points });
   }, [snapshot]);
 
   const showCoach = coachArmed && roundIndex === 0;
@@ -626,7 +627,13 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
                 highlightSeatIds={champion ? [champion.seatId] : null}
                 showRoundScore={false}
               />
-              {award && <SocialPointsAward points={award.points} total={award.total} />}
+              {/* Local-device progression only: never sent to the room, never shown for a peer. */}
+              {award && (
+                <>
+                  <SocialPointsAward points={award.points} total={award.total} />
+                  <SocialProgressCard previousTotal={award.previousTotal} total={award.total} pointsAwarded={award.points} />
+                </>
+              )}
               <div className="button-row mp-final-actions">
                 <Button variant="secondary" onClick={onExit}>
                   Exit

@@ -5636,3 +5636,122 @@ body {
   font-size: 0.85rem;
   color: var(--color-text-muted);
 }
+
+/* ------------------------------------------------------- Social Rank card -- */
+/*
+ * The after-match motivation beat. Deliberately a card with a heavy bar, not a
+ * hairline: it has to be findable at a glance on a 320px phone, and it is the
+ * only place that says "one more game gets you somewhere".
+ */
+.social-progress {
+  width: 100%;
+  max-width: 420px;
+  /* Never wider than its column, whatever the bar is asked to hold. */
+  box-sizing: border-box;
+  margin: var(--space-4) 0 0;
+  padding: var(--space-4);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.social-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.social-progress-rank {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.social-progress-gain {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-primary-fill);
+  white-space: nowrap;
+}
+
+.social-progress-points {
+  margin: 2px 0 var(--space-3);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.social-progress-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 20px;
+  overflow: hidden;
+  /* A solid, clearly darker trough so the unfilled part is unmistakably
+     unfilled in both themes - a tinted-transparent track washes out on dark. */
+  background: color-mix(in srgb, var(--color-text-muted) 30%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+}
+
+.social-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--social-fill, 0%);
+  background: var(--color-primary-fill);
+  border-radius: 999px;
+}
+
+.social-progress-label {
+  position: relative;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text);
+  /* Legible over both the filled and unfilled halves without relying on either. */
+  text-shadow:
+    0 0 3px var(--color-card),
+    0 0 3px var(--color-card),
+    0 0 4px var(--color-card);
+}
+
+.social-progress-next {
+  margin: var(--space-2) 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.social-rankup {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-primary-fill) 18%, transparent);
+  border-radius: var(--radius-md);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .social-progress-fill {
+    transition: width 120ms linear;
+  }
+  .social-rankup {
+    animation: social-rankup-in 320ms ease-out;
+  }
+}
+
+@keyframes social-rankup-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

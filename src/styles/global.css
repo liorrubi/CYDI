@@ -5964,3 +5964,11 @@ body {
   font-size: 0.9rem;
   white-space: nowrap;
 }
+
+/* The coach slot keeps its height when its text changes: a one-line hint
+   becoming a two-line one would move the canvas under a finger that is already
+   drawing on it, which is the same reflow that made the first stroke jump. */
+.mp-coach {
+  min-height: 44px;
+  box-sizing: border-box;
+}

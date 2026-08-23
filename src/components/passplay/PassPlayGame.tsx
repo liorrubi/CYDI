@@ -357,7 +357,15 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
           {phase === "DRAWING" && !submitting && (
             <>
               <p className="mp-stage-caption">Draw it from memory</p>
-              {showCoach && !hasDrawn && <RoundCoachMark text="Draw it from memory!" />}
+              {/*
+                ONE coach slot, whose text changes - never two that swap places
+                around the canvas. The hint used to sit here until the first
+                point landed and then reappear below the buttons, which pulled
+                the canvas 62px up mid-stroke: the finger stayed put, the canvas
+                slid out from under it, and the stroke jumped. Reported as the
+                pencil jumping at the start of a drawing.
+              */}
+              {showCoach && <RoundCoachMark text={hasDrawn ? "Finished? Tap DONE" : "Draw it from memory!"} />}
             </>
           )}
 
@@ -397,7 +405,6 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
                   DONE
                 </Button>
               </div>
-              {showCoach && hasDrawn && <RoundCoachMark text="Finished? Tap DONE" />}
             </>
           )}
         </div>

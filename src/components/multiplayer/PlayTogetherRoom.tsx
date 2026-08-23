@@ -509,13 +509,17 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
             <>
               <p className="mp-stage-caption">Draw it from memory</p>
               {/*
-                One hint at a time. Showing "draw it" and "tap DONE" together
-                stacked two banners above the canvas on a 375px screen, during
-                the one phase where the player is racing a clock. The second
-                hint only earns its place once there is actually something to
-                submit, which is also exactly when it becomes true.
+                One hint at a time, and always in the SAME slot. Swapping the
+                two between a position above the canvas and one below it moved
+                the canvas 62px mid-stroke, so the first stroke jumped away from
+                the finger. Only the text changes now; nothing around the canvas
+                mounts or unmounts while someone is drawing on it.
               */}
-              {showCoach && !hasDrawn && <RoundCoachMark text="Draw it from memory — the shape is gone now!" />}
+              {showCoach && (
+                <RoundCoachMark
+                  text={hasDrawn ? "Finished? Tap DONE — finishing early earns a speed bonus." : "Draw it from memory — the shape is gone now!"}
+                />
+              )}
             </>
           )}
 
@@ -556,7 +560,6 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
                   DONE
                 </Button>
               </div>
-              {showCoach && hasDrawn && <RoundCoachMark text="Finished? Tap DONE — finishing early earns a speed bonus." />}
             </>
           )}
 

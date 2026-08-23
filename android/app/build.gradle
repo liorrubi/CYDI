@@ -144,12 +144,20 @@ android {
         // at a temporary staging tunnel via VITE_API_ORIGIN_OVERRIDE, so it must
         // never be confused with a shippable artifact.
         //
-        // CURRENT STATE: highest PLAY upload is 21; 22 exists only on a test
-        // device. 23 is therefore the next Play release - skipping 22 removes any
-        // ambiguity about which build a device is running, and Play permanently
-        // rejects a re-used code either way.
-        versionCode 23
-        versionName "0.38.0"
+        // 23: shipped to Play as 0.38.0 (Play Together). Live.
+        //
+        // 24: release-candidate TEST build for the next version - the mode
+        // selector, 2 Players and Social Points/Rank. DEBUG-signed on purpose:
+        // the Mi 8 already carries a debug build, and a release-signed APK over
+        // it would be refused for a signature mismatch, which on a test device
+        // means uninstalling and losing the very local state (coins, tutorial
+        // flags, Social Points) the QA is meant to exercise. Never uploaded to
+        // Play; the shipping build takes the next code after it.
+        //
+        // CURRENT STATE: highest PLAY upload is 23 (live). 24 exists only on a
+        // test device.
+        versionCode 24
+        versionName "0.39.0-rc1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -56,12 +56,19 @@ for (const f of FRAMES) {
       fillW: Math.round(fill.getBoundingClientRect().width),
       labelFits: host.querySelector(".social-progress-label").scrollWidth <= bar.clientWidth,
     })
-  `).then((m) => console.log(f.name, m));
+  `).then((m) => process.stdout.write(f.name + " " + m + "\n"));
 
-  await sleep(400);
-  const shot = await call("Page.captureScreenshot", { format: "png" });
+  await sleep(300);
+  // Clip to the card. A full 1031x2090 page screenshot is megabytes of base64
+  // over the ADB hop and was the whole reason this crawled.
+  const box = JSON.parse(
+    await evaluate(`(() => { const r = document.querySelector("#__frame .social-progress").getBoundingClientRect();
+      return JSON.stringify({ x: Math.floor(r.x), y: Math.floor(r.y), width: Math.ceil(r.width), height: Math.ceil(r.height) }); })()`),
+  );
+  const shot = await call("Page.captureScreenshot", { format: "png", clip: { ...box, scale: 2 } });
   if (shot.result?.data) {
     await writeFile(`${outDir}/rank-${f.name}.png`, Buffer.from(shot.result.data, "base64"));
+    process.stdout.write(`wrote rank-${f.name}.png\n`);
   }
 }
 

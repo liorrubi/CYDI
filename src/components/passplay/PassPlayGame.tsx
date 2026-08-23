@@ -104,6 +104,10 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
   const player = currentPlayer(game);
   const turnKey = `${roundIndex}-${turnPosition}`;
 
+  // A badge hold must never outlive this screen - leaving before the progress
+  // card appears would otherwise freeze the badge on a stale number.
+  useEffect(() => clearSocialPointsOverride, []);
+
   /**
    * Hold the screen awake for the whole game, exactly as a live room does.
    *
@@ -111,10 +115,6 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
    * 20-second turn is not touching the device at all, and a phone that locks
    * mid-handoff turns a friendly game into a passcode prompt.
    */
-  // A hold must never outlive this screen - leaving before the card appears
-  // would otherwise freeze the badge on a stale number.
-  useEffect(() => clearSocialPointsOverride, []);
-
   useEffect(() => {
     let lock: ScreenWakeLock | null = null;
     let cancelled = false;
@@ -293,6 +293,12 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
               I&apos;m ready
             </Button>
           </div>
+          {/*
+            Round 1 only. The handoff CARD stays for every round - it is the
+            mechanic, not the tutorial - but the instruction to physically pass
+            the phone over is only news the first time.
+          */}
+          {showCoach && <RoundCoachMark text={`Pass the device to ${player.name}`} />}
         </div>
       )}
 
@@ -329,7 +335,7 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
           {phase === "DRAWING" && !submitting && (
             <>
               <p className="mp-stage-caption">Draw it from memory</p>
-              {showCoach && !hasDrawn && <RoundCoachMark text="Draw it from memory — the shape is gone now!" />}
+              {showCoach && !hasDrawn && <RoundCoachMark text="Draw it from memory!" />}
             </>
           )}
 
@@ -369,9 +375,7 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
                   DONE
                 </Button>
               </div>
-              {showCoach && hasDrawn && (
-                <RoundCoachMark text="Finished? Tap DONE — finishing early earns a speed bonus." />
-              )}
+              {showCoach && hasDrawn && <RoundCoachMark text="Finished? Tap DONE" />}
             </>
           )}
         </div>

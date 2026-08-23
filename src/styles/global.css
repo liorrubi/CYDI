@@ -5760,3 +5760,40 @@ body {
 .social-progress-fill-cut {
   transition: none !important;
 }
+
+/* ------------------------------------------------- mode intro + rank intro -- */
+
+.mode-intro-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.mode-intro-list li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--color-text);
+}
+
+.mode-intro-icon {
+  flex: 0 0 auto;
+  font-size: 1.1rem;
+}
+
+.mode-intro-hint {
+  margin: var(--space-3) 0 0;
+  text-align: center;
+}
+
+/* Shown once, under the bar, the first time a social match actually pays out. */
+.social-progress-intro {
+  margin: var(--space-2) 0 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}

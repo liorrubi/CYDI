@@ -16,6 +16,7 @@ import {
   tweenDurationMs,
 } from "../social/socialRank";
 import { setSocialPointsOverride } from "../social/socialPointsDisplay";
+import { markSocialRankIntroShown, shouldShowSocialRankIntro } from "../services/multiplayerTutorialStore";
 
 type SocialProgressCardProps = {
   /** The tally before this match. Equal to `total` when nothing was awarded. */
@@ -31,6 +32,11 @@ function prefersReducedMotion(): boolean {
   } catch {
     return false;
   }
+}
+
+/** The one-line "what is this" is owed only to somebody who has just earned their first points. */
+function shouldShowAnimateIntro(pointsAwarded: number): boolean {
+  return pointsAwarded > 0 && shouldShowSocialRankIntro();
 }
 
 /** Ease-out: most of the movement happens early, so the bar feels responsive rather than slow. */
@@ -68,6 +74,18 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
   const [flipping, setFlipping] = useState(false);
   const [promotion, setPromotion] = useState<string | null>(null);
   const celebratedRef = useRef(false);
+  /*
+   * Explained once, and only once points have actually been paid.
+   *
+   * Read at mount rather than at render time so it cannot flicker off
+   * mid-animation, and only armed for a real award: a player revisiting a
+   * finished match, or one whose award was already banked, is not owed an
+   * introduction to a system they have already been introduced to.
+   */
+  const [showIntro] = useState(() => shouldShowAnimateIntro(pointsAwarded));
+  useEffect(() => {
+    if (showIntro) markSocialRankIntroShown();
+  }, [showIntro]);
 
   useEffect(() => {
     const promotions = crossedRanks(from, total);
@@ -222,6 +240,12 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
         />
         <span className="social-progress-label">{progress.label}</span>
       </div>
+
+      {showIntro && (
+        <p className="social-progress-intro">
+          <span aria-hidden="true">{SOCIAL_POINTS_ICON}</span> Social games earn Social Points and build your Social Rank.
+        </p>
+      )}
 
       <p className="social-progress-next">
         {progress.isMax

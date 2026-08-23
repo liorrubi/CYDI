@@ -3,7 +3,7 @@ export const APP_TAGLINE = "Quick drawing challenges";
 
 // Bumped by hand only when a new product version ships - unrelated to SaveData's
 // internal schemaVersion, which tracks the save file format, not the game itself.
-export const APP_VERSION = "0.37.0";
+export const APP_VERSION = "0.38.0";
 // Short git commit hash (or a build timestamp fallback), set automatically at build time.
 export const APP_BUILD = __APP_BUILD__;
 // ISO timestamp of when this build was produced, set automatically at build time - not schemaVersion (save file format) or APP_VERSION (hand-bumped product version).
@@ -15,7 +15,6 @@ export const SHAPE_CHALLENGE_PASS_SCORE = 70;
 
 export const CANVAS_SIZE = 320;
 
-export const RESAMPLE_POINT_COUNT = 128;
 export const MIN_POINTS_TO_SAVE = 8;
 
 export const PREVIEW_DURATION_MS = 2000;
@@ -24,20 +23,19 @@ export const FIRST_ROUND_PREVIEW_DURATION_MS = 3000;
 export const ANALYZING_MIN_MS = 800;
 export const ANALYZING_MAX_MS = 1200;
 
-// A step of 1 tries every possible rotational starting point (cheap: ~128
-// offsets x 2 directions on a 128-point array, well under a millisecond).
-// A coarser step can skip right past the true best alignment for shapes
-// with a few sharp, widely-spaced features (stars, hub-and-spoke symbols),
-// producing a spuriously low score even for an accurate trace.
-export const CLOSED_SHAPE_OFFSET_STEP = 1;
-export const CLOSED_SHAPE_CLOSURE_THRESHOLD = 0.15;
-
-export const SCORE_WEIGHTS = {
-  shapeMatch: 0.7,
-  coverage: 0.05,
-  smoothness: 0.05,
-  scale: 0.2,
-} as const;
+// The scoring engine's own constants live in engine/scoringConstants.ts, which
+// is dependency-free so the Worker can import it too (this file cannot be
+// imported there - see the note in that file, and in app/dailyChallengePrizes.ts).
+// Re-exported here so every existing `from "../app/constants"` import keeps
+// working and there is still exactly one source of truth.
+export {
+  RESAMPLE_POINT_COUNT,
+  CLOSED_SHAPE_OFFSET_STEP,
+  CLOSED_SHAPE_CLOSURE_THRESHOLD,
+  SCORE_WEIGHTS,
+  scoreMessage,
+} from "../engine/scoringConstants";
+import { SCORE_WEIGHTS } from "../engine/scoringConstants";
 
 // Single source of truth for star thresholds - both the scoring logic and
 // the in-app instructions page read from this list, so they can never drift
@@ -111,14 +109,6 @@ export function improvementTip(score: {
   if (score.total >= FIVE_STAR_MIN_SCORE) return undefined;
   const weakest = SCORE_PARAMETERS.reduce((worst, param) => (score[param.key] < score[worst.key] ? param : worst));
   return weakest.tip;
-}
-
-export function scoreMessage(total: number): string {
-  if (total >= 95) return "Incredible";
-  if (total >= 85) return "Excellent";
-  if (total >= 70) return "Nice work";
-  if (total >= 50) return "Getting close";
-  return "Try again";
 }
 
 export const CELEBRATION_MESSAGES = [

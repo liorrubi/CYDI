@@ -24,8 +24,9 @@ import SharedArtistResultScreen from "./screens/SharedArtistResultScreen";
 import SpecialChallengeScreen from "./screens/SpecialChallengeScreen";
 import MegaChallengeScreen from "./screens/MegaChallengeScreen";
 import ArtistPackScreen from "./screens/ArtistPackScreen";
-import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toHome, toShapeChallenge, toSharedArtistResult, toSharedResult } from "./app/routes";
-import { resolveIncomingAppLinkId, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
+import PlayTogetherScreen from "./screens/PlayTogetherScreen";
+import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toHome, toPlayTogether, toShapeChallenge, toSharedArtistResult, toSharedResult } from "./app/routes";
+import { resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
 import {
@@ -43,6 +44,7 @@ import { isDailyChallengeSharePath } from "./services/dailyChallengeShare";
 import type { LandingPage } from "./seo/landingPages";
 import { initializeNativeAds } from "./services/ads/nativeAdsSetup";
 import { maybePromptAppUpdate } from "./services/appUpdate";
+import { isRoomCode } from "./multiplayer/protocol";
 import type { Screen } from "./types/GameMode";
 
 /** Imports a shared challenge idempotently, keeping the recipient's own progress if they've already opened this link before - only `name`/`target` ever sync from the payload, never `createdAt`/`personalBest`/`attempts`. */
@@ -76,6 +78,14 @@ function importSharedScreenFromHash(): Screen | null {
   if (artistResult) return toSharedArtistResult(artistResult);
 
   return null;
+}
+
+/** Matches the Play Together invite path, `/join/<CODE>`, and returns the code. Case-insensitive on the way in; codes themselves are always upper-case. */
+export function playTogetherJoinCode(pathname: string): string | null {
+  const match = pathname.match(/^\/join\/([A-Za-z0-9]{6})\/?$/);
+  if (!match) return null;
+  const code = match[1].toUpperCase();
+  return isRoomCode(code) ? code : null;
 }
 
 /** A /c/<id> link that can't be resolved - expired, deleted, or simply offline. Without
@@ -127,6 +137,15 @@ export default function App({ landing }: AppProps) {
     if (isDailyChallengeSharePath(location.pathname)) {
       history.replaceState(null, "", "/" + location.search);
       return toDailyChallenge();
+    }
+    // Play Together invite: /join/<CODE>. A dedicated path rather than the /c/
+    // share namespace, so an invite link reads as what it is. The code is
+    // consumed into screen state and stripped, exactly like the share paths
+    // above - re-opening the app must not silently rejoin an old room.
+    const joinCode = playTogetherJoinCode(location.pathname);
+    if (joinCode) {
+      history.replaceState(null, "", "/" + location.search);
+      return toPlayTogether(joinCode);
     }
     // Landing pages keep their URL (unlike the share paths above) - it is the
     // canonical, indexed address of this page, not a payload to consume.
@@ -237,6 +256,17 @@ export default function App({ landing }: AppProps) {
 
     /** Returns whether this URL was taken on - the caller uses that to stop waiting. */
     function handleIncomingUrl(rawUrl: string): boolean {
+      // A Play Together invite. Checked first because it needs no network round
+      // trip: the room code is in the URL, so the join screen can open straight
+      // away rather than through the share-link resolve path below.
+      const joinCode = resolveIncomingJoinCode(rawUrl, lastHandledAppLinkUrlRef.current);
+      if (joinCode) {
+        lastHandledAppLinkUrlRef.current = rawUrl;
+        setScreen(toPlayTogether(joinCode));
+        setSharedLinkPending(false);
+        return true;
+      }
+
       const id = resolveIncomingAppLinkId(rawUrl, lastHandledAppLinkUrlRef.current);
       if (!id) return false;
       lastHandledAppLinkUrlRef.current = rawUrl;
@@ -435,6 +465,8 @@ export default function App({ landing }: AppProps) {
             return <MegaChallengeScreen onNavigate={navigate} />;
           case "artistPack":
             return <ArtistPackScreen packId={screen.packId} from={screen.from} replyTo={screen.replyTo} onNavigate={navigate} />;
+          case "playTogether":
+            return <PlayTogetherScreen onNavigate={navigate} initialJoinCode={screen.joinCode} />;
         }
       })()}
       {/* Spotlights the home screen's Shape Challenge card, so it only renders where that card exists. */}

@@ -260,3 +260,57 @@ export function playCashRegisterSound(): void {
   playTone(ctx, 1900, now + 0.05, 0.15, 0.12, "triangle");
   playTone(ctx, 300, now + 0.18, 0.1, 0.08);
 }
+
+// --- Play Together -----------------------------------------------------------
+// Three moments, three deliberately different sizes: a tick when drawing opens
+// (heard every round, so it must not wear out), a short flourish for a round
+// win, and a real fanfare reserved for the champion. All honour the existing
+// sound setting through the same isSoundEnabled() gate as everything above.
+
+/** The instant the countdown ends and drawing opens. One clean tick - it fires every single round. */
+export function playRoundStartSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  playTone(ctx, 880, now, 0.08, 0.1, "triangle"); // A5
+  playTone(ctx, 1318.51, now + 0.06, 0.12, 0.09, "sine"); // E6
+}
+
+/** Won a round. A quick rising three-note flourish - celebratory, but short enough to hear ten times in a game. */
+export function playRoundWinSound(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  const notes = [659.25, 830.61, 1046.5]; // E5 G#5 C6
+  notes.forEach((frequency, i) => playTone(ctx, frequency, now + i * 0.07, 0.22, 0.16, "triangle"));
+}
+
+/**
+ * Crowned CYDI Champion. Deliberately the biggest sound in the mode - a rising
+ * major run with a held chord under it, so it is unmistakably bigger than the
+ * per-round flourish rather than just louder.
+ */
+export function playChampionFanfare(): void {
+  if (!isSoundEnabled()) return;
+
+  const ctx = getContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+
+  const now = ctx.currentTime;
+  const run = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+  run.forEach((frequency, i) => playTone(ctx, frequency, now + i * 0.11, 0.4, 0.18, "triangle"));
+  // Sustained C major underneath, entering as the run lands.
+  playTone(ctx, 261.63, now + 0.33, 0.9, 0.1, "sine"); // C4
+  playTone(ctx, 329.63, now + 0.33, 0.9, 0.08, "sine"); // E4
+  playTone(ctx, 392.0, now + 0.33, 0.9, 0.08, "sine"); // G4
+  playTone(ctx, 1567.98, now + 0.55, 0.5, 0.12, "sine"); // G6 sparkle
+}

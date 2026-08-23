@@ -88,6 +88,23 @@ export default function PrivacyPage() {
             containing a long “#…” fragment) are self-contained — that data lives only inside the link and is not
             sent to or stored by us.
           </li>
+          <li>
+            <strong>Play Together (multiplayer):</strong> when you create or join a Play Together room, we hold a
+            short-lived game session on our servers so everyone in the room stays in sync. It contains the room
+            code, the nickname you type for that game, a randomly generated seat identifier and access token for
+            your place in the room, and the live game state — the current round, each player&rsquo;s scores, and
+            whether each player has finished drawing. Your drawing IS sent for this mode, because scoring happens
+            on our server rather than on your device; it is used only to calculate that round&rsquo;s score and is
+            not stored after the round is scored. None of this is linked to your player ID or to any other mode.
+          </li>
+          <li>
+            <strong>How long a Play Together room lasts:</strong> a room is temporary by design. It is deleted
+            automatically once nobody has been connected to it for 30 minutes, and nothing from it is kept
+            afterwards — the nickname, the scores and the game state all go with it. Play Together nicknames and
+            results are not saved to your profile, do not affect your progress, coins or achievements, and are not
+            used to build any long-term record. As with display names elsewhere in CYDI, please do not use your
+            real name or any contact details as a nickname.
+          </li>
         </ul>
 
         <h3>Game content updates</h3>
@@ -107,6 +124,12 @@ export default function PrivacyPage() {
           blocked before an event is sent and again on our server, which keeps only running totals, never a record
           of individual events. On the website, we also use Cloudflare Web Analytics for aggregate site metrics
           (such as visits, referrers, and performance). This is disabled during development.
+        </p>
+        <p className="status-text">
+          Play Together sends the same kind of aggregate events — for example that a room was created, that a game
+          of a given length and difficulty started, or that a round finished. They carry only counts and settings,
+          such as how many players were in the room and which round number it was. They never include the room
+          code, any nickname, your seat in the room, or anything you drew.
         </p>
         <p className="status-text">
           So that we can tell “one person played ten rounds” from “ten people played one round each,” an analytics

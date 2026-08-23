@@ -8,6 +8,7 @@ import {
   toHome,
   toInstructions,
   toList,
+  toPlayTogether,
   toSettings,
   toShapeChallenge,
   toShop,
@@ -65,6 +66,14 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         >
           <h2>Daily Challenge</h2>
           <p>Draw from memory, race for the top score</p>
+        </button>
+        <button
+          type="button"
+          className="card home-card home-card-accent-pink"
+          onClick={() => handleSelect(toPlayTogether())}
+        >
+          <h2>Play Together</h2>
+          <p>Draw against friends, live &mdash; 2 to 8 players</p>
         </button>
         <button
           type="button"

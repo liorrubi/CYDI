@@ -1,4 +1,5 @@
-// Validates an incoming Android App Link (https://playcydi.com/c/{id}) before
+// Validates an incoming Android App Link (https://playcydi.com/c/{id} or
+// https://playcydi.com/join/{ROOMCODE}) before
 // App.tsx ever navigates or makes an API call from it. The Android intent-filter
 // (see AndroidManifest.xml) is scoped to this host/path already, but that's an OS
 // routing decision, not a security boundary - a crafted intent from another app
@@ -43,4 +44,41 @@ export function parseIncomingAppLinkId(rawUrl: string): string | null {
 export function resolveIncomingAppLinkId(rawUrl: string, previouslyHandledUrl: string | null): string | null {
   if (rawUrl === previouslyHandledUrl) return null;
   return parseIncomingAppLinkId(rawUrl);
+}
+
+// --- Play Together invites ---------------------------------------------------
+// Same reasoning as the share links above: the intent-filter routes
+// https://playcydi.com/join/<CODE> into the app, but that is OS routing, not
+// validation, so the code is re-checked here before anything acts on it.
+//
+// This matters on native specifically. On the web the code can be read straight
+// off `location.pathname`, but inside the Capacitor WebView `location` never
+// changes for an App Link - the URL only ever arrives through getLaunchUrl() or
+// an appUrlOpen event, so without this the intent-filter would open the app on
+// the home screen and quietly drop the invite.
+
+/** Upper-case only in the canonical form, but links get typed and copied in every case, so the match is case-insensitive and the result is normalised. */
+export const JOIN_LINK_PATH_PATTERN = /^\/join\/([A-Za-z0-9]{6})\/?$/;
+
+const ROOM_CODE_CHARS = /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/;
+
+/** Parses an incoming invite URL, returning the upper-cased room code only if scheme, host, path and alphabet all match exactly. */
+export function parseIncomingJoinCode(rawUrl: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.hostname !== SHORT_LINK_HOST) return null;
+  const match = url.pathname.match(JOIN_LINK_PATH_PATTERN);
+  if (!match) return null;
+  const code = match[1].toUpperCase();
+  return ROOM_CODE_CHARS.test(code) ? code : null;
+}
+
+/** The invite-link counterpart of resolveIncomingAppLinkId, including the same redelivery guard. */
+export function resolveIncomingJoinCode(rawUrl: string, previouslyHandledUrl: string | null): string | null {
+  if (rawUrl === previouslyHandledUrl) return null;
+  return parseIncomingJoinCode(rawUrl);
 }

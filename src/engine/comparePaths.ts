@@ -1,6 +1,6 @@
 import type { Point } from "../types/Point";
 import { clamp, distance } from "./geometry";
-import { CLOSED_SHAPE_CLOSURE_THRESHOLD, CLOSED_SHAPE_OFFSET_STEP } from "../app/constants";
+import { CLOSED_SHAPE_CLOSURE_THRESHOLD, CLOSED_SHAPE_OFFSET_STEP } from "./scoringConstants";
 
 const DISTANCE_TO_SCORE_FACTOR = 380;
 
@@ -119,4 +119,96 @@ export function compareClosedShapeWithOffsets(
   }
 
   return best;
+}
+
+// ---------------------------------------------------- contour deviation ----
+
+/** Distance from a point to a line SEGMENT (not just to its endpoints). */
+function pointToSegmentDistance(p: Point, a: Point, b: Point): number {
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const lengthSquared = vx * vx + vy * vy;
+  if (lengthSquared === 0) return distance(p, a);
+  const t = clamp(((p.x - a.x) * vx + (p.y - a.y) * vy) / lengthSquared, 0, 1);
+  return Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy));
+}
+
+/** Splits a point array at the given segment starts, so no measurement ever crosses the invisible gap between two disconnected parts. */
+function toPolylines(points: Point[], segmentStarts: number[]): Point[][] {
+  if (segmentStarts.length === 0) return points.length > 1 ? [points] : [];
+  const out: Point[][] = [];
+  let start = 0;
+  for (const boundary of segmentStarts) {
+    if (boundary > start) out.push(points.slice(start, boundary));
+    start = boundary;
+  }
+  out.push(points.slice(start));
+  return out.filter((s) => s.length > 1);
+}
+
+/** Shortest distance from `p` to anywhere on a set of polylines. */
+function distanceToPolylines(p: Point, polylines: Point[][]): number {
+  let best = Infinity;
+  for (const line of polylines) {
+    for (let i = 1; i < line.length; i++) {
+      const d = pointToSegmentDistance(p, line[i - 1], line[i]);
+      if (d < best) best = d;
+    }
+  }
+  return best === Infinity ? 0 : best;
+}
+
+/**
+ * How far the WORST PARTS of one contour sit from the other, as a 0-100 score.
+ *
+ * This exists because every other comparison here is an aggregate, and an
+ * aggregate hides exactly the mistake players notice most: a drawing whose
+ * outline is broadly right but where one section bulges well away from the
+ * reference. Two things conspire to bury it:
+ *
+ *   1. normalizePath centers and rescales, so a big LOCAL bulge is spread into
+ *      a moderate GLOBAL offset - after normalization there is no outlier tail
+ *      left for RMS to punish (measured: a 34px dent produced a distance
+ *      distribution with mean 0.066 and p95 0.112, barely a tail at all).
+ *   2. comparePointArrays pairs point i with point i, so its result depends on
+ *      how the two paths happen to be parameterised, not purely on where the
+ *      ink is.
+ *
+ * So this measures something different on purpose: distance from each point to
+ * the nearest place on the OTHER contour, ignoring correspondence entirely, and
+ * reports a high percentile rather than a mean. Symmetric, because one
+ * direction alone is trivially gamed - drawing over half the shape leaves every
+ * attempt point close to the target, and only the target-to-attempt direction
+ * notices the missing half.
+ *
+ * A percentile rather than the true maximum (which compareOrderIndependent
+ * already uses): the maximum is one point, so a single stray sample or the
+ * endpoint of an open path can dominate it. The 90th percentile means "a tenth
+ * of the outline may be off; the rest has to be close", which is what the eye
+ * is actually doing.
+ */
+const CONTOUR_DEVIATION_PERCENTILE = 0.9;
+
+export function compareContourDeviation(
+  target: Point[],
+  targetSegmentStarts: number[],
+  attempt: Point[],
+  attemptSegmentStarts: number[],
+): number {
+  if (target.length < 2 || attempt.length < 2) return 0;
+
+  const targetLines = toPolylines(target, targetSegmentStarts);
+  const attemptLines = toPolylines(attempt, attemptSegmentStarts);
+  if (targetLines.length === 0 || attemptLines.length === 0) return 0;
+
+  const deviations: number[] = [];
+  for (const p of attempt) deviations.push(distanceToPolylines(p, targetLines));
+  for (const p of target) deviations.push(distanceToPolylines(p, attemptLines));
+
+  deviations.sort((a, b) => a - b);
+  const index = Math.min(deviations.length - 1, Math.floor(CONTOUR_DEVIATION_PERCENTILE * deviations.length));
+  // Same distance-to-score factor as the sequential comparison, deliberately:
+  // both are measuring a distance in the same normalized unit space, and a
+  // second independent constant would be two things to keep calibrated.
+  return clamp(100 - deviations[index] * DISTANCE_TO_SCORE_FACTOR, 0, 100);
 }

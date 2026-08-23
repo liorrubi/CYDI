@@ -5,11 +5,11 @@
 import type { Point } from "../types/Point";
 import type { DrawingPath } from "../types/Challenge";
 import type { ScoreBreakdown } from "../types/Score";
-import { RESAMPLE_POINT_COUNT, SCORE_WEIGHTS, scoreMessage } from "../app/constants";
+import { RESAMPLE_POINT_COUNT, SCORE_WEIGHTS, scoreMessage, sizeCeiling } from "./scoringConstants";
 import type { Vec2 } from "./geometry";
 import { boundingBox, clamp, pathLength } from "./geometry";
 import { normalizePath } from "./normalizePath";
-import { compareClosedShapeWithOffsets, compareOrderIndependent, compareWithReverse, isClosedPath } from "./comparePaths";
+import { compareClosedShapeWithOffsets, compareContourDeviation, compareOrderIndependent, compareWithReverse, isClosedPath } from "./comparePaths";
 
 /** Ratio of normalized arc lengths - did the attempt trace a comparable amount of path. */
 function computeCoverage(normTarget: Point[], normAttempt: Point[]): number {
@@ -77,7 +77,8 @@ function computeSmoothness(normAttempt: Point[], segmentStarts: number[] = []): 
  * shape the target is, only on whether it is closed.
  */
 export function scoreAttempt(targetPath: DrawingPath, attemptPath: DrawingPath): ScoreBreakdown {
-  const normTarget = normalizePath(targetPath, RESAMPLE_POINT_COUNT).points;
+  const normTargetResult = normalizePath(targetPath, RESAMPLE_POINT_COUNT);
+  const normTarget = normTargetResult.points;
   const normAttemptResult = normalizePath(attemptPath, RESAMPLE_POINT_COUNT);
   const normAttempt = normAttemptResult.points;
 
@@ -109,22 +110,46 @@ export function scoreAttempt(targetPath: DrawingPath, attemptPath: DrawingPath):
     compareOrderIndependent(normTarget, normAttemptContinuous),
   );
 
-  const shapeMatch = Math.max(shapeMatchSegmented, shapeMatchContinuous, shapeMatchOrderIndependent);
+  // The three comparisons above all ask "is there SOME reading of this attempt
+  // that lines up with the target", so taking the best of them is right - a
+  // player should not be punished for stroke order or direction. But that also
+  // means they only ever raise the score, and none of them can see a section of
+  // the outline sitting well away from the reference: after normalization a big
+  // local bulge becomes a moderate global offset, which averages away.
+  //
+  // So the best-case alignment is capped by an independent check on the WORST
+  // parts of the contour. Both have to be satisfied: it is not enough to find a
+  // flattering alignment if a tenth of the drawing is still far from the shape.
+  const bestAlignment = Math.max(shapeMatchSegmented, shapeMatchContinuous, shapeMatchOrderIndependent);
+  const contourFidelity = Math.max(
+    compareContourDeviation(normTarget, normTargetResult.segmentStarts, normAttempt, normAttemptResult.segmentStarts),
+    // Same reason the continuous interpretation exists above: lifting the pen
+    // must never score worse than not lifting it.
+    compareContourDeviation(normTarget, normTargetResult.segmentStarts, normAttemptContinuous, []),
+  );
+  const shapeMatch = Math.min(bestAlignment, contourFidelity);
 
   const coverage = computeCoverage(normTarget, normAttempt);
   const smoothness = computeSmoothness(normAttempt, normAttemptResult.segmentStarts);
   const scale = computeScaleScore(targetPath, attemptPath);
 
-  const total = clamp(
-    Math.round(
-      shapeMatch * SCORE_WEIGHTS.shapeMatch +
-        coverage * SCORE_WEIGHTS.coverage +
-        smoothness * SCORE_WEIGHTS.smoothness +
-        scale * SCORE_WEIGHTS.scale,
-    ),
-    0,
-    100,
-  );
+  const weighted =
+    shapeMatch * SCORE_WEIGHTS.shapeMatch +
+    coverage * SCORE_WEIGHTS.coverage +
+    smoothness * SCORE_WEIGHTS.smoothness +
+    scale * SCORE_WEIGHTS.scale;
+
+  // Size is capped rather than only weighted. The rest of the scorer is
+  // size-blind by construction (normalizePath rescales before comparing), so
+  // the 20%-weighted `scale` term is the only thing that notices size at all -
+  // and a weighted term can only ever dock about 20 points, which left a
+  // flawless outline drawn at a third of the size scoring in the 80s.
+  //
+  // Same composition as the contour check above: a ceiling that can only ever
+  // lower the result, engaging only past a generous tolerance, so ordinary
+  // size variation is untouched. Measured across the whole calibration set it
+  // costs good and near-perfect drawings exactly 0.0 points.
+  const total = clamp(Math.round(Math.min(weighted, sizeCeiling(scale))), 0, 100);
 
   return {
     total,

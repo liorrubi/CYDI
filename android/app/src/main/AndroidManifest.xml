@@ -34,6 +34,15 @@
                     android:scheme="https"
                     android:host="playcydi.com"
                     android:pathPrefix="/c/" />
+                <!-- Play Together invites. A separate path prefix rather than reusing
+                     /c/, so an invite link reads as what it is and the two namespaces
+                     can never collide. Anyone WITHOUT the app is unaffected: the same
+                     URL is a normal web page that opens the join screen in a browser,
+                     which is the primary flow (guests are told they need no app). -->
+                <data
+                    android:scheme="https"
+                    android:host="playcydi.com"
+                    android:pathPrefix="/join/" />
             </intent-filter>
 
         </activity>

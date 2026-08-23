@@ -35,6 +35,14 @@ const DENYLISTED_PARAM_KEYS = new Set([
   "playername",
   "displayname",
   "username",
+  // Play Together's own vocabulary. "nickname" is a display name by another
+  // name, and a room code plus a timestamp would identify a specific group of
+  // people who played together - the privacy policy promises neither is ever
+  // sent, and this is the runtime guarantee rather than caller discipline.
+  "nickname",
+  "roomcode",
+  "seatid",
+  "playertoken",
   "email",
   "emailaddress",
   "ip",

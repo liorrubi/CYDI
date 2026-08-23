@@ -41,9 +41,19 @@ export type GameType =
    * leaving the shapeChallenge funnel a clean real-play baseline. Web-only: the
    * Android app has no landing pages and can never emit it.
    */
-  | "seoPractice";
+  | "seoPractice"
+  /** Play Together, the live multiplayer mode. Its own funnel, so multiplayer usage never skews the single-player numbers. */
+  | "playTogether";
 
 export type CategoryOrCustom = CategoryId | "custom";
+
+/** Mirrors DIFFICULTY_OPTIONS in multiplayer/protocol.ts. Duplicated as a literal union rather than imported, so this schema stays importable by the Worker without dragging the protocol in. */
+export const MP_DIFFICULTY_PARAMS = ["easy", "medium", "hard", "mixed"] as const;
+export type MultiplayerDifficultyParam = (typeof MP_DIFFICULTY_PARAMS)[number];
+
+/** Mirrors ROOM_PHASES in multiplayer/protocol.ts, for the same reason. */
+export const MP_PHASE_PARAMS = ["LOBBY", "COUNTDOWN", "SHOW_SHAPE", "DRAWING", "ROUND_RESULTS", "FINAL_RESULTS", "ABANDONED"] as const;
+export type MultiplayerPhaseParam = (typeof MP_PHASE_PARAMS)[number];
 
 export type EventParamsMap = {
   app_open: Record<string, never>;
@@ -60,6 +70,23 @@ export type EventParamsMap = {
    * attempts cannot skew, while still counting those attempts here.
    */
   shape_practice_completed: { category: CategoryId; starRating: number; passed: boolean; isNewBest: boolean };
+  // --- Play Together -------------------------------------------------------
+  // Aggregate shape only. Deliberately NO room code, nickname, seat id, player
+  // id, seat token or drawing data: a room code plus a timestamp would identify
+  // a specific group of people playing together, which is exactly the kind of
+  // linkage the rest of this file exists to prevent. `platform` already rides
+  // in the envelope, so Android and web split for free.
+  mp_room_created: { roundCount: number; difficulty: MultiplayerDifficultyParam };
+  /** Emitted by the joining player only, so it counts joins rather than every peer's view of them. */
+  mp_player_joined: { playerCount: number };
+  mp_game_started: { playerCount: number; roundCount: number; difficulty: MultiplayerDifficultyParam };
+  /** One per round, per client. `submitted` distinguishes a real attempt from a timed-out empty one. */
+  mp_round_completed: { roundIndex: number; playerCount: number; submitted: boolean };
+  mp_game_finished: { playerCount: number; roundCount: number };
+  mp_rematch: { playerCount: number };
+  /** The connection dropped mid-session. `phase` says where it hurt. */
+  mp_disconnect: { phase: MultiplayerPhaseParam };
+
   purchase_completed: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
   artist_pack_link_clicked: { artistKey: string; packKey: string; hasAffiliate: boolean };
@@ -158,6 +185,13 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "create_discovery_shown",
   "create_discovery_accepted",
   "challenge_created",
+  "mp_room_created",
+  "mp_player_joined",
+  "mp_game_started",
+  "mp_round_completed",
+  "mp_game_finished",
+  "mp_rematch",
+  "mp_disconnect",
 ];
 
 export type ValidationResult<E extends AnalyticsEventName> =
@@ -173,6 +207,7 @@ const GAME_TYPES: GameType[] = [
   "specialChallenge",
   "customChallenge",
   "seoPractice",
+  "playTogether",
 ];
 const PRODUCT_TYPES = ["penColor", "penSkin", "chestKey", "megaCard"] as const;
 const MEGA_RARITIES = ["rare", "epic", "legendary"] as const;
@@ -201,6 +236,19 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
 
+/** 2-8, the room's own bounds. A value outside them means a bug, not data worth keeping. */
+function isPlayerCount(value: unknown): value is number {
+  return isIntInRange(value, 1, 8);
+}
+
+function isRoundCountParam(value: unknown): value is number {
+  return value === 5 || value === 10 || value === 15;
+}
+
+function isDifficultyParam(value: unknown): value is MultiplayerDifficultyParam {
+  return typeof value === "string" && (MP_DIFFICULTY_PARAMS as readonly string[]).includes(value);
+}
+
 function isIntInRange(value: unknown, min: number, max: number): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
 }
@@ -223,6 +271,41 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   app_open: (p) => {
     if (!isRecord(p) || Object.keys(p).length !== 0) return { valid: false };
     return { valid: true, params: {} };
+  },
+  mp_room_created: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["roundCount", "difficulty"])) return { valid: false };
+    if (!isRoundCountParam(p.roundCount) || !isDifficultyParam(p.difficulty)) return { valid: false };
+    return { valid: true, params: { roundCount: p.roundCount, difficulty: p.difficulty } };
+  },
+  mp_player_joined: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["playerCount"])) return { valid: false };
+    if (!isPlayerCount(p.playerCount)) return { valid: false };
+    return { valid: true, params: { playerCount: p.playerCount } };
+  },
+  mp_game_started: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["playerCount", "roundCount", "difficulty"])) return { valid: false };
+    if (!isPlayerCount(p.playerCount) || !isRoundCountParam(p.roundCount) || !isDifficultyParam(p.difficulty)) return { valid: false };
+    return { valid: true, params: { playerCount: p.playerCount, roundCount: p.roundCount, difficulty: p.difficulty } };
+  },
+  mp_round_completed: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["roundIndex", "playerCount", "submitted"])) return { valid: false };
+    if (!isIntInRange(p.roundIndex, 0, 14) || !isPlayerCount(p.playerCount) || !isBoolean(p.submitted)) return { valid: false };
+    return { valid: true, params: { roundIndex: p.roundIndex, playerCount: p.playerCount, submitted: p.submitted } };
+  },
+  mp_game_finished: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["playerCount", "roundCount"])) return { valid: false };
+    if (!isPlayerCount(p.playerCount) || !isRoundCountParam(p.roundCount)) return { valid: false };
+    return { valid: true, params: { playerCount: p.playerCount, roundCount: p.roundCount } };
+  },
+  mp_rematch: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["playerCount"])) return { valid: false };
+    if (!isPlayerCount(p.playerCount)) return { valid: false };
+    return { valid: true, params: { playerCount: p.playerCount } };
+  },
+  mp_disconnect: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["phase"])) return { valid: false };
+    if (typeof p.phase !== "string" || !(MP_PHASE_PARAMS as readonly string[]).includes(p.phase)) return { valid: false };
+    return { valid: true, params: { phase: p.phase as MultiplayerPhaseParam } };
   },
   shape_completed: (p) => validateRoundResultEvent(p),
   shape_practice_completed: (p) => validateRoundResultEvent(p),

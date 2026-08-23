@@ -1,5 +1,6 @@
 import { AnalyticsDO } from "./analyticsDO";
 import { DailyChallengeDO } from "./dailyChallengeDO";
+import { RoomDO } from "./roomDO";
 import { parseShareRecord, renderShareImage, shareTitleAndDescription } from "./shareImage";
 import {
   CONTENT_ACTIVE_KEY,
@@ -14,9 +15,10 @@ import {
   type ReleaseIndexEntry,
 } from "../src/content/catalogSchema";
 import { ADS_CONFIG_KV_KEY, isValidRemoteAdsConfig, parseRemoteAdsConfig } from "../src/services/ads/remoteAdsConfigSchema";
+import { isRoomCode, MP_LIMITS, ROOM_CODE_ALPHABET } from "../src/multiplayer/protocol";
 import { canonicalUrl, renderSeoSection, robotsTxt, seoPageForPath, sitemapXml, type SeoPage } from "./seoPages";
 
-export { AnalyticsDO, DailyChallengeDO };
+export { AnalyticsDO, DailyChallengeDO, RoomDO };
 
 export interface Env {
   /** User share content ONLY (drawings/challenges/results). Never content-catalog data. */
@@ -26,6 +28,8 @@ export interface Env {
   ASSETS: Fetcher;
   DAILY_CHALLENGE_DO: DurableObjectNamespace;
   ANALYTICS_DO: DurableObjectNamespace;
+  /** Play Together - one instance per room code, addressed by idFromName (see worker/roomDO.ts). */
+  ROOM_DO: DurableObjectNamespace;
   /** Admin bearer for the analytics report endpoint only. */
   ANALYTICS_ADMIN_TOKEN: string;
   /** Admin bearer for content-catalog publish/activate/list/delete. Deliberately SEPARATE from ANALYTICS_ADMIN_TOKEN so the two capabilities can be rotated and scoped independently. */
@@ -483,6 +487,46 @@ function forwardToAnalyticsDO(request: Request, env: Env, path: string): Promise
   });
 }
 
+// Play Together. Unlike the two forwarders above, this one is keyed by ROOM
+// CODE rather than a fixed global name, so every room gets its own Durable
+// Object - the whole point of the design. The request is passed through
+// untouched (headers included), which is what lets the DO answer a WebSocket
+// upgrade with a 101 + webSocket.
+function forwardToRoomDO(request: Request, env: Env, roomCode: string, path: string): Promise<Response> {
+  const id = env.ROOM_DO.idFromName(roomCode);
+  const stub = env.ROOM_DO.get(id);
+  const target = new URL(`${path}?code=${encodeURIComponent(roomCode)}`, "https://room.internal");
+  return stub.fetch(target.toString(), request);
+}
+
+function randomRoomCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(MP_LIMITS.ROOM_CODE_LENGTH));
+  let code = "";
+  for (const byte of bytes) code += ROOM_CODE_ALPHABET[byte % ROOM_CODE_ALPHABET.length];
+  return code;
+}
+
+/**
+ * Allocates a fresh room. The DO answers 409 when the code is already a live
+ * room, so a collision retries with a new code rather than dropping a new host
+ * into someone else's game. 6 characters over a 32-symbol alphabet is ~30 bits;
+ * collisions are rare enough that five attempts is generous.
+ */
+async function handleRoomCreate(env: Env): Promise<Response> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const roomCode = randomRoomCode();
+    const created = await forwardToRoomDO(
+      new Request("https://room.internal/create", { method: "POST" }),
+      env,
+      roomCode,
+      "/create",
+    );
+    if (created.ok) return json({ roomCode }, 201);
+    if (created.status !== 409) return created;
+  }
+  return json({ error: "could not allocate a room code" }, 503);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -515,6 +559,16 @@ export default {
 
     const episodeMatch = url.pathname.match(/^\/api\/daily\/episode\/(\d+)$/);
     if (episodeMatch && request.method === "GET") return forwardToDailyDO(request, env, `/episode/${episodeMatch[1]}`);
+
+    // Play Together rooms. `/create` is NOT reachable from outside - a room is
+    // only ever allocated through POST /api/room, which owns code generation
+    // and collision retry.
+    if (url.pathname === "/api/room" && request.method === "POST") return handleRoomCreate(env);
+
+    const roomMatch = url.pathname.match(/^\/api\/room\/([A-Z0-9]{6})\/(ws|info)$/);
+    if (roomMatch && isRoomCode(roomMatch[1])) {
+      return forwardToRoomDO(request, env, roomMatch[1], `/${roomMatch[2]}`);
+    }
 
     if (url.pathname === "/api/analytics/event" && request.method === "POST") return forwardToAnalyticsDO(request, env, "/event");
     if (url.pathname === "/api/analytics/report" && request.method === "GET") return forwardToAnalyticsDO(request, env, "/report");

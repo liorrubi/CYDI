@@ -44,6 +44,24 @@ export function getPublicOrigin(): string {
   return Capacitor.isNativePlatform() ? PRODUCTION_ORIGIN : location.origin;
 }
 
+/**
+ * The origin a WebSocket to the Worker must be opened against.
+ *
+ * Mirrors apiFetch's split rather than reusing getApiOrigin() directly: on web,
+ * a socket has to go to the page's OWN origin, or `npm run dev`, a preview
+ * deploy and a tunnelled test build would all silently connect to production.
+ * On native there is no meaningful page origin (it is the virtual
+ * https://localhost), so the API origin - including a test build's override -
+ * is the only correct answer.
+ *
+ * Unlike getPublicOrigin(), this DOES honour VITE_API_ORIGIN_OVERRIDE: a test
+ * APK pointed at a staging Worker must open its sockets there too.
+ */
+export function getApiWebSocketOrigin(): string {
+  const origin = Capacitor.isNativePlatform() ? getApiOrigin() : location.origin;
+  return origin.replace(/^http/, "ws");
+}
+
 type ApiFetchInit = {
   method?: string;
   headers?: Record<string, string>;

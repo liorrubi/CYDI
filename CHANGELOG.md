@@ -1,5 +1,73 @@
 # Changelog
 
+## 0.38.0 - 2026-08-23
+
+Play Together: live multiplayer. Two to eight people draw the same shape at the
+same time, from a link or a room code, with no account and no install for the
+guests.
+
+**How a game runs.** One person creates a room and shares a six-character code
+(or the QR / `playcydi.com/join/<CODE>` link that goes with it). The host picks
+5, 10 or 15 rounds and Easy / Medium / Hard / Mixed. Each round shows everyone
+the same shape for 3 seconds, hides it, then gives 20 seconds to draw it from
+memory. Finish early and you keep the time as a speed bonus. After every round
+there is a winner reveal and a leaderboard; the host starts the next one. The
+highest total at the end is the CYDI Champion, and Play Again keeps the same
+room and the same people.
+
+**The server decides everything.** A Durable Object per room owns the phase, the
+deadlines, the shape sequence and every score (`worker/roomDO.ts`). Drawings are
+scored server-side with the same engine the single-player game uses - unlike the
+Daily Challenge, which accepts a client-reported number, nothing here trusts the
+client with a score. Round deadlines are absolute server timestamps enforced by
+alarms, and clients render them through a measured clock offset: the test phone
+sat 1.4 seconds off the server, which is exactly the kind of drift a local timer
+would have turned into an unfair round. A player whose phone slept, backgrounded
+the app or lost signal rejoins with their seat and score intact and re-syncs from
+a full snapshot rather than replaying what they missed. If the host drops, they
+keep the role for 60 seconds before it passes to the longest-connected player.
+
+**Deliberately outside the rest of the game.** Play Together awards no coins, no
+achievements, no streak and no progression, shows no ads, and has no Shop entry
+point. That isolation is enforced by a test that reads the feature's own source
+and fails if it so much as imports one of those modules.
+
+**Scoring, recalibrated.** Two long-standing ways to score higher than a drawing
+deserved are closed, in single-player as well as multiplayer.
+
+A drawing whose outline was broadly right but visibly wrong in one place could
+reach the "Excellent" band, because normalization spreads a large local bulge
+into a moderate global offset that averages away. Shape matching is now capped by
+a symmetric point-to-contour check at the 90th percentile
+(`compareContourDeviation`), which asks how far the worst parts of the outline
+sit from the reference rather than how far the average point does. Across a
+144-case calibration set this moved locally-defective drawings graded "Excellent"
+from three to zero while costing genuinely good drawings 0.5 points.
+
+Separately, a flawless outline drawn at a third of the size still scored in the
+80s, because every comparison except `scale` normalizes size away and a
+20%-weighted term can only ever dock about twenty points. Size is now a ceiling
+as well: past a 15% tolerance, each further 1% of size error removes one point
+from the maximum achievable score. Ordinary size variation (0.85x to 1.15x) is
+untouched, and across the whole calibration set the ceiling costs good and
+near-perfect drawings nothing at all. The four scoring weights are unchanged.
+
+**Shape pools.** Multiplayer difficulty is a new per-shape rating derived from
+geometry - parts, total turning, arc length and corner count - generated into
+`src/multiplayer/shapeDifficultyTable.ts` and hand-correctable. Five shapes
+(Turtle, Lion, Fire Truck, Grapes, Owl) are held out of multiplayer entirely:
+each needs more than 15 seconds of drawing across ten or more separate pieces, so
+in a 20-second round the clock decided the score rather than the player. They are
+untouched in the single-player game. Feather moved from Medium to Hard, where its
+ten separate barbs actually belong.
+
+**Also.** A screen wake lock while a room is open, so a phone does not dim while
+you watch someone else draw; confetti and distinct sounds for a round win and for
+the champion; short haptics on Android at the draw cue and the two wins; separate
+first-run tutorials for hosts and guests plus one-at-a-time coach marks through
+the first round; and `mp_*` analytics events that carry counts and settings only -
+never a room code, nickname, seat, token or drawing.
+
 ## 0.37.0 - 2026-08-20
 
 Analytics can now tell one person playing ten rounds from ten people playing one

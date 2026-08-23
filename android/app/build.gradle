@@ -139,11 +139,17 @@ android {
         // 0.35.0 could not carry them: its code was already published, and Play
         // permanently rejects a re-used versionCode.
         //
-        // CURRENT STATE: 21 clears Play (highest upload 20). The NEXT release must use
-        // 22 or higher - Play permanently rejects a re-used code, and a device
-        // silently refuses a same-or-lower one.
-        versionCode 21
-        versionName "0.35.1"
+        // 22: Stage 6 release-candidate TEST build for Play Together, installed
+        // on the Mi 8 for real-device QA and never uploaded to Play. It pointed
+        // at a temporary staging tunnel via VITE_API_ORIGIN_OVERRIDE, so it must
+        // never be confused with a shippable artifact.
+        //
+        // CURRENT STATE: highest PLAY upload is 21; 22 exists only on a test
+        // device. 23 is therefore the next Play release - skipping 22 removes any
+        // ambiguity about which build a device is running, and Play permanently
+        // rejects a re-used code either way.
+        versionCode 23
+        versionName "0.38.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

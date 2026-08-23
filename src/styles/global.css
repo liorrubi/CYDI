@@ -33,6 +33,9 @@
 
   --accent-blue: #7fa8d9;
   --accent-purple: #a794e8;
+  /* Play Together's accent - the one card on the home screen that is about
+     other people, so it gets a hue nothing else uses. */
+  --accent-pink: #e79ac0;
   --accent-green: #7cc9a0;
   --accent-orange: #eab088;
 
@@ -42,6 +45,7 @@
   --color-primary-text: #4444d6;
   --accent-blue-text: #2f5f96;
   --accent-purple-text: #5b3fa6;
+  --accent-pink-text: #a83a76;
   --accent-green-text: #1f7a52;
   --accent-orange-text: #a15a1f;
   --accent-gold-text: #b98600;
@@ -80,6 +84,7 @@
   --color-primary-text: #a3a0ff;
   --accent-blue-text: #8fb8e8;
   --accent-purple-text: #c3b0f2;
+  --accent-pink-text: #f0a8ce;
   --accent-green-text: #6fd9a8;
   --accent-orange-text: #f0a868;
   --accent-gold-text: #ffd166;
@@ -4650,4 +4655,858 @@ body {
   .result-actions {
     margin-top: var(--space-1);
   }
+}
+
+/* ============================================================================
+   Play Together (multiplayer)
+   Mobile-first throughout: every layout here starts as a single column and only
+   widens at a breakpoint. The drawing stage in particular must never introduce
+   its own scroll container around the canvas - a scrollable ancestor turns a
+   drawing gesture into a page pan on touch.
+   ========================================================================== */
+
+/* Screen-reader-only text. Used for table captions and status wording that
+   would be redundant on screen but is the only cue without sight. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.home-card.home-card-accent-pink {
+  border-top-color: var(--accent-pink);
+}
+
+.home-card.home-card-accent-pink h2 {
+  color: var(--accent-pink-text);
+}
+
+/* ---------------------------------------------------------------- entry --- */
+
+.mp-entry,
+.mp-form,
+.mp-lobby,
+.mp-room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+}
+
+.mp-explainer {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.mp-explainer-list {
+  list-style: none;
+  margin: var(--space-4) 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  text-align: left;
+}
+
+.mp-explainer-list li {
+  display: grid;
+  grid-template-columns: 1.75rem 1fr;
+  gap: var(--space-3);
+  align-items: start;
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+.mp-explainer-icon {
+  font-size: 1.15rem;
+  line-height: 1.4;
+}
+
+.mp-entry-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.mp-entry-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  text-align: left;
+  cursor: pointer;
+  border-top: 4px solid var(--accent-pink);
+}
+
+.mp-entry-card-primary {
+  border-top-width: 5px;
+  box-shadow: 0 0 0 2px var(--accent-pink), 0 10px 24px rgba(167, 58, 118, 0.22);
+}
+
+.mp-entry-icon {
+  font-size: 1.6rem;
+}
+
+.mp-entry-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.mp-entry-sub {
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+/* ----------------------------------------------------------------- form --- */
+
+.mp-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+.mp-field-label {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.mp-input {
+  width: 100%;
+  padding: var(--space-4);
+  font-size: 1rem;
+  color: var(--color-text);
+  background: var(--color-card);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-md);
+}
+
+.mp-input:focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* A room code is read character by character, so it is set in a monospace face
+   with wide tracking - the same reason the alphabet excludes 0/O and 1/I. */
+.mp-input-code {
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, monospace;
+  font-size: 1.6rem;
+  letter-spacing: 0.35em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.mp-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.mp-legend {
+  font-weight: 600;
+  color: var(--color-text);
+  padding: 0 0 var(--space-2);
+}
+
+.mp-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.mp-chip {
+  flex: 1 1 auto;
+  min-width: 4.5rem;
+  /* 44px minimum touch target. */
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-card);
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.mp-chip-active {
+  color: #ffffff;
+  background: var(--color-primary-fill);
+  border-color: var(--color-primary-fill);
+}
+
+.mp-primary-action {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+/* --------------------------------------------------------------- invite --- */
+
+.mp-invite {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.mp-invite-heading,
+.mp-panel-heading {
+  margin: 0 0 var(--space-4);
+  font-size: 1.05rem;
+  color: var(--color-text);
+}
+
+.mp-invite-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  align-items: center;
+  justify-content: center;
+}
+
+.mp-invite-code-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 12rem;
+}
+
+.mp-invite-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+.mp-room-code {
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, monospace;
+  font-size: clamp(1.9rem, 9vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  /* The tracking above adds a trailing gap; pull it back so the code reads centred. */
+  text-indent: 0.18em;
+  color: var(--color-text);
+}
+
+.mp-invite-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mp-qr {
+  display: block;
+  border-radius: var(--radius-sm);
+  /* The white plate is part of the code; a border keeps it from bleeding into
+     a white card in light mode. */
+  border: 1px solid var(--color-border);
+}
+
+.mp-invite-hint,
+.mp-hint {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.mp-hint-inline {
+  align-self: center;
+}
+
+.mp-invite-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.mp-invite-actions .btn {
+  flex: 1;
+}
+
+.mp-invite-feedback {
+  min-height: 1.25rem;
+  margin: var(--space-3) 0 0;
+  font-size: 0.85rem;
+  color: var(--color-success);
+}
+
+/* ---------------------------------------------------------------- lobby --- */
+
+.mp-panel {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  text-align: left;
+}
+
+.mp-count {
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.mp-roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mp-roster-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mp-roster-avatar {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--color-primary-fill);
+  color: #ffffff;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.mp-roster-name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.mp-waiting-panel {
+  text-align: center;
+}
+
+.mp-waiting-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.mp-waiting-inline {
+  margin-top: var(--space-4);
+}
+
+.mp-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.mp-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary-fill);
+  animation: mp-dot-pulse 1.2s infinite ease-in-out;
+}
+
+.mp-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.mp-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes mp-dot-pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---------------------------------------------------------------- stage --- */
+
+.mp-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+}
+
+.mp-stage-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.mp-round-label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.mp-stage-caption {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.mp-stage-caption-strong {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.mp-stage-countdown {
+  justify-content: center;
+  min-height: 50vh;
+}
+
+.mp-countdown-number {
+  margin: 0;
+  font-size: clamp(5rem, 30vw, 9rem);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-primary-fill);
+  animation: mp-countdown-pop 1s infinite;
+}
+
+@keyframes mp-countdown-pop {
+  0% {
+    transform: scale(1.25);
+    opacity: 0.4;
+  }
+  30% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* The canvas must not sit inside anything scrollable, or a drag becomes a pan. */
+.mp-canvas-wrapper {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+/* ---------------------------------------------------------------- timer --- */
+
+.mp-timer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 320px;
+}
+
+.mp-timer-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.mp-timer-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary-fill);
+  transform-origin: left center;
+  transform: scaleX(var(--mp-timer-fraction, 1));
+  /* Matches the 200ms sampling interval, so the bar glides instead of stepping. */
+  transition: transform 0.2s linear;
+}
+
+.mp-timer-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--color-text);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.mp-timer-urgent .mp-timer-fill {
+  background: var(--color-danger);
+}
+
+.mp-timer-urgent .mp-timer-value {
+  color: var(--color-danger);
+}
+
+/* -------------------------------------------------------- submit status --- */
+
+.mp-submit-status {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.mp-submit-status li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 999px;
+  font-size: 0.88rem;
+  border: 1px solid var(--color-border);
+}
+
+.mp-submit-done {
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.mp-submit-pending {
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------- leaderboard --- */
+
+.mp-leaderboard {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.mp-leaderboard th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  padding: var(--space-2) var(--space-3);
+  font-weight: 600;
+}
+
+.mp-leaderboard td {
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.mp-lb-rank {
+  width: 2.5rem;
+  text-align: center;
+}
+
+.mp-lb-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mp-lb-total {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--color-text);
+}
+
+.mp-lb-nickname {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.mp-lb-tag {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-primary-fill);
+  color: #ffffff;
+}
+
+.mp-lb-tag-host {
+  background: var(--accent-pink-text);
+}
+
+.mp-lb-tag-away {
+  background: var(--color-text-muted);
+  color: var(--color-on-muted);
+}
+
+.mp-lb-row-you {
+  background: color-mix(in srgb, var(--color-primary-fill) 8%, transparent);
+}
+
+.mp-lb-row-win .mp-lb-total {
+  color: var(--color-success);
+}
+
+.mp-lb-round-score {
+  display: block;
+  font-weight: 600;
+  color: var(--color-success);
+}
+
+.mp-lb-breakdown {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.mp-lb-muted {
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------------------- reveal --- */
+
+.mp-reveal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-5);
+  min-height: 40vh;
+  justify-content: center;
+  animation: mp-reveal-in 0.35s ease-out;
+}
+
+@keyframes mp-reveal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mp-reveal-emoji {
+  font-size: clamp(3rem, 18vw, 5rem);
+  animation: mp-reveal-pop 0.5s ease-out;
+}
+
+@keyframes mp-reveal-pop {
+  0% {
+    transform: scale(0.3) rotate(-15deg);
+  }
+  60% {
+    transform: scale(1.15) rotate(6deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.mp-reveal-kicker {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.mp-reveal-title {
+  margin: 0;
+  font-size: clamp(1.4rem, 7vw, 2rem);
+  font-weight: 800;
+  color: var(--color-text);
+  text-align: center;
+}
+
+.mp-reveal-score {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-success);
+}
+
+/* The confetti canvas. Absolutely positioned over the reveal and click-through,
+   so it can never intercept a tap on whatever is underneath. */
+.mp-confetti {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.mp-final-heading {
+  margin: 0;
+  font-size: 1.25rem;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.mp-final-actions {
+  width: 100%;
+  margin-top: var(--space-4);
+}
+
+/* ---------------------------------------------------------------- coach --- */
+
+.mp-coach {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  border: 1px solid var(--color-accent);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  animation: mp-coach-in 0.3s ease-out;
+}
+
+@keyframes mp-coach-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mp-coach-pointer {
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------- tutorial --- */
+
+.mp-tutorial-body {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.mp-tutorial-dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}
+
+.mp-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+
+.mp-dot-active {
+  background: var(--color-primary-fill);
+}
+
+/* ---------------------------------------------------------------- error --- */
+
+.mp-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  border: 1px solid var(--color-danger);
+  color: var(--color-text);
+  text-align: left;
+}
+
+.mp-error-dismiss {
+  border: 0;
+  background: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--color-text);
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* --------------------------------------------------------------- wider --- */
+
+@media (min-width: 640px) {
+  .mp-entry-actions {
+    flex-direction: row;
+  }
+
+  .mp-entry-card {
+    flex: 1;
+  }
+
+  .mp-invite-body {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    text-align: left;
+  }
+}
+
+/* Respect a reduced-motion preference: the celebratory movement is decoration,
+   and the information it carries is also present as text. */
+@media (prefers-reduced-motion: reduce) {
+  .mp-countdown-number,
+  .mp-reveal,
+  .mp-reveal-emoji,
+  .mp-coach,
+  .mp-dots i {
+    animation: none;
+  }
+}
+
+/* Connection trouble. Shown above the (now stale) board rather than replacing
+   it - a frozen board reads far better than an empty screen, and the next
+   snapshot replaces all of it at once. */
+.mp-reconnecting,
+.mp-host-away {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  text-align: center;
+}
+
+.mp-reconnecting {
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  border: 1px solid var(--color-accent);
+  color: var(--color-text);
+}
+
+.mp-host-away {
+  margin: 0;
+  background: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
 }

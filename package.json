@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --import ./scripts/register-ts.mjs --test \"src/**/*.test.ts\"",
+    "test": "node --import ./scripts/register-ts.mjs --test \"src/**/*.test.ts\" \"worker/**/*.test.ts\"",
     "export-catalog": "node --import ./scripts/register-ts.mjs scripts/exportContentCatalog.ts",
+    "verify-qr": "node scripts/verifyQrScan.mjs",
+    "shape-difficulty": "node --import ./scripts/register-ts.mjs scripts/generateShapeDifficulty.ts",
     "seo-images": "node --import ./scripts/register-ts.mjs scripts/generateSeoShapeImages.ts",
     "preview": "vite preview"
   },
@@ -16,8 +18,10 @@
     "@capacitor-community/admob": "^8.0.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.4.1",
+    "@capacitor/haptics": "^8.0.2",
     "@capacitor/share": "^8.0.1",
     "@capawesome/capacitor-app-update": "^8.0.3",
+    "qrcode-generator": "^1.5.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

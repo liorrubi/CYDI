@@ -49,6 +49,14 @@
       {
         "name": "ANALYTICS_DO",
         "class_name": "AnalyticsDO"
+      },
+      {
+        // Play Together: one Durable Object instance per room code, addressed
+        // with idFromName(code). Unlike the two bindings above (which each have
+        // a single global instance), this one is created and destroyed with the
+        // rooms themselves. See worker/roomDO.ts.
+        "name": "ROOM_DO",
+        "class_name": "RoomDO"
       }
     ]
   },
@@ -60,6 +68,10 @@
     {
       "tag": "v2",
       "new_sqlite_classes": ["AnalyticsDO"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["RoomDO"]
     }
   ],
   // Secrets the Worker cannot run without. Declaring them here makes wrangler

@@ -105,16 +105,35 @@ test("CTA targets are real pages, never the page itself, and never repeated in i
   for (const page of SEO_PAGES) {
     // Every internal destination on the page: the practice group, the small link
     // list, and the CTA - each target may appear exactly once across all three.
+    // A `#root` CTA is not a destination at all (it leads up to the app on this
+    // same page), so it is checked separately below.
     const internalHrefs = [
       ...(page.linkGroup?.items ?? []).map((item) => item.href),
       ...page.links.map((link) => link.href),
-      ...(page.cta ? [page.cta.href] : []),
+      ...(page.cta && !page.cta.href.startsWith("#") ? [page.cta.href] : []),
     ];
     for (const href of internalHrefs) {
       assert.ok(knownPaths.has(href), `${page.path} links to unknown ${href}`);
       assert.notEqual(href, page.path, `${page.path} links to itself`);
     }
     assert.equal(new Set(internalHrefs).size, internalHrefs.length, `${page.path} shows the same destination twice`);
+  }
+});
+
+test("a mode page sends its CTA to the game on that page, never back to Classic", () => {
+  // The bug this pins down: both mode CTAs pointed at "/", so "Start a Game with
+  // Friends" dropped the visitor on the Classic home screen. The app at the top
+  // of a mode page is ALREADY that mode, so the CTA belongs to it.
+  for (const path of ["/multiplayer-drawing-game", "/2-player-drawing-game-one-phone"]) {
+    const landing = landingPageForPath(path)!;
+    assert.ok(landing.mode, `${path} is expected to open a mode`);
+    assert.equal(seoPageForPath(path)!.cta?.href, "#root", `${path} CTA does not lead to the game on the page`);
+  }
+  // And the converse: only a page that opens a mode may use the in-page CTA.
+  for (const page of SEO_PAGES) {
+    if (page.cta?.href.startsWith("#")) {
+      assert.ok(landingPageForPath(page.path)?.mode, `${page.path} has an in-page CTA but opens no mode`);
+    }
   }
 });
 

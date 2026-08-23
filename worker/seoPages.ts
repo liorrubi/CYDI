@@ -52,7 +52,12 @@ export type SeoPage = {
    * shapes" list. Same no-duplicate rule as `links` above. */
   linkGroup?: { heading: string; items: { href: string; label: string; description: string }[] };
   /** The one prominent "keep playing" link, last thing in the copy block. The
-   * homepage has none: the game itself is already the page. */
+   * homepage has none: the game itself is already the page.
+   *
+   * Usually another landing path. On the two mode pages it is a `#root` fragment
+   * instead: the app at the top of THAT page already opens in the mode the copy
+   * is about, so the CTA has to lead up to it. Sending those to `/` would land
+   * the visitor on Classic - the one place the button does not promise. */
   cta?: { href: string; label: string };
   /** Secondary Google Play line. Omitted on the homepage, whose web home screen
    * already renders its own "Get the Android App" card (HomeScreen.tsx). */
@@ -245,7 +250,7 @@ const MULTIPLAYER: SeoPage = {
     { href: "/2-player-drawing-game-one-phone", label: "Only have one phone? Play two-player on the same device" },
     { href: "/drawing-accuracy-test", label: "Test your drawing accuracy on your own first" },
   ],
-  cta: { href: "/", label: "Start a Game with Friends" },
+  cta: { href: "#root", label: "Start a Game with Friends" },
   androidCta: true,
 };
 
@@ -264,7 +269,7 @@ const TWO_PLAYER: SeoPage = {
     { href: "/multiplayer-drawing-game", label: "Everyone has their own phone? Play online multiplayer" },
     { href: "/draw-shapes-online", label: "Practise the shapes on your own" },
   ],
-  cta: { href: "/", label: "Start a Two-Player Game" },
+  cta: { href: "#root", label: "Start a Two-Player Game" },
   androidCta: true,
 };
 

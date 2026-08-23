@@ -10,6 +10,8 @@ import {
   currentPlayer,
   duplicateNameIndex,
   nextPlayer,
+  finishGame,
+  isLastRound,
   nextRound,
   rematch,
   roundWinners,
@@ -332,13 +334,17 @@ test("a full five-round game ends on FINAL_RESULTS with a champion", () => {
     // the order alternates, that is not the same person every round.
     game = playTurn(game, perfectAttempt(game), 3_000);
     game = playTurn(game, SCRIBBLE, 12_000);
-    if (round < 4) {
-      assert.equal(game.phase, "ROUND_RESULTS", `round ${round + 1}`);
-      game = nextRound(game);
-    }
+    // EVERY round ends in its own results screen, the last one included - that
+    // is where the two drawings get compared.
+    assert.equal(game.phase, "ROUND_RESULTS", `round ${round + 1}`);
+    if (round < 4) game = nextRound(game);
   }
 
-  assert.equal(game.phase, "FINAL_RESULTS", "the last round skips ROUND_RESULTS, exactly as the server does");
+  assert.equal(isLastRound(game), true);
+  assert.equal(nextRound(game), game, "there is no next round to go to");
+  game = finishGame(game);
+
+  assert.equal(game.phase, "FINAL_RESULTS");
   assert.equal(game.roundIndex, 4);
   assert.equal(champions(game).length, 1);
   const totals = game.players.map((p) => p.totalScore);
@@ -353,6 +359,7 @@ test("a game where nobody ever scored has no champion rather than an arbitrary o
     game = playTurn(game, null, MP_TIMINGS.DRAWING_MS);
     if (round < 4) game = nextRound(game);
   }
+  game = finishGame(game);
   assert.equal(game.phase, "FINAL_RESULTS");
   assert.deepEqual(champions(game), []);
 });
@@ -400,4 +407,44 @@ test("the engine is written over a player list, so three and four players work u
   game = playTurn(game, SCRIBBLE, 4_000);
   assert.equal(game.phase, "ROUND_RESULTS");
   assert.equal(standings(game).length, 3);
+});
+
+// ------------------------------------------- the last round keeps its screen ---
+
+test("the last round shows its own results before the champion screen", () => {
+  let game = newGame(5);
+  for (let round = 0; round < 4; round++) {
+    game = playTurn(game, perfectAttempt(game), 3_000);
+    game = playTurn(game, SCRIBBLE, 12_000);
+    game = nextRound(game);
+  }
+  // Round five.
+  const drawn = perfectAttempt(game);
+  game = playTurn(game, drawn, 3_000);
+  game = playTurn(game, SCRIBBLE, 12_000);
+
+  assert.equal(game.phase, "ROUND_RESULTS", "not straight to the champion");
+  assert.equal(isLastRound(game), true);
+  assert.ok(game.lastRound, "with a round to show");
+  assert.deepEqual(game.players[0].round?.path, drawn, "and both drawings still available to compare");
+  assert.ok(game.players[1].round?.path);
+  assert.deepEqual(champions(game), [], "the champion is not decided until the player asks for it");
+});
+
+test("only finishGame ends the game, and only from the last round's results", () => {
+  let game = newGame(5);
+  game = playTurn(game, perfectAttempt(game), 3_000);
+  game = playTurn(game, SCRIBBLE, 12_000);
+  assert.equal(game.phase, "ROUND_RESULTS");
+  assert.equal(finishGame(game), game, "round one cannot end the game");
+
+  for (let round = 1; round < 5; round++) {
+    game = nextRound(game);
+    game = playTurn(game, perfectAttempt(game), 3_000);
+    game = playTurn(game, SCRIBBLE, 12_000);
+  }
+  const ended = finishGame(game);
+  assert.equal(ended.phase, "FINAL_RESULTS");
+  assert.equal(ended.championIds.length, 1);
+  assert.equal(finishGame(ended), ended, "and it cannot be run twice");
 });

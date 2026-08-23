@@ -38,6 +38,8 @@ import {
   champions,
   createPassPlayGame,
   currentPlayer,
+  finishGame,
+  isLastRound,
   nextRound,
   rematch,
   roundLabel as formatRoundLabel,
@@ -433,9 +435,16 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
               {showCoach && (
                 <RoundCoachMark text="Scores add up across every round — there's plenty of time to catch up." />
               )}
-              <Button className="mp-primary-action" onClick={() => setGame(nextRound)}>
-                Next Round
-              </Button>
+              {/* The last round still shows its comparison; only the button changes. */}
+              {isLastRound(game) ? (
+                <Button className="mp-primary-action" onClick={() => setGame(finishGame)}>
+                  SEE FINAL RESULTS
+                </Button>
+              ) : (
+                <Button className="mp-primary-action" onClick={() => setGame(nextRound)}>
+                  Next Round
+                </Button>
+              )}
             </>
           )}
         </div>

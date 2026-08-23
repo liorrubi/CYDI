@@ -53,17 +53,20 @@ export const PASS_PLAY_LIMITS = {
  *   HANDOFF -> COUNTDOWN -> SHOW_SHAPE -> DRAWING -+-> HANDOFF (next player)
  *      ^                                           |
  *      +------- ROUND_RESULTS <--------------------+ (last player of the round)
- *                                                  |
- *                       last round -> FINAL_RESULTS+
+ *                     |
+ *                     +-- last round --> FINAL_RESULTS
  *
  * HANDOFF is the beat that makes the mode work on one device: it names whose
  * turn it is and waits for a tap, so nobody's shape appears while the phone is
  * still in the other player's hand. It is also the only pause in the loop - the
  * three timed phases run exactly as long as they do in Play Together.
  *
- * The last round skips ROUND_RESULTS and goes straight to FINAL_RESULTS, which
- * is what the server does (worker/roomDO.ts finishRound), so the two modes end
- * the same way.
+ * EVERY round ends in ROUND_RESULTS, the last one included. Play Together jumps
+ * straight from the final round to FINAL_RESULTS, and this mode deliberately
+ * does not: the round-results screen is where the two players compare what they
+ * drew, and skipping it for round five would break that promise on the one
+ * round most worth looking at. FINAL_RESULTS then stays what it is for - the
+ * champion, the standings and the Social Rank card.
  */
 export const PASS_PLAY_PHASES = [
   "HANDOFF",
@@ -280,22 +283,24 @@ function leadersBy(players: PassPlayPlayer[], value: (p: PassPlayPlayer) => numb
 function closeRound(state: PassPlayState): PassPlayState {
   const players = state.players.map((p) => ({ ...p, totalScore: p.totalScore + (p.round?.score ?? 0) }));
   const winnerIds = leadersBy(state.players, (p) => p.round?.score ?? 0);
-  const lastRound = {
-    roundIndex: state.roundIndex,
-    shapeId: state.shapeSequence[state.roundIndex] ?? "",
-    winnerIds,
-  };
-
-  const isLastRound = state.roundIndex >= state.rounds - 1;
   return {
     ...state,
     players,
-    phase: isLastRound ? "FINAL_RESULTS" : "ROUND_RESULTS",
+    phase: "ROUND_RESULTS",
     phaseEndsAt: null,
     drawingStartedAt: null,
-    lastRound,
-    championIds: isLastRound ? leadersBy(players, (p) => p.totalScore) : [],
+    lastRound: {
+      roundIndex: state.roundIndex,
+      shapeId: state.shapeSequence[state.roundIndex] ?? "",
+      winnerIds,
+    },
+    championIds: [],
   };
+}
+
+/** Whether the round now showing its results was the last one - the screen shows "See Final Results" instead of "Next Round". */
+export function isLastRound(state: PassPlayState): boolean {
+  return state.roundIndex >= state.rounds - 1;
 }
 
 // ------------------------------------------------------------ transitions ---
@@ -351,9 +356,9 @@ export function submitTurn(state: PassPlayState, path: DrawingPath | null, now: 
   return closeRound(next);
 }
 
-/** ROUND_RESULTS -> the next round's first handoff. */
+/** ROUND_RESULTS -> the next round's first handoff. A no-op after the last round, which ends through `finishGame` instead. */
 export function nextRound(state: PassPlayState): PassPlayState {
-  if (state.phase !== "ROUND_RESULTS") return state;
+  if (state.phase !== "ROUND_RESULTS" || isLastRound(state)) return state;
   return {
     ...state,
     phase: "HANDOFF",
@@ -363,6 +368,23 @@ export function nextRound(state: PassPlayState): PassPlayState {
     drawingStartedAt: null,
     players: state.players.map((p) => ({ ...p, round: null })),
     lastRound: null,
+  };
+}
+
+/**
+ * The last round's results -> the champion screen.
+ *
+ * The champion is worked out here rather than when the round closed, so there
+ * is exactly one place that decides the game is over.
+ */
+export function finishGame(state: PassPlayState): PassPlayState {
+  if (state.phase !== "ROUND_RESULTS" || !isLastRound(state)) return state;
+  return {
+    ...state,
+    phase: "FINAL_RESULTS",
+    phaseEndsAt: null,
+    drawingStartedAt: null,
+    championIds: leadersBy(state.players, (p) => p.totalScore),
   };
 }
 

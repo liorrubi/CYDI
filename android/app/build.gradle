@@ -158,16 +158,17 @@ android {
         // installed only on the Mi 8 for QA. rc1 -> rc2 fixed the compact badge
         // announcing a promotion about 400ms before the progress card did.
         //
-        // 26: shipping 0.39.0 - the mode selector, 2 Players and Social
-        // Points/Rank. Skips nothing that Play has seen: 23 is the live release
-        // and 24/25 never left the test device, but a used code can never be
-        // re-uploaded, so this takes the next free one.
+        // 26: uploaded to the Play production draft for 0.39.0, then superseded
+        // before submission by the multiplayer canvas / leave / resume fixes.
+        // A used code can never be re-uploaded, so 27 is what ships.
+        //
+        // 27: 0.39.0 as it will actually ship.
         //
         // DEPLOYMENT COUPLING: this client reads `gameSerial` from the room
         // snapshot, which only the Worker in this same commit sends. The Worker
         // and the web build must go out together or a rematch stops earning
         // Social Points. See worker/roomDO.ts handleStart.
-        versionCode 26
+        versionCode 27
         versionName "0.39.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

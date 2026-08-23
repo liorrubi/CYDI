@@ -48,6 +48,18 @@ Play re-arms all of them.
 here, and a Play Together room now stamps each match with its own serial, so a
 rematch counts as the new match it is.
 
+Leaving a live multiplayer game now asks first - from the back arrow, the header
+shortcuts and the Android back button alike - and if the app is closed
+mid-match, Home offers to take you back to it, reconnecting to wherever the game
+has got to rather than replaying what you missed.
+
+Two drawing faults are fixed. A canvas could stop accepting touches while still
+looking live, because a pointer whose release never arrived was remembered
+forever; it now heals itself and every drawing window opens ready. And the first
+stroke of a coached round could jump, because the hint above the canvas was
+replaced by one below it the instant you started drawing, moving the canvas 62px
+out from under your finger mid-stroke.
+
 ## 0.38.1 - 2026-08-23
 
 Web-only fix. Android stays on 0.38.0, which is unaffected in practice and

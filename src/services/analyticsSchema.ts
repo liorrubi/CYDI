@@ -132,7 +132,9 @@ export type EventParamsMap = {
   /** Emitted once per award actually banked, so a reconnect or remount cannot double-count it. */
   social_points_awarded: { source: SocialSourceParam; amount: number };
   social_rank_up: { source: SocialSourceParam; newRank: SocialRankParam };
+  /** Read all the way through. Skipping reports tutorial_skipped instead, so "completed" means completed. */
   tutorial_completed: { tutorialType: TutorialTypeParam };
+  tutorial_skipped: { tutorialType: TutorialTypeParam };
 
   purchase_completed: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
@@ -253,6 +255,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "social_points_awarded",
   "social_rank_up",
   "tutorial_completed",
+  "tutorial_skipped",
 ];
 
 export type ValidationResult<E extends AnalyticsEventName> =
@@ -414,11 +417,8 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     if (typeof p.newRank !== "string" || !(SOCIAL_RANK_PARAMS as readonly string[]).includes(p.newRank)) return { valid: false };
     return { valid: true, params: { source: p.source as SocialSourceParam, newRank: p.newRank as SocialRankParam } };
   },
-  tutorial_completed: (p) => {
-    if (!isRecord(p) || !hasExactKeys(p, ["tutorialType"])) return { valid: false };
-    if (typeof p.tutorialType !== "string" || !(TUTORIAL_TYPE_PARAMS as readonly string[]).includes(p.tutorialType)) return { valid: false };
-    return { valid: true, params: { tutorialType: p.tutorialType as TutorialTypeParam } };
-  },
+  tutorial_completed: (p) => validateTutorialEvent(p),
+  tutorial_skipped: (p) => validateTutorialEvent(p),
   shape_completed: (p) => validateRoundResultEvent(p),
   shape_practice_completed: (p) => validateRoundResultEvent(p),
   purchase_completed: (p) => {
@@ -476,6 +476,13 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   create_discovery_accepted: (p) => validateNoParams(p),
   challenge_created: (p) => validateNoParams(p),
 };
+
+/** The two tutorial outcomes share a payload: which explanation, and nothing else. */
+function validateTutorialEvent<E extends "tutorial_completed" | "tutorial_skipped">(p: unknown): ValidationResult<E> {
+  if (!isRecord(p) || !hasExactKeys(p, ["tutorialType"])) return { valid: false };
+  if (typeof p.tutorialType !== "string" || !(TUTORIAL_TYPE_PARAMS as readonly string[]).includes(p.tutorialType)) return { valid: false };
+  return { valid: true, params: { tutorialType: p.tutorialType as TutorialTypeParam } as EventParamsMap[E] };
+}
 
 /** Events that carry no params at all. Anything in the payload is a bug, and a rejected event is safer than a leaked one. */
 function validateNoParams<E extends AnalyticsEventName>(p: unknown): ValidationResult<E> {

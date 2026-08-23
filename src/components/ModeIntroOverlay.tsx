@@ -36,6 +36,11 @@ export default function ModeIntroOverlay({ onDismiss }: ModeIntroOverlayProps) {
     onDismiss();
   }
 
+  function skip() {
+    trackEvent("tutorial_skipped", { tutorialType: "classicModeIntro" });
+    onDismiss();
+  }
+
   return (
     <div className="onboarding-overlay" role="presentation">
       <div
@@ -45,7 +50,7 @@ export default function ModeIntroOverlay({ onDismiss }: ModeIntroOverlayProps) {
         aria-modal="true"
         aria-labelledby="mode-intro-title"
       >
-        <button type="button" className="onboarding-skip" onClick={onDismiss}>
+        <button type="button" className="onboarding-skip" onClick={skip}>
           Skip
         </button>
 

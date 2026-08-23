@@ -24,16 +24,22 @@ export default function MultiplayerTutorialOverlay({ role, onDismiss }: Multipla
   const step = steps[index];
   const isLast = index === steps.length - 1;
 
-  function finish() {
-    // One event per explanation, whether it was read through or skipped: the
-    // flag is set either way, so this is the moment it is done with.
+  // Completed and skipped are separate outcomes: counting a skip as a
+  // completion would make the metric say the opposite of what happened. The
+  // tutorial is marked shown either way - only the reporting differs.
+  function complete() {
     trackEvent("tutorial_completed", { tutorialType: TUTORIAL_TYPE_BY_ROLE[role] });
+    onDismiss();
+  }
+
+  function skip() {
+    trackEvent("tutorial_skipped", { tutorialType: TUTORIAL_TYPE_BY_ROLE[role] });
     onDismiss();
   }
 
   function next() {
     playChipSound();
-    if (isLast) finish();
+    if (isLast) complete();
     else setIndex((i) => i + 1);
   }
 
@@ -46,7 +52,7 @@ export default function MultiplayerTutorialOverlay({ role, onDismiss }: Multipla
         aria-modal="true"
         aria-label={LABEL_BY_ROLE[role]}
       >
-        <button type="button" className="onboarding-skip" onClick={finish}>
+        <button type="button" className="onboarding-skip" onClick={skip}>
           Skip
         </button>
 

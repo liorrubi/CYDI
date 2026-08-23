@@ -25,6 +25,7 @@ const NEW_EVENTS: AnalyticsEventName[] = [
   "social_points_awarded",
   "social_rank_up",
   "tutorial_completed",
+  "tutorial_skipped",
 ];
 
 const GOOD: Record<string, unknown> = {
@@ -37,6 +38,7 @@ const GOOD: Record<string, unknown> = {
   social_points_awarded: { source: "multiplayer", amount: 3 },
   social_rank_up: { source: "twoPlayers", newRank: "Challenger" },
   tutorial_completed: { tutorialType: "multiplayerHost" },
+  tutorial_skipped: { tutorialType: "twoPlayers" },
 };
 
 test("every new event is registered and validates", () => {
@@ -108,12 +110,32 @@ test("progression events are emitted only for an award that was actually banked"
 
 // -------------------------------------------------------------- tutorials ---
 
-test("tutorial completion names one of the four explanations", () => {
-  for (const tutorialType of TUTORIAL_TYPE_PARAMS) {
-    assert.equal(validateEventParams("tutorial_completed", { tutorialType }).valid, true, tutorialType);
+test("both tutorial outcomes name one of the four explanations", () => {
+  for (const name of ["tutorial_completed", "tutorial_skipped"] as const) {
+    for (const tutorialType of TUTORIAL_TYPE_PARAMS) {
+      assert.equal(validateEventParams(name, { tutorialType }).valid, true, `${name} ${tutorialType}`);
+    }
+    assert.equal(validateEventParams(name, { tutorialType: "roundCoach" }).valid, false, name);
+    assert.equal(validateEventParams(name, { tutorialType: "twoPlayers", step: 3 }).valid, false, `${name} must not report steps`);
   }
-  assert.equal(validateEventParams("tutorial_completed", { tutorialType: "roundCoach" }).valid, false);
-  assert.equal(validateEventParams("tutorial_completed", { tutorialType: "twoPlayers", step: 3 }).valid, false, "no per-step reporting");
+});
+
+test("skipping reports a skip, and completing reports a completion", async () => {
+  // Counting a skip as a completion would make the metric say the opposite of
+  // what happened, so the two buttons must not share an event.
+  const { readFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+
+  const overlay = await readFile(join(import.meta.dirname, "..", "components", "multiplayer", "MultiplayerTutorialOverlay.tsx"), "utf8");
+  assert.match(overlay, /function skip\(\)[\s\S]{0,160}tutorial_skipped/, "Skip must report a skip");
+  assert.match(overlay, /function complete\(\)[\s\S]{0,160}tutorial_completed/, "finishing must report a completion");
+  assert.match(overlay, /onClick=\{skip\}/, "the Skip button must be wired to skip()");
+  assert.match(overlay, /if \(isLast\) complete\(\)/, "the last step must complete");
+
+  const intro = await readFile(join(import.meta.dirname, "..", "components", "ModeIntroOverlay.tsx"), "utf8");
+  assert.match(intro, /function skip\(\)[\s\S]{0,160}tutorial_skipped/, "the mode intro Skip must report a skip");
+  assert.match(intro, /onClick=\{skip\}/);
+  assert.match(intro, /tutorial_completed[\s\S]{0,80}classicModeIntro/, "Got it! must report a completion");
 });
 
 // ----------------------------------------------------------------- privacy --

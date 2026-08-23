@@ -17,11 +17,15 @@ import { playRoundStartSound } from "../../engine/soundEngine";
 import { hapticRoundStart } from "../../services/haptics";
 import { ScreenWakeLock } from "../../services/wakeLock";
 import {
+  markPassPlayRoundCoachShown,
   markPassPlayTutorialShown,
-  markRoundCoachShown,
+  shouldShowPassPlayRoundCoach,
   shouldShowPassPlayTutorial,
-  shouldShowRoundCoach,
 } from "../../services/multiplayerTutorialStore";
+import { awardPassPlayMatch } from "../../services/socialPointsStore";
+import { PASS_PLAY_MATCH_POINTS } from "../../social/socialRewards";
+import { SocialPointsAward } from "../SocialPointsBadge";
+import { trackEvent } from "../../services/analytics";
 import { useDeadlineRemaining } from "../../multiplayer/useRoom";
 import { MP_TIMINGS } from "../../multiplayer/protocol";
 import {
@@ -45,9 +49,19 @@ import {
 } from "../../passplay/passPlayGame";
 import type { DrawingPath } from "../../types/Challenge";
 
+export type PassPlayProgress = {
+  /** True from the first handoff until the champion screen. Drives the "Quit game?" confirmation in the screen above. */
+  active: boolean;
+  roundIndex: number;
+  rounds: number;
+  playerCount: number;
+};
+
 type PassPlayGameProps = {
   setup: PassPlaySetup;
   onExit: () => void;
+  /** Reports how far the match has got, so the screen can guard navigation and report an abandon without owning the game state. */
+  onProgress?: (progress: PassPlayProgress) => void;
 };
 
 /** The standings table is shared with Play Together, which thinks in seats; a local player id is the same kind of stable key. */
@@ -68,7 +82,7 @@ function joinNames(players: PassPlayPlayer[]): string | null {
   return `${players.slice(0, -1).map((p) => p.name).join(", ")} & ${players[players.length - 1].name}`;
 }
 
-export default function PassPlayGame({ setup, onExit }: PassPlayGameProps) {
+export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGameProps) {
   const [game, setGame] = useState<PassPlayState>(() => createPassPlayGame(setup));
   const remainingMs = useDeadlineRemaining(game.phaseEndsAt, 0);
 
@@ -78,11 +92,10 @@ export default function PassPlayGame({ setup, onExit }: PassPlayGameProps) {
   const [submitting, setSubmitting] = useState(false);
   const [revealDone, setRevealDone] = useState(false);
   const [showTutorial, setShowTutorial] = useState(() => shouldShowPassPlayTutorial());
-  // The same first-round hints as Play Together, behind the same flag: they say
-  // the same things ("remember this", "draw it", "DONE early scores more"), and
-  // a player who has already been walked through them once does not need it
-  // again because the other mode is on screen.
-  const [coachArmed] = useState(() => shouldShowRoundCoach());
+  // First-round hints, on their own flag rather than Play Together's: passing a
+  // phone back and forth is a different game from everyone drawing at once, and
+  // having been walked through one is not having been shown the other.
+  const [coachArmed] = useState(() => shouldShowPassPlayRoundCoach());
   const penColor = useMemo(() => getSelectedColor(), []);
 
   const { phase, roundIndex, turnPosition } = game;
@@ -121,8 +134,17 @@ export default function PassPlayGame({ setup, onExit }: PassPlayGameProps) {
   }, [roundIndex, phase]);
 
   useEffect(() => {
-    if (coachArmed && roundIndex === 1) markRoundCoachShown();
+    if (coachArmed && roundIndex === 1) markPassPlayRoundCoachShown();
   }, [coachArmed, roundIndex]);
+
+  useEffect(() => {
+    onProgress?.({
+      active: phase !== "FINAL_RESULTS",
+      roundIndex: Math.max(0, roundIndex),
+      rounds: game.rounds,
+      playerCount: game.players.length,
+    });
+  }, [onProgress, phase, roundIndex, game.rounds, game.players.length]);
 
   // Run the countdown and the shape peek forward when their deadlines pass.
   useEffect(() => {
@@ -140,10 +162,17 @@ export default function PassPlayGame({ setup, onExit }: PassPlayGameProps) {
     hapticRoundStart();
   }, [phase, turnKey]);
 
+  /** Turns this round that ran the clock out on an empty canvas - reported as `submitted: false`, never as a name or a score. */
+  const emptyTurnsRef = useRef(0);
+  useEffect(() => {
+    emptyTurnsRef.current = 0;
+  }, [roundIndex]);
+
   function handleDone(allowEmpty = false) {
     if (game.phase !== "DRAWING" || submitting) return;
     const drawn = attempt && attempt.points.length >= 2;
     if (!drawn && !allowEmpty) return;
+    if (!drawn) emptyTurnsRef.current += 1;
     setSubmitting(true);
     setGame((current) => submitTurn(current, drawn ? attempt : null, Date.now()));
   }
@@ -166,6 +195,52 @@ export default function PassPlayGame({ setup, onExit }: PassPlayGameProps) {
     handleDone(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainingMs, phase, submitting, game.phaseEndsAt]);
+
+  // ------------------------------------------------------------- analytics --
+  // Counts and settings only. There are two real people sitting next to each
+  // other here, so a name in an event would be worse than in a live room, not
+  // better - neither name ever leaves the device.
+  const startReportedRef = useRef("");
+  useEffect(() => {
+    if (startReportedRef.current === game.gameId) return;
+    startReportedRef.current = game.gameId;
+    trackEvent("pp_game_started", {
+      playerCount: game.players.length,
+      roundCount: game.rounds,
+      difficulty: game.difficulty,
+    });
+  }, [game.gameId, game.players.length, game.rounds, game.difficulty]);
+
+  const roundReportedRef = useRef(-1);
+  useEffect(() => {
+    if (phase !== "ROUND_RESULTS" && phase !== "FINAL_RESULTS") return;
+    if (roundReportedRef.current === roundIndex) return;
+    roundReportedRef.current = roundIndex;
+    trackEvent("pp_round_completed", {
+      roundIndex,
+      playerCount: game.players.length,
+      submitted: emptyTurnsRef.current === 0,
+    });
+  }, [phase, roundIndex, game.players.length]);
+
+  // ------------------------------------------------- Social Points award ----
+  /**
+   * Paid once, when the match is genuinely finished.
+   *
+   * Keyed on the match's own id, so a remount, a back/forward navigation or
+   * simply re-rendering the champion screen cannot pay twice - and a rematch,
+   * which mints a new id, can. Nothing is awarded for quitting part-way: this
+   * effect is only ever reached from FINAL_RESULTS.
+   */
+  const [award, setAward] = useState<{ points: number; total: number } | null>(null);
+  const finishedRef = useRef("");
+  useEffect(() => {
+    if (phase !== "FINAL_RESULTS" || finishedRef.current === game.gameId) return;
+    finishedRef.current = game.gameId;
+    trackEvent("pp_game_finished", { playerCount: game.players.length, roundCount: game.rounds });
+    const result = awardPassPlayMatch(game.gameId, PASS_PLAY_MATCH_POINTS);
+    setAward({ points: result.points, total: result.total });
+  }, [phase, game.gameId, game.players.length, game.rounds]);
 
   const shapeId = visibleShapeId(game);
   const target = useMemo(() => (shapeId ? getShapeById(shapeId)?.generate(CANVAS_SIZE) : undefined), [shapeId]);
@@ -353,11 +428,20 @@ export default function PassPlayGame({ setup, onExit }: PassPlayGameProps) {
                 highlightSeatIds={game.championIds}
                 showRoundScore={false}
               />
+              {award && <SocialPointsAward points={award.points} total={award.total} />}
               <div className="button-row mp-final-actions">
                 <Button variant="secondary" onClick={onExit}>
                   Exit
                 </Button>
-                <Button onClick={() => setGame((c) => rematch(c))}>Play Again</Button>
+                <Button
+                  onClick={() => {
+                    trackEvent("pp_rematch", { playerCount: game.players.length });
+                    setAward(null);
+                    setGame((c) => rematch(c));
+                  }}
+                >
+                  Play Again
+                </Button>
               </div>
             </>
           )}

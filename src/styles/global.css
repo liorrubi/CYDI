@@ -5593,3 +5593,46 @@ body {
 .pp-handoff-hint {
   margin: 0;
 }
+
+/* ------------------------------------------------------------ Social Points -- */
+/*
+ * Prestige, not currency - so it is a quiet line inside the social modes rather
+ * than another icon in Home's status row, which is already full.
+ */
+.social-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  margin: 0 0 var(--space-3);
+  padding: 2px var(--space-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  border-radius: 999px;
+}
+
+.social-badge-value {
+  color: var(--color-text);
+}
+
+.social-award {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: var(--space-3) 0 0;
+  text-align: center;
+}
+
+.social-award-gain {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.social-award-total {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}

@@ -83,14 +83,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         </button>
         <button
           type="button"
-          className="card home-card home-card-accent-pink"
-          onClick={() => handleSelect(toPlayTogether())}
-        >
-          <h2>Play Together</h2>
-          <p>Draw against friends, live &mdash; 2 to 8 players</p>
-        </button>
-        <button
-          type="button"
           className="card home-card home-card-accent-green"
           onClick={() => handleSelect(toCreate())}
         >

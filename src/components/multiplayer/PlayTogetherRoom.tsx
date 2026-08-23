@@ -24,6 +24,9 @@ import { playRoundStartSound } from "../../engine/soundEngine";
 import { hapticRoundStart } from "../../services/haptics";
 import { ScreenWakeLock } from "../../services/wakeLock";
 import { trackEvent } from "../../services/analytics";
+import { awardSocialPoints } from "../../services/socialPointsStore";
+import { multiplayerAwardId, multiplayerAwards } from "../../social/socialRewards";
+import { SocialPointsAward } from "../SocialPointsBadge";
 import {
   DIFFICULTY_OPTIONS,
   MP_LIMITS,
@@ -213,6 +216,35 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
     playRoundStartSound();
     hapticRoundStart();
   }, [phase, roundIndex]);
+
+  // ------------------------------------------------- Social Points award ----
+  /**
+   * Paid once per player, per finished match.
+   *
+   * Each client awards only ITSELF - there is no server ledger, and a client
+   * cannot be trusted to hand out points to its peers anyway. The key comes from
+   * the room's `gameSerial`, which the DO bumps once per Start, so every repeat
+   * of the final snapshot, every reconnect and every remount lands on the same
+   * key and pays nothing, while a rematch that is actually played out to the end
+   * gets a new key and earns again.
+   *
+   * Reaching FINAL_RESULTS at all is what "completed" means: a room that is
+   * abandoned, a player who only joins the lobby, a single round and a rematch
+   * that nobody finishes never get here.
+   */
+  const [award, setAward] = useState<{ points: number; total: number } | null>(null);
+  const awardedRef = useRef("");
+  useEffect(() => {
+    if (!snapshot || snapshot.phase !== "FINAL_RESULTS") return;
+    const seatId = snapshot.you?.seatId;
+    if (!seatId) return;
+    const awardId = multiplayerAwardId(snapshot.roomCode, snapshot.gameSerial, seatId);
+    if (awardedRef.current === awardId) return;
+    awardedRef.current = awardId;
+    const points = multiplayerAwards(snapshot.players.map((p) => ({ id: p.seatId, totalScore: p.totalScore }))).get(seatId) ?? 0;
+    const result = awardSocialPoints(awardId, points);
+    setAward({ points: result.points, total: result.total });
+  }, [snapshot]);
 
   const showCoach = coachArmed && roundIndex === 0;
   /** Whether there is anything on the canvas yet - gates the second coach mark and the DONE button. */
@@ -594,6 +626,7 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
                 highlightSeatIds={champion ? [champion.seatId] : null}
                 showRoundScore={false}
               />
+              {award && <SocialPointsAward points={award.points} total={award.total} />}
               <div className="button-row mp-final-actions">
                 <Button variant="secondary" onClick={onExit}>
                   Exit
@@ -602,6 +635,7 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
                   <Button
                     onClick={() => {
                       trackEvent("mp_rematch", { playerCount });
+                      setAward(null);
                       send({ type: "rematch" });
                     }}
                   >

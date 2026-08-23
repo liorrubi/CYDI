@@ -2,10 +2,13 @@
  * © 2026 Lior Rubinovich. All rights reserved.
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
-import PassPlayGame from "../components/passplay/PassPlayGame";
+import PassPlayGame, { type PassPlayProgress } from "../components/passplay/PassPlayGame";
+import { SocialPointsBadge } from "../components/SocialPointsBadge";
+import { useDialogA11y } from "../hooks/useDialogA11y";
+import { trackEvent } from "../services/analytics";
 import { getPlayerName, setPlayerName } from "../services/playerProfileStore";
 import { DIFFICULTY_OPTIONS, ROUND_COUNT_OPTIONS, type MultiplayerDifficulty, type RoundCount } from "../multiplayer/protocol";
 import { cleanPlayerName, duplicateNameIndex, PASS_PLAY_LIMITS, type PassPlaySetup } from "../passplay/passPlayGame";
@@ -47,8 +50,41 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
   const [rounds, setRounds] = useState<RoundCount>(10);
   const [difficulty, setDifficulty] = useState<MultiplayerDifficulty>("mixed");
   const [formError, setFormError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<PassPlayProgress | null>(null);
+  /** The navigation the player asked for, held while the "Quit game?" confirmation is up. */
+  const [pendingExit, setPendingExit] = useState<{ run: () => void } | null>(null);
 
   const goHome = () => onNavigate(toHome());
+
+  // Identity-stable so it does not re-fire the game's reporting effect on every
+  // render of this screen.
+  const handleProgress = useCallback((next: PassPlayProgress) => setProgress(next), []);
+
+  /**
+   * Every way out of a running match goes through here.
+   *
+   * A match cannot be paused or resumed - there is no server holding it - so
+   * leaving really does destroy it, and that deserves a question. Setup and the
+   * finished champion screen have nothing to lose, so they are not guarded.
+   */
+  function leave(run: () => void) {
+    if (progress?.active) setPendingExit({ run });
+    else run();
+  }
+
+  function confirmQuit() {
+    if (progress) {
+      trackEvent("pp_abandoned", {
+        roundIndex: progress.roundIndex,
+        playerCount: progress.playerCount,
+        roundCount: progress.rounds,
+      });
+    }
+    const action = pendingExit?.run;
+    setPendingExit(null);
+    setProgress(null);
+    action?.();
+  }
 
   function updateName(seat: number, value: string) {
     setNames((current) => current.map((name, i) => (i === seat ? value : name)));
@@ -69,16 +105,22 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
   }
 
   if (setup) {
+    const backToSetup = () => {
+      setProgress(null);
+      setSetup(null);
+    };
     return (
       <div className="screen">
         <AppHeader
           title="2 Players"
-          onBack={() => setSetup(null)}
-          onNavigateToHome={goHome}
-          onNavigateToSettings={() => onNavigate(toSettings())}
-          onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
+          onBack={() => leave(backToSetup)}
+          onNavigateToHome={() => leave(goHome)}
+          onNavigateToSettings={() => leave(() => onNavigate(toSettings()))}
+          onNavigateToShapeChallenge={() => leave(() => onNavigate(toShapeChallenge()))}
         />
-        <PassPlayGame setup={setup} onExit={() => setSetup(null)} />
+        <SocialPointsBadge />
+        <PassPlayGame setup={setup} onExit={backToSetup} onProgress={handleProgress} />
+        {pendingExit && <QuitConfirmation onKeepPlaying={() => setPendingExit(null)} onQuit={confirmQuit} />}
       </div>
     );
   }
@@ -93,6 +135,7 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
         onNavigateToSettings={() => onNavigate(toSettings())}
         onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
       />
+      <SocialPointsBadge />
 
       <div className="mp-form">
         <section className="mp-explainer">
@@ -178,6 +221,37 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
         <Button className="mp-primary-action" onClick={handleStart}>
           Start Game
         </Button>
+      </div>
+    </div>
+  );
+}
+
+type QuitConfirmationProps = {
+  onKeepPlaying: () => void;
+  onQuit: () => void;
+};
+
+/** Escape and the backdrop both mean "keep playing" - the safe answer is the easy one to reach by accident. */
+function QuitConfirmation({ onKeepPlaying, onQuit }: QuitConfirmationProps) {
+  const dialogRef = useDialogA11y<HTMLDivElement>(true, { onClose: onKeepPlaying });
+  return (
+    <div className="onboarding-overlay" role="presentation" onClick={onKeepPlaying}>
+      <div
+        ref={dialogRef}
+        className="password-prompt-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pp-quit-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="pp-quit-title">Quit game?</h2>
+        <p className="status-text">Your current match progress will be lost.</p>
+        <div className="button-row">
+          <Button onClick={onKeepPlaying}>Keep Playing</Button>
+          <Button variant="secondary" onClick={onQuit}>
+            Quit Game
+          </Button>
+        </div>
       </div>
     </div>
   );

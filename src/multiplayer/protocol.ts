@@ -336,6 +336,18 @@ export type RoomSnapshot = {
   lastRound: RoundResult | null;
   /** seatId of the overall winner - only set in FINAL_RESULTS. */
   championSeatId: string | null;
+  /**
+   * Which match this is within the room: 1 for the first, bumped on every
+   * Start, so a rematch is a different number.
+   *
+   * The client uses it as the idempotency key for Social Points. It has to come
+   * from the server because it must survive a reconnect and a remount - a
+   * counter held by the client would restart at exactly the moment the guard is
+   * needed - and it must differ between a repeat of the final snapshot (same
+   * serial, no second award) and a genuinely new rematch (new serial, new
+   * award).
+   */
+  gameSerial: number;
   /** The receiving player's own view: who they are and what they may do. */
   you: { seatId: string; isHost: boolean; submitted: boolean } | null;
 };

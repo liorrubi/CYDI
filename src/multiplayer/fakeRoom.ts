@@ -118,6 +118,8 @@ export class FakeRoom implements RoomTransport {
   private players: FakePlayer[] = [];
   private lastRound: RoundResult | null = null;
   private championSeatId: string | null = null;
+  /** Mirrors the server: bumped once per Start, so the harness exercises the same Social Points idempotency key. */
+  private gameSerial = 0;
 
   constructor(options: FakeRoomOptions) {
     this.now = options.now ?? (() => Date.now());
@@ -229,6 +231,7 @@ export class FakeRoom implements RoomTransport {
       players,
       lastRound: this.lastRound,
       championSeatId: this.championSeatId,
+      gameSerial: this.gameSerial,
       you: you ? { seatId: you.seatId, isHost: you.isHost, submitted: you.round !== null } : null,
     };
   }
@@ -266,6 +269,7 @@ export class FakeRoom implements RoomTransport {
   private startGame(): void {
     this.shapeSequence = pickShapeSequence(this.difficulty, this.rounds, this.random);
     this.championSeatId = null;
+    this.gameSerial += 1;
     for (const p of this.players) {
       p.totalScore = 0;
       p.round = null;

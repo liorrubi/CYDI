@@ -101,6 +101,15 @@ export type PassPlayPlayer = {
 };
 
 export type PassPlayState = {
+  /**
+   * Unique to this match, minted when it is created.
+   *
+   * The idempotency key for its Social Points award: a rematch builds a whole
+   * new state and therefore a new id, so finishing it earns again, while every
+   * re-render, remount and revisit of the SAME finished match sees the same id
+   * and pays nothing.
+   */
+  gameId: string;
   phase: PassPlayPhase;
   players: PassPlayPlayer[];
   rounds: number;
@@ -180,6 +189,16 @@ export function duplicateNameIndex(names: string[]): number {
 
 // --------------------------------------------------------------- creation ---
 
+function newGameId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    // Ancient WebView without randomUUID. Uniqueness per device is all this
+    // needs - it is never sent anywhere and never compared across devices.
+    return `pp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
 export function createPassPlayGame(setup: PassPlaySetup, random: () => number = Math.random): PassPlayState {
   const players: PassPlayPlayer[] = setup.names.map((name, seat) => ({
     id: `p${seat}`,
@@ -189,6 +208,7 @@ export function createPassPlayGame(setup: PassPlaySetup, random: () => number = 
   }));
 
   return {
+    gameId: newGameId(),
     phase: "HANDOFF",
     players,
     rounds: setup.rounds,

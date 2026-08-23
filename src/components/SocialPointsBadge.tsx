@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { getSocialPoints, subscribeSocialPoints } from "../services/socialPointsStore";
 import { SOCIAL_POINTS_ICON, SOCIAL_POINTS_LABEL } from "../social/socialRewards";
 import { compactRankLabel, rankFor } from "../social/socialRank";
+import { getSocialPointsOverride, subscribeSocialPointsOverride } from "../social/socialPointsDisplay";
 
 /**
  * The running Social Points total, as a small pill.
@@ -16,8 +17,13 @@ import { compactRankLabel, rankFor } from "../social/socialRank";
  * that can only ever be zero.
  */
 export function SocialPointsBadge() {
-  const [total, setTotal] = useState(() => getSocialPoints());
-  useEffect(() => subscribeSocialPoints((profile) => setTotal(profile.total)), []);
+  const [stored, setStored] = useState(() => getSocialPoints());
+  const [held, setHeld] = useState(() => getSocialPointsOverride());
+  useEffect(() => subscribeSocialPoints((profile) => setStored(profile.total)), []);
+  // While a progress card is counting up, the badge shows the same number it
+  // does - so it can never announce a promotion the card has not reached yet.
+  useEffect(() => subscribeSocialPointsOverride(setHeld), []);
+  const total = held ?? stored;
 
   return (
     <p className="social-badge" aria-label={`${rankFor(total).name}, ${total} ${SOCIAL_POINTS_LABEL}`}>

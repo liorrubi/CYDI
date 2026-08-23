@@ -26,6 +26,7 @@ import { awardPassPlayMatch } from "../../services/socialPointsStore";
 import { PASS_PLAY_MATCH_POINTS } from "../../social/socialRewards";
 import { SocialPointsAward } from "../SocialPointsBadge";
 import SocialProgressCard from "../SocialProgressCard";
+import { clearSocialPointsOverride, setSocialPointsOverride } from "../../social/socialPointsDisplay";
 import { trackEvent } from "../../services/analytics";
 import { useDeadlineRemaining } from "../../multiplayer/useRoom";
 import { MP_TIMINGS } from "../../multiplayer/protocol";
@@ -110,6 +111,10 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
    * 20-second turn is not touching the device at all, and a phone that locks
    * mid-handoff turns a friendly game into a passcode prompt.
    */
+  // A hold must never outlive this screen - leaving before the card appears
+  // would otherwise freeze the badge on a stale number.
+  useEffect(() => clearSocialPointsOverride, []);
+
   useEffect(() => {
     let lock: ScreenWakeLock | null = null;
     let cancelled = false;
@@ -240,6 +245,8 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
     finishedRef.current = game.gameId;
     trackEvent("pp_game_finished", { playerCount: game.players.length, roundCount: game.rounds });
     const result = awardPassPlayMatch(game.gameId, PASS_PLAY_MATCH_POINTS);
+    // Hold the header badge at the old total until the card takes over.
+    if (result.points > 0) setSocialPointsOverride(result.total - result.points);
     setAward({ points: result.points, total: result.total, previousTotal: result.total - result.points });
   }, [phase, game.gameId, game.players.length, game.rounds]);
 
@@ -449,6 +456,7 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
                   onClick={() => {
                     trackEvent("pp_rematch", { playerCount: game.players.length });
                     setAward(null);
+                    clearSocialPointsOverride();
                     setGame((c) => rematch(c));
                   }}
                 >

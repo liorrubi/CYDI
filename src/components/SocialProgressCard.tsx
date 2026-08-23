@@ -7,7 +7,15 @@ import Confetti from "./multiplayer/Confetti";
 import { playRoundWinSound } from "../engine/soundEngine";
 import { hapticRoundWin } from "../services/haptics";
 import { SOCIAL_POINTS_ICON, SOCIAL_POINTS_LABEL } from "../social/socialRewards";
-import { crossedRanks, rankFor, rankProgress, shouldAnimateAward, tweenDurationMs } from "../social/socialRank";
+import {
+  crossedRanks,
+  rankIndexFor,
+  rankProgress,
+  RANK_FLIP_HOLD_MS,
+  shouldAnimateAward,
+  tweenDurationMs,
+} from "../social/socialRank";
+import { setSocialPointsOverride } from "../social/socialPointsDisplay";
 
 type SocialProgressCardProps = {
   /** The tally before this match. Equal to `total` when nothing was awarded. */
@@ -49,6 +57,15 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
   const from = animate ? previousTotal : total;
 
   const [displayed, setDisplayed] = useState(from);
+  /*
+   * Which band the BAR is drawing, which deliberately lags the points during a
+   * promotion. Without the lag the fill goes 90% -> 0% the instant the counter
+   * ticks over, and a width transition renders that as the bar sliding
+   * backwards exactly as the player is told they were promoted.
+   */
+  const [bandIndex, setBandIndex] = useState(() => rankIndexFor(from));
+  /** Suppresses the width transition for the single frame the band flips, so the reset to 0% is a cut rather than a slide. */
+  const [flipping, setFlipping] = useState(false);
   const [promotion, setPromotion] = useState<string | null>(null);
   const celebratedRef = useRef(false);
 
@@ -56,9 +73,11 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
     const promotions = crossedRanks(from, total);
     const reduced = prefersReducedMotion();
     const duration = tweenDurationMs(promotions.length, reduced);
+    const targetBand = rankIndexFor(total);
 
-    // A promotion is announced either way; only the movement is dropped when
-    // the player has asked for less of it.
+    let cancelled = false;
+    const timers: number[] = [];
+
     const announce = () => {
       if (promotions.length === 0 || celebratedRef.current) return;
       celebratedRef.current = true;
@@ -71,21 +90,69 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
       }
     };
 
-    if (duration === 0 || from === total) {
-      setDisplayed(total);
+    // Every path keeps the badge on the same number the card is showing, and
+    // releases it once the card has arrived.
+    const show = (value: number) => {
+      setDisplayed(value);
+      setSocialPointsOverride(value);
+    };
+
+    /**
+     * Steps the bar into the next band: cut the fill back to zero without a
+     * transition, then let it animate on from there. Repeats until the bar has
+     * caught up with the points, so clearing two thresholds at once shows two
+     * completed bars rather than one confusing jump.
+     */
+    const advanceBand = (band: number) => {
+      if (cancelled || band >= targetBand) return;
       announce();
-      return;
+      setFlipping(true);
+      setBandIndex(band + 1);
+      timers.push(
+        window.setTimeout(() => {
+          if (cancelled) return;
+          setFlipping(false);
+          advanceBand(band + 1);
+        }, RANK_FLIP_HOLD_MS),
+      );
+    };
+
+    const finish = () => {
+      if (cancelled) return;
+      show(total);
+      if (promotions.length === 0) {
+        setSocialPointsOverride(null);
+        return;
+      }
+      // Let the completed bar be seen before the rank changes underneath it.
+      timers.push(
+        window.setTimeout(() => {
+          if (cancelled) return;
+          advanceBand(rankIndexFor(from));
+          setSocialPointsOverride(null);
+        }, RANK_FLIP_HOLD_MS),
+      );
+    };
+
+    if (duration === 0 || from === total) {
+      // Reduced motion: no movement at all, but the promotion is still stated.
+      show(total);
+      setBandIndex(targetBand);
+      announce();
+      setSocialPointsOverride(null);
+      return () => {
+        cancelled = true;
+        for (const t of timers) window.clearTimeout(t);
+      };
     }
 
     let raf = 0;
     const started = performance.now();
     const step = (now: number) => {
       const t = Math.min(1, (now - started) / duration);
-      const value = Math.round(from + (total - from) * easeOut(t));
-      setDisplayed(value);
-      if (rankFor(value).id !== rankFor(from).id) announce();
+      show(Math.round(from + (total - from) * easeOut(t)));
       if (t < 1) raf = requestAnimationFrame(step);
-      else setDisplayed(total);
+      else finish();
     };
     raf = requestAnimationFrame(step);
 
@@ -93,25 +160,31 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
      * requestAnimationFrame does not run while the page is hidden, and the end
      * of a match is a moment people genuinely background the app in - tapping a
      * notification, showing someone the score, locking the phone. Without this
-     * the card would sit frozen on the pre-match total and a promotion would
-     * never be announced at all, because the only code that announces it lives
-     * in a callback that is not being called.
-     *
-     * A plain timer settles the final state regardless. It cannot double-count:
-     * setting the total twice is idempotent, and `announce` guards itself.
+     * the card would sit frozen on the pre-match total and the promotion would
+     * never be announced, because the only code that announces it lives in a
+     * callback that is not being called.
      */
-    const settle = window.setTimeout(() => {
-      setDisplayed(total);
-      announce();
-    }, duration + 150);
+    timers.push(window.setTimeout(finish, duration + 150));
 
+    /*
+     * The hold on the badge is deliberately NOT released in this cleanup.
+     *
+     * StrictMode runs mount -> cleanup -> mount in development, and releasing it
+     * here opened a window where the card still showed the old total while the
+     * badge had already fallen back to the real one - the exact spoiler this
+     * mechanism prevents, and it was visible on a real device. Ownership passes
+     * upward instead: `finish` releases it, the rematch handler releases it, and
+     * the screen releases it on unmount.
+     */
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
-      window.clearTimeout(settle);
+      for (const t of timers) window.clearTimeout(t);
     };
   }, [from, total]);
 
-  const progress = rankProgress(displayed);
+  // Pinned to the band the BAR is on, which lags the points across a promotion.
+  const progress = rankProgress(displayed, bandIndex);
   const percent = Math.round(progress.fraction * 100);
 
   return (
@@ -139,11 +212,14 @@ export default function SocialProgressCard({ previousTotal, total, pointsAwarded
         aria-valuenow={percent}
         aria-valuetext={
           progress.isMax
-            ? `${progress.points} ${SOCIAL_POINTS_LABEL}. Top rank reached: ${progress.rank.name}.`
-            : `${progress.points} of ${progress.next!.threshold} ${SOCIAL_POINTS_LABEL} towards ${progress.next!.name}.`
+            ? `Top rank reached: ${progress.rank.name}. ${progress.points} ${SOCIAL_POINTS_LABEL} in total.`
+            : `${progress.earnedInRank} of ${progress.rankSpan} towards ${progress.next!.name}. ${progress.points} ${SOCIAL_POINTS_LABEL} in total.`
         }
       >
-        <div className="social-progress-fill" style={{ "--social-fill": `${percent}%` } as CSSProperties} />
+        <div
+          className={flipping ? "social-progress-fill social-progress-fill-cut" : "social-progress-fill"}
+          style={{ "--social-fill": `${percent}%` } as CSSProperties}
+        />
         <span className="social-progress-label">{progress.label}</span>
       </div>
 

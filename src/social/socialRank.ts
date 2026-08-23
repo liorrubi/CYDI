@@ -69,13 +69,38 @@ export type RankProgress = {
   /** 0..1, for the bar. Exactly 1 at the top rank, which is shown as complete rather than empty. */
   fraction: number;
   isMax: boolean;
-  /** "37 / 50" while climbing, or the plain total at the top. Read out as-is, so progress never depends on colour. */
+  /**
+   * What the bar itself says: progress WITHIN the current band, never a raw
+   * total against the next threshold.
+   *
+   * "10 / 25" beside a bar sitting at 0% is a contradiction the reader has to
+   * resolve - the number looks like progress while the bar says there is none.
+   * The band figures agree with the fill by construction: "0 / 15 to
+   * Competitor" next to an empty bar is simply true. The running total is shown
+   * separately, where it cannot be mistaken for the bar's denominator.
+   */
   label: string;
 };
 
-export function rankProgress(points: number): RankProgress {
+/**
+ * Progress for a total, optionally pinned to a band it has already left.
+ *
+ * The pin exists for the promotion beat. A count-up that crosses a threshold
+ * would otherwise take the bar from 90% straight to 0% - and with a width
+ * transition on it, that reads as the bar sliding BACKWARDS at the exact moment
+ * the player is being told they were promoted. Caught on a real device, where a
+ * screenshot landed mid-slide.
+ *
+ * Holding the old band for a beat lets the bar fill to 100% first, which is
+ * what a promotion should look like; the card then flips to the new band and
+ * carries on. Past the end of a pinned band the fraction simply clamps at 1.
+ */
+export function rankProgress(points: number, pinnedBandIndex?: number): RankProgress {
   const total = Number.isFinite(points) ? Math.max(0, Math.floor(points)) : 0;
-  const rankIndex = rankIndexFor(total);
+  const rankIndex =
+    pinnedBandIndex === undefined
+      ? rankIndexFor(total)
+      : Math.max(0, Math.min(SOCIAL_RANKS.length - 1, Math.floor(pinnedBandIndex)));
   const rank = SOCIAL_RANKS[rankIndex];
   const next = SOCIAL_RANKS[rankIndex + 1] ?? null;
 
@@ -92,12 +117,14 @@ export function rankProgress(points: number): RankProgress {
       // would read as "no progress", which is the opposite of the truth.
       fraction: 1,
       isMax: true,
-      label: `${total}`,
+      // No denominator at the top: there is no next threshold, and inventing
+      // one would imply a rank that does not exist.
+      label: "Max rank",
     };
   }
 
   const rankSpan = next.threshold - rank.threshold;
-  const earnedInRank = total - rank.threshold;
+  const earnedInRank = Math.max(0, Math.min(rankSpan, total - rank.threshold));
   return {
     rank,
     rankIndex,
@@ -105,10 +132,10 @@ export function rankProgress(points: number): RankProgress {
     points: total,
     earnedInRank,
     rankSpan,
-    pointsToNext: next.threshold - total,
+    pointsToNext: Math.max(0, next.threshold - total),
     fraction: Math.max(0, Math.min(1, earnedInRank / rankSpan)),
     isMax: false,
-    label: `${total} / ${next.threshold}`,
+    label: `${earnedInRank} / ${rankSpan} to ${next.name}`,
   };
 }
 
@@ -137,6 +164,8 @@ export const RANK_TWEEN_BASE_MS = 900;
 /** Added per rank crossed, so a promotion has room to land without making anyone wait for Rematch. */
 export const RANK_TWEEN_PER_RANK_MS = 350;
 export const RANK_TWEEN_MAX_MS = 2000;
+/** How long the old band sits visibly full before the card flips to the new rank. Long enough to read as "completed", short enough not to stall. */
+export const RANK_FLIP_HOLD_MS = 420;
 
 /**
  * How long the bar should take.

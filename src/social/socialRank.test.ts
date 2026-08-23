@@ -6,6 +6,7 @@ import {
   MAX_RANK,
   rankFor,
   rankProgress,
+  RANK_FLIP_HOLD_MS,
   RANK_TWEEN_BASE_MS,
   RANK_TWEEN_MAX_MS,
   shouldAnimateAward,
@@ -87,15 +88,50 @@ test("the fraction runs 0 to 1 across each band", () => {
 test("the worked example from the brief renders as specified", () => {
   const p = rankProgress(37);
   assert.equal(p.rank.name, "Competitor");
-  assert.equal(p.label, "37 / 50");
+  assert.equal(p.label, "12 / 25 to Social Artist");
   assert.equal(p.next?.name, "Social Artist");
   assert.equal(p.pointsToNext, 13);
 });
 
+test("the bar states progress WITHIN the band, so the number can never contradict the fill", () => {
+  // Every one of these is the moment a raw total would have lied: the bar is at
+  // 0% and a total-based label would have shown a large number beside it.
+  const cases: [number, string, string, number][] = [
+    [8, "Rookie", "8 / 10 to Challenger", 80],
+    [10, "Challenger", "0 / 15 to Competitor", 0],
+    [18, "Challenger", "8 / 15 to Competitor", 53],
+    [73, "Social Artist", "23 / 50 to Champion", 46],
+    [25, "Competitor", "0 / 25 to Social Artist", 0],
+    [100, "Champion", "0 / 100 to CYDI Master", 0],
+  ];
+  for (const [points, rank, label, percent] of cases) {
+    const p = rankProgress(points);
+    assert.equal(p.rank.name, rank, `${points} rank`);
+    assert.equal(p.label, label, `${points} label`);
+    assert.equal(Math.round(p.fraction * 100), percent, `${points} fill`);
+  }
+});
+
+test("the numerator is zero exactly when the bar is empty, and full exactly when it is about to promote", () => {
+  for (const points of [0, 9, 10, 24, 25, 49, 50, 99, 100, 199]) {
+    const p = rankProgress(points);
+    assert.equal(p.earnedInRank === 0, p.fraction === 0, `${points}: empty bar and zero numerator must agree`);
+    assert.ok(p.earnedInRank < p.rankSpan, `${points}: a full band would mean the rank should already have changed`);
+  }
+});
+
 test("the label always states progress in numbers, so colour is never the only signal", () => {
-  assert.equal(rankProgress(0).label, "0 / 10");
-  assert.equal(rankProgress(99).label, "99 / 100");
-  assert.equal(rankProgress(240).label, "240", "no target left to state at the top");
+  assert.equal(rankProgress(0).label, "0 / 10 to Challenger");
+  assert.equal(rankProgress(99).label, "49 / 50 to Champion");
+});
+
+test("the top rank shows a completed state rather than a made-up denominator", () => {
+  assert.equal(rankProgress(240).label, "Max rank");
+  assert.equal(rankProgress(240).fraction, 1);
+  assert.equal(rankProgress(240).next, null);
+  for (const points of [200, 240, 5000]) {
+    assert.ok(!rankProgress(points).label.includes("/"), `${points} must not imply a next threshold`);
+  }
 });
 
 // -------------------------------------------------------------- max rank ----
@@ -208,4 +244,47 @@ test("rank is derived, so nothing new has to be stored or migrated", async () =>
   const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.ok(!/\brank\b/i.test(code), "the store must not persist a rank");
   assert.ok(code.includes('"cydi.social.v1"'), "and the existing key is unchanged");
+});
+
+// -------------------------------------------- the promotion beat (pinning) ---
+
+test("a band pinned behind the points fills to completion instead of resetting", () => {
+  // The count-up has reached 10 but the bar is still drawing the Rookie band.
+  // It must read as finished, not as an empty Challenger bar.
+  const held = rankProgress(10, 0);
+  assert.equal(held.rank.name, "Rookie");
+  assert.equal(held.fraction, 1, "the old band completes");
+  assert.equal(held.label, "10 / 10 to Challenger");
+  assert.equal(held.pointsToNext, 0);
+
+  // And once the card flips, the same points read as the start of the new band.
+  const flipped = rankProgress(10, 1);
+  assert.equal(flipped.rank.name, "Challenger");
+  assert.equal(flipped.fraction, 0);
+  assert.equal(flipped.label, "0 / 15 to Competitor");
+});
+
+test("a pinned band clamps rather than overflowing when the points run well past it", () => {
+  const held = rankProgress(26, 0);
+  assert.equal(held.fraction, 1, "never more than full");
+  assert.equal(held.earnedInRank, 10, "and never a numerator above the span");
+  assert.equal(held.label, "10 / 10 to Challenger");
+  assert.equal(held.pointsToNext, 0, "never negative");
+});
+
+test("an out-of-range pin is clamped to a real band", () => {
+  assert.equal(rankProgress(10, -3).rank.name, "Rookie");
+  assert.equal(rankProgress(10, 99).rank.name, "CYDI Master");
+  assert.equal(rankProgress(10, 99).isMax, true);
+});
+
+test("without a pin nothing changes for the ordinary case", () => {
+  for (const points of [0, 8, 10, 18, 37, 73, 99, 200]) {
+    assert.deepEqual(rankProgress(points), rankProgress(points, undefined), `${points}`);
+  }
+});
+
+test("the flip hold is long enough to read and short enough not to stall", () => {
+  assert.ok(RANK_FLIP_HOLD_MS >= 250, "a completed bar nobody sees is not a completed bar");
+  assert.ok(RANK_FLIP_HOLD_MS <= 600, "Rematch must not be held up");
 });

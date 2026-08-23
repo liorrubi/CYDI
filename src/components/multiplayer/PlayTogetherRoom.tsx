@@ -28,6 +28,7 @@ import { awardSocialPoints } from "../../services/socialPointsStore";
 import { multiplayerAwardId, multiplayerAwards } from "../../social/socialRewards";
 import { SocialPointsAward } from "../SocialPointsBadge";
 import SocialProgressCard from "../SocialProgressCard";
+import { clearSocialPointsOverride, setSocialPointsOverride } from "../../social/socialPointsDisplay";
 import {
   DIFFICULTY_OPTIONS,
   MP_LIMITS,
@@ -110,6 +111,8 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
    * dims and locks. Released on unmount, so leaving the room - by any route,
    * including the hardware back button - always gives the lock back.
    */
+  useEffect(() => clearSocialPointsOverride, []);
+
   useEffect(() => {
     let lock: ScreenWakeLock | null = null;
     let cancelled = false;
@@ -244,6 +247,8 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
     awardedRef.current = awardId;
     const points = multiplayerAwards(snapshot.players.map((p) => ({ id: p.seatId, totalScore: p.totalScore }))).get(seatId) ?? 0;
     const result = awardSocialPoints(awardId, points);
+    // Hold the header badge at the old total until the card takes over.
+    if (result.points > 0) setSocialPointsOverride(result.total - result.points);
     setAward({ points: result.points, total: result.total, previousTotal: result.total - result.points });
   }, [snapshot]);
 
@@ -643,6 +648,7 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
                     onClick={() => {
                       trackEvent("mp_rematch", { playerCount });
                       setAward(null);
+                      clearSocialPointsOverride();
                       send({ type: "rematch" });
                     }}
                   >

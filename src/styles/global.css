@@ -5755,3 +5755,8 @@ body {
     transform: none;
   }
 }
+
+/* The one frame a promotion resets the bar: a cut, never a slide backwards. */
+.social-progress-fill-cut {
+  transition: none !important;
+}

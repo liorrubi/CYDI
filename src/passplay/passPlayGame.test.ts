@@ -216,8 +216,54 @@ test("speed decays linearly across the 20-second window and bottoms out at zero"
 
 test("an empty canvas at 0s is a real zero, not a missing turn", () => {
   const game = playTurn(newGame(), null, MP_TIMINGS.DRAWING_MS);
-  assert.deepEqual(game.players[0].round, { score: 0, accuracy: 0, speed: 0 });
+  assert.deepEqual(game.players[0].round, { score: 0, accuracy: 0, speed: 0, path: null });
   assert.equal(game.phase, "HANDOFF", "the round still moves on");
+});
+
+// ------------------------------------------------ drawings for comparison ---
+
+test("a submitted drawing is kept with its score, so the round can be compared", () => {
+  const start = newGame();
+  const drawn = perfectAttempt(start);
+  const game = playTurn(start, drawn, 3_000);
+  assert.deepEqual(game.players[0].round?.path, drawn, "the exact path they drew");
+  assert.equal(game.players[1].round, null, "and nothing at all for the player still to go");
+});
+
+test("both drawings are available once the round closes", () => {
+  let game = newGame();
+  game = playTurn(game, perfectAttempt(game), 2_000);
+  game = playTurn(game, SCRIBBLE, 9_000);
+  assert.equal(game.phase, "ROUND_RESULTS");
+  assert.ok(game.players[0].round?.path, "first player's drawing");
+  assert.deepEqual(game.players[1].round?.path, SCRIBBLE, "second player's drawing");
+});
+
+test("a drawing never outlives the round it belongs to", () => {
+  // Local-only and transient: the comparison needs it for one screen, and
+  // nothing persists it. The next round starts with both slots empty.
+  let game = newGame();
+  game = playTurn(game, perfectAttempt(game), 2_000);
+  game = playTurn(game, SCRIBBLE, 9_000);
+  game = nextRound(game);
+  assert.deepEqual(game.players.map((p) => p.round), [null, null]);
+});
+
+test("a rematch carries no drawings over from the previous game", () => {
+  let game = newGame(5);
+  game = playTurn(game, perfectAttempt(game), 2_000);
+  game = playTurn(game, SCRIBBLE, 9_000);
+  const again = rematch({ ...game, phase: "FINAL_RESULTS" }, () => 0.42);
+  assert.deepEqual(again.players.map((p) => p.round), [null, null]);
+});
+
+test("the drawing is not visible before the second player has finished", () => {
+  // Held in state, but `standingsVisible` is what the UI gates every
+  // score-shaped thing on - the comparison included.
+  const game = playTurn(newGame(), perfectAttempt(newGame()), 2_000);
+  assert.equal(game.phase, "HANDOFF");
+  assert.ok(game.players[0].round?.path, "recorded");
+  assert.equal(standingsVisible(game.phase), false, "but nothing may be shown yet");
 });
 
 test("a single stray dot is treated as an empty canvas rather than scored", () => {

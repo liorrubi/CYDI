@@ -5797,3 +5797,125 @@ body {
   line-height: 1.35;
   color: var(--color-text-muted);
 }
+
+/* ------------------------------------------- 2 Players round comparison -- */
+/*
+ * The "look at yours vs mine" screen. Stacked by default: two canvases side by
+ * side on a 320px phone come out around 130px each, which is too small to judge
+ * a drawing by and defeats the point of showing them at all. They go side by
+ * side only once there is room for both to stay legible.
+ */
+.pp-compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+  margin: var(--space-3) 0 0;
+}
+
+.pp-compare-heading {
+  margin: 0 0 var(--space-1);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.pp-compare-target {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* The reference is deliberately smaller than the attempts: it is the question,
+   not the answer, and the answers are what people came to look at. */
+.pp-compare-target .drawing-canvas {
+  width: 132px;
+  height: 132px;
+}
+
+.pp-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pp-compare-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.pp-compare-card-win {
+  border-color: var(--color-primary-fill);
+  box-shadow: 0 0 0 1px var(--color-primary-fill) inset;
+}
+
+.pp-compare-card .drawing-canvas,
+.pp-compare-empty {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.pp-compare-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-text-muted) 10%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.pp-compare-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.pp-compare-score {
+  margin: var(--space-1) 0 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--color-primary-fill);
+}
+
+.pp-compare-detail {
+  display: flex;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* Both drawings fit side by side from here up without either shrinking below
+   the ~150px where a traced shape stops being readable. */
+@media (min-width: 400px) {
+  .pp-compare-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .pp-compare-card .drawing-canvas,
+  .pp-compare-empty {
+    max-width: 100%;
+  }
+}

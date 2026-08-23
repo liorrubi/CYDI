@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "../Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../DrawingCanvas";
 import MultiplayerLeaderboard, { type LeaderboardPlayer } from "../multiplayer/MultiplayerLeaderboard";
+import PassPlayRoundComparison from "./PassPlayRoundComparison";
 import MultiplayerTutorialOverlay from "../multiplayer/MultiplayerTutorialOverlay";
 import RoundCoachMark from "../multiplayer/RoundCoachMark";
 import RoundTimer from "../multiplayer/RoundTimer";
@@ -42,6 +43,7 @@ import {
   roundLabel as formatRoundLabel,
   roundWinners,
   showsTargetShape,
+  turnOrder,
   standings,
   submitTurn,
   visibleShapeId,
@@ -253,6 +255,24 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
   const shapeId = visibleShapeId(game);
   const target = useMemo(() => (shapeId ? getShapeById(shapeId)?.generate(CANVAS_SIZE) : undefined), [shapeId]);
 
+  /**
+   * The round just finished, for the comparison screen.
+   *
+   * Read from `lastRound` rather than `visibleShapeId`, which is deliberately
+   * null outside the three-second look - the point of that rule is that the
+   * shape is hidden while people are DRAWING, not after everyone has finished.
+   */
+  const finishedShapeId = game.lastRound?.shapeId ?? null;
+  const finishedTarget = useMemo(
+    () => (finishedShapeId ? getShapeById(finishedShapeId)?.generate(CANVAS_SIZE) : undefined),
+    [finishedShapeId],
+  );
+  /** Both players in the order they took their turns, so the drawings read left-to-right the way the round was played. */
+  const playersInTurnOrder = useMemo(
+    () => turnOrder(game.players.length, roundIndex).map((i) => game.players[i]).filter(Boolean),
+    [game.players, roundIndex],
+  );
+
   const hasDrawn = (attempt?.points.length ?? 0) >= 2;
   const showCoach = coachArmed && roundIndex === 0;
   const roundLabel = formatRoundLabel(roundIndex, game.rounds);
@@ -396,6 +416,15 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
             />
           ) : (
             <>
+              {finishedTarget && (
+                <PassPlayRoundComparison
+                  target={finishedTarget}
+                  players={playersInTurnOrder}
+                  winnerIds={game.lastRound?.winnerIds ?? []}
+                  penColor={penColor}
+                />
+              )}
+
               <MultiplayerLeaderboard
                 players={rows}
                 yourSeatId={null}

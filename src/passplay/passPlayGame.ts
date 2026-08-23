@@ -84,11 +84,24 @@ export const PASS_PLAY_TIMED_PHASES: ReadonlySet<PassPlayPhase> = new Set<PassPl
 
 // ------------------------------------------------------------------ state ---
 
-export type TurnResult = {
+export type TurnScore = {
   /** The combined 75/25 score, which is what counts towards the total. */
   score: number;
   accuracy: number;
   speed: number;
+};
+
+export type TurnResult = TurnScore & {
+  /**
+   * What they actually drew, kept so the round-results screen can put the two
+   * attempts side by side.
+   *
+   * Held for the CURRENT ROUND ONLY - `nextRound` clears it with the rest of the
+   * round state - and never persisted. It exists so two people can look at each
+   * other's drawing for a few seconds, which is not a reason to write anything
+   * to disk. null when the clock ran out on an empty canvas.
+   */
+  path: DrawingPath | null;
 };
 
 export type PassPlayPlayer = {
@@ -237,7 +250,7 @@ export function createPassPlayGame(setup: PassPlaySetup, random: () => number = 
  * An empty canvas is a real zero, not a missing result: the player took their
  * turn and drew nothing, which is a score, and the round still closes.
  */
-export function scoreTurn(shapeId: string, path: DrawingPath | null, elapsedMs: number): TurnResult {
+export function scoreTurn(shapeId: string, path: DrawingPath | null, elapsedMs: number): TurnScore {
   if (!path || path.points.length < 2) return { score: 0, accuracy: 0, speed: 0 };
   const shape = getShapeById(shapeId);
   if (!shape) return { score: 0, accuracy: 0, speed: 0 };
@@ -323,16 +336,19 @@ export function submitTurn(state: PassPlayState, path: DrawingPath | null, now: 
   if (!player) return state;
 
   const elapsed = state.drawingStartedAt === null ? MP_TIMINGS.DRAWING_MS : now - state.drawingStartedAt;
-  const result = scoreTurn(state.shapeSequence[state.roundIndex] ?? "", path, elapsed);
+  const scored = scoreTurn(state.shapeSequence[state.roundIndex] ?? "", path, elapsed);
+  // The drawing rides along with its score: they are shown together and
+  // discarded together.
+  const result: TurnResult = { ...scored, path };
   const players = state.players.map((p) => (p.id === player.id ? { ...p, round: result } : p));
 
-  const scored: PassPlayState = { ...state, players, phaseEndsAt: null, drawingStartedAt: null };
+  const next: PassPlayState = { ...state, players, phaseEndsAt: null, drawingStartedAt: null };
 
   // More turns left in this round: hand over WITHOUT revealing anything.
   if (state.turnPosition + 1 < state.players.length) {
-    return { ...scored, phase: "HANDOFF", turnPosition: state.turnPosition + 1 };
+    return { ...next, phase: "HANDOFF", turnPosition: state.turnPosition + 1 };
   }
-  return closeRound(scored);
+  return closeRound(next);
 }
 
 /** ROUND_RESULTS -> the next round's first handoff. */

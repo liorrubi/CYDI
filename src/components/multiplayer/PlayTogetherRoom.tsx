@@ -290,11 +290,13 @@ export default function PlayTogetherRoom({ transport, onExit }: PlayTogetherRoom
      * expiring SHOW_SHAPE deadline, and the render that applies the DRAWING
      * snapshot still closes over that stale 0.
      *
-     * Live, this has been surviving on network timing - the snapshot normally
-     * lands before the next 200ms tick, so the 0 never happens. On a slow link
-     * it would, and the whole room would auto-submit an empty canvas the
-     * instant drawing opened. The same code path in Pass & Play, where the
-     * phase change IS caused by the tick reaching 0, failed on the first try.
+     * Without this, a client whose DRAWING snapshot arrives more than one
+     * 200ms tick after the SHOW_SHAPE deadline auto-submits an empty canvas
+     * the instant the drawing window opens - scoring 0 for the round with no
+     * chance to draw. It has been invisible only because the snapshot normally
+     * beats the next tick; a slow or congested link is all it takes. It was
+     * found in Pass & Play, where the phase change IS the tick reaching 0 and
+     * so it failed on the very first run.
      */
     const deadline = snapshot?.phaseEndsAt ?? null;
     if (deadline === null || Date.now() + clockOffsetMs < deadline) return;

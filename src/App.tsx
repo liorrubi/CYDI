@@ -48,6 +48,7 @@ import { decodeArtistResultHash, decodeChallengeHash, decodeResultHash, type Dec
 import { fetchSharedById } from "./services/shareApi";
 import { isDailyChallengeSharePath } from "./services/dailyChallengeShare";
 import type { LandingPage } from "./seo/landingPages";
+import { LANDING_CTA_HASH, landingCtaMode } from "./seo/landingCta";
 import { initializeNativeAds } from "./services/ads/nativeAdsSetup";
 import { maybePromptAppUpdate } from "./services/appUpdate";
 import { isRoomCode } from "./multiplayer/protocol";
@@ -323,6 +324,17 @@ export default function App({ landing }: AppProps) {
   // above never runs on its own for that case).
   useEffect(() => {
     function handleHashChange() {
+      // The landing page's own CTA (see seo/landingCta.ts). Handled before the
+      // share decoders, which have nothing to say about this fragment.
+      if (location.hash === LANDING_CTA_HASH) {
+        // Consumed, so pressing the button a SECOND time is a fragment change
+        // again rather than a silent no-op that leaves the visitor on home.
+        history.replaceState(null, "", location.pathname + location.search);
+        const mode = landingCtaMode(landing, screenRef.current.name);
+        if (mode === "playTogether") setScreen(toPlayTogether());
+        else if (mode === "passPlay") setScreen(toPassPlay());
+        return;
+      }
       const shared = importSharedScreenFromHash();
       if (!shared) {
         if (hasUndecodableChallengeHash()) setLinkNotice(SHARED_LINK_UNAVAILABLE);
@@ -333,7 +345,7 @@ export default function App({ landing }: AppProps) {
     }
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, []);
+  }, [landing]);
 
   // Resolves a short /c/<id> link on load. Runs after the hash-based sync
   // check above, so it only applies when the URL has no hash payload of its

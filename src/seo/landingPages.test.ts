@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 const { LANDING_PATHS, landingPageForPath } = await import("./landingPages.ts");
+const { LANDING_CTA_HASH, landingCtaMode } = await import("./landingCta.ts");
 // Worker-side SEO definitions - pure data/string builders, so they import fine
 // under plain Node. This is the whole point of the file split: if a path is added
 // or renamed on one side only, this test fails instead of shipping a landing page
@@ -127,7 +128,7 @@ test("a mode page sends its CTA to the game on that page, never back to Classic"
   for (const path of ["/multiplayer-drawing-game", "/2-player-drawing-game-one-phone"]) {
     const landing = landingPageForPath(path)!;
     assert.ok(landing.mode, `${path} is expected to open a mode`);
-    assert.equal(seoPageForPath(path)!.cta?.href, "#root", `${path} CTA does not lead to the game on the page`);
+    assert.equal(seoPageForPath(path)!.cta?.href, LANDING_CTA_HASH, `${path} CTA does not lead to the game on the page`);
   }
   // And the converse: only a page that opens a mode may use the in-page CTA.
   for (const page of SEO_PAGES) {
@@ -135,6 +136,26 @@ test("a mode page sends its CTA to the game on that page, never back to Classic"
       assert.ok(landingPageForPath(page.path)?.mode, `${page.path} has an in-page CTA but opens no mode`);
     }
   }
+});
+
+test("the CTA re-opens the mode when the app has drifted back to home", () => {
+  // The bug: the fragment scrolls up to the app, and nothing more. A visitor who
+  // pressed Back first was carried up to the HOME screen by a button that says
+  // "Start a Two-Player Game" - the reported production failure.
+  const twoPlayer = landingPageForPath("/2-player-drawing-game-one-phone")!;
+  const multiplayer = landingPageForPath("/multiplayer-drawing-game")!;
+  assert.equal(landingCtaMode(twoPlayer, "home"), "passPlay");
+  assert.equal(landingCtaMode(multiplayer, "home"), "playTogether");
+
+  // Already in the mode, or anywhere else the player went deliberately: the
+  // button stays a scroll, so a match in progress is never thrown away.
+  assert.equal(landingCtaMode(twoPlayer, "passPlay"), null);
+  assert.equal(landingCtaMode(multiplayer, "playTogether"), null);
+  assert.equal(landingCtaMode(twoPlayer, "shapeChallenge"), null);
+
+  // Pages that open no mode, and plain app paths, have nothing to re-open.
+  assert.equal(landingCtaMode(landingPageForPath("/draw-shapes-online")!, "home"), null);
+  assert.equal(landingCtaMode(undefined, "home"), null);
 });
 
 test("the hub links to each individual shape page under a visible heading", () => {

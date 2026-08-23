@@ -162,13 +162,16 @@ android {
         // before submission by the multiplayer canvas / leave / resume fixes.
         // A used code can never be re-uploaded, so 27 is what ships.
         //
-        // 27: 0.39.0 as it will actually ship.
+        // 27: test build with the multiplayer canvas / leave / resume fixes.
+        //
+        // 28: adds the coach-mark layout fix for the first-stroke jump. Test
+        // build; the production AAB takes the next free code after it.
         //
         // DEPLOYMENT COUPLING: this client reads `gameSerial` from the room
         // snapshot, which only the Worker in this same commit sends. The Worker
         // and the web build must go out together or a rematch stops earning
         // Social Points. See worker/roomDO.ts handleStart.
-        versionCode 27
+        versionCode 28
         versionName "0.39.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

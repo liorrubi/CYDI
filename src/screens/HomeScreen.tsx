@@ -18,6 +18,7 @@ import {
   toSpecialChallenge,
 } from "../app/routes";
 import { playSelectSound } from "../engine/soundEngine";
+import { trackEvent } from "../services/analytics";
 import { isAndroidApp, PLAY_STORE_URL } from "../services/nativeShare";
 import type { Screen } from "../types/GameMode";
 
@@ -38,6 +39,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
    * Classic is therefore always the selected tab here, because Home IS Classic.
    */
   function handleMode(mode: HomeMode) {
+    trackEvent("game_mode_selected", { mode: mode === "passPlay" ? "twoPlayers" : mode });
     if (mode === "passPlay") onNavigate(toPassPlay());
     if (mode === "multiplayer") onNavigate(toPlayTogether());
   }

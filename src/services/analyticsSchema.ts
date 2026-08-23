@@ -55,6 +55,22 @@ export type MultiplayerDifficultyParam = (typeof MP_DIFFICULTY_PARAMS)[number];
 export const MP_PHASE_PARAMS = ["LOBBY", "COUNTDOWN", "SHOW_SHAPE", "DRAWING", "ROUND_RESULTS", "FINAL_RESULTS", "ABANDONED"] as const;
 export type MultiplayerPhaseParam = (typeof MP_PHASE_PARAMS)[number];
 
+/** The three ways to play, as the home selector offers them. */
+export const GAME_MODE_PARAMS = ["classic", "twoPlayers", "multiplayer"] as const;
+export type GameModeParam = (typeof GAME_MODE_PARAMS)[number];
+
+/** Which social mode paid out. Deliberately not "which room" or "which match". */
+export const SOCIAL_SOURCE_PARAMS = ["multiplayer", "twoPlayers"] as const;
+export type SocialSourceParam = (typeof SOCIAL_SOURCE_PARAMS)[number];
+
+/** Mirrors SOCIAL_RANKS in social/socialRank.ts; a test keeps the two in step. */
+export const SOCIAL_RANK_PARAMS = ["Rookie", "Challenger", "Competitor", "Social Artist", "Champion", "CYDI Master"] as const;
+export type SocialRankParam = (typeof SOCIAL_RANK_PARAMS)[number];
+
+/** One completion event per first-run explanation, not one per step. */
+export const TUTORIAL_TYPE_PARAMS = ["classicModeIntro", "twoPlayers", "multiplayerHost", "multiplayerGuest"] as const;
+export type TutorialTypeParam = (typeof TUTORIAL_TYPE_PARAMS)[number];
+
 export type EventParamsMap = {
   app_open: Record<string, never>;
   shape_completed: { category: CategoryId; starRating: number; passed: boolean; isNewBest: boolean };
@@ -98,6 +114,25 @@ export type EventParamsMap = {
   pp_rematch: { playerCount: number };
   /** Quit from inside a running match. `roundIndex` is how far they got, which is the whole reason to record it. */
   pp_abandoned: { roundIndex: number; playerCount: number; roundCount: number };
+
+  // --- 0.39.0: mode choice, leave/resume, progression, tutorials -----------
+  // Same privacy rule as everything above, and the resume events are where it
+  // would be easiest to get wrong: they carry NO room code, because a room code
+  // plus a timestamp identifies a specific group of people.
+  /** Fired only when the player actually taps a mode in the home selector. */
+  game_mode_selected: { mode: GameModeParam };
+  /** "Return to Game" was actually rendered - i.e. the room was checked and found live. */
+  mp_resume_offered: Record<string, never>;
+  /** Reconnected and a valid snapshot arrived. */
+  mp_resume_success: Record<string, never>;
+  /** The resume finally failed - never a transient retry. */
+  mp_resume_failed: Record<string, never>;
+  mp_leave_confirmed: Record<string, never>;
+  mp_leave_cancelled: Record<string, never>;
+  /** Emitted once per award actually banked, so a reconnect or remount cannot double-count it. */
+  social_points_awarded: { source: SocialSourceParam; amount: number };
+  social_rank_up: { source: SocialSourceParam; newRank: SocialRankParam };
+  tutorial_completed: { tutorialType: TutorialTypeParam };
 
   purchase_completed: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
@@ -209,6 +244,15 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "pp_game_finished",
   "pp_rematch",
   "pp_abandoned",
+  "game_mode_selected",
+  "mp_resume_offered",
+  "mp_resume_success",
+  "mp_resume_failed",
+  "mp_leave_confirmed",
+  "mp_leave_cancelled",
+  "social_points_awarded",
+  "social_rank_up",
+  "tutorial_completed",
 ];
 
 export type ValidationResult<E extends AnalyticsEventName> =
@@ -285,10 +329,7 @@ function isGameType(value: unknown): value is GameType {
 type Validator<E extends AnalyticsEventName> = (params: unknown) => ValidationResult<E>;
 
 const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
-  app_open: (p) => {
-    if (!isRecord(p) || Object.keys(p).length !== 0) return { valid: false };
-    return { valid: true, params: {} };
-  },
+  app_open: (p) => validateNoParams(p),
   mp_room_created: (p) => {
     if (!isRecord(p) || !hasExactKeys(p, ["roundCount", "difficulty"])) return { valid: false };
     if (!isRoundCountParam(p.roundCount) || !isDifficultyParam(p.difficulty)) return { valid: false };
@@ -349,6 +390,35 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     if (!isIntInRange(p.roundIndex, 0, 14) || !isPlayerCount(p.playerCount) || !isRoundCountParam(p.roundCount)) return { valid: false };
     return { valid: true, params: { roundIndex: p.roundIndex, playerCount: p.playerCount, roundCount: p.roundCount } };
   },
+  game_mode_selected: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["mode"])) return { valid: false };
+    if (typeof p.mode !== "string" || !(GAME_MODE_PARAMS as readonly string[]).includes(p.mode)) return { valid: false };
+    return { valid: true, params: { mode: p.mode as GameModeParam } };
+  },
+  mp_resume_offered: (p) => validateNoParams(p),
+  mp_resume_success: (p) => validateNoParams(p),
+  mp_resume_failed: (p) => validateNoParams(p),
+  mp_leave_confirmed: (p) => validateNoParams(p),
+  mp_leave_cancelled: (p) => validateNoParams(p),
+  social_points_awarded: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["source", "amount"])) return { valid: false };
+    if (typeof p.source !== "string" || !(SOCIAL_SOURCE_PARAMS as readonly string[]).includes(p.source)) return { valid: false };
+    // 1-3 today; the range is deliberately narrow so a bug that pays out
+    // something absurd is dropped rather than recorded.
+    if (!isIntInRange(p.amount, 1, 10)) return { valid: false };
+    return { valid: true, params: { source: p.source as SocialSourceParam, amount: p.amount } };
+  },
+  social_rank_up: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["source", "newRank"])) return { valid: false };
+    if (typeof p.source !== "string" || !(SOCIAL_SOURCE_PARAMS as readonly string[]).includes(p.source)) return { valid: false };
+    if (typeof p.newRank !== "string" || !(SOCIAL_RANK_PARAMS as readonly string[]).includes(p.newRank)) return { valid: false };
+    return { valid: true, params: { source: p.source as SocialSourceParam, newRank: p.newRank as SocialRankParam } };
+  },
+  tutorial_completed: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["tutorialType"])) return { valid: false };
+    if (typeof p.tutorialType !== "string" || !(TUTORIAL_TYPE_PARAMS as readonly string[]).includes(p.tutorialType)) return { valid: false };
+    return { valid: true, params: { tutorialType: p.tutorialType as TutorialTypeParam } };
+  },
   shape_completed: (p) => validateRoundResultEvent(p),
   shape_practice_completed: (p) => validateRoundResultEvent(p),
   purchase_completed: (p) => {
@@ -407,10 +477,8 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   challenge_created: (p) => validateNoParams(p),
 };
 
-/** Events that carry no params at all - same rule app_open uses. */
-function validateNoParams<E extends "create_discovery_shown" | "create_discovery_accepted" | "challenge_created">(
-  p: unknown,
-): ValidationResult<E> {
+/** Events that carry no params at all. Anything in the payload is a bug, and a rejected event is safer than a leaked one. */
+function validateNoParams<E extends AnalyticsEventName>(p: unknown): ValidationResult<E> {
   if (!isRecord(p) || Object.keys(p).length !== 0) return { valid: false };
   return { valid: true, params: {} as EventParamsMap[E] };
 }

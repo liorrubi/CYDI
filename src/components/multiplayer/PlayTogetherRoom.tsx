@@ -26,6 +26,8 @@ import { ScreenWakeLock } from "../../services/wakeLock";
 import { trackEvent } from "../../services/analytics";
 import { awardSocialPoints } from "../../services/socialPointsStore";
 import { multiplayerAwardId, multiplayerAwards } from "../../social/socialRewards";
+import { crossedRanks } from "../../social/socialRank";
+import type { SocialRankParam } from "../../services/analyticsSchema";
 import { SocialPointsAward } from "../SocialPointsBadge";
 import SocialProgressCard from "../SocialProgressCard";
 import { clearSocialPointsOverride, setSocialPointsOverride } from "../../social/socialPointsDisplay";
@@ -255,6 +257,15 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
     awardedRef.current = awardId;
     const points = multiplayerAwards(snapshot.players.map((p) => ({ id: p.seatId, totalScore: p.totalScore }))).get(seatId) ?? 0;
     const result = awardSocialPoints(awardId, points);
+    // Same guard as Pass & Play: `granted` is false for every repeat, so a
+    // reconnect or a re-delivered final snapshot cannot double-count.
+    if (result.granted && result.points > 0) {
+      trackEvent("social_points_awarded", { source: "multiplayer", amount: result.points });
+      const promotions = crossedRanks(result.total - result.points, result.total);
+      if (promotions.length > 0) {
+        trackEvent("social_rank_up", { source: "multiplayer", newRank: promotions[promotions.length - 1].name as SocialRankParam });
+      }
+    }
     // Hold the header badge at the old total until the card takes over.
     if (result.points > 0) setSocialPointsOverride(result.total - result.points);
     setAward({ points: result.points, total: result.total, previousTotal: result.total - result.points });

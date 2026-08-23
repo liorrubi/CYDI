@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDialogA11y } from "../../hooks/useDialogA11y";
 import { playChipSound } from "../../engine/soundEngine";
+import { trackEvent } from "../../services/analytics";
 import { LABEL_BY_ROLE, STEPS_BY_ROLE, type TutorialRole } from "./tutorialSteps";
 
 type MultiplayerTutorialOverlayProps = {
@@ -8,6 +9,12 @@ type MultiplayerTutorialOverlayProps = {
   role: TutorialRole;
   onDismiss: () => void;
 };
+
+const TUTORIAL_TYPE_BY_ROLE = {
+  host: "multiplayerHost",
+  guest: "multiplayerGuest",
+  passPlay: "twoPlayers",
+} as const;
 
 export default function MultiplayerTutorialOverlay({ role, onDismiss }: MultiplayerTutorialOverlayProps) {
   const steps = STEPS_BY_ROLE[role];
@@ -17,9 +24,16 @@ export default function MultiplayerTutorialOverlay({ role, onDismiss }: Multipla
   const step = steps[index];
   const isLast = index === steps.length - 1;
 
+  function finish() {
+    // One event per explanation, whether it was read through or skipped: the
+    // flag is set either way, so this is the moment it is done with.
+    trackEvent("tutorial_completed", { tutorialType: TUTORIAL_TYPE_BY_ROLE[role] });
+    onDismiss();
+  }
+
   function next() {
     playChipSound();
-    if (isLast) onDismiss();
+    if (isLast) finish();
     else setIndex((i) => i + 1);
   }
 
@@ -32,7 +46,7 @@ export default function MultiplayerTutorialOverlay({ role, onDismiss }: Multipla
         aria-modal="true"
         aria-label={LABEL_BY_ROLE[role]}
       >
-        <button type="button" className="onboarding-skip" onClick={onDismiss}>
+        <button type="button" className="onboarding-skip" onClick={finish}>
           Skip
         </button>
 

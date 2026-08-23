@@ -80,7 +80,7 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
   useEffect(() => {
     if (!initialJoinCode || session) return;
     if (!isRoomCode(initialJoinCode) || !hasRoomToken(initialJoinCode)) return;
-    startSession(initialJoinCode, false);
+    startSession(initialJoinCode, false, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -94,7 +94,35 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
    * and the host applies their choice with a `configure` frame once connected -
    * which is also how every other client learns about it.
    */
-  function startSession(roomCode: string, applySettings: boolean) {
+  /**
+   * Watches a RESUME attempt to its conclusion.
+   *
+   * Success is a real snapshot, not merely an open socket. Failure is only
+   * reported for a terminal server refusal - the socket retries a dropped
+   * connection on its own, and a retry in progress is not a failed resume.
+   */
+  function watchResume(socket: RoomSocket) {
+    let settled = false;
+    const stop = socket.subscribe((frame) => {
+      if (settled) return;
+      if (frame.type === "snapshot") {
+        settled = true;
+        stop();
+        trackEvent("mp_resume_success", {});
+        return;
+      }
+      // The two terminal refusals: the room is gone, or the seat cannot be had.
+      // Everything else the server can say is recoverable, and a dropped
+      // connection never reaches here at all - the socket retries it silently.
+      if (frame.type === "error" && (frame.code === "room_closed" || frame.code === "room_full")) {
+        settled = true;
+        stop();
+        trackEvent("mp_resume_failed", {});
+      }
+    });
+  }
+
+  function startSession(roomCode: string, applySettings: boolean, isResume = false) {
     setPlayerName(cleanNickname);
     const socket = new RoomSocket({ roomCode, nickname: cleanNickname });
     if (applySettings) {
@@ -108,6 +136,7 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
         }
       });
     }
+    if (isResume) watchResume(socket);
     setActiveRoomCode(roomCode);
     // The breadcrumb that lets Home offer "Return to Game" if the app is closed
     // or backgrounded away. Removed again by a deliberate Leave.
@@ -203,9 +232,15 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
   }
 
   function confirmLeave() {
+    trackEvent("mp_leave_confirmed", {});
     const action = pendingLeave?.run;
     setPendingLeave(null);
     action?.();
+  }
+
+  function cancelLeave() {
+    trackEvent("mp_leave_cancelled", {});
+    setPendingLeave(null);
   }
 
   // The hardware back button is handled centrally, so a live game has to
@@ -231,7 +266,7 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
         />
         <SocialPointsBadge />
         <PlayTogetherRoom transport={session} onExit={exitRoom} onActiveChange={handleActiveChange} />
-        {pendingLeave && <LeaveConfirmation onStay={() => setPendingLeave(null)} onLeave={confirmLeave} />}
+        {pendingLeave && <LeaveConfirmation onStay={cancelLeave} onLeave={confirmLeave} />}
       </div>
     );
   }

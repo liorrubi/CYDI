@@ -25,6 +25,8 @@ import {
 } from "../../services/multiplayerTutorialStore";
 import { awardPassPlayMatch } from "../../services/socialPointsStore";
 import { PASS_PLAY_MATCH_POINTS } from "../../social/socialRewards";
+import { crossedRanks } from "../../social/socialRank";
+import type { SocialRankParam } from "../../services/analyticsSchema";
 import { SocialPointsAward } from "../SocialPointsBadge";
 import SocialProgressCard from "../SocialProgressCard";
 import { clearSocialPointsOverride, setSocialPointsOverride } from "../../social/socialPointsDisplay";
@@ -249,6 +251,18 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
     finishedRef.current = game.gameId;
     trackEvent("pp_game_finished", { playerCount: game.players.length, roundCount: game.rounds });
     const result = awardPassPlayMatch(game.gameId, PASS_PLAY_MATCH_POINTS);
+    /*
+     * Reported off `granted`, which the store sets only the first time an award
+     * id is seen. A repeated final snapshot, a remount or a revisit all take the
+     * false branch, so neither event can be counted twice.
+     */
+    if (result.granted && result.points > 0) {
+      trackEvent("social_points_awarded", { source: "twoPlayers", amount: result.points });
+      const promotions = crossedRanks(result.total - result.points, result.total);
+      if (promotions.length > 0) {
+        trackEvent("social_rank_up", { source: "twoPlayers", newRank: promotions[promotions.length - 1].name as SocialRankParam });
+      }
+    }
     // Hold the header badge at the old total until the card takes over.
     if (result.points > 0) setSocialPointsOverride(result.total - result.points);
     setAward({ points: result.points, total: result.total, previousTotal: result.total - result.points });

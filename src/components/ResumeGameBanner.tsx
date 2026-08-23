@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { lookupRoom } from "../multiplayer/roomApi";
 import { hasRoomToken } from "../multiplayer/roomSocket";
 import { clearActiveRoom, getActiveRoomHint } from "../multiplayer/resumeStore";
+import { trackEvent } from "../services/analytics";
 
 type ResumeGameBannerProps = {
   onResume: (roomCode: string) => void;
@@ -51,6 +52,9 @@ export default function ResumeGameBanner({ onResume }: ResumeGameBannerProps) {
         return;
       }
       setRoomCode(hint.roomCode);
+      // Reported here, not when the breadcrumb was found: this is the moment
+      // the offer actually reaches the player. No room code goes with it.
+      trackEvent("mp_resume_offered", {});
     });
 
     return () => {

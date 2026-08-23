@@ -4,6 +4,7 @@
  */
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { playChipSound } from "../engine/soundEngine";
+import { trackEvent } from "../services/analytics";
 
 type ModeIntroOverlayProps = {
   onDismiss: () => void;
@@ -31,6 +32,7 @@ export default function ModeIntroOverlay({ onDismiss }: ModeIntroOverlayProps) {
 
   function dismiss() {
     playChipSound();
+    trackEvent("tutorial_completed", { tutorialType: "classicModeIntro" });
     onDismiss();
   }
 

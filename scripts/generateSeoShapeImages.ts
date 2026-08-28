@@ -18,6 +18,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getShapeById, type Vec2 } from "../src/engine/shapeLibrary.ts";
+import { exampleAttempt, exampleTarget } from "../src/content/scoringExample.ts";
 import type { DrawingPath } from "../src/types/Challenge.ts";
 
 const SIZE = 400;
@@ -185,10 +186,82 @@ function heartImage(): string {
   );
 }
 
+/**
+ * Circle: the two things a freehand circle is actually judged on - one constant
+ * radius all the way round, and a join that lands back where the line started.
+ * Both are read off the traced outline (centre and radius from its own points).
+ */
+function circleImage(): string {
+  const { path, svgPath } = shapeOutline("circle");
+  const xs = path.points.map((point) => point.x);
+  const ys = path.points.map((point) => point.y);
+  const center = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  const radius = (Math.max(...xs) - Math.min(...xs)) / 2;
+  // Where the generator starts the outline is where a player's line has to come
+  // back to - the one place a circle can visibly fail to close.
+  const join = path.points[0];
+
+  const radii = [0, 90, 180, 270]
+    .map((degrees) => {
+      const radians = (degrees * Math.PI) / 180;
+      return (
+        `<line x1="${center.x.toFixed(1)}" y1="${center.y.toFixed(1)}" ` +
+        `x2="${(center.x + Math.cos(radians) * radius).toFixed(1)}" ` +
+        `y2="${(center.y + Math.sin(radians) * radius).toFixed(1)}" ` +
+        `stroke="${ACCENT}" stroke-width="1.5" stroke-dasharray="5 6" opacity="0.55"/>`
+      );
+    })
+    .join("");
+
+  return svg(
+    "Circle drawing target with radius and closing-point guides",
+    "The circle target used in the CYDI circle challenge. Four dashed radii from the centre show the single " +
+      "distance every point of the line has to keep, and a marked dot shows the point where the drawn line has " +
+      "to close back onto its own start.",
+    radii +
+      outlineMarkup(svgPath) +
+      dot(center, 4) +
+      dot(join) +
+      label("every point, one distance from here", center.x, center.y - 14) +
+      label("start and finish meet here", Math.min(join.x - 10, SIZE - 12), join.y + 5, "end") +
+      label("no corners to aim at, nowhere to hide a wobble", SIZE / 2, SIZE - 14),
+  );
+}
+
+/**
+ * The worked example on /how-to-play: the real circle target with the real
+ * example attempt laid over it, exactly the way the game shows a finished round.
+ * Both paths come from src/content/scoringExample.ts, which is also what the page
+ * scores - so the picture and the numbers beside it can never disagree.
+ */
+function scoringOverlayImage(): string {
+  const target = exampleTarget(SIZE);
+  const attempt = exampleAttempt(SIZE);
+
+  const legend = (x: number, y: number, color: string, text: string): string =>
+    `<line x1="${x}" y1="${y}" x2="${x + 34}" y2="${y}" stroke="${color}" stroke-width="5" stroke-linecap="round"/>` +
+    label(text, x + 44, y + 5, "start");
+
+  return svg(
+    "A drawing attempt laid over the circle target it was scored against",
+    "The CYDI circle target drawn as a thick grey line with an example freehand attempt drawn over it in blue. " +
+      "The attempt is slightly smaller than the target and slightly wider than it is tall, and its line wavers " +
+      "in and out of the target instead of holding one distance from the centre.",
+    `<path d="${toSvgPath(target)}" fill="none" stroke="#c9ced6" stroke-width="12" ` +
+      `stroke-linejoin="round" stroke-linecap="round"/>` +
+      `<path d="${toSvgPath(attempt)}" fill="none" stroke="${ACCENT}" stroke-width="4" ` +
+      `stroke-linejoin="round" stroke-linecap="round"/>` +
+      legend(24, SIZE - 44, "#c9ced6", "the target") +
+      legend(24, SIZE - 20, ACCENT, "the attempt"),
+  );
+}
+
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "images", "seo");
 const FILES: [string, string][] = [
   ["draw-a-perfect-star-five-point-star-symmetry-guide.svg", starImage()],
   ["draw-a-perfect-heart-symmetry-and-curve-guide.svg", heartImage()],
+  ["draw-a-perfect-circle-radius-and-closing-guide.svg", circleImage()],
+  ["how-to-play-attempt-over-target.svg", scoringOverlayImage()],
 ];
 
 mkdirSync(OUT_DIR, { recursive: true });

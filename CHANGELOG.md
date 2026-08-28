@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.40.0 - 2026-08-28
+
+The public site gets the half it never had: real pages about the game, and a
+policy a machine can actually read. Web-only - nothing in this release reaches
+the Android app, which loads its HTML from inside the APK and never routes
+through the Worker.
+
+**/privacy was serving an empty shell.** The policy has always existed, but only
+inside a React component, so the published URL answered with 2.4 KB of empty SPA
+shell and no policy text in it at all - invisible to anything that does not run
+JavaScript. The text now lives in one place (`src/content/privacyPolicyHtml.ts`)
+and is rendered twice: server-side by the Worker for the public URL, and by the
+in-app page for `npm run dev` and the Android WebView. Not one word of the policy
+changed - the extraction was verified word for word.
+
+**Four new pages**, served as complete documents rather than the app shell, so
+there is nothing to execute before the text is there: `/how-to-play`, `/about`,
+`/contact` and `/terms`. `/how-to-play` is the substantial one - the round loop,
+what each part of the score actually measures and what it is worth, the size
+ceiling, stars, difficulty, coins, the Daily Challenge and both multiplayer
+modes, plus a worked example scored by the game's own scorer while the page is
+being served.
+
+**Navigation.** Every public page now carries the same header/footer links,
+including the game pages, where they sit inside the copy block that already
+lived below the canvas. Gameplay layout is untouched by design and was measured
+to prove it: canvas geometry is identical with the nav, without it, and with the
+whole block removed.
+
+**Corrected claims on the existing SEO pages.** The copy said the four scored
+components "all count" towards the total; they do not - shape match is 70%, size
+20%, coverage and smoothness 5% each. "A large library of shapes" is now the real
+276 across 12 categories. Every number the public pages state now comes from
+`src/content/publicFacts.ts`, which imports the game's real value where a Worker
+can reach it and is pinned to it by a test where it cannot - so a figure on the
+site cannot silently drift away from the game again.
+
+Also: two new illustrations generated from the real shape generators (a circle
+guide and an attempt-over-target overlay), and the sitemap grew from 8 URLs to 13.
+
 ## 0.39.1 - 2026-08-23
 
 Fixes for the two drawing faults reported from real multiplayer play, plus the

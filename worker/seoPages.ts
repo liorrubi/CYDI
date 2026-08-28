@@ -20,6 +20,20 @@
  */
 export const CANONICAL_ORIGIN = "https://playcydi.com";
 
+// Numbers stated on these pages come from here, never from memory: publicFacts
+// either imports the game's real value or is pinned to it by a test. An audit of
+// this file found copy claiming the four scored components "all count" equally
+// when shape match is most of the score, and describing the shape library only
+// as "large" - the kind of drift that makes a page worth less than no page.
+import {
+  CATEGORY_COUNT,
+  CATEGORY_FACTS,
+  RESAMPLE_POINTS,
+  SCORE_WEIGHT_PERCENTS,
+  SHAPE_COUNT,
+  SIZE_TOLERANCE_PERCENT,
+} from "../src/content/publicFacts";
+
 /**
  * The app's real listing URL. Duplicated from src/services/nativeShare.ts rather
  * than imported, because that module pulls in Capacitor, which cannot load in a
@@ -72,10 +86,11 @@ const HOME: SeoPage = {
   h1: "Can You Draw It? Test Your Drawing Accuracy",
   paragraphs: [
     "CYDI is a free drawing accuracy game that runs straight in your browser. Each round shows you a target shape for a few seconds, then clears the canvas: you redraw it freehand, by eye, with a mouse, trackpad or finger.",
-    "The moment you finish, your attempt is compared against the target and scored out of 100 - shape match, coverage, smoothness and scale all count towards the total and the star rating. Your drawing is shown on top of the target too, so it is obvious where the line drifted, and you can retry the same shape as often as you like to push your best score higher.",
-    "There is a large library of shapes to work through, grouped into categories like geometric shapes, symbols, letters, nature, food and sports, plus a new Daily Challenge every day. Nothing to install and no account to create - your progress and best scores are stored locally in your browser. An Android version is available if you would rather play in an app.",
+    `The moment you finish, your attempt is compared against the target and scored out of 100. Four things are measured, and they do not count equally: shape match is ${SCORE_WEIGHT_PERCENTS.shapeMatch}% of the score, size ${SCORE_WEIGHT_PERCENTS.scale}%, and coverage and smoothness ${SCORE_WEIGHT_PERCENTS.coverage}% each - so getting the form right matters far more than drawing a steady line. Your drawing is then shown on top of the target, so it is obvious where the line drifted, and you can retry the same shape as often as you like to push your best score higher.`,
+    `There are ${SHAPE_COUNT} shapes to work through across ${CATEGORY_COUNT} categories - geometric shapes, symbols, the alphabet, animals, nature, food, sport, transport, household objects, calligraphy, fantasy and universal signs - plus a new Daily Challenge every day. Nothing to install and no account to create: your progress and best scores are stored locally in your browser. An Android version is available if you would rather play in an app.`,
   ],
   links: [
+    { href: "/how-to-play", label: "How to play, and how the scoring works" },
     { href: "/drawing-accuracy-test", label: "Take the drawing accuracy test" },
     { href: "/draw-a-perfect-circle", label: "Try to draw a perfect circle" },
     { href: "/draw-shapes-online", label: "Draw shapes online" },
@@ -92,11 +107,13 @@ const ACCURACY_TEST: SeoPage = {
   h1: "Drawing Accuracy Test",
   paragraphs: [
     "How precise is your freehand, really? This is a short drawing accuracy test: a target shape appears for a few seconds, you redraw it on the empty canvas, and CYDI measures how close you got.",
-    "The score is measured, not guessed. Your stroke is compared to the target on four separate things - shape match (does your outline follow the same form?), coverage (did you draw the whole shape?), smoothness (a steady line or a shaky one?) and scale (the right size, not much smaller or larger) - and those combine into one percentage plus a star rating. Your attempt is drawn over the target afterwards, so the score always comes with visible evidence.",
+    `The score is measured, not guessed. Both your stroke and the target are resampled to ${RESAMPLE_POINTS} evenly spaced points and compared point for point on four things - shape match (does your outline follow the same form?), size (the right size, not much smaller or larger), coverage (did you draw the whole shape?) and smoothness (a steady line or a shaky one?). They are weighted ${SCORE_WEIGHT_PERCENTS.shapeMatch}%, ${SCORE_WEIGHT_PERCENTS.scale}%, ${SCORE_WEIGHT_PERCENTS.coverage}% and ${SCORE_WEIGHT_PERCENTS.smoothness}% into one percentage plus a star rating. Your attempt is drawn over the target afterwards, so the score always comes with visible evidence.`,
+    `Where you start the line and which way round you go are not part of the test: every possible starting point is tried, in both directions, and the best alignment is the one that gets scored. What is not forgiven is size - draw much smaller than the target and a ceiling comes down on the total no matter how good the outline is.`,
     "The test starts with a circle, which is the fairest way to benchmark a steady hand: no corners to aim at and nowhere to hide a wobble. Retake it as many times as you want - only your best score is kept - and when you want harder targets, the full shape library is one click away.",
   ],
   links: [
     { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
+    { href: "/how-to-play", label: "What each part of the score measures" },
     { href: "/", label: "CYDI home" },
   ],
   cta: { href: "/draw-shapes-online", label: "Play More Drawing Challenges" },
@@ -112,8 +129,18 @@ const PERFECT_CIRCLE: SeoPage = {
   paragraphs: [
     "Drawing a perfect circle freehand is famously hard. There are no straight edges to anchor against and no corners to aim for - just one continuous curve that has to come back and meet exactly where it started.",
     "Try it here. The target circle is shown for a few seconds, then you draw yours on the blank canvas and get an instant score out of 100, with your attempt overlaid on the target so you can see precisely where the curve went wide, flat or lumpy. A wobbly line costs you smoothness, an oval costs you shape match, and stopping short of the join costs you coverage.",
+    `Two things decide it. Every point of a circle sits the same distance from its centre, so any stretch into an oval shows up immediately in shape match - which is ${SCORE_WEIGHT_PERCENTS.shapeMatch}% of the score, far more than the smoothness a shaky line costs you. And the line has to come back to where it started: the join is the one place a circle can visibly fail to close.`,
+    `Draw it big. Size is the other ${SCORE_WEIGHT_PERCENTS.scale}%, and it works as a ceiling as well as a component - up to about ${SIZE_TOLERANCE_PERCENT}% off costs nothing, but past that every further 1% of size error takes a point off the highest total the round can reach. A neat little circle in the corner of the canvas cannot score what the same circle drawn full size would.`,
     "The last few percent are the hard part: the gap between a good circle and a great one is almost entirely hand steadiness and pace. Retry as often as you like, since only your best score is kept, and move on to tougher targets whenever you are ready.",
   ],
+  image: {
+    src: "/images/seo/draw-a-perfect-circle-radius-and-closing-guide.svg",
+    alt: "Circle target with four dashed radii from its centre and a marked point where the drawn line has to close back onto its own start",
+    caption:
+      "The circle target and the two things it is judged on: one distance from the centre, held all the way round, and a line that closes back onto its own start.",
+    width: 400,
+    height: 400,
+  },
   links: [
     { href: "/draw-a-perfect-star", label: "Draw a perfect star" },
     { href: "/draw-a-perfect-heart", label: "Draw a perfect heart" },
@@ -147,6 +174,7 @@ const PERFECT_STAR: SeoPage = {
     { href: "/draw-a-perfect-heart", label: "Draw a perfect heart" },
     { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
     { href: "/drawing-accuracy-test", label: "Take the drawing accuracy test" },
+    { href: "/how-to-play", label: "How the score is worked out" },
     { href: "/", label: "CYDI home" },
   ],
   cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
@@ -176,6 +204,7 @@ const PERFECT_HEART: SeoPage = {
     { href: "/draw-a-perfect-star", label: "Draw a perfect star" },
     { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
     { href: "/drawing-accuracy-test", label: "Take the drawing accuracy test" },
+    { href: "/how-to-play", label: "How the score is worked out" },
     { href: "/", label: "CYDI home" },
   ],
   cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
@@ -190,7 +219,8 @@ const DRAW_SHAPES: SeoPage = {
   h1: "Draw Shapes Online",
   paragraphs: [
     "CYDI is a free shape drawing game that runs entirely in the browser. There is nothing to download, no account to create and no drawing tablet needed - a mouse, a trackpad or a finger is enough.",
-    "Pick a category and work through it shape by shape. Geometric shapes come first, from a plain circle and oval through triangles, pentagons and heptagons to multi-point stars, spirals, waves and gears, followed by categories like symbols, the English alphabet, nature, food and sports. Every shape flashes up as a target, you redraw it freehand, and you get a scored side-by-side comparison right away. Clearing a shape unlocks the next one in its category, so the targets get harder as your hand gets steadier.",
+    `Pick a category and work through it shape by shape. There are ${SHAPE_COUNT} shapes in ${CATEGORY_COUNT} categories: ${CATEGORY_FACTS.map((category) => `${category.name} (${category.shapes})`).join(", ")}. Geometric shapes come first and are the largest set, running from a plain circle and oval through triangles, pentagons and heptagons to multi-point stars, spirals, waves and gears.`,
+    "Every shape flashes up as a target for a couple of seconds, you redraw it freehand on the cleared canvas, and you get a scored comparison right away with your line laid over the target. Clearing a shape unlocks the next one in its category, so the targets get harder as your hand gets steadier, and further categories are unlocked with the coins you earn along the way.",
     "Best scores are saved per shape in your browser, which makes it easy to come back and beat your own record on the shapes that beat you.",
   ],
   linkGroup: {
@@ -219,6 +249,7 @@ const DRAW_SHAPES: SeoPage = {
   links: [
     { href: "/multiplayer-drawing-game", label: "Multiplayer drawing game" },
     { href: "/2-player-drawing-game-one-phone", label: "2 player drawing game on one phone" },
+    { href: "/how-to-play", label: "How scoring, stars and coins work" },
     { href: "/", label: "CYDI home" },
   ],
   // This page IS the shape map, so "play more shapes" would point at itself, and
@@ -249,6 +280,7 @@ const MULTIPLAYER: SeoPage = {
   links: [
     { href: "/2-player-drawing-game-one-phone", label: "Only have one phone? Play two-player on the same device" },
     { href: "/drawing-accuracy-test", label: "Test your drawing accuracy on your own first" },
+    { href: "/how-to-play", label: "How rooms, rounds and scoring work" },
   ],
   cta: { href: "#root", label: "Start a Game with Friends" },
   androidCta: true,
@@ -268,6 +300,7 @@ const TWO_PLAYER: SeoPage = {
   links: [
     { href: "/multiplayer-drawing-game", label: "Everyone has their own phone? Play online multiplayer" },
     { href: "/draw-shapes-online", label: "Practise the shapes on your own" },
+    { href: "/how-to-play", label: "How turns, timing and scoring work" },
   ],
   cta: { href: "#root", label: "Start a Two-Player Game" },
   androidCta: true,
@@ -283,8 +316,32 @@ export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFEC
  */
 export const LANDING_PATHS: string[] = SEO_PAGES.filter((page) => page.path !== "/").map((page) => page.path);
 
-/** Extra paths that belong in the sitemap but need no metadata rewriting. */
-const STATIC_SITEMAP_PATHS = ["/privacy"];
+/**
+ * The site's one navigation list, in one order. It lives here rather than in
+ * contentPages.ts because both modules need it and this is the one with no
+ * imports - contentPages.ts already depends on this file for the canonical
+ * origin, so putting it the other way round would make the two circular.
+ *
+ * Header and footer of every content page render it, and renderSeoSection()
+ * below puts the same links at the top of the copy block on the game pages.
+ */
+export const SITE_NAV: { href: string; label: string }[] = [
+  { href: "/", label: "Play" },
+  { href: "/how-to-play", label: "How to Play" },
+  { href: "/draw-shapes-online", label: "All Shapes" },
+  { href: "/multiplayer-drawing-game", label: "Multiplayer" },
+  { href: "/about", label: "About" },
+  { href: "/contact", label: "Contact" },
+  { href: "/privacy", label: "Privacy" },
+  { href: "/terms", label: "Terms" },
+];
+
+/** The nav as plain anchors, minus a link to the page being rendered. */
+export function renderNavLinks(current: string): string {
+  return SITE_NAV.filter((link) => link.href !== current)
+    .map((link) => `<a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`)
+    .join("");
+}
 
 /**
  * Trailing slashes are stripped so "/draw-shapes-online/" resolves to the same
@@ -386,8 +443,21 @@ export function renderSeoSection(page: SeoPage): string {
     `.cydi-seo-cta a{display:inline-block;padding:.6rem 1.1rem;border:1px solid currentColor;` +
     `border-radius:.5rem;font-weight:600;text-decoration:none}` +
     `.cydi-seo-store{font-size:.9rem;opacity:.7!important;margin:0!important}` +
+    // The site nav, and the copyright/trust line under it. Both live INSIDE this
+    // injected block, which is appended after the full-height #root the game
+    // renders into - so on a game page they sit below the canvas and cannot
+    // move, resize or reflow it. That is deliberate: the drawing canvas sizes
+    // itself from the viewport, and a header bolted above it would change the
+    // one measurement the whole game depends on, on exactly the small screens
+    // where there is least room to spare.
+    `.cydi-seo-nav{display:flex;flex-wrap:wrap;gap:.3rem 1.05rem;margin:0 0 1.35rem;font-size:.95rem}` +
+    `.cydi-seo-nav a{text-decoration:none}` +
+    `.cydi-seo-nav a:hover{text-decoration:underline}` +
+    `.cydi-seo-foot{margin:1.5rem 0 0!important;padding-top:1rem;border-top:1px solid rgba(128,128,128,.35);` +
+    `font-size:.85rem;opacity:.7!important}` +
     `</style>` +
     `<section class="cydi-seo">` +
+    `<nav class="cydi-seo-nav" aria-label="CYDI site">${renderNavLinks(page.path)}</nav>` +
     `<h1>${escapeHtml(page.h1)}</h1>` +
     paragraphs +
     linkGroup +
@@ -395,6 +465,11 @@ export function renderSeoSection(page: SeoPage): string {
     `<ul>${links}</ul>` +
     cta +
     android +
+    `<p class="cydi-seo-foot">` +
+    `<a href="/how-to-play">How to play</a> &middot; <a href="/about">About</a> &middot; ` +
+    `<a href="/contact">Contact</a> &middot; <a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a>` +
+    `<br>&copy; 2026 Lior Rubinovich. All rights reserved.` +
+    `</p>` +
     `</section>`
   );
 }
@@ -415,8 +490,14 @@ export function robotsTxt(): string {
   ].join("\n");
 }
 
-export function sitemapXml(): string {
-  const paths = [...SEO_PAGES.map((page) => page.path), ...STATIC_SITEMAP_PATHS];
+/**
+ * `extraPaths` is how the content pages get in (worker/index.ts passes
+ * CONTENT_PATHS): importing them here would be circular, and a sitemap that
+ * silently omitted /about, /privacy or /terms would undo the point of serving
+ * them at all.
+ */
+export function sitemapXml(extraPaths: string[] = []): string {
+  const paths = [...SEO_PAGES.map((page) => page.path), ...extraPaths];
   const entries = paths.map((path) => `  <url><loc>${canonicalUrl(path)}</loc></url>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries}\n</urlset>\n`;
 }

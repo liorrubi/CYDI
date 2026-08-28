@@ -17,6 +17,7 @@ import {
 import { ADS_CONFIG_KV_KEY, isValidRemoteAdsConfig, parseRemoteAdsConfig } from "../src/services/ads/remoteAdsConfigSchema";
 import { isRoomCode, MP_LIMITS, ROOM_CODE_ALPHABET } from "../src/multiplayer/protocol";
 import { canonicalUrl, renderSeoSection, robotsTxt, seoPageForPath, sitemapXml, type SeoPage } from "./seoPages";
+import { CONTENT_PATHS, contentPageForPath, renderContentDocument } from "./contentPages";
 
 export { AnalyticsDO, DailyChallengeDO, RoomDO };
 
@@ -575,7 +576,26 @@ export default {
 
     if (url.pathname === "/robots.txt" && request.method === "GET") return textResponse(robotsTxt(), "text/plain; charset=utf-8");
     if (url.pathname === "/sitemap.xml" && request.method === "GET")
-      return textResponse(sitemapXml(), "application/xml; charset=utf-8");
+      return textResponse(sitemapXml(CONTENT_PATHS), "application/xml; charset=utf-8");
+
+    // Content pages (/how-to-play, /about, /contact, /terms, /privacy) are whole
+    // documents rather than the app shell, so they are answered here and never
+    // reach the assets binding's SPA fallback. /privacy in particular used to
+    // fall through to that fallback and serve an empty shell, which meant the
+    // published policy was invisible to anything that does not run JavaScript.
+    if (request.method === "GET") {
+      const contentPage = contentPageForPath(url.pathname);
+      if (contentPage) {
+        return new Response(renderContentDocument(contentPage), {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            // Short, because the pages are generated: the scoring example and the
+            // shape counts are computed from the live code at render time.
+            "cache-control": "public, max-age=600",
+          },
+        });
+      }
+    }
 
     const shareLinkMatch = url.pathname.match(/^\/c\/([A-Za-z0-9]{4,12})$/);
     if (shareLinkMatch && request.method === "GET") {

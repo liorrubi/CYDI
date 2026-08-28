@@ -17,6 +17,7 @@ const {
   robotsTxt,
   sitemapXml,
 } = await import("../../worker/seoPages.ts");
+const { CONTENT_PATHS } = await import("../../worker/contentPages.ts");
 
 test("app and Worker agree on the landing paths", () => {
   assert.deepEqual([...LANDING_PATHS].sort(), [...WORKER_LANDING_PATHS].sort());
@@ -102,7 +103,10 @@ test("every landing page has one internal CTA and the Android line; the homepage
 });
 
 test("CTA targets are real pages, never the page itself, and never repeated in its link list", () => {
-  const knownPaths = new Set(SEO_PAGES.map((page) => page.path));
+  // Both halves of the public site count as real destinations: the game pages
+  // here, and the standalone content pages the Worker serves (/how-to-play,
+  // /about, /contact, /terms, /privacy - see worker/contentPages.ts).
+  const knownPaths = new Set([...SEO_PAGES.map((page) => page.path), ...CONTENT_PATHS]);
   for (const page of SEO_PAGES) {
     // Every internal destination on the page: the practice group, the small link
     // list, and the CTA - each target may appear exactly once across all three.

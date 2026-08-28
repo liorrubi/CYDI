@@ -899,6 +899,11 @@ main h1{font-size:1.7rem;line-height:1.25;margin:0 0 .5rem}
 main h2{font-size:1.25rem;margin:2rem 0 .6rem;padding-top:.35rem;border-top:1px solid var(--line)}
 main h3{font-size:1.05rem;margin:1.5rem 0 .5rem}
 main p{margin:0 0 1rem}
+/* The privacy policy cites two Google policy URLs using the URL itself as the
+   link text, and neither has a break opportunity in it - at 375px they pushed
+   the page 19px wider than the viewport and it scrolled sideways. Anywhere is
+   needed rather than break-word: these strings have no spaces to break at. */
+main a{overflow-wrap:anywhere}
 .cydi-standfirst{color:var(--muted);font-size:.95rem;margin:0 0 1.5rem}
 ul.cydi-list,ol.cydi-steps{margin:0 0 1.15rem;padding-left:1.25rem}
 ul.cydi-list li,ol.cydi-steps li{margin:0 0 .55rem}

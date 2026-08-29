@@ -1,0 +1,45 @@
+{
+  "projectId": "c0f1b03c-de60-4a0f-afc3-d829e6586886",
+  "pkg": "cydi",
+  "globalName": "Cydi",
+  "shape": "package",
+  "srcDir": "src",
+  "tsconfig": "tsconfig.app.json",
+  "buildCmd": "npx tsc -p .design-sync/tsconfig.types.json",
+  "cssEntry": "src/styles/global.css",
+  "componentSrcMap": {
+    "AchievementUnlockedBanner": "src/components/AchievementUnlockedBanner.tsx",
+    "AppHeader": "src/components/AppHeader.tsx",
+    "AppLogo": "src/components/AppLogo.tsx",
+    "ArtistPackCard": "src/components/ArtistPackCard.tsx",
+    "Button": "src/components/Button.tsx",
+    "ChallengeCard": "src/components/ChallengeCard.tsx",
+    "ChampionBadge": "src/components/ChampionBadge.tsx",
+    "ChestIcon": "src/components/ChestIcon.tsx",
+    "CoinIndicator": "src/components/CoinIndicator.tsx",
+    "DailyLeaderboardTable": "src/components/DailyLeaderboardTable.tsx",
+    "EmptyState": "src/components/EmptyState.tsx",
+    "HomeModeTabs": "src/components/HomeModeTabs.tsx",
+    "LockedFeatureHint": "src/components/LockedFeatureHint.tsx",
+    "PenSkinGlyph": "src/components/PenSkinGlyph.tsx",
+    "ResultComparison": "src/components/ResultComparison.tsx",
+    "ScoreCard": "src/components/ScoreCard.tsx",
+    "ShapePreviewIcon": "src/components/ShapePreviewIcon.tsx",
+    "SoundToggleButton": "src/components/SoundToggleButton.tsx",
+    "StarRating": "src/components/StarRating.tsx"
+  },
+  "overrides": {
+    "AchievementUnlockedBanner": {
+      "cardMode": "single",
+      "viewport": "440x700",
+      "primaryStory": "Default"
+    },
+    "AppHeader": {
+      "cardMode": "column"
+    },
+    "ArtistPackCard": {
+      "cardMode": "column"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}

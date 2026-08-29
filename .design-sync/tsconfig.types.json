@@ -1,0 +1,16 @@
+{
+  "//": "design-sync: emits a .d.ts tree into types/ so the converter can extract real prop contracts. CYDI's own build is noEmit, so this is the only source of declarations.",
+  "extends": "../tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationDir": "../types",
+    "rootDir": "../src",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.types.tsbuildinfo"
+  },
+  "include": ["../src"],
+  "exclude": ["../src/**/*.test.ts", "../src/**/*.test.tsx"]
+}

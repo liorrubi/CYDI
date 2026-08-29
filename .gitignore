@@ -34,3 +34,11 @@ artist-source-files/
 *.njsproj
 *.sln
 *.sw?
+
+# design-sync (claude.ai/design sync)
+.ds-sync/
+ds-bundle/
+types/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules

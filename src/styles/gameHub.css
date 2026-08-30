@@ -1,0 +1,795 @@
+/*
+ * © 2026 Lior Rubinovich. All rights reserved.
+ * Unauthorized copying, modification, distribution, or commercial use is prohibited.
+ */
+
+/* ===========================================================================
+ * 5b GAME HUB  ("/play", web only)
+ *
+ * Every rule is scoped under .site-game - the class SiteGameSkin puts on the
+ * web game surfaces - so global.css is untouched and Android's HomeScreen
+ * renders exactly what it rendered before. It is its own file rather than more
+ * of siteGame.css so the hub can be lazy-loaded with its component.
+ *
+ * Colours come from the tokens the skin already redefines. The two hues the
+ * layout contract names that the game has no token for - the create accent and
+ * the daily gold - are declared as hub-local variables here rather than added
+ * to the root theme, which would change native rendering.
+ * ======================================================================== */
+.site-game .site-hub {
+  --hub-create: #c3b0f2;
+  --hub-create-ink: #241a3d;
+  --hub-create-shadow: #8f7fc0;
+  --hub-daily: #ffc94d;
+  --hub-daily-ink: #3a2a05;
+  --hub-daily-shadow: #c99b1f;
+  --hub-panel: #1b1d2b;
+  --hub-panel-alt: #191b28;
+  --hub-line: #24263a;
+  --hub-line-soft: #2c2f47;
+  --hub-inset: #232640;
+  /* The white islands inside the dark page: the shape tiles, the saved-challenge
+     list and the empty state. These CANNOT use --color-card / --color-bg: the
+     skin flips both to dark for the stage, which would paint the design's paper
+     surfaces near-black and leave this ink invisible on them. Surface AND ink
+     are pinned to the light values together, so the pair always agrees. */
+  --hub-paper: #ffffff;
+  --hub-paper-tint: #f4f5fb;
+  --hub-paper-ink: #1e202e;
+  --hub-paper-muted: #6b6f80;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--space-4) 0 var(--space-6);
+}
+
+/* ---------------------------------------------------------------- intro - */
+.site-game .site-hub-intro {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.site-game .site-hub-title {
+  margin: 0;
+  font-size: clamp(1.6rem, 4vw, 2.15rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--color-text);
+}
+
+.site-game .site-hub-sub {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------ section scaffold */
+.site-game .site-hub-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.site-game .site-hub-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The divider is the heading's own ::after, so no empty element is added to
+   the accessibility tree just to draw a line. */
+.site-game .site-hub-kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.site-game .site-hub-kicker::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hub-line);
+}
+
+.site-game .site-hub-kicker-create {
+  color: var(--hub-create);
+}
+
+.site-game .site-hub-kicker-create::after {
+  background: var(--hub-line-soft);
+}
+
+.site-game .site-hub-flow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--hub-create);
+  white-space: nowrap;
+}
+
+.site-game .site-hub-flow i {
+  font-style: normal;
+  color: var(--color-text-muted);
+}
+
+.site-game .site-hub-sectiontext {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------- cards - */
+.site-game .site-hub-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--hub-line);
+  border-radius: var(--radius-lg);
+  background: var(--hub-panel);
+}
+
+.site-game .site-hub-cardtitle {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.site-game .site-hub-cardtitle-sm {
+  font-size: 1.1rem;
+}
+
+.site-game .site-hub-cardtext {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.site-game .site-hub-eyebrow {
+  font-size: 0.7rem; /* 11.2px - the contract's legibility floor is 11px */
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+}
+
+/* Shape art sits on white, because white is the surface CYDI draws and scores
+   on everywhere else - the canvas, the previews, the result cards. */
+.site-game .site-hub-art {
+  display: block;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--hub-paper);
+  padding: 10px;
+}
+
+.site-game .site-hub-art-lg {
+  width: 118px;
+  aspect-ratio: 1;
+}
+
+.site-game .site-hub-art-md {
+  width: 104px;
+  aspect-ratio: 1;
+}
+
+.site-game .site-hub-art-sm {
+  width: 46px;
+  aspect-ratio: 1;
+  padding: 6px;
+}
+
+/* Matches the dotted guide surface the real Create screen draws on. */
+.site-game .site-hub-art-dotted {
+  background-color: var(--hub-paper);
+  background-image: radial-gradient(#dfe2f0 1.1px, transparent 1.1px);
+  background-size: 18px 18px;
+}
+
+/* -------------------------------------------------------------- play row */
+.site-game .site-hub-playrow {
+  display: grid;
+  grid-template-columns: 1.42fr 0.58fr;
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.site-game .site-hub-classic {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.site-game .site-hub-cardbody {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.site-game .site-hub-daily {
+  border-color: #33354a;
+  box-shadow: inset 0 0 0 1px rgba(255, 201, 77, 0.22);
+}
+
+.site-game .site-hub-dailyhead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.site-game .site-hub-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: rgba(255, 201, 77, 0.16);
+  color: var(--hub-daily);
+  font-size: 0.69rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.site-game .site-hub-dailystate,
+.site-game .site-hub-dailystate-done {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.site-game .site-hub-dailystate {
+  color: var(--hub-daily);
+}
+
+.site-game .site-hub-dailystate-done {
+  color: var(--color-success);
+}
+
+/* --------------------------------------------------------------- actions */
+.site-game .site-hub-cta {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  margin-top: auto;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.site-game .site-hub-cta-primary {
+  background: var(--color-primary);
+  color: #0f1018;
+  box-shadow: 0 4px 0 var(--color-primary-dark);
+}
+
+.site-game .site-hub-cta-daily {
+  background: var(--hub-daily);
+  color: var(--hub-daily-ink);
+  box-shadow: 0 4px 0 var(--hub-daily-shadow);
+}
+
+.site-game .site-hub-cta-create {
+  align-self: stretch;
+  background: var(--hub-create);
+  color: var(--hub-create-ink);
+  box-shadow: 0 4px 0 var(--hub-create-shadow);
+}
+
+.site-game .site-hub-cta-small {
+  height: 36px;
+  margin-top: 0;
+  padding: 0 16px;
+  background: var(--color-primary-fill);
+  color: #ffffff;
+  font-size: 0.82rem;
+}
+
+.site-game .site-hub-cta:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+/* ------------------------------------------------------- your challenges */
+.site-game .site-hub-challenges {
+  padding: var(--space-4);
+  border-top: 1px solid var(--hub-line);
+  border-bottom: 1px solid var(--hub-line);
+  border-radius: var(--radius-lg);
+  background: var(--hub-panel-alt);
+}
+
+.site-game .site-hub-challengerow {
+  display: grid;
+  grid-template-columns: 0.86fr 1.14fr;
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.site-game .site-hub-create {
+  gap: var(--space-3);
+  border-color: #3a3252;
+  box-shadow: inset 0 0 0 1px rgba(195, 176, 242, 0.2);
+}
+
+.site-game .site-hub-createbody {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.site-game .site-hub-mine {
+  gap: var(--space-3);
+  border-color: #3a3252;
+}
+
+.site-game .site-hub-minehead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.site-game .site-hub-textlink {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.site-game .site-hub-textlink:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+.site-game .site-hub-minelist {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 10px;
+  list-style: none;
+  border-radius: var(--radius-md);
+  background: var(--hub-paper);
+}
+
+.site-game .site-hub-mineitem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px;
+  border-radius: 11px;
+  background: var(--hub-paper-tint);
+}
+
+.site-game .site-hub-minethumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--hub-paper);
+}
+
+.site-game .site-hub-minethumb .shape-icon {
+  width: 100%;
+  height: 100%;
+}
+
+.site-game .site-hub-minetext {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.site-game .site-hub-minename {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--hub-paper-ink);
+}
+
+.site-game .site-hub-minemeta {
+  font-size: 0.69rem;
+  color: var(--hub-paper-muted);
+}
+
+.site-game .site-hub-chip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.69rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.site-game .site-hub-chip-replay {
+  background: #eeeefe;
+  color: #4444d6;
+}
+
+.site-game .site-hub-chip-share {
+  background: #f2eefc;
+  color: #5b3fa6;
+}
+
+/* While the share sheet or the clipboard write is in flight. */
+.site-game .site-hub-chip:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+/* Replaces the standing note under the list while a share result is up, so the
+   outcome lands where the player just acted instead of at the top of the page. */
+.site-game .site-hub-sharefeedback {
+  margin: auto 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  color: var(--color-primary);
+}
+
+.site-game .site-hub-chip-open {
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 10px;
+  background: #2f3350;
+  color: #a3a0ff;
+  font-size: 0.78rem;
+}
+
+.site-game .site-hub-minenote {
+  margin: auto 0 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.site-game .site-hub-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--hub-paper);
+  text-align: center;
+}
+
+.site-game .site-hub-emptymark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  background: #eeeefe;
+  color: #4444d6;
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+
+.site-game .site-hub-emptytitle {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--hub-paper-ink);
+}
+
+.site-game .site-hub-emptytext {
+  max-width: 26ch;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--hub-paper-muted);
+}
+
+/* -------------------------------------------------------------- shop row */
+.site-game .site-hub-shop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--hub-line);
+  border-radius: var(--radius-lg);
+  background: var(--hub-panel);
+}
+
+.site-game .site-hub-shoptext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.site-game .site-hub-shopcta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  height: 42px;
+  padding: 0 20px;
+  border: 1px solid #3a3e5c;
+  border-radius: var(--radius-md);
+  background: var(--hub-inset);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--hub-daily);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.site-game .site-hub-shopcta:hover {
+  background: #2b2f4d;
+}
+
+.site-game .site-hub-coindot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--hub-daily);
+}
+
+/* -------------------------------------------------------------- progress */
+.site-game .site-hub-progressrow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.site-game .site-hub-stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: #1f2136;
+  text-align: left;
+}
+
+.site-game .site-hub-stat-action {
+  background: var(--hub-inset);
+  font: inherit;
+  cursor: pointer;
+}
+
+.site-game .site-hub-statmark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--hub-paper);
+  color: var(--hub-paper-ink);
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.site-game .site-hub-statmark-crown {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--hub-inset);
+  color: var(--hub-daily);
+  font-size: 0.9rem;
+}
+
+.site-game .site-hub-stattext {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.site-game .site-hub-statlabel {
+  font-size: 0.7rem; /* 11.2px - the contract's legibility floor is 11px */
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.site-game .site-hub-statlabel-sub {
+  font-size: 0.74rem;
+  color: var(--color-text-muted);
+}
+
+.site-game .site-hub-statvalue {
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: var(--color-text);
+}
+
+.site-game .site-hub-statvalue-sm {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.site-game .site-hub-statnote {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: right;
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------------- mobile 5b */
+@media (max-width: 860px) {
+  .site-game .site-hub-playrow,
+  .site-game .site-hub-challengerow,
+  .site-game .site-hub-progressrow {
+    grid-template-columns: 1fr;
+  }
+
+  /*
+   * The 5b mobile frame states each Play-now card as ONE compact row -
+   * art, name, action - not the desktop card stacked. The supporting
+   * paragraph and the eyebrow are what it drops to get there: the card
+   * titles already say which mode each one is, so nothing is lost, and
+   * both actions stay a full 36px+ tap target on the right.
+   */
+  .site-game .site-hub-art-lg {
+    width: 56px;
+  }
+
+  .site-game .site-hub-art-md {
+    width: 72px;
+  }
+
+  .site-game .site-hub-cardtitle {
+    font-size: 1.05rem;
+  }
+
+  .site-game .site-hub-classic .site-hub-eyebrow,
+  .site-game .site-hub-classic .site-hub-cardtext,
+  .site-game .site-hub-daily .site-hub-cardtext {
+    display: none;
+  }
+
+  .site-game .site-hub-classic {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .site-game .site-hub-classic .site-hub-cardbody {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /*
+   * Daily carries one more thing than Classic - its played / not-played
+   * line - so it is an explicit grid rather than a wrapping row: the art
+   * and the action each span both rows, and the title sits above the
+   * state in the middle column. A wrapping flex row cannot express that
+   * without an extra wrapper element in the markup.
+   */
+  .site-game .site-hub-daily {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "art title action"
+      "art state action";
+    align-items: center;
+    /* Tighter than Classic's: this card has three columns to fit on a 375px
+       screen, and the copy is fixed - "Daily Challenge" and its state line are
+       both real product text, so the LAYOUT gives way, not the words. */
+    column-gap: var(--space-2);
+    row-gap: 2px;
+    padding: var(--space-3);
+  }
+
+  /* Reclaiming width for the middle column, in the order that costs least:
+     the art tile is decorative, the action only needs its label, and the title
+     drops a step on the type scale while staying far above the 11px floor. */
+  .site-game .site-hub-daily .site-hub-art-sm {
+    width: 40px;
+    padding: 5px;
+  }
+
+  .site-game .site-hub-daily > .site-hub-cardtitle {
+    font-size: 0.95rem;
+  }
+
+  .site-game .site-hub-daily .site-hub-dailyhead {
+    grid-area: art;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .site-game .site-hub-daily > .site-hub-cardtitle {
+    grid-area: title;
+    min-width: 0;
+  }
+
+  .site-game .site-hub-daily .site-hub-dailystate,
+  .site-game .site-hub-daily .site-hub-dailystate-done {
+    grid-area: state;
+  }
+
+  /* The action leaves the column flow and sits at the end of the row. */
+  .site-game .site-hub-classic .site-hub-cta {
+    align-self: center;
+    margin-top: 0;
+    margin-left: auto;
+    height: 38px;
+    padding: 0 16px;
+    white-space: nowrap;
+  }
+
+  .site-game .site-hub-daily .site-hub-cta {
+    grid-area: action;
+    align-self: center;
+    margin-top: 0;
+    height: 38px;
+    /* Narrower than Classic's, for the three-column fit noted above; still a
+       38px-tall target with 13px of breathing room either side of the label. */
+    padding: 0 13px;
+    white-space: nowrap;
+  }
+
+  .site-game .site-hub-shop {
+    flex-wrap: wrap;
+  }
+
+  .site-game .site-hub-shopcta {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Redundant next to the number it repeats, and the first thing to go when
+     the stat rows become full-width. */
+  .site-game .site-hub-statnote {
+    display: none;
+  }
+}

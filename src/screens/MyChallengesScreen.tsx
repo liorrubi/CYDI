@@ -5,10 +5,7 @@ import ChallengeCard from "../components/ChallengeCard";
 import EmptyState from "../components/EmptyState";
 import { deleteChallenge, getChallenges } from "../services/challengeStorage";
 import { useDialogA11y } from "../hooks/useDialogA11y";
-import { encodeChallengeLink } from "../services/shareLink";
-import { createShortChallengeLink } from "../services/shareApi";
-import { shareOrCopy } from "../services/nativeShare";
-import { recordChallengeShared } from "../services/sharedChallengesStore";
+import { shareChallenge, SHARE_FEEDBACK_MS } from "../services/challengeShare";
 import { markMyChallengesTutorialShown, shouldShowMyChallengesTutorial } from "../services/tutorialStore";
 import {
   toAchievements,
@@ -49,23 +46,17 @@ export default function MyChallengesScreen({ onNavigate }: MyChallengesScreenPro
     setChallenges(getChallenges());
   }
 
+  /*
+   * The flow itself now lives in services/challengeShare.ts so the Game Hub can
+   * run the SAME share rather than a second copy of it. This screen still owns
+   * how the outcome is shown, which is the only part that was ever specific to
+   * it - including the failure message staying up, because it carries the link.
+   */
   async function handleShare(challenge: Challenge) {
-    const url = (await createShortChallengeLink(challenge)) ?? encodeChallengeLink(challenge);
-    const outcome = await shareOrCopy({
-      title: `CYDI Challenge: ${challenge.name}`,
-      text: `Can you draw "${challenge.name}"? Try my CYDI challenge!`,
-      url,
-    });
-    // Only "shared"/"copied" mean the link actually left the device - "cancelled"
-    // (backed out of the share sheet) and "failed" never reached a friend, so
-    // they shouldn't count toward the sharing achievements.
-    if (outcome === "shared" || outcome === "copied") recordChallengeShared(challenge.id);
-    if (outcome === "copied") {
-      setShareFeedback("Link copied!");
-      window.setTimeout(() => setShareFeedback(null), 2500);
-    } else if (outcome === "failed") {
-      setShareFeedback(`Couldn't share automatically - copy this link: ${url}`);
-    }
+    const result = await shareChallenge(challenge);
+    if (!result.message) return;
+    setShareFeedback(result.message);
+    if (!result.sticky) window.setTimeout(() => setShareFeedback(null), SHARE_FEEDBACK_MS);
   }
 
   return (

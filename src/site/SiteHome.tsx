@@ -6,9 +6,23 @@
  * Art direction 3a: the public home at "/". Marketing surface only.
  *
  * It is NOT the game's home screen. HomeScreen.tsx is untouched and stays the
- * single entry to Daily Challenge, Create, My Challenges and the Shop; this
- * page's "Play in browser" hands over to it (see App.tsx's "/play" screen).
+ * secondary hub for Daily Challenge, Create, My Challenges and the Shop, which
+ * this page reaches through "More challenges" (App.tsx's "/play" screen).
  * Android never renders this file.
+ *
+ * THE HIERARCHY THIS PAGE IMPLEMENTS - "/play" is never a step on the way into
+ * Classic. Every primary way to start playing lands on /play/classic directly:
+ *
+ *   Classic (nav) / Play now / Play in browser / the Classic mode card
+ *                                          -> onPlayClassic  -> /play/classic
+ *   2 Players (nav, mode card)             -> /2-player-drawing-game-one-phone
+ *   Multiplayer (nav, mode card, Join)     -> /multiplayer-drawing-game
+ *   More challenges                        -> onOpenGameMenu -> /play
+ *   Daily teaser                           -> the existing Daily flow
+ *
+ * "/play" is deliberately never labelled "Play" here: it is "More challenges"
+ * from this page and "Game menu" from inside the game, so Home, Classic and the
+ * hub stay three distinct ideas rather than three names for one.
  *
  * Every product number below comes from src/content/siteContent.ts, which
  * derives them from publicFacts - the mockups' "276", "12", "2-8",
@@ -43,10 +57,12 @@ type SiteHomeProps = {
    */
   onPlayClassic: () => void;
   /**
-   * The secondary way in: the existing game HomeScreen, which is still the one
+   * The secondary hub: the existing game HomeScreen, which is still the one
    * place Daily Challenge, Create Challenge, My Challenges and the Shop live.
    * Nothing about that screen changes; it just stops being the first thing a
-   * visitor meets.
+   * visitor meets, and it is NOT on the path into Classic - it is surfaced only
+   * as "More challenges". (That screen now renders the 5b Game Hub on the web,
+   * via src/site/GameHub.tsx; this contract was unaffected by that landing.)
    */
   onOpenGameMenu: () => void;
   /** Opens the existing Daily Challenge flow from the teaser. */

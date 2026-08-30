@@ -14,7 +14,15 @@ const LABELS: Record<HomeMode, string> = {
 };
 
 type HomeModeTabsProps = {
-  active: HomeMode;
+  /**
+   * The mode you are already on, or null for none.
+   *
+   * null exists for the web Game Hub: "/play" stopped being Classic when the
+   * site took over "/" and Classic moved to its own "/play/classic", so on the
+   * web no tab is current and Classic is a real destination like the other two.
+   * Android still passes "classic" and behaves exactly as before.
+   */
+  active: HomeMode | null;
   onSelect: (mode: HomeMode) => void;
 };
 

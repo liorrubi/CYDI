@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+import { Capacitor } from "@capacitor/core";
 import AppHeader from "../components/AppHeader";
 import FeaturedShapePreviews from "../components/FeaturedShapePreviews";
 import HomeModeTabs, { type HomeMode } from "../components/HomeModeTabs";
@@ -11,16 +13,25 @@ import {
   toInstructions,
   toList,
   toPassPlay,
+  toPlay,
   toPlayTogether,
   toSettings,
   toShapeChallenge,
   toShop,
   toSpecialChallenge,
 } from "../app/routes";
+import { shareChallenge } from "../services/challengeShare";
 import { playSelectSound } from "../engine/soundEngine";
 import { trackEvent } from "../services/analytics";
 import { isAndroidApp, PLAY_STORE_URL } from "../services/nativeShare";
 import type { Screen } from "../types/GameMode";
+
+/*
+ * The approved 5b Game Hub, web only and split out of the main bundle so none
+ * of it ships to Android. HomeScreen keeps owning every destination; the hub is
+ * presentation over the handlers below.
+ */
+const GameHub = lazy(() => import("../site/GameHub"));
 
 type HomeScreenProps = {
   onNavigate: (screen: Screen) => void;
@@ -42,11 +53,26 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
     trackEvent("game_mode_selected", { mode: mode === "passPlay" ? "twoPlayers" : mode });
     if (mode === "passPlay") onNavigate(toPassPlay());
     if (mode === "multiplayer") onNavigate(toPlayTogether());
+    /*
+     * Classic is a real destination on the web. It used to be a no-op because
+     * Home WAS Classic; since the site took "/" and Classic moved to its own
+     * "/play/classic", the hub is not Classic and the tab has to go there - App
+     * .tsx's navigate() moves the address with it. Android is unchanged: it
+     * still passes active="classic", so the tab is current and never fires.
+     */
+    if (mode === "classic" && onWeb) onNavigate(toShapeChallenge());
   }
 
   // Hidden inside the Android app itself, where "get the app" is meaningless -
   // this is the website's install CTA only.
   const showGetTheApp = !isAndroidApp();
+
+  /*
+   * The web gets the 5b Game Hub; Android keeps the card list below, unchanged.
+   * Both are driven by the same handlers and the same routes - this is a
+   * presentation swap, not a second implementation of the menu.
+   */
+  const onWeb = !Capacitor.isNativePlatform();
 
   function handleGetTheApp() {
     playSelectSound();
@@ -65,9 +91,25 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
         onNavigateToShapeChallenge={() => handleSelect(toShapeChallenge())}
         onNavigateToSettings={() => handleSelect(toSettings())}
       />
-      <HomeModeTabs active="classic" onSelect={handleMode} />
+      <HomeModeTabs active={onWeb ? null : "classic"} onSelect={handleMode} />
       {/* Only renders once the room has been confirmed still live. */}
       <ResumeGameBanner onResume={(roomCode) => handleSelect(toPlayTogether(roomCode))} />
+      {onWeb && (
+        <Suspense fallback={<div className="home-cards" />}>
+          <GameHub
+            onPlayClassic={() => handleSelect(toShapeChallenge())}
+            onDailyChallenge={() => handleSelect(toDailyChallenge())}
+            onCreate={() => handleSelect(toCreate())}
+            onMyChallenges={() => handleSelect(toList())}
+            onPlayChallenge={(challengeId) => handleSelect(toPlay(challengeId, toHome()))}
+            /* The canonical share, not a hub-local copy of it. */
+            onShareChallenge={shareChallenge}
+            onShop={() => handleSelect(toShop(toHome()))}
+            onAchievements={() => handleSelect(toAchievements(toHome()))}
+          />
+        </Suspense>
+      )}
+      {!onWeb && (
       <div className="home-cards">
         <button
           type="button"
@@ -139,6 +181,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </button>
         )}
       </div>
+      )}
     </div>
   );
 }

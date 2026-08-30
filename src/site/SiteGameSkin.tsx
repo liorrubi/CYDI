@@ -54,7 +54,16 @@ export default function SiteGameSkin({
 
   return (
     <div className="site-game">
-      {children}
+      {/* Same bypass and landmark the site shell provides, so /play,
+          /play/classic and the mode landings are not the one class of web page
+          without them. The two shells are mutually exclusive (App.tsx renders
+          one or the other), so this can never nest inside the site's <main>. */}
+      <a className="site-skip-link" href="#main-content">
+        Skip to main content
+      </a>
+      <main className="site-main" id="main-content" tabIndex={-1}>
+        {children}
+      </main>
       {/* One quiet line back to the site, so the game is somewhere you entered
           rather than somewhere you got stuck. Not a game control: it sits
           outside every screen and changes nothing about them. */}

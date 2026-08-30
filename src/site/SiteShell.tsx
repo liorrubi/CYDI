@@ -22,46 +22,18 @@
  * rendered, this one when it is - and they say the same thing, because both are
  * built from publicFacts / siteContent.
  */
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import AppLogo from "../components/AppLogo";
 import { SITE_NAV } from "../content/siteContent";
 import { useCrawlableBlockTakeover } from "./crawlableBlock";
 import "../styles/site.css";
 
 /**
- * Figtree is the approved display face. It is attached at RUNTIME rather than
- * from index.html on purpose: index.html is also what Capacitor packages into
- * the APK, and the Android app must not gain a webfont it cannot fetch. Doing
- * it here means the request only ever happens on a page that renders the site
- * shell, and it works identically under `vite dev` and behind the Worker.
- *
- * `display=swap` plus the fallback stack in --site-font means text is readable
- * immediately and the face swaps in when it arrives.
+ * Figtree is the approved display face. It is now SELF-HOSTED: the @font-face
+ * rules live in site.css, which only this shell imports, so the files are still
+ * web-only and never reach the APK - and the site no longer contacts Google to
+ * render text. See the licence note at the top of src/styles/site.css.
  */
-const FONT_HREF =
-  "https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800;900&display=swap";
-const FONT_LINK_ID = "cydi-site-font";
-
-function useSiteFont() {
-  useEffect(() => {
-    if (document.getElementById(FONT_LINK_ID)) return;
-
-    const preconnect = document.createElement("link");
-    preconnect.rel = "preconnect";
-    preconnect.href = "https://fonts.gstatic.com";
-    preconnect.crossOrigin = "anonymous";
-
-    const stylesheet = document.createElement("link");
-    stylesheet.id = FONT_LINK_ID;
-    stylesheet.rel = "stylesheet";
-    stylesheet.href = FONT_HREF;
-
-    document.head.append(preconnect, stylesheet);
-    // Deliberately not removed on unmount: navigating from the site into the
-    // game and back should not re-request the face.
-  }, []);
-}
-
 export type SiteNavKey = "classic" | "passPlay" | "multiplayer" | null;
 
 type SiteShellProps = {
@@ -80,11 +52,15 @@ type SiteShellProps = {
 };
 
 export default function SiteShell({ children, active = null, onPlay, navExtra, footerMeta }: SiteShellProps) {
-  useSiteFont();
   useCrawlableBlockTakeover();
 
   return (
     <div className="site-root">
+      {/* First thing TAB reaches, so a keyboard or screen-reader user can jump
+          the nav instead of walking it on every page (WCAG 2.4.1). */}
+      <a className="site-skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <header className="site-nav">
         <a className="site-brand" href="/" aria-label="CYDI home">
           <span className="site-brand-mark" aria-hidden="true">
@@ -136,7 +112,12 @@ export default function SiteShell({ children, active = null, onPlay, navExtra, f
         {navExtra && <div className="site-nav-actions">{navExtra}</div>}
       </header>
 
-      {children}
+      {/* tabIndex={-1} so the skip link can actually move focus here; the CSS
+          suppresses the ring, because the landmark is a destination, not a
+          control. Every site route renders exactly one of these. */}
+      <main className="site-main" id="main-content" tabIndex={-1}>
+        {children}
+      </main>
 
       <footer className="site-footer">
         <ul className="site-footer-links">
@@ -163,6 +144,11 @@ export default function SiteShell({ children, active = null, onPlay, navExtra, f
           <li>
             <a className="site-footer-link" href="/terms">
               Terms
+            </a>
+          </li>
+          <li>
+            <a className="site-footer-link" href="/accessibility">
+              Accessibility
             </a>
           </li>
         </ul>

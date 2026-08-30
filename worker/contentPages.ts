@@ -794,8 +794,107 @@ const PRIVACY: ContentPage = {
   blocks: [{ kind: "raw", html: PRIVACY_POLICY_HTML }],
 };
 
+// ---------------------------------------------------------- accessibility ----
+
+/*
+ * Deliberately factual and narrow. It describes what was actually built and
+ * verified, and it names the one thing that is NOT solved - freehand drawing
+ * has no equivalent for a screen-reader user. It claims no standard, no
+ * conformance level and no external audit, because none of those has happened.
+ */
+const ACCESSIBILITY_LAST_UPDATED = "30 August 2026";
+
+const ACCESSIBILITY: ContentPage = {
+  path: "/accessibility",
+  title: "Accessibility - CYDI",
+  description:
+    "How accessible CYDI is: keyboard navigation, focus indicators, semantic structure, zoom and reduced motion across the site, and the known limitation that freehand drawing has no equivalent for screen-reader users.",
+  h1: "Accessibility",
+  standfirst: `Last updated: ${ACCESSIBILITY_LAST_UPDATED}`,
+  blocks: [
+    {
+      kind: "p",
+      html:
+        "We want CYDI to be usable by as many people as possible, and we treat the website and its navigation as " +
+        "something that should work for everyone - not only for a mouse and a pair of eyes. This page describes " +
+        "where that is true today and, just as importantly, where it is not.",
+    },
+
+    { kind: "h2", text: "What we have built and checked" },
+    {
+      kind: "p",
+      html:
+        "The following have been verified on the live site, on desktop and on a phone-sized screen:",
+    },
+    {
+      kind: "ul",
+      items: [
+        "<strong>Keyboard navigation</strong> - the site, its menus and its buttons can be reached and operated " +
+          "with the keyboard alone, in a logical order, with no keyboard traps. A <em>Skip to main content</em> " +
+          "link is the first thing Tab reaches on every page.",
+        "<strong>Visible focus</strong> - whatever has keyboard focus is drawn with a clear outline, rather than " +
+          "leaving you guessing where you are.",
+        "<strong>Semantic structure</strong> - real headings, landmarks, lists and buttons, so assistive " +
+          "technology can describe and skip through a page instead of reading it as flat text.",
+        "<strong>Text contrast</strong> - body and interface text is set well above the usual 4.5:1 guideline " +
+          "against its background.",
+        "<strong>Zoom and small screens</strong> - the site reflows at 200% zoom and on narrow phones without " +
+          "clipping controls and without forcing sideways scrolling.",
+        "<strong>Reduced motion</strong> - if your device is set to reduce motion, the decorative drawing " +
+          "animations stop.",
+        "<strong>Images and icons</strong> - decorative artwork is hidden from screen readers, and controls have " +
+          "names that say what they do.",
+      ],
+    },
+
+    { kind: "h2", text: "Known limitation: the drawing itself" },
+    {
+      kind: "note",
+      html:
+        "<strong>Drawing a shape in CYDI is a visual, pointer-based task, and we do not currently offer an " +
+        "equivalent alternative for people who use a screen reader.</strong> The game asks you to look at a " +
+        "shape, remember it, and redraw it by hand; the score comes from comparing the path you drew against the " +
+        "target. We have not found a way to make that core mechanic meaningfully playable without sight, and we " +
+        "would rather say so plainly than imply otherwise.",
+    },
+    {
+      kind: "p",
+      html:
+        "So the honest position is: the site, the menus, the pages and the navigation aim to be accessible; the " +
+        "act of drawing is not equally available to everyone. If you have ideas about how that could change, we " +
+        "would genuinely like to hear them.",
+    },
+
+    { kind: "h2", text: "What this page does not claim" },
+    {
+      kind: "p",
+      html:
+        "CYDI has not been through an external accessibility audit, and we do not claim conformance with any " +
+        "particular accessibility standard or level. This page describes our own testing only. We would rather " +
+        "under-claim and keep improving than display a badge we have not earned.",
+    },
+
+    { kind: "h2", text: "Found a problem? Tell us" },
+    {
+      kind: "p",
+      html:
+        "If something on CYDI is hard or impossible for you to use, please email " +
+        '<a href="mailto:support@playcydi.com"><strong>support@playcydi.com</strong></a>. It reaches the people ' +
+        "who make the game. Telling us what you were trying to do, what happened, and what you use to browse " +
+        "(for example a particular screen reader or browser) helps a great deal, but do not worry about getting " +
+        "the details right - a short message is much better than none.",
+    },
+    {
+      kind: "p",
+      html:
+        'See also <a href="/how-to-play">How to play</a>, <a href="/privacy">Privacy</a> and ' +
+        '<a href="/terms">Terms</a>.',
+    },
+  ],
+};
+
 /** Every page this module serves. */
-export const CONTENT_PAGES: ContentPage[] = [HOW_TO_PLAY, ABOUT, CONTACT, TERMS, PRIVACY];
+export const CONTENT_PAGES: ContentPage[] = [HOW_TO_PLAY, ABOUT, CONTACT, TERMS, ACCESSIBILITY, PRIVACY];
 
 export const CONTENT_PATHS: string[] = CONTENT_PAGES.map((page) => page.path);
 

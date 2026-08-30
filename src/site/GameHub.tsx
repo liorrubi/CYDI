@@ -190,7 +190,9 @@ export default function GameHub({
   return (
     <div className="site-hub">
       <header className="site-hub-intro">
-        <h1 className="site-hub-title">More ways to play</h1>
+        {/* h2, not h1: the page's single h1 is the app header's title, and the
+            hub renders inside that chrome. */}
+        <h2 className="site-hub-title">More ways to play</h2>
         <p className="site-hub-sub">Everything in CYDI, in one place</p>
       </header>
 

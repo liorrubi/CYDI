@@ -352,6 +352,7 @@ export const SITE_NAV: { href: string; label: string }[] = [
   { href: "/contact", label: "Contact" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
+  { href: "/accessibility", label: "Accessibility" },
 ];
 
 /** The nav as plain anchors, minus a link to the page being rendered. */

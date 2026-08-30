@@ -3,6 +3,45 @@
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
 
+/* ---------------------------------------------------------------------------
+ * Figtree, SELF-HOSTED.
+ *
+ * It used to be fetched from fonts.googleapis.com at runtime, which made every
+ * visitor's browser contact Google and disclose its IP address to a third party
+ * purely to render text. Serving the face ourselves removes that contact
+ * entirely - the site now makes no request to any Google host - so it is a
+ * privacy fix first and a performance one second.
+ *
+ * ONE VARIABLE FONT covers the whole 400-900 range the design uses, so this is
+ * two small files rather than the five static weights the old URL requested.
+ * Subsets and unicode-range are copied from Google's own stylesheet, so the
+ * browser still downloads latin-ext only when a page actually needs it.
+ *
+ * Licence: SIL Open Font License 1.1 - see src/assets/fonts/OFL.txt, which is
+ * kept beside the files because the OFL requires the notice to travel with them.
+ * ------------------------------------------------------------------------- */
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 400 900;
+  /* Same as Google's stylesheet: text paints immediately in the fallback and
+     swaps when the face lands, so there is no invisible-text (FOIT) window. */
+  font-display: swap;
+  src: url("../assets/fonts/figtree-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("../assets/fonts/figtree-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /*
  * Web-only stylesheet for the public site surfaces (art directions 3a and 4a):
  * the marketing home at "/" and the SEO/practice pages.
@@ -63,9 +102,9 @@
   --site-cta-shadow: #4b4bcc;
   --site-cta-ink: #0f1018;
 
-  /* Figtree is loaded at runtime by SiteShell (web only, never in the APK), so
-     the fallback stack is the app's own font and the page is readable before
-     and without it. */
+  /* Figtree is self-hosted (see the @font-face block at the top of this file).
+     The fallback stack is the app's own font, so the page is readable while the
+     face loads and if it never does. */
   --site-font: Figtree, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   background: var(--site-stage);
@@ -2318,4 +2357,40 @@
     margin-left: auto;
     width: auto;
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * Skip link (WCAG 2.4.1 Bypass Blocks)
+ *
+ * Off-screen until it is focused, so it changes nothing visually for anyone
+ * using a mouse or touch, and it is the first thing TAB reaches on the page.
+ *
+ * Positioned rather than `display:none` / `visibility:hidden` on purpose -
+ * either of those would take it out of the focus order and defeat the point.
+ * ------------------------------------------------------------------------- */
+.site-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 999;
+  padding: 12px 18px;
+  border-radius: 0 0 var(--radius-md) 0;
+  background: var(--color-primary-fill);
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.site-skip-link:focus-visible,
+.site-skip-link:focus {
+  left: 0;
+  outline: 3px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+/* The landmark is a focus target, not a control: it must not draw a ring of its
+   own when the skip link sends focus into it. */
+.site-main:focus {
+  outline: none;
 }

@@ -38,7 +38,9 @@ artist-source-files/
 # design-sync (claude.ai/design sync)
 .ds-sync/
 ds-bundle/
-types/
+# Leading slash: only the generated tree at the repo root. Unanchored, this
+# also matched src/types/, so new files there were silently untracked.
+/types/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules

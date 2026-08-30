@@ -2,7 +2,8 @@
  * © 2026 Lior Rubinovich. All rights reserved.
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
-import { useCallback, useState } from "react";
+import { Suspense, lazy, useCallback, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import PassPlayGame, { type PassPlayProgress } from "../components/passplay/PassPlayGame";
@@ -12,7 +13,7 @@ import { trackEvent } from "../services/analytics";
 import { getPlayerName, setPlayerName } from "../services/playerProfileStore";
 import { DIFFICULTY_OPTIONS, ROUND_COUNT_OPTIONS, type MultiplayerDifficulty, type RoundCount } from "../multiplayer/protocol";
 import { cleanPlayerName, duplicateNameIndex, PASS_PLAY_LIMITS, type PassPlaySetup } from "../passplay/passPlayGame";
-import { toHome, toSettings, toShapeChallenge } from "../app/routes";
+import { toHome, toPassPlay, toSettings, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type PassPlayScreenProps = {
@@ -42,6 +43,15 @@ const DIFFICULTY_HINTS: Record<MultiplayerDifficulty, string> = {
  * raising the cap to three or four is then a change to this array and the
  * validation below, and nothing else.
  */
+/**
+ * The web's 2 Players entry (art direction 3a). Lazy and web-only: Android never
+ * takes this branch, so the chunk is never requested and the existing form
+ * renders exactly as before.
+ *
+ * Fully controlled by this screen - it holds no pass-play state of its own.
+ */
+const PassPlayEntry = lazy(() => import("../site/PassPlayEntry"));
+
 export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
   const [setup, setSetup] = useState<PassPlaySetup | null>(null);
   // Seat 1 is prefilled with whatever name this device already plays under;
@@ -104,6 +114,26 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
     setSetup({ names: names.map((name, seat) => cleanPlayerName(name, seat)), rounds, difficulty });
   }
 
+  /*
+   * Web-only header wiring for the two consistency fixes.
+   *
+   *  socialRankInHeader  the Social Rank pill moves into the header's status
+   *                      row instead of floating alone under it. Presentation
+   *                      only - the badge, and every bit of Social Rank logic
+   *                      behind it, is the same component either way.
+   *
+   *  shopFromHere        the coin pill is the shop shortcut everywhere else in
+   *                      the game (AppHeader turns CoinIndicator into a button
+   *                      exactly when it is given this). Leaving it out here is
+   *                      what made an identical-looking control dead on this
+   *                      screen, so the web now passes it too.
+   *
+   * Android is untouched: both are undefined there, so the header renders the
+   * plain coin span and the badge stays where it has always been.
+   */
+  const onWeb = !Capacitor.isNativePlatform();
+  const shopFromHere = onWeb ? () => onNavigate(toShop(toPassPlay())) : undefined;
+
   if (setup) {
     const backToSetup = () => {
       setProgress(null);
@@ -113,12 +143,13 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
       <div className="screen">
         <AppHeader
           title="2 Players"
+          showSocialRank={onWeb}
           onBack={() => leave(backToSetup)}
           onNavigateToHome={() => leave(goHome)}
           onNavigateToSettings={() => leave(() => onNavigate(toSettings()))}
           onNavigateToShapeChallenge={() => leave(() => onNavigate(toShapeChallenge()))}
         />
-        <SocialPointsBadge />
+        {!onWeb && <SocialPointsBadge />}
         <PassPlayGame setup={setup} onExit={backToSetup} onProgress={handleProgress} />
         {pendingExit && <QuitConfirmation onKeepPlaying={() => setPendingExit(null)} onQuit={confirmQuit} />}
       </div>
@@ -130,13 +161,38 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
       <AppHeader
         title="2 Players"
         subtitle="Take turns on this device"
+        showSocialRank={onWeb}
         onBack={goHome}
         onNavigateToHome={goHome}
+        onNavigateToShop={shopFromHere}
         onNavigateToSettings={() => onNavigate(toSettings())}
         onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
       />
-      <SocialPointsBadge />
+      {!onWeb && <SocialPointsBadge />}
 
+      {/* The web gets the 3a composition; Android keeps the form below,
+          unchanged. Both drive the same state and the same handleStart. */}
+      {!Capacitor.isNativePlatform() && (
+        <Suspense fallback={<div className="mp-form" />}>
+          <PassPlayEntry
+            names={names}
+            onNameChange={updateName}
+            maxNameLength={PASS_PLAY_LIMITS.MAX_NAME_LENGTH}
+            rounds={rounds}
+            roundOptions={ROUND_COUNT_OPTIONS}
+            onRounds={(count) => setRounds(count as RoundCount)}
+            difficulty={difficulty}
+            difficultyOptions={DIFFICULTY_OPTIONS}
+            difficultyLabel={(option) => DIFFICULTY_LABELS[option as MultiplayerDifficulty]}
+            difficultyHint={DIFFICULTY_HINTS[difficulty]}
+            onDifficulty={(option) => setDifficulty(option as MultiplayerDifficulty)}
+            formError={formError}
+            onStart={handleStart}
+          />
+        </Suspense>
+      )}
+
+      {Capacitor.isNativePlatform() && (
       <div className="mp-form">
         <section className="mp-explainer">
           <h2 className="mp-panel-heading">How it works</h2>
@@ -222,6 +278,7 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
           Start Game
         </Button>
       </div>
+      )}
     </div>
   );
 }

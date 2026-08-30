@@ -5,6 +5,21 @@ import type { PenColorId, PenSkinId } from "./constants";
 
 export type { Screen };
 
+/**
+ * The public marketing home at "/" (web only). Distinct from `toHome()`, which
+ * is the game's own home screen - the site links into that one, never replaces
+ * it, so Daily Challenge, Create, My Challenges and the Shop keep their single
+ * entry point.
+ */
+export function toSiteHome(): Screen {
+  return { name: "siteHome" };
+}
+
+/** The SEO/practice landing presentation (web only). */
+export function toSeoLanding(): Screen {
+  return { name: "seoLanding" };
+}
+
 export function toHome(): Screen {
   return { name: "home" };
 }

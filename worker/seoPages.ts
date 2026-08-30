@@ -33,6 +33,13 @@ import {
   SHAPE_COUNT,
   SIZE_TOLERANCE_PERCENT,
 } from "../src/content/publicFacts";
+// The 4a page's structured content. Shared with the client presentation
+// (src/site/SeoPracticePage.tsx) so the indexed text and the rendered text can
+// never disagree - and so neither one restates a product fact by hand.
+// Called with no argument on purpose: the Worker renders for a crawler, before
+// any client-side catalog swap can have happened, so it states the build-time
+// counts - the same ones the rest of this file uses.
+import { siteFaq } from "../src/content/siteContent";
 
 /**
  * The app's real listing URL. Duplicated from src/services/nativeShare.ts rather
@@ -76,6 +83,13 @@ export type SeoPage = {
   /** Secondary Google Play line. Omitted on the homepage, whose web home screen
    * already renders its own "Get the Android App" card (HomeScreen.tsx). */
   androidCta?: boolean;
+  /**
+   * Renders the shared FAQ (src/content/siteContent.ts) into the crawlable
+   * block. Set on the shape/practice pages, which are the ones the app renders
+   * with the 4a presentation - so the same four questions are in the HTML for a
+   * crawler that runs no JavaScript, and on screen for a visitor who does.
+   */
+  faq?: boolean;
 };
 
 const HOME: SeoPage = {
@@ -118,6 +132,7 @@ const ACCURACY_TEST: SeoPage = {
   ],
   cta: { href: "/draw-shapes-online", label: "Play More Drawing Challenges" },
   androidCta: true,
+  faq: true,
 };
 
 const PERFECT_CIRCLE: SeoPage = {
@@ -149,6 +164,7 @@ const PERFECT_CIRCLE: SeoPage = {
   ],
   cta: { href: "/draw-shapes-online", label: "Play More Drawing Challenges" },
   androidCta: true,
+  faq: true,
 };
 
 const PERFECT_STAR: SeoPage = {
@@ -179,6 +195,7 @@ const PERFECT_STAR: SeoPage = {
   ],
   cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
   androidCta: true,
+  faq: true,
 };
 
 const PERFECT_HEART: SeoPage = {
@@ -209,6 +226,7 @@ const PERFECT_HEART: SeoPage = {
   ],
   cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
   androidCta: true,
+  faq: true,
 };
 
 const DRAW_SHAPES: SeoPage = {
@@ -410,6 +428,16 @@ export function renderSeoSection(page: SeoPage): string {
   const cta = page.cta
     ? `<p class="cydi-seo-cta"><a href="${escapeHtml(page.cta.href)}">${escapeHtml(page.cta.label)} &rarr;</a></p>`
     : "";
+  // A definition list rather than <details>: it must be readable with no CSS and
+  // no JavaScript, which is the whole point of this block.
+  const faq = page.faq
+    ? `<h2 class="cydi-seo-h2">Questions people ask</h2>` +
+      `<dl class="cydi-seo-faq">` +
+      siteFaq().map(
+        (entry) => `<dt>${escapeHtml(entry.question)}</dt><dd>${escapeHtml(entry.answer)}</dd>`,
+      ).join("") +
+      `</dl>`
+    : "";
   // Deliberately the quietest element in the block: plain small text under the
   // primary CTA, never a badge or a button.
   const android = page.androidCta
@@ -439,6 +467,9 @@ export function renderSeoSection(page: SeoPage): string {
     `.cydi-seo ul.cydi-seo-practice li{display:flex;flex-direction:column;gap:.15rem}` +
     `.cydi-seo ul.cydi-seo-practice a{font-weight:600}` +
     `.cydi-seo ul.cydi-seo-practice span{font-size:.9rem;opacity:.75}` +
+    `.cydi-seo-faq{margin:0 0 1rem}` +
+    `.cydi-seo-faq dt{font-weight:600;margin:0 0 .2rem}` +
+    `.cydi-seo-faq dd{margin:0 0 .9rem;opacity:.85}` +
     `.cydi-seo-cta{margin:1.5rem 0 .5rem!important;opacity:1!important}` +
     `.cydi-seo-cta a{display:inline-block;padding:.6rem 1.1rem;border:1px solid currentColor;` +
     `border-radius:.5rem;font-weight:600;text-decoration:none}` +
@@ -461,6 +492,7 @@ export function renderSeoSection(page: SeoPage): string {
     `<h1>${escapeHtml(page.h1)}</h1>` +
     paragraphs +
     linkGroup +
+    faq +
     (page.paragraphsAfterLinkGroup ?? []).map((text) => `<p>${escapeHtml(text)}</p>`).join("") +
     `<ul>${links}</ul>` +
     cta +

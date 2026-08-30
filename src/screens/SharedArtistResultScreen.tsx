@@ -1,4 +1,5 @@
 import AppHeader from "../components/AppHeader";
+import { useExplicitHome } from "../app/explicitHome";
 import Button from "../components/Button";
 import ScoreCard from "../components/ScoreCard";
 import ShapeOverlayCanvas from "../components/ShapeOverlayCanvas";
@@ -33,6 +34,10 @@ type SharedArtistResultScreenProps = {
  * continue in both directions - see ArtistPackScreen's `replyTo` handling.
  */
 export default function SharedArtistResultScreen({ data, onNavigate }: SharedArtistResultScreenProps) {
+  // Explicit Home: the public site on the web, the game home on Android.
+  const explicitHome = useExplicitHome();
+  const goHome = explicitHome ?? (() => onNavigate(toHome()));
+
   const from = toSharedArtistResult(data);
   const canDrawItBack = data.artworkId !== undefined && resolvePublishedArtwork(data.packId, data.artworkId) !== undefined;
 
@@ -67,7 +72,7 @@ export default function SharedArtistResultScreen({ data, onNavigate }: SharedArt
       </p>
       <p className="artist-artwork-credit artist-artwork-credit-result">🎨 Inspired by {data.artistName}</p>
       <div className="button-row">
-        <Button variant="secondary" onClick={() => onNavigate(toHome())}>
+        <Button variant="secondary" onClick={goHome}>
           Home
         </Button>
         <Button variant="secondary" onClick={() => onNavigate(toArtistPack(data.packId))}>

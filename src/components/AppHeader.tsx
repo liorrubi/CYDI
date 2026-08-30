@@ -5,15 +5,28 @@ import {
   playLogoPeekSound,
 } from "../engine/soundEngine";
 import AppLogo from "./AppLogo";
+import { useExplicitHome } from "../app/explicitHome";
 import ChampionBadge from "./ChampionBadge";
 import CoinIndicator from "./CoinIndicator";
 import DailyChestButton from "./DailyChestButton";
 import ShareGameButton from "./ShareGameButton";
+import { SocialPointsBadge } from "./SocialPointsBadge";
 import SpecialChallengeButton from "./SpecialChallengeButton";
 
 type AppHeaderProps = {
   title?: string;
   subtitle?: string;
+  /**
+   * Renders the Social Rank pill inside the header's status row, beside the
+   * champion badge and coins.
+   *
+   * OPTIONAL AND OFF BY DEFAULT, so every existing caller is untouched. The two
+   * social modes used to drop <SocialPointsBadge /> in as a bare sibling right
+   * under the header, which left it floating alone at the far left of the page,
+   * outside the composition. On the web they now hand it to the header instead;
+   * Android keeps rendering it exactly where it always did.
+   */
+  showSocialRank?: boolean;
   onBack?: () => void;
   onNavigateToAchievements?: () => void;
   onNavigateToInstructions?: () => void;
@@ -27,6 +40,7 @@ type AppHeaderProps = {
 export default function AppHeader({
   title,
   subtitle,
+  showSocialRank = false,
   onBack,
   onNavigateToAchievements,
   onNavigateToShop,
@@ -35,6 +49,11 @@ export default function AppHeader({
   onNavigateToHome,
   onNavigateToSettings,
 }: AppHeaderProps) {
+  // On the web the logo means the public home at "/"; on Android it keeps
+  // meaning whatever the screen passed, which is the game's own home screen.
+  const explicitHome = useExplicitHome();
+  const goHome = explicitHome ?? onNavigateToHome;
+
   return (
     <header className="app-header">
       {onBack && (
@@ -50,13 +69,13 @@ export default function AppHeader({
           ←
         </button>
       )}
-      {onNavigateToHome ? (
+      {goHome ? (
         <button
           type="button"
           className="app-logo-button"
           onClick={() => {
             playLogoPeekSound();
-            onNavigateToHome();
+            goHome();
           }}
           aria-label="Go to home"
         >
@@ -75,6 +94,11 @@ export default function AppHeader({
       )}
       <div className="app-header-actions">
         <ChampionBadge />
+        {showSocialRank && (
+          <span className="app-header-social">
+            <SocialPointsBadge />
+          </span>
+        )}
         <CoinIndicator
           onClick={
             onNavigateToShop &&

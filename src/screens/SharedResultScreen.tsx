@@ -1,4 +1,5 @@
 import AppHeader from "../components/AppHeader";
+import { useExplicitHome } from "../app/explicitHome";
 import Button from "../components/Button";
 import ScoreCard from "../components/ScoreCard";
 import ResultComparison from "../components/ResultComparison";
@@ -25,6 +26,10 @@ type SharedResultScreenProps = {
 
 /** Read-only landing page for a "Share Result Back" link - shows a friend's score on a challenge, with no live play session of its own. */
 export default function SharedResultScreen({ data, onNavigate }: SharedResultScreenProps) {
+  // Explicit Home: the public site on the web, the game home on Android.
+  const explicitHome = useExplicitHome();
+  const goHome = explicitHome ?? (() => onNavigate(toHome()));
+
   const from = toSharedResult(data);
 
   function handlePlayThisChallenge() {
@@ -58,7 +63,7 @@ export default function SharedResultScreen({ data, onNavigate }: SharedResultScr
       <StarRating score={data.score.total} size={44} />
       <ResultComparison target={data.target} attempt={data.attempt} attemptLabel="Their drawing" />
       <div className="button-row">
-        <Button variant="secondary" onClick={() => onNavigate(toHome())}>
+        <Button variant="secondary" onClick={goHome}>
           Home
         </Button>
         <Button onClick={handlePlayThisChallenge}>Play This Challenge</Button>

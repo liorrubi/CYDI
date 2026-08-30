@@ -4,6 +4,16 @@ import type { Point } from "../types/Point";
 type ShapePreviewIconProps = {
   shape: ShapeDefinition;
   size?: number;
+  /**
+   * Extra class on the <svg>, appended AFTER "shape-icon" so the base class and
+   * every existing rule that targets it still apply. Web-only callers (the
+   * public site, src/site/) use it to opt into their own colour and draw-in
+   * animation; omitting it - which every game screen does - leaves the rendered
+   * markup byte-identical to before this prop existed.
+   */
+  className?: string;
+  /** Stroke width override. Defaults to the value the game has always used. */
+  strokeWidth?: number;
 };
 
 /** Splits points into sub-arrays at the given break indices (each index starts a new segment). */
@@ -19,11 +29,17 @@ function sliceIntoSegments(points: Point[], breaks: number[] | undefined): Point
   return segments;
 }
 
-export default function ShapePreviewIcon({ shape, size = 40 }: ShapePreviewIconProps) {
+export default function ShapePreviewIcon({ shape, size = 40, className, strokeWidth = 2.5 }: ShapePreviewIconProps) {
   const path = shape.generate(size);
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shape-icon" aria-hidden="true">
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className={className ? `shape-icon ${className}` : "shape-icon"}
+      aria-hidden="true"
+    >
       {sliceIntoSegments(path.points, path.breaks).map((segment, i) => (
         // pathLength normalises the stroke to 1 unit, so a caller can animate it with
         // stroke-dashoffset: 1 -> 0 whatever the shape's real length (see .home-card-preview).
@@ -34,7 +50,7 @@ export default function ShapePreviewIcon({ shape, size = 40 }: ShapePreviewIconP
           pathLength={1}
           fill="none"
           stroke="currentColor"
-          strokeWidth="2.5"
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
         />

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import ChestIcon from "../components/ChestIcon";
@@ -219,6 +220,46 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
         <p className="shop-balance-label">Your balance</p>
         <p className="shop-balance-amount">🪙 {coins}</p>
       </div>
+      {/*
+        * What the Shop actually reaches, stated for the visitor who arrived
+        * from 2 Players or Multiplayer and is wondering whether buying
+        * something changes those modes.
+        *
+        * This is NOT "Classic only" - the code says otherwise on both halves,
+        * and the copy follows the code:
+        *
+        *   Drawing Pens / Ink Colors  cosmetic, and they DO carry into every
+        *       mode. PassPlayGame and PlayTogetherRoom both read
+        *       getSelectedColor() and pass it as the canvas strokeColor, and
+        *       DrawingCanvas defaults penSkin to getSelectedSkin(). Neither
+        *       touches scoring.
+        *   Chest Keys / Mega Cards    coins and Mega Album progress, neither of
+        *       which the social modes touch. Nothing under components/passplay
+        *       or components/multiplayer calls addCoins, and roomDO.ts is
+        *       structurally barred from importing coinsStore at all.
+        *
+        * And coins are NOT a Classic-only currency, so the copy must not say so.
+        * Every addCoins/addCoinsPending caller is single-player, but there are
+        * seven of them: Classic rounds (app/shapeRoundOutcome.ts), the Daily
+        * Challenge, the Mega Challenge, the Special Challenge, Artist Packs,
+        * achievements and chests. Classic is the everyday one, which is what the
+        * link below offers - not the only one, which is what it must not claim.
+        *
+        * Web only, so Android renders precisely what it did before.
+        */}
+      {!Capacitor.isNativePlatform() && (
+        <div className="card shop-scope-note">
+          <p className="shop-scope-note-body">
+            <strong>Pens and ink colors are cosmetic and follow you into every mode</strong> — Classic, 2 Players and
+            Multiplayer alike. They never affect scoring. <strong>Chest Keys and Mega Cards are single-player progression:</strong>{" "}
+            buying them changes nothing in 2 Players or Multiplayer. Coins are earned across single-player play — Classic
+            rounds, the Daily, Mega and Special Challenges, Artist Packs, achievements and chests.
+          </p>
+          <button type="button" className="shop-scope-note-link" onClick={() => onNavigate(toShapeChallenge())}>
+            Play Classic ›
+          </button>
+        </div>
+      )}
       <h2>Chest Keys</h2>
       <div className="shop-product-list">
         {CHEST_TIERS.map((tier) => {

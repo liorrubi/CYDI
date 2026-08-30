@@ -1,0 +1,673 @@
+/*
+ * © 2026 Lior Rubinovich. All rights reserved.
+ * Unauthorized copying, modification, distribution, or commercial use is prohibited.
+ */
+
+/*
+ * WEB ONLY. The 3a visual language, carried into the browser game entry screens
+ * (/play and /play/classic) so walking in from the site does not look like
+ * changing product halfway through.
+ *
+ * SCOPE: every selector below is a descendant of `.site-game`, and that wrapper
+ * is rendered by src/site/SiteGameSkin.tsx, which App.tsx mounts only when
+ * Capacitor reports a non-native platform. Nothing here can match inside the
+ * Android WebView, and no shared global selector is modified - global.css is
+ * untouched. Remove the wrapper and the screens render exactly as they always
+ * did.
+ *
+ * HOW IT WORKS, and why it is this short: the game is already fully
+ * token-driven and already HAS a dark theme whose contrast ratios were worked
+ * out and commented in global.css. So the skin re-declares those token VALUES
+ * on the wrapper - it does not invent a palette - and then layers the four
+ * things that actually make 3a look like 3a: Figtree, the dark stage, bright
+ * paper for anything showing a drawing, and the CTA and border treatment.
+ *
+ * WHAT IT DOES NOT TOUCH: layout structure, card order, unlock and locked
+ * states, progress values, coin display, or any action. Only presentation.
+ */
+
+.site-game {
+  /* Same dark values :root[data-theme="dark"] sets in global.css, scoped here
+     so the player's own theme choice is untouched and restored on exit. */
+  color-scheme: dark;
+  --color-primary: #7b7bfa;
+  --color-primary-dark: #4444d6;
+  --color-accent: #ffc94d;
+  --color-success: #3ecb85;
+  --color-danger: #ff6b7a;
+  --color-text: #eef0fa;
+  --color-text-muted: #a4a8bd;
+  --color-bg: #14151f;
+  --color-border: #33354a;
+  --color-page-bg: #14151f;
+  --color-on-success: #0f2419;
+  --color-on-muted: #1e2030;
+  --color-control-border: #8b90a8;
+  --color-primary-text: #a3a0ff;
+  --accent-blue-text: #8fb8e8;
+  --accent-purple-text: #c3b0f2;
+  --accent-pink-text: #f0a8ce;
+  --accent-green-text: #6fd9a8;
+  --accent-orange-text: #f0a868;
+  --accent-gold-text: #ffd166;
+
+  /* 3a's panel, a touch cooler than the game's own dark card. */
+  --color-card: #1b1d2b;
+
+  --site-stage: #14151f;
+  --site-panel: #1b1d2b;
+  --site-hairline: #24263a;
+  --site-edge: #33354a;
+  --site-paper: #ffffff;
+  --site-ink: #1e202e;
+  --site-ink-muted: #6b6f80;
+  --site-cta: #7b7bfa;
+  --site-cta-shadow: #4b4bcc;
+  --site-cta-ink: #0f1018;
+  --site-font: Figtree, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  background-color: var(--site-stage);
+  color: var(--color-text);
+  font-family: var(--site-font);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* The stage owns the background; the screen inside it is transparent. */
+.site-game .screen {
+  background: transparent;
+  gap: var(--space-5);
+}
+
+/* --------------------------------------------------------------- header --- */
+
+.site-game .app-header {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--site-hairline);
+}
+
+/* 3a puts the mark on a bright tile - the one piece of chrome that is paper. */
+.site-game .app-logo-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background-color: var(--site-paper);
+  color: var(--site-ink);
+}
+
+.site-game .app-header-text h1 {
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.site-game .app-header-back {
+  background-color: var(--site-panel);
+  border: 1px solid var(--site-edge);
+  border-radius: 14px;
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+.site-game .app-header-back:hover {
+  border-color: var(--color-text-muted);
+}
+
+/* The header shortcut buttons read as one row of quiet pills. */
+.site-game .achievements-shortcut,
+.site-game .settings-shortcut,
+.site-game .share-game-shortcut,
+.site-game .info-shortcut,
+.site-game .daily-chest-shortcut,
+.site-game .special-challenge-shortcut,
+.site-game .coin-indicator {
+  background-color: var(--site-panel);
+  border: 1px solid var(--site-hairline);
+  border-radius: 12px;
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------- cards --- */
+
+.site-game .card,
+.site-game .home-card {
+  background-color: var(--site-panel);
+  border: 1px solid var(--site-hairline);
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+/* The accent stripe is how a player tells the cards apart - kept, restyled. */
+.site-game .home-card {
+  border-top-width: 3px;
+}
+
+.site-game .home-card h2 {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.site-game .home-card.home-card-featured {
+  border-color: var(--site-edge);
+  box-shadow: inset 0 0 0 1px rgba(195, 176, 242, 0.3);
+  transform: none;
+}
+
+.site-game .home-card:hover {
+  border-color: var(--site-edge);
+}
+
+/* ----------------------------------------------------------- mode tabs --- */
+
+.site-game .home-mode-tabs {
+  background-color: var(--site-panel);
+  border: 1px solid var(--site-hairline);
+  border-radius: 14px;
+}
+
+.site-game .home-mode-tab {
+  font-weight: 700;
+}
+
+.site-game .home-mode-tab-active {
+  background-color: var(--site-stage);
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+/* --------------------------------------------------------------- buttons -- */
+
+/* 3a's CTA: a coloured slab with a hard bottom edge. */
+.site-game .btn-primary {
+  background-color: var(--site-cta);
+  color: var(--site-cta-ink);
+  border-radius: 15px;
+  box-shadow: 0 4px 0 var(--site-cta-shadow);
+  font-weight: 800;
+}
+
+.site-game .btn-primary:hover {
+  background-color: var(--site-cta);
+  filter: brightness(1.06);
+}
+
+.site-game .btn-primary:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--site-cta-shadow);
+}
+
+.site-game .btn-secondary {
+  background-color: var(--site-panel);
+  border: 1px solid var(--site-edge);
+  color: var(--color-text);
+  border-radius: 15px;
+  font-weight: 700;
+}
+
+.site-game .btn-secondary:hover {
+  border-color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------- category cards --- */
+
+/*
+ * Category cards are ALREADY bright cards: ShapeChallengeScreen gives each one
+ * its own pastel gradient as an inline style (hsl(hue 70% 97%) -> 55% 91%),
+ * which is how a player tells the categories apart and which no stylesheet can
+ * - or should - override. So the skin leaves the colour alone and fixes what
+ * the dark stage actually broke: the ink on top of it. Re-declaring the text
+ * tokens locally flips every descendant back to dark type, including ones this
+ * file never names.
+ */
+.site-game .category-card {
+  --color-text: var(--site-ink);
+  --color-text-muted: var(--site-ink-muted);
+  --color-primary-text: var(--color-primary-dark);
+  color: var(--site-ink);
+  border: 1px solid rgba(30, 32, 46, 0.1);
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.site-game .category-card:hover {
+  border-color: rgba(30, 32, 46, 0.22);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.32);
+}
+
+/* Its progress track sits on that light card, so it keeps light-mode contrast. */
+.site-game .category-card-progress-track {
+  background-color: rgba(30, 32, 46, 0.12);
+}
+
+/* These sit on the dark stage, so they invert. */
+.site-game .progress-bar-track,
+.site-game .artist-pack-progress-track,
+.site-game .mega-entry-progress-track {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ---------------------------------------------------------- shape tiles --- */
+
+/*
+ * The one place 3a is emphatic about: anything showing a DRAWING is a bright
+ * card on the dark stage. Flipping the tile to paper means the ink tokens have
+ * to flip with it, which is why this re-declares them locally rather than
+ * hand-picking a colour per child - every descendant then reads correctly,
+ * including ones this file never names.
+ */
+.site-game .shape-tile {
+  --color-text: var(--site-ink);
+  --color-text-muted: var(--site-ink-muted);
+  --color-accent: #f5b400;
+  background-color: var(--site-paper);
+  color: var(--site-ink);
+  border: 1px solid var(--site-hairline);
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.site-game .shape-tile:not(.shape-tile-locked):hover {
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.32);
+}
+
+/* Locked stays locked, and stays legible on paper. */
+.site-game .shape-tile-locked {
+  background-color: rgba(255, 255, 255, 0.72);
+}
+
+.site-game .shape-grid {
+  gap: var(--space-3);
+}
+
+/* ------------------------------------------------------------ misc text --- */
+
+.site-game .status-text,
+.site-game .best-summary,
+.site-game .journey-stats {
+  color: var(--color-text-muted);
+}
+
+.site-game h1,
+.site-game h2,
+.site-game h3 {
+  letter-spacing: -0.02em;
+}
+
+/* The web-only "play your way" block and install card keep the card treatment. */
+.site-game .home-ways {
+  background-color: var(--site-panel);
+  border: 1px solid var(--site-hairline);
+  border-radius: 20px;
+}
+
+/* --------------------------------------------------- multiplayer (web) --- */
+
+/*
+ * Play Together's entry, setup and lobby surfaces, in the same language as the
+ * rest of the skin. Presentation only: not one selector here changes a control,
+ * a limit, a timing or a piece of copy - the protocol, the room logic and the
+ * sockets never see CSS.
+ *
+ * The mode's pink accent is kept and leaned into, because it is how a player
+ * tells Multiplayer apart from Classic and 2 Players everywhere else on the
+ * site. Almost nothing else is needed: these screens were already written
+ * against the design tokens, so the dark values on `.site-game` do most of the
+ * work and this only adds 3a's panels, radii, fields and CTA.
+ */
+
+.site-game .mp-explainer,
+.site-game .mp-panel,
+.site-game .mp-lobby,
+.site-game .mp-waiting-panel {
+  background-color: var(--site-panel);
+  border: 1px solid var(--site-hairline);
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+/* The two entry cards keep their pink edge; the primary one keeps its ring. */
+.site-game .mp-entry-card {
+  border-top: 3px solid var(--accent-pink-text);
+  border-radius: 20px;
+}
+
+.site-game .mp-entry-card-primary {
+  border-top-width: 4px;
+  box-shadow: inset 0 0 0 1px rgba(240, 168, 206, 0.32);
+}
+
+.site-game .mp-entry-title {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Fields: dark, hairline, 3a radius - and a focus ring that reads on the stage. */
+.site-game .mp-input {
+  background-color: var(--site-stage);
+  border: 1px solid var(--site-edge);
+  border-radius: 14px;
+  color: var(--color-text);
+}
+
+.site-game .mp-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.site-game .mp-input:focus-visible {
+  outline: 3px solid var(--accent-pink-text);
+  outline-offset: 2px;
+  border-color: var(--accent-pink-text);
+}
+
+.site-game .mp-field-label,
+.site-game .mp-panel-heading,
+.site-game .mp-invite-heading {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Round-count and difficulty chips. */
+.site-game .mp-chip {
+  background-color: var(--site-panel);
+  border: 1px solid var(--site-edge);
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.site-game .mp-chip:hover {
+  border-color: var(--color-text-muted);
+}
+
+.site-game .mp-chip-active {
+  background-color: var(--site-cta);
+  border-color: var(--site-cta);
+  color: var(--site-cta-ink);
+}
+
+/* The room code is the thing people read aloud - given the pink accent and a
+   dark plate, but left monospace, which is what makes a code legible. */
+.site-game .mp-invite-code-block {
+  background-color: var(--site-stage);
+  border: 1px solid var(--site-edge);
+  border-radius: 18px;
+  padding: var(--space-4) var(--space-5);
+}
+
+.site-game .mp-room-code {
+  color: var(--accent-pink-text);
+}
+
+.site-game .mp-invite-label {
+  color: var(--color-text-muted);
+}
+
+/* The QR stays on paper - it has to scan. */
+.site-game .mp-qr,
+.site-game .mp-invite-qr img,
+.site-game .mp-invite-qr canvas,
+.site-game .mp-invite-qr svg {
+  background-color: var(--site-paper);
+  border-radius: 12px;
+}
+
+.site-game .mp-roster-row {
+  padding: var(--space-2) var(--space-3);
+  border-radius: 12px;
+  background-color: var(--site-stage);
+}
+
+.site-game .mp-roster-name {
+  font-weight: 700;
+}
+
+/* The room's own primary action gets 3a's CTA, like every other primary. */
+.site-game .mp-primary-action.btn-primary {
+  border-radius: 15px;
+  box-shadow: 0 4px 0 var(--site-cta-shadow);
+}
+
+.site-game .mp-error {
+  border-radius: 14px;
+}
+
+/* Tracks on the dark stage invert, exactly like the progress bars above. */
+.site-game .mp-timer-track,
+.site-game .mp-social-progress-bar {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ------------------------------------------------- the rest of the game --- */
+
+/*
+ * The skin now covers EVERY game screen on the web (App.tsx skins anything that
+ * is not a site surface), so this section carries the shared families rather
+ * than naming screens. It is small on purpose: an audit of global.css found the
+ * dark theme is entirely TOKEN-driven - not one `[data-theme="dark"] .foo`
+ * selector exists - so re-declaring the token values on `.site-game` already
+ * reproduces the shipped dark theme everywhere. What is left is 3a's polish:
+ * radii, hairlines, fields and the CTA.
+ */
+
+/* Panels that carry their own surface rather than using `.card`. */
+.site-game .onboarding-card,
+.site-game .mp-tutorial-card,
+.site-game .tutorial-spotlight-card,
+.site-game .pp-handoff-card,
+.site-game .pp-compare,
+.site-game .friend-challenge-intro-card,
+.site-game .create-discovery-card,
+.site-game .keep-playing-card,
+.site-game .daily-leaderboard-card,
+.site-game .instructions-card,
+.site-game .credits-card,
+.site-game .settings-card,
+.site-game .empty-state {
+  border-radius: 20px;
+}
+
+/* Every text field the game has, given the same treatment as the room fields. */
+.site-game input[type="text"],
+.site-game input[type="number"],
+.site-game input:not([type]),
+.site-game textarea,
+.site-game select,
+.site-game .daily-name-input,
+.site-game .password-prompt-input,
+.site-game .backup-code-textarea,
+.site-game .double-offer-input {
+  background-color: var(--site-stage);
+  border: 1px solid var(--site-edge);
+  border-radius: 14px;
+  color: var(--color-text);
+}
+
+.site-game input::placeholder,
+.site-game textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Selectable chips - difficulty here, rounds in the room setup. */
+.site-game .difficulty-chip {
+  background-color: var(--site-panel);
+  border: 1px solid var(--site-edge);
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.site-game .difficulty-chip-selected {
+  background-color: var(--site-cta);
+  border-color: var(--site-cta);
+  color: var(--site-cta-ink);
+}
+
+/* 2 Players: the two attempts sit side by side as separate cards. */
+.site-game .pp-compare-card {
+  background-color: var(--site-stage);
+  border: 1px solid var(--site-hairline);
+  border-radius: 16px;
+}
+
+.site-game .pp-compare-card-win {
+  border-color: var(--accent-purple-text);
+  box-shadow: inset 0 0 0 1px var(--accent-purple-text);
+}
+
+/*
+ * Stars: `.star-filled` is a fixed dark gold, which is right on paper and far
+ * too dark on the stage. Point it at the gold token instead, so it follows
+ * whichever surface it is sitting on.
+ */
+.site-game .star-filled {
+  color: var(--accent-gold-text);
+}
+
+/* Paper surfaces flip the ink tokens back, stars included. */
+.site-game .shape-tile,
+.site-game .mega-card-back,
+.site-game .drawing-canvas {
+  --accent-gold-text: #b98600;
+}
+
+/*
+ * INTENTIONALLY BRIGHT - left alone. The drawing canvas is 3a's paper surface,
+ * and the reward/collection art (chests, Mega cards, Artist packs, the double
+ * -coins banner) is branded colour that already carries its own ink. Skinning
+ * those would flatten the thing they exist to celebrate.
+ */
+.site-game .drawing-canvas {
+  border-radius: 14px;
+}
+
+/* --------------------------------------------------------- site strip ----- */
+
+/*
+ * A single quiet line tying the game back to the site it was entered from.
+ * Rendered by SiteGameSkin, not by any game screen.
+ */
+.site-game-strip {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 0 var(--space-4) var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.site-game-strip a,
+.site-game-strip-menu {
+  color: var(--color-primary-text);
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.site-game-strip a:hover,
+.site-game-strip-menu:hover {
+  text-decoration: underline;
+}
+
+.site-game-strip-sep {
+  color: var(--site-faint);
+}
+
+/* The supporting line - present, but never louder than the two actions. */
+.site-game-strip-note {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+/* ---------------------------------------------------------------------------
+ * Social Rank, inside the header status row
+ *
+ * The badge itself is unchanged - same component, same logic, same markup. It
+ * is only re-seated: AppHeader now accepts it into .app-header-actions on the
+ * web, so it reads as one of the player-status controls beside the champion
+ * badge and coins rather than as a stray pill at the far left of the page.
+ *
+ * .social-badge is laid out for the old position (block-level, own bottom
+ * margin, align-self:flex-start). These three lines undo exactly that for the
+ * in-header case, scoped under .site-game so global.css - and therefore
+ * Android's rendering of the badge in its original spot - is untouched.
+ * ------------------------------------------------------------------------- */
+.site-game .app-header-social {
+  display: inline-flex;
+  /* Stretch rather than a fixed height: the status row is `flex-wrap: wrap`,
+     and the controls are 44px on desktop but 48px on a phone. Stretching makes
+     the pill take the height of whichever wrapped line it lands on, so it
+     always matches the coin pill beside it without this file having to know -
+     or re-hardcode - either number. */
+  align-self: stretch;
+  align-items: stretch;
+}
+
+.site-game .app-header-social .social-badge {
+  margin: 0;
+  height: 100%;
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shop scope note
+ *
+ * Explains what a purchase actually reaches, for someone who arrived from a
+ * social mode. Quiet by design: it is orientation, not an offer, so it must not
+ * compete with the product cards below it.
+ * ------------------------------------------------------------------------- */
+.site-game .shop-scope-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+}
+
+.site-game .shop-scope-note-body {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.site-game .shop-scope-note-body strong {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.site-game .shop-scope-note-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  /* --color-primary, not --color-text: the note is body copy and the link is
+     the one action in it, so it has to read as a link rather than as more
+     prose. (An earlier --site-accent here silently fell back to body text -
+     that token is not declared in this skin.) */
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.site-game .shop-scope-note-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  /* The header row is already tight on a phone, so the pill gives back a little
+     type size. Its height is left to the stretch rule above, which matches
+     whatever the controls next to it are doing. */
+  .site-game .app-header-social .social-badge {
+    font-size: 0.8rem;
+  }
+}

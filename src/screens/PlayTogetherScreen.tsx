@@ -2,7 +2,8 @@
  * © 2026 Lior Rubinovich. All rights reserved.
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import PlayTogetherRoom from "../components/multiplayer/PlayTogetherRoom";
@@ -24,7 +25,7 @@ import {
 import type { RoomTransport } from "../multiplayer/roomTransport";
 import { getPlayerName, setPlayerName } from "../services/playerProfileStore";
 import { trackEvent } from "../services/analytics";
-import { toHome, toSettings, toShapeChallenge } from "../app/routes";
+import { toHome, toPlayTogether, toSettings, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
 
 type PlayTogetherScreenProps = {
@@ -48,6 +49,16 @@ const DIFFICULTY_HINTS: Record<MultiplayerDifficulty, string> = {
   hard: "Animals, vehicles and intricate scenes",
   mixed: "A bit of everything",
 };
+
+/**
+ * The web's Multiplayer entry (art direction 3a). Lazy and web-only: on Android
+ * the branch below is never taken, so the chunk is never requested and the
+ * existing entry renders exactly as it always has.
+ *
+ * It is PRESENTATION ONLY - it calls back into the two handlers below and owns
+ * no session, socket, room or validation of its own.
+ */
+const MultiplayerEntry = lazy(() => import("../site/MultiplayerEntry"));
 
 export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: PlayTogetherScreenProps) {
   const [view, setView] = useState<View>(initialJoinCode ? "join" : "menu");
@@ -254,17 +265,28 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchActive, activeRoomCode, session]);
 
+  /*
+   * Web-only header wiring, matching PassPlayScreen so the two social modes do
+   * not drift apart again: the Social Rank pill sits in the header's status row
+   * rather than floating under it, and the coin pill is the shop shortcut it
+   * already is on every other screen. Android gets neither, so it renders
+   * exactly what it rendered before.
+   */
+  const onWeb = !Capacitor.isNativePlatform();
+  const shopFromHere = onWeb ? () => onNavigate(toShop(toPlayTogether())) : undefined;
+
   if (session) {
     return (
       <div className="screen">
         <AppHeader
           title="Play Together"
+          showSocialRank={onWeb}
           onBack={() => leave(exitRoom)}
           onNavigateToHome={() => leave(goHome)}
           onNavigateToSettings={() => leave(() => onNavigate(toSettings()))}
           onNavigateToShapeChallenge={() => leave(() => onNavigate(toShapeChallenge()))}
         />
-        <SocialPointsBadge />
+        {!onWeb && <SocialPointsBadge />}
         <PlayTogetherRoom transport={session} onExit={exitRoom} onActiveChange={handleActiveChange} />
         {pendingLeave && <LeaveConfirmation onStay={cancelLeave} onLeave={confirmLeave} />}
       </div>
@@ -276,15 +298,35 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
       <AppHeader
         title="Play Together"
         subtitle="Draw against your friends, live"
+        showSocialRank={onWeb}
         onBack={view === "menu" ? goHome : () => { setView("menu"); setFormError(null); }}
         onNavigateToHome={goHome}
+        onNavigateToShop={shopFromHere}
         onNavigateToSettings={() => onNavigate(toSettings())}
         onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
       />
 
-      <SocialPointsBadge />
+      {!onWeb && <SocialPointsBadge />}
 
-      {view === "menu" && (
+      {/* The web gets the 3a composition; Android keeps the existing entry
+          below, unchanged. Both drive the same two actions. */}
+      {view === "menu" && !Capacitor.isNativePlatform() && (
+        <Suspense fallback={<div className="mp-entry" />}>
+          <MultiplayerEntry
+            onCreateRoom={() => {
+              setFormError(null);
+              setView("create");
+            }}
+            onJoinWithCode={(code) => {
+              setFormError(null);
+              if (code) setJoinCode(code);
+              setView("join");
+            }}
+          />
+        </Suspense>
+      )}
+
+      {view === "menu" && Capacitor.isNativePlatform() && (
         <div className="mp-entry">
           <section className="mp-explainer">
             <h2 className="mp-panel-heading">How it works</h2>

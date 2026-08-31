@@ -71,6 +71,7 @@ import {
 import { markModeIntroShown, resetModeIntro, shouldShowModeIntro } from "./services/modeIntroStore";
 import { runNavigationGuard } from "./app/navigationGuard";
 import { ExplicitHomeContext } from "./app/explicitHome";
+import AppSkin from "./app/AppSkin";
 import { resetMultiplayerTutorials } from "./services/multiplayerTutorialStore";
 import { getChallenge, updateChallenge } from "./services/challengeStorage";
 import { decodeArtistResultHash, decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
@@ -806,6 +807,12 @@ export default function App({ landing }: AppProps) {
   // is untouched: it stays whatever each screen already passes as `onBack`.
   // Not rendered at all on Android, so every consumer there falls back to the
   // game home screen exactly as before.
-  if (Capacitor.isNativePlatform()) return body;
+  /*
+   * Android gets the app-shell wrapper: one class that carries the visual
+   * refresh (src/styles/appShell.css) and renders no chrome of its own, so no
+   * layout, flow or tap target changes. The web never mounts it, which is what
+   * keeps the refresh out of the website entirely.
+   */
+  if (Capacitor.isNativePlatform()) return <AppSkin>{body}</AppSkin>;
   return <ExplicitHomeContext.Provider value={exitToSite}>{body}</ExplicitHomeContext.Provider>;
 }

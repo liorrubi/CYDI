@@ -32,10 +32,53 @@ const NOTHING: DrawingPath = { points: [], canvasWidth: CANVAS_SIZE, canvasHeigh
  * This is deliberately NOT the single-player result screen: no star rating, no
  * share, no coins, no guide toggle. Three numbers per player, a winner mark, and
  * the drawings big enough to actually look at.
+ *
+ * The verdict is stated BEFORE the evidence. Comparing two cards to work out who
+ * won is work the screen can do for the player, so the banner says it outright
+ * and the cards below are then just the reason.
  */
 export default function PassPlayRoundComparison({ target, players, winnerIds, penColor }: PassPlayRoundComparisonProps) {
+  /*
+   * The verdict, derived entirely from the props this component already gets -
+   * no new state, no new prop, nothing asked of the game logic.
+   *
+   * SCOPE. This component compares ONE ROUND (`round.score` is the round's
+   * score, and the section is labelled "Round drawings"), so the margin is the
+   * gap between round scores. A cumulative `totalScore` gap would be a
+   * different claim about a different scope and is deliberately not shown here.
+   *
+   * TIES are real - `winnerIds` is an array precisely because two players can
+   * draw level - so a tie says so and shows no margin, because there isn't one.
+   */
+  const winners = players.filter((player) => winnerIds.includes(player.id));
+  const isTie = winners.length > 1;
+  const roundScore = (id: string) => players.find((p) => p.id === id)?.round?.score ?? 0;
+  const bestWinnerScore = winners.length > 0 ? Math.max(...winners.map((w) => roundScore(w.id))) : 0;
+  const runnersUp = players.filter((player) => !winnerIds.includes(player.id));
+  const bestRunnerUpScore = runnersUp.length > 0 ? Math.max(...runnersUp.map((p) => p.round?.score ?? 0)) : null;
+  const margin = bestRunnerUpScore === null ? null : bestWinnerScore - bestRunnerUpScore;
+
   return (
     <section className="pp-compare" aria-label="Round drawings">
+      {winners.length > 0 && (
+        <p className="pp-verdict">
+          <span className="pp-verdict-mark" aria-hidden="true">
+            🏆
+          </span>
+          <span className="pp-verdict-text">
+            <span className="pp-verdict-label">{isTie ? "Tied" : "Winner"}</span>
+            <strong className="pp-verdict-name">{winners.map((w) => w.name).join(" & ")}</strong>
+          </span>
+          {/* Only when there is a real margin to state. */}
+          {!isTie && margin !== null && margin > 0 && (
+            <span className="pp-verdict-margin">
+              <span className="pp-verdict-margin-label">By</span>
+              <strong className="pp-verdict-margin-value">{margin}</strong>
+            </span>
+          )}
+        </p>
+      )}
+
       <div className="pp-compare-target">
         <p className="pp-compare-heading">The shape</p>
         <ShapeOverlayCanvas

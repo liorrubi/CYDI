@@ -1,0 +1,882 @@
+/*
+ * © 2026 Lior Rubinovich. All rights reserved.
+ * Unauthorized copying, modification, distribution, or commercial use is prohibited.
+ */
+
+/* ===========================================================================
+ * ANDROID VISUAL REFRESH  -  every rule scoped under `.app-shell`
+ *
+ * WHY A SEPARATE FILE. src/styles/global.css is shared byte-for-byte between
+ * the Android WebView and the web game screens, so editing it is an Android
+ * change AND a web change at once. `.app-shell` is put on the tree by
+ * src/app/AppSkin.tsx, which App.tsx renders ONLY when
+ * Capacitor.isNativePlatform() is true. So everything here reaches the APK and
+ * nothing here can alter the website - the same containment SiteGameSkin uses
+ * in the other direction.
+ *
+ * THERE IS DELIBERATELY NO GLOBAL SELECTOR IN THIS FILE. No html, :root, body,
+ * button or bare element rule outside `.app-shell`. If this stylesheet is ever
+ * pulled into the web bundle it is inert there, because the class never exists.
+ *
+ * TOKENS ARE NOT REDECLARED. The app already themes itself through the
+ * --color, --space and --radius custom properties in global.css and flips them
+ * for dark mode, so these rules consume those and work in both themes. The few
+ * literal colours below are deliberate: they are the dark "stage" the drawings
+ * sit on, which is the art direction and does not follow the UI theme.
+ *
+ * RESTRAINT. The website's language is plot-plans, measurement rails and
+ * technical annotation. Android takes the *structure* of that - precise
+ * outlines, real hierarchy, strong numerals, quiet borders - and none of the
+ * decoration. No rulers, no dimension lines, no annotations, and nothing extra
+ * anywhere near an active round.
+ * ======================================================================== */
+
+/* ---------------------------------------------------------------- font ---
+ * Figtree, from the files already inside the APK (capacitor webDir: "dist",
+ * so dist/assets/figtree-*.woff2 is packaged and loaded over file://).
+ * NO NETWORK REQUEST IS POSSIBLE HERE - there is no @import and no absolute
+ * URL; Vite rewrites these to the bundled asset paths.
+ *
+ * Display only. Body copy stays on the platform stack, which renders better at
+ * small sizes on Android and keeps the app feeling native rather than like the
+ * website in a WebView.
+ * ------------------------------------------------------------------------ */
+@font-face {
+  font-family: "CydiDisplay";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("../assets/fonts/figtree-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "CydiDisplay";
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url("../assets/fonts/figtree-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+.app-shell {
+  /* Local to this subtree, so nothing outside the APK shell can inherit it. */
+  --app-display: "CydiDisplay", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* The stage a drawing is read on. Fixed, not themed: white paper on a dark
+     ground IS the art direction, on both light and dark UI themes. */
+  --app-stage: #14151f;
+  --app-stage-line: #24263a;
+  --app-stage-ink: #eef0fa;
+  --app-stage-muted: #a4a8bd;
+
+  /* Per-mode identity. One hue each, so the three modes are told apart at a
+     glance instead of by reading their titles.
+     These are the design system's own "ink on a tinted surface" tokens rather
+     than literals, for two reasons: they already flip with the theme, and the
+     bright display hues (#3ecb85, #e79ac0) measure 2.08:1 and 2.15:1 on a white
+     card - under the 3:1 floor for a graphical element. These read 5.30:1 and
+     5.95:1 while staying recognisably the same green and pink. */
+  --app-classic: var(--color-primary);
+  --app-two: var(--accent-green-text);
+  --app-multi: var(--accent-pink-text);
+}
+
+/* ======================================================================
+ * HOME  -  mode selection
+ *
+ * The three modes were a 40px tab strip with no copy; they are now the first
+ * thing on the screen, each a single large target that goes straight into the
+ * mode. The card IS the action - no intermediate landing, no second CTA.
+ * ==================================================================== */
+.app-shell .app-modes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.app-shell .app-mode {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  /* Comfortably past the 44px guideline even before the copy wraps. */
+  min-height: 76px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  /* The mode's hue is a rail down the leading edge - identity without
+     colouring the whole card, which would fight the drawing art. */
+  border-left: 4px solid var(--app-accent, var(--color-primary));
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-shell .app-mode-classic {
+  --app-accent: var(--app-classic);
+}
+
+.app-shell .app-mode-passPlay {
+  --app-accent: var(--app-two);
+}
+
+.app-shell .app-mode-multiplayer {
+  --app-accent: var(--app-multi);
+}
+
+/* Classic is the core mode and reads as the primary one: taller, with the
+   shape art, and a filled chevron rather than an outline. */
+.app-shell .app-mode-classic {
+  min-height: 96px;
+  grid-template-columns: 64px 1fr auto;
+}
+
+.app-shell .app-mode-art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  border-radius: var(--radius-md);
+  /* The dark stage, in miniature. */
+  background: var(--app-stage);
+  color: var(--app-stage-ink);
+}
+
+.app-shell .app-mode-art svg {
+  width: 78%;
+  height: 78%;
+}
+
+.app-shell .app-mode-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.app-shell .app-mode-name {
+  font-family: var(--app-display);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.app-shell .app-mode-classic .app-mode-name {
+  font-size: 1.3rem;
+  font-weight: 900;
+}
+
+/* One short line. Never more - the point is to be understood in a glance. */
+.app-shell .app-mode-sub {
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+.app-shell .app-mode-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--app-accent) 16%, transparent);
+  color: var(--app-accent);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.app-shell .app-mode-classic .app-mode-go {
+  background: var(--app-accent);
+  color: #0f1018;
+}
+
+.app-shell .app-mode:active {
+  transform: translateY(1px);
+}
+
+/* ======================================================================
+ * HOME  -  secondary area
+ *
+ * Daily, Create, My Challenges and the Shop are not buried and gain no extra
+ * screen: they keep their existing destinations and simply stop competing
+ * with the three modes for first place.
+ * ==================================================================== */
+.app-shell .app-more-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* .screen centres its children, so without this the <p> shrinks to the width
+     of the word and the rule after it has nothing to grow into. */
+  width: 100%;
+  margin: 0 0 var(--space-3);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.app-shell .app-more-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* Quieter than a mode card: no hue rail, no art, tighter. */
+.app-shell .app-more .home-card {
+  border-top: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.app-shell .app-more .home-card h2 {
+  font-family: var(--app-display);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.app-shell .app-more .home-card p {
+  font-size: 0.8rem;
+}
+
+/* ======================================================================
+ * RESULT  -  the score is the headline
+ * ==================================================================== */
+.app-shell .score-card {
+  border: 1px solid var(--color-border);
+}
+
+.app-shell .score-total {
+  font-family: var(--app-display);
+  font-weight: 900;
+}
+
+.app-shell .score-message {
+  font-family: var(--app-display);
+}
+
+/* The breakdown becomes a measured row of four rather than four loose pairs:
+   quiet rules between them, label above, numeral below. */
+.app-shell .score-grid {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.app-shell .score-grid > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.app-shell .score-grid > div + div {
+  border-left: 1px solid var(--color-border);
+}
+
+.app-shell .score-grid span {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.app-shell .score-grid strong {
+  font-family: var(--app-display);
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.app-shell .record-banner {
+  font-family: var(--app-display);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+/* ======================================================================
+ * 2 PLAYERS  -  a duel, and who won it
+ * ==================================================================== */
+.app-shell .pp-compare-heading {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.app-shell .pp-compare-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.app-shell .pp-compare-name {
+  font-family: var(--app-display);
+  font-weight: 800;
+}
+
+.app-shell .pp-compare-score {
+  font-family: var(--app-display);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.app-shell .pp-compare-card-win .pp-compare-score {
+  color: var(--app-two);
+}
+
+.app-shell .pp-compare-detail {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+/* ======================================================================
+ * MULTIPLAYER  -  ranked results
+ * ==================================================================== */
+.app-shell .mp-leaderboard th {
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.app-shell .mp-lb-rank {
+  font-family: var(--app-display);
+  font-size: 1rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.app-shell .mp-lb-nickname {
+  font-family: var(--app-display);
+  font-weight: 700;
+}
+
+/* The running total is the number that decides the room, so it outweighs the
+   round score beside it. */
+.app-shell .mp-lb-total {
+  font-family: var(--app-display);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.app-shell .mp-lb-round-score {
+  font-family: var(--app-display);
+  font-weight: 800;
+}
+
+.app-shell .mp-lb-tag {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ======================================================================
+ * SHARED CHROME  -  headings and the room code
+ * ==================================================================== */
+.app-shell .app-header-text h1 {
+  font-family: var(--app-display);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.app-shell h2 {
+  font-family: var(--app-display);
+  letter-spacing: -0.01em;
+}
+
+/* The one place a monospaced, spaced-out numeral is genuinely the right
+   answer: a code being read aloud across a table. */
+.app-shell .mp-room-code {
+  font-family: var(--app-display);
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+/* ======================================================================
+ * MOTION  -  the press feedback above is the whole of it, and it goes when
+ * the player has asked for less motion.
+ * ==================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .app-mode:active {
+    transform: none;
+  }
+}
+
+/* ======================================================================
+ * NARROW PHONES  -  360px and down
+ * ==================================================================== */
+@media (max-width: 380px) {
+  .app-shell .app-mode {
+    grid-template-columns: 44px 1fr auto;
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .app-shell .app-mode-classic {
+    grid-template-columns: 54px 1fr auto;
+  }
+
+  .app-shell .app-mode-name {
+    font-size: 1.05rem;
+  }
+
+  .app-shell .app-mode-classic .app-mode-name {
+    font-size: 1.15rem;
+  }
+
+  .app-shell .score-grid strong {
+    font-size: 1rem;
+  }
+}
+
+/* ===========================================================================
+ * VERSION B  -  the approved Android visual reference
+ *
+ * Everything below is still scoped under `.app-shell`, so it reaches the APK
+ * and cannot touch the website. What Version B contributes over Version A is
+ * not new colour: it is the dark shape stage wherever a drawing is shown, a
+ * genuinely dominant score, and rows that let you find the winner - and
+ * yourself - without reading.
+ *
+ * WHAT WAS NOT COPIED, AND WHY. Version B is a mockup and several of its
+ * figures have no source in this product:
+ *   - "I'm ready" / "All in" / "4 / 6 ready"  no readiness exists in the
+ *     multiplayer protocol at all, so the footer states the REAL between-round
+ *     situation instead: the host's "Next Round", or the waiting message.
+ *   - "Match . best of 5" / "2 - 1"            no per-player win tally exists;
+ *     2 Players tracks a cumulative score, and the round label is "Round X of N".
+ *   - "Accuracy 94%"                           Classic renders the raw score
+ *     with no percent sign, so the hero is the real number and the real message.
+ *   - "Hide guide" / "Play Classic"            controls that do not exist, and a
+ *     second tap the card already provides.
+ * ======================================================================== */
+
+/* ---------------------------------------------------------------- HOME ---
+ * Version B's Classic card, 2 Players / Multiplayer rows and 2x2 More.
+ * ------------------------------------------------------------------------ */
+
+/* Version B puts the real best score under Classic's copy, as a quiet
+   uppercase line in the success hue - the one number Home carries. */
+.app-shell .app-mode-best {
+  margin-top: 3px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-success);
+}
+
+/* 2x2 of compact tiles, so all four secondary destinations fit above the fold
+   rather than becoming a scroll. */
+.app-shell .app-more-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  width: 100%;
+  margin-bottom: var(--space-4);
+}
+
+.app-shell .app-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* 56px, matching the rows above - still a comfortable target at this size. */
+  min-height: 56px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-shell .app-tile:active {
+  transform: translateY(1px);
+}
+
+.app-shell .app-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
+/* Each tile's own tint, from the design system's accent pairs so both the
+   surface and the ink move together between themes. */
+.app-shell .app-tile-icon-daily {
+  background: color-mix(in srgb, var(--accent-gold-text) 14%, transparent);
+  color: var(--accent-gold-text);
+}
+
+.app-shell .app-tile-icon-create {
+  background: color-mix(in srgb, var(--accent-purple-text) 14%, transparent);
+  color: var(--accent-purple-text);
+}
+
+.app-shell .app-tile-icon-saved {
+  background: color-mix(in srgb, var(--accent-blue-text) 14%, transparent);
+  color: var(--accent-blue-text);
+}
+
+.app-shell .app-tile-icon-shop {
+  background: color-mix(in srgb, var(--accent-gold-text) 14%, transparent);
+  color: var(--accent-gold-text);
+}
+
+.app-shell .app-tile-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-shell .app-tile-name {
+  font-family: var(--app-display);
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+  /* "My Challenges" is the long one; it must not push the tile wider. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell .app-tile-sub {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+/* The leftover container that used to hold the four cards; on Android only the
+   install CTA can appear in it, and on the web it is not rendered at all. */
+.app-shell .home-cards.app-more:empty {
+  display: none;
+}
+
+/* ------------------------------------------------------- CLASSIC RESULT ---
+ * The single biggest borrowing from Version B: the drawing gets a real dark
+ * stage, and the score stops being one number among several.
+ * ------------------------------------------------------------------------ */
+
+/* The comparison canvas, framed. This is the element the website and the app
+   now share outright - white drawing on a dark ground.
+
+   These are ResultComparison.tsx's REAL class names: .canvas-wrapper is its
+   root, with .overlay-legend and .guide-toggle-row beneath it. Worth recording
+   that Version B's "Target / Your line" legend AND its "Hide guide" control
+   both already exist in the product (.overlay-legend-target and .guide-toggle),
+   so this styles them instead of omitting them as first assumed. */
+.app-shell .canvas-wrapper,
+.app-shell .pp-compare-target {
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--app-stage);
+  border: 1px solid var(--app-stage-line);
+}
+
+.app-shell .canvas-wrapper canvas,
+.app-shell .pp-compare-target canvas {
+  border-radius: var(--radius-md);
+  background: #0f1018;
+}
+
+/* Anything sitting on the stage takes the stage's ink, not the page's. */
+.app-shell .overlay-legend,
+.app-shell .guide-toggle-label,
+.app-shell .pp-compare-target .pp-compare-heading {
+  color: var(--app-stage-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+/* Version B's hero: an eyebrow, then the number at 54px/900 with the stars and
+   the best-state to its right. The number is the first thing the eye lands on. */
+.app-shell .score-total {
+  /* Slightly tighter than Version A's clamp so the stars fit on one line
+     beside it at 360px, which is what makes the row read as one unit. */
+  font-size: clamp(2.9rem, 15vw, 3.5rem);
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+}
+
+/* The real message, demoted to the supporting line Version B gives it -
+   never a replacement for the number. */
+.app-shell .score-message {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.app-shell .record-banner {
+  align-self: flex-start;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-success) 16%, transparent);
+  color: var(--color-success);
+  font-size: 0.75rem;
+}
+
+/* The tip, as Version B's quiet block rather than a floating line. */
+.app-shell .score-improvement-tip {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* ----------------------------------------------------------- 2 PLAYERS ---
+ * Version B leads with the verdict. The existing markup has no verdict banner,
+ * so the same job is done by making the winning card unmistakably dominant and
+ * putting it first - in weight, border, order and score size, never by colour
+ * alone (the crown in .pp-compare-crown is already there).
+ * ------------------------------------------------------------------------ */
+/* Version B puts the two attempts SIDE BY SIDE, which is what makes the screen
+   a comparison rather than two results in sequence. global.css stacks them at
+   this width; this restores the pair without touching that file. */
+.app-shell .pp-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+/* The cards stay in turn order now that the banner names the winner outright -
+   reordering them was a workaround for not having one, and keeping both would
+   make "Player 1 / Player 2" read in an order the round did not happen in. */
+.app-shell .pp-compare-card-win {
+  border-width: 2px;
+  border-color: var(--app-two);
+  box-shadow: inset 0 0 0 1px var(--app-two);
+}
+
+.app-shell .pp-compare-card-win .pp-compare-name {
+  color: var(--color-text);
+}
+
+.app-shell .pp-compare-crown {
+  font-size: 1.05rem;
+}
+
+/* The two scores are the comparison, so they carry the weight - and the loser's
+   is muted so the ranking is legible in greyscale. */
+.app-shell .pp-compare-score {
+  font-size: 2rem;
+  line-height: 0.95;
+}
+
+.app-shell .pp-compare-card:not(.pp-compare-card-win) .pp-compare-score {
+  color: var(--color-text-muted);
+}
+
+/* Each attempt on its own dark stage, matching the target above it. */
+.app-shell .pp-compare-card canvas,
+.app-shell .pp-compare-empty {
+  border-radius: var(--radius-md);
+  background: var(--app-stage);
+  color: var(--app-stage-muted);
+}
+
+/* --------------------------------------------------------- MULTIPLAYER ---
+ * Version B's ranked list: find first place, find yourself, read the score.
+ * ------------------------------------------------------------------------ */
+
+/* The round label becomes real context rather than a stray line. */
+.app-shell .mp-round-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.app-shell .mp-leaderboard {
+  border-collapse: separate;
+  border-spacing: 0 6px;
+}
+
+/* Rows become their own surfaces, which is what lets the two special ones be
+   picked out at a glance. */
+.app-shell .mp-lb-row > td {
+  padding: 10px 8px;
+  background: var(--color-bg);
+  border-top: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+}
+
+.app-shell .mp-lb-row > td:first-child {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  border-left: 1px solid transparent;
+}
+
+.app-shell .mp-lb-row > td:last-child {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  border-right: 1px solid transparent;
+}
+
+/* First place: the success tint plus a border - and the medal glyph the table
+   already renders, so it is not colour alone. */
+.app-shell .mp-lb-row-win > td {
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-card));
+  border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
+}
+
+/* You: the primary tint, so the row you are looking for is the one that is a
+   different hue from every other row on screen. */
+.app-shell .mp-lb-row-you > td {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-card));
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+}
+
+.app-shell .mp-lb-row-you .mp-lb-nickname,
+.app-shell .mp-lb-row-you .mp-lb-total {
+  color: var(--color-primary-text);
+}
+
+/* The running total is what decides the room, so it is the largest thing in
+   the row - Version B's hierarchy. */
+.app-shell .mp-lb-total {
+  font-size: 1.25rem;
+}
+
+/* The between-round footer, stating the REAL situation: the host gets the
+   action, everyone else gets the truth about what is being waited on. */
+.app-shell .mp-primary-action {
+  width: 100%;
+  min-height: 52px;
+  font-family: var(--app-display);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.app-shell .mp-waiting-inline {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+/* .mp-shape-frame / .mp-target-frame were guesses that match nothing. The room's
+   real container is .mp-stage and its canvases are already covered by the
+   .canvas-wrapper rule above, so no extra rule is needed here. */
+
+/* -------------------------------------------------- narrow phones, 360px --- */
+@media (max-width: 380px) {
+  .app-shell .app-tile {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .app-shell .app-tile-name {
+    font-size: 0.8rem;
+  }
+
+  .app-shell .app-tile-sub {
+    font-size: 0.66rem;
+  }
+
+  .app-shell .mp-lb-total {
+    font-size: 1.1rem;
+  }
+
+  .app-shell .pp-compare-score {
+    font-size: 1.7rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 2 PLAYERS  -  the verdict, stated before the evidence
+ *
+ * One line, read in well under a second: mark, label, name, margin. The winner
+ * is carried by FOUR independent signals across this screen - this banner, the
+ * trophy, the 2px border on the winning card and the score weight - so it
+ * survives greyscale and colour-blindness rather than leaning on the green.
+ * ------------------------------------------------------------------------- */
+.app-shell .pp-verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--app-two) 40%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--app-two) 12%, var(--color-card));
+}
+
+.app-shell .pp-verdict-mark {
+  flex-shrink: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.app-shell .pp-verdict-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-shell .pp-verdict-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--app-two);
+}
+
+.app-shell .pp-verdict-name {
+  font-family: var(--app-display);
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  /* Two joined names on a tie must not push the margin off the row. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell .pp-verdict-margin {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.app-shell .pp-verdict-margin-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.app-shell .pp-verdict-margin-value {
+  font-family: var(--app-display);
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}

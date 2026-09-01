@@ -175,12 +175,19 @@ android {
         //
         // 29: 0.39.1, the patch itself.
         //
+        // 30: 0.40.0, the Android visual refresh - Home, Classic Show/Draw,
+        // Classic Result, 2 Players Result and Multiplayer Result on one native
+        // presentation layer, plus the solid-target-in-preview convention.
+        // Play Console bundle explorer on 1 Sep 2026 listed 13 uploads across
+        // all tracks (11-15, 17-21, 23, 26, 29); 29 was the highest, so 30 is
+        // the next free code.
+        //
         // DEPLOYMENT COUPLING: this client reads `gameSerial` from the room
         // snapshot, which only the Worker in this same commit sends. The Worker
         // and the web build must go out together or a rematch stops earning
         // Social Points. See worker/roomDO.ts handleStart.
-        versionCode 29
-        versionName "0.39.1"
+        versionCode 30
+        versionName "0.40.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

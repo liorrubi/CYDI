@@ -2,10 +2,10 @@
 
 ## 0.40.0 - 2026-08-28
 
-The public site gets the half it never had: real pages about the game, and a
-policy a machine can actually read. Web-only - nothing in this release reaches
-the Android app, which loads its HTML from inside the APK and never routes
-through the Worker.
+Two halves. The public site gets the pages it never had, and the Android app
+gets a visual refresh. The web half went out first, on its own - it never
+reaches the app, which loads its HTML from inside the APK and never routes
+through the Worker. The Android half is versionCode 30.
 
 **/privacy was serving an empty shell.** The policy has always existed, but only
 inside a React component, so the published URL answered with 2.4 KB of empty SPA
@@ -39,6 +39,16 @@ site cannot silently drift away from the game again.
 
 Also: two new illustrations generated from the real shape generators (a circle
 guide and an attempt-over-target overlay), and the sitemap grew from 8 URLs to 13.
+
+**Android: one look across the core loop.** Home, the round itself and every
+result screen now share the same visual language. Studying a shape and then
+drawing it happen on a single surface that no longer changes under you, and the
+shape you are asked to remember is drawn as a solid line so it can never be
+mistaken for the dashed guide you trace against. The Classic, 2 Players and
+Multiplayer result screens have been rebuilt to lead with the outcome rather than
+make you work it out, and Multiplayer results now fit a full room of eight with
+the next action still in view. Nothing about scoring, timing or how the game
+plays has changed.
 
 ## 0.39.1 - 2026-08-23
 

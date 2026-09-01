@@ -5805,6 +5805,85 @@ body {
  * a drawing by and defeats the point of showing them at all. They go side by
  * side only once there is room for both to stay legible.
  */
+/*
+ * The round verdict, on the WEB.
+ *
+ * PassPlayRoundComparison has rendered this banner since the Version B pass, but
+ * its only styles lived in appShell.css - which never loads outside the Android
+ * shell. So on the web it has been rendering as a bare paragraph: "🏆 Winner
+ * Maya By 1" on one unstyled line. This is that regression, and nothing else:
+ * the surrounding comparison layout is untouched, and Android does not use these
+ * rules at all (it renders .pp-nres-verdict from its own component).
+ *
+ * The winner accent is --color-primary, matching .pp-compare-card-win directly
+ * below, rather than the green the Android layout uses - each surface stays
+ * internally consistent.
+ */
+.pp-verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.pp-verdict-mark {
+  flex-shrink: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.pp-verdict-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pp-verdict-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-primary-text);
+}
+
+.pp-verdict-name {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  /* Two joined names on a tie must not push the margin off the row. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pp-verdict-margin {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.pp-verdict-margin-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.pp-verdict-margin-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
 .pp-compare {
   display: flex;
   flex-direction: column;

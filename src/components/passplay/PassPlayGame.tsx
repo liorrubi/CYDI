@@ -7,6 +7,9 @@ import Button from "../Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../DrawingCanvas";
 import MultiplayerLeaderboard, { type LeaderboardPlayer } from "../multiplayer/MultiplayerLeaderboard";
 import PassPlayRoundComparison from "./PassPlayRoundComparison";
+import PassPlayResultNative from "./PassPlayResultNative";
+import { solidTargetInPreview } from "../../app/targetRendering";
+import { Capacitor } from "@capacitor/core";
 import MultiplayerTutorialOverlay from "../multiplayer/MultiplayerTutorialOverlay";
 import RoundCoachMark from "../multiplayer/RoundCoachMark";
 import RoundTimer from "../multiplayer/RoundTimer";
@@ -71,6 +74,9 @@ type PassPlayGameProps = {
   /** Reports how far the match has got, so the screen can guard navigation and report an abandon without owning the game state. */
   onProgress?: (progress: PassPlayProgress) => void;
 };
+
+/** One string, so the web layout and the Android layout cannot drift apart. */
+const ROUND_COACH_TEXT = "Scores add up across every round — there's plenty of time to catch up.";
 
 /** The standings table is shared with Play Together, which thinks in seats; a local player id is the same kind of stable key. */
 function toLeaderboardRow(player: PassPlayPlayer): LeaderboardPlayer {
@@ -293,6 +299,12 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
   const showCoach = coachArmed && roundIndex === 0;
   const roundLabel = formatRoundLabel(roundIndex, game.rounds);
   const rows = standings(game).map(toLeaderboardRow);
+  /*
+   * Android renders the round result with its own layout. The target has to
+   * exist for it (the two attempts are drawn over it), which is the same guard
+   * the web branch applies - just hoisted, so it also narrows the type.
+   */
+  const nativeResult = Capacitor.isNativePlatform() && finishedTarget !== undefined;
 
   function dismissTutorial() {
     markPassPlayTutorialShown();
@@ -398,6 +410,7 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
               disabled={!canDrawNow(phase, submitting)}
               ghostPath={showsTargetShape(phase) ? target : undefined}
               showGhost={showsTargetShape(phase)}
+              ghostSolid={solidTargetInPreview(showsTargetShape(phase))}
               strokeColor={penColor}
               onChange={setAttempt}
               onComplete={setAttempt}
@@ -427,7 +440,8 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
       {/* --------------------------------------------------- ROUND_RESULTS -- */}
       {phase === "ROUND_RESULTS" && (
         <div className="mp-stage">
-          <p className="mp-round-label">{roundLabel}</p>
+          {/* The native layout prints the round label itself, as its first line. */}
+          {!nativeResult && <p className="mp-round-label">{roundLabel}</p>}
           {!revealDone ? (
             <WinnerReveal
               nickname={joinNames(roundWinners(game))}
@@ -436,6 +450,24 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
               tie={roundWinners(game).length > 1}
               variant="round"
               onDone={() => setRevealDone(true)}
+            />
+          ) : nativeResult ? (
+            /*
+             * ANDROID gets the approved Version B layout: verdict, the two
+             * drawings as evidence, a compact total, then the button. Same data
+             * and the same decision about which action this is - only the
+             * presentation differs. The web falls through below, unchanged.
+             */
+            <PassPlayResultNative
+              roundLabel={roundLabel}
+              target={finishedTarget}
+              players={playersInTurnOrder}
+              standings={standings(game)}
+              winnerIds={game.lastRound?.winnerIds ?? []}
+              penColor={penColor}
+              primaryLabel={isLastRound(game) ? "SEE FINAL RESULTS" : "Next Round"}
+              onPrimary={() => setGame(isLastRound(game) ? finishGame : nextRound)}
+              tip={showCoach ? <RoundCoachMark text={ROUND_COACH_TEXT} /> : null}
             />
           ) : (
             <>
@@ -453,9 +485,7 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
                 yourSeatId={null}
                 highlightSeatIds={game.lastRound?.winnerIds ?? null}
               />
-              {showCoach && (
-                <RoundCoachMark text="Scores add up across every round — there's plenty of time to catch up." />
-              )}
+              {showCoach && <RoundCoachMark text={ROUND_COACH_TEXT} />}
               {/* The last round still shows its comparison; only the button changes. */}
               {isLastRound(game) ? (
                 <Button className="mp-primary-action" onClick={() => setGame(finishGame)}>

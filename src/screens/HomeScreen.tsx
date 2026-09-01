@@ -1,7 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import AppHeader from "../components/AppHeader";
-import FeaturedShapePreviews from "../components/FeaturedShapePreviews";
 import HomeModeTabs, { type HomeMode } from "../components/HomeModeTabs";
 import ResumeGameBanner from "../components/ResumeGameBanner";
 import { APP_NAME, APP_TAGLINE } from "../app/constants";
@@ -22,6 +21,8 @@ import {
 } from "../app/routes";
 import { shareChallenge } from "../services/challengeShare";
 import { CreateIcon, DailyIcon, GroupIcon, SavedIcon, ShopIcon, TwoPlayersIcon } from "../app/appIcons";
+import ShapePreviewIcon from "../components/ShapePreviewIcon";
+import { getShapeById } from "../content/contentRepository";
 import { getProgress } from "../services/shapeChallengeProgress";
 import { getChallenges } from "../services/challengeStorage";
 import { playSelectSound } from "../engine/soundEngine";
@@ -41,6 +42,13 @@ const GameHub = lazy(() => import("../site/GameHub"));
  * thing, which is read without being learned. Classic keeps the real shape
  * previews - it is the one mode whose art can BE the product.
  */
+/*
+ * The shape on Classic's tile. A real catalog id, verified present - the site
+ * uses this same compass for its own Classic art, so the two surfaces show the
+ * player the same thing.
+ */
+const CLASSIC_TILE_SHAPE_ID = "univ-compass";
+
 const MODE_ICON: Record<string, ReactNode> = {
   passPlay: <TwoPlayersIcon size={26} />,
   multiplayer: <GroupIcon size={26} />,
@@ -129,13 +137,43 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const personalBest = bestScores.length > 0 ? Math.max(...bestScores) : null;
   const savedChallenges = onWeb ? 0 : getChallenges().length;
 
+  /*
+   * Classic's mark: ONE real catalog shape, drawn by the game's own renderer.
+   *
+   * It used to be <FeaturedShapePreviews />, and on a real device that came out
+   * as an empty dark square. Three faults at once, none of them a colour tweak:
+   *   - global.css sets `.home-card-preview .shape-icon { color:
+   *     var(--accent-purple-text) }`, which in light mode is #5b3fa6 - 2.34:1
+   *     on this stage, i.e. invisible. An explicit rule on the child beats the
+   *     stage's inherited ink, so the parent could never fix it.
+   *   - that component lays out THREE 52px icons with 24px gaps and a top
+   *     margin - about 204px of content pushed into a 64px tile.
+   *   - it is a wide-card strip, not a tile mark. Wrong component for the slot.
+   * So the icon is rendered directly here under a class this file's stylesheet
+   * owns, and FeaturedShapePreviews is left exactly as it is for the onboarding
+   * spotlight that still uses it.
+   *
+   * `getShapeById` returns undefined if a content source lacks the id, in which
+   * case the tile simply renders nothing rather than a placeholder.
+   */
+  const classicShape = onWeb ? undefined : getShapeById(CLASSIC_TILE_SHAPE_ID);
+  const classicArt = classicShape ? (
+    <ShapePreviewIcon shape={classicShape} size={64} strokeWidth={2.4} className="app-mode-shape" />
+  ) : null;
+
   function handleGetTheApp() {
     playSelectSound();
     window.open(PLAY_STORE_URL, "_blank", "noopener");
   }
 
   return (
-    <div className="screen">
+    /*
+     * `app-home` exists so appShell.css can tighten THIS screen's header
+     * without touching the other 18 screens that render the same AppHeader
+     * (Result, 2 Players, Multiplayer, Settings, Shop and the rest). Every rule
+     * that uses it is also under `.app-shell`, so it is inert on the web.
+     */
+    <div className="screen app-home">
       <AppHeader
         title={APP_NAME}
         subtitle={APP_TAGLINE}
@@ -178,7 +216,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
             onClick={mode.go}
           >
             <span className="app-mode-art" aria-hidden="true">
-              {mode.id === "classic" ? <FeaturedShapePreviews /> : MODE_ICON[mode.id]}
+              {mode.id === "classic" ? classicArt : MODE_ICON[mode.id]}
             </span>
             <span className="app-mode-text">
               <span className="app-mode-name">{mode.name}</span>

@@ -71,6 +71,12 @@
   --app-stage-line: #24263a;
   --app-stage-ink: #eef0fa;
   --app-stage-muted: #a4a8bd;
+  /* The ink a real CYDI shape is drawn in on the stage. Not an invented hex:
+     this is the design system's own --color-primary-text dark value, and the
+     stage is deliberately theme-independent like the values above it.
+     7.81:1 on --app-stage, against 2.34:1 for the light-mode purple that made
+     the shape invisible on the device. */
+  --app-stage-accent: #a3a0ff;
 
   /* Per-mode identity. One hue each, so the three modes are told apart at a
      glance instead of by reading their titles.
@@ -305,42 +311,6 @@
   font-family: var(--app-display);
   font-weight: 900;
   letter-spacing: 0.02em;
-}
-
-/* ======================================================================
- * 2 PLAYERS  -  a duel, and who won it
- * ==================================================================== */
-.app-shell .pp-compare-heading {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
-.app-shell .pp-compare-card {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.app-shell .pp-compare-name {
-  font-family: var(--app-display);
-  font-weight: 800;
-}
-
-.app-shell .pp-compare-score {
-  font-family: var(--app-display);
-  font-weight: 900;
-  letter-spacing: -0.03em;
-}
-
-.app-shell .pp-compare-card-win .pp-compare-score {
-  color: var(--app-two);
-}
-
-.app-shell .pp-compare-detail {
-  font-size: 0.72rem;
-  color: var(--color-text-muted);
 }
 
 /* ======================================================================
@@ -579,33 +549,26 @@
  * stage, and the score stops being one number among several.
  * ------------------------------------------------------------------------ */
 
-/* The comparison canvas, framed. This is the element the website and the app
-   now share outright - white drawing on a dark ground.
+/* The comparison canvas on the Classic result screen is now framed by
+   `.app-result-stage` further down this file, and the dark ground is painted by
+   the canvas itself: ShapeOverlayCanvas takes a `variant` prop and fills the
+   bitmap dark when it is "dark". An earlier note here said a dark ground was
+   not achievable without changing that component - it was right about the
+   cause, and the component was changed (Result only, default still white).
 
-   These are ResultComparison.tsx's REAL class names: .canvas-wrapper is its
-   root, with .overlay-legend and .guide-toggle-row beneath it. Worth recording
-   that Version B's "Target / Your line" legend AND its "Hide guide" control
-   both already exist in the product (.overlay-legend-target and .guide-toggle),
-   so this styles them instead of omitting them as first assumed. */
-.app-shell .canvas-wrapper,
-.app-shell .pp-compare-target {
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
-  background: var(--app-stage);
-  border: 1px solid var(--app-stage-line);
-}
+   `.app-shell .app-result > .canvas-wrapper` used to add a surround here. It is
+   gone: the comparison is no longer a direct child of the screen, and the frame
+   belongs to the stage. Note that this must never be widened back to
+   `.app-shell .canvas-wrapper` - that selector hits 11 files including the LIVE
+   drawing surface, which is how a 12px dark mat once landed on every drawing
+   screen in the app. */
 
-.app-shell .canvas-wrapper canvas,
-.app-shell .pp-compare-target canvas {
-  border-radius: var(--radius-md);
-  background: #0f1018;
-}
-
-/* Anything sitting on the stage takes the stage's ink, not the page's. */
+/* The legend and guide label sit on the PAGE, not on a dark stage, so they take
+   the page's muted ink. The Classic result stage overrides this for its own
+   copies further down, where they really are on a dark surface. */
 .app-shell .overlay-legend,
-.app-shell .guide-toggle-label,
-.app-shell .pp-compare-target .pp-compare-heading {
-  color: var(--app-stage-muted);
+.app-shell .guide-toggle-label {
+  color: var(--color-text-muted);
   font-size: 0.74rem;
   font-weight: 700;
 }
@@ -632,8 +595,8 @@
   align-self: flex-start;
   padding: 0 11px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-success) 16%, transparent);
-  color: var(--color-success);
+  background: var(--color-success);
+  color: var(--color-on-success);
   font-size: 0.75rem;
 }
 
@@ -646,58 +609,6 @@
   font-size: 0.82rem;
   line-height: 1.5;
   color: var(--color-text-muted);
-}
-
-/* ----------------------------------------------------------- 2 PLAYERS ---
- * Version B leads with the verdict. The existing markup has no verdict banner,
- * so the same job is done by making the winning card unmistakably dominant and
- * putting it first - in weight, border, order and score size, never by colour
- * alone (the crown in .pp-compare-crown is already there).
- * ------------------------------------------------------------------------ */
-/* Version B puts the two attempts SIDE BY SIDE, which is what makes the screen
-   a comparison rather than two results in sequence. global.css stacks them at
-   this width; this restores the pair without touching that file. */
-.app-shell .pp-compare-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-  align-items: stretch;
-}
-
-/* The cards stay in turn order now that the banner names the winner outright -
-   reordering them was a workaround for not having one, and keeping both would
-   make "Player 1 / Player 2" read in an order the round did not happen in. */
-.app-shell .pp-compare-card-win {
-  border-width: 2px;
-  border-color: var(--app-two);
-  box-shadow: inset 0 0 0 1px var(--app-two);
-}
-
-.app-shell .pp-compare-card-win .pp-compare-name {
-  color: var(--color-text);
-}
-
-.app-shell .pp-compare-crown {
-  font-size: 1.05rem;
-}
-
-/* The two scores are the comparison, so they carry the weight - and the loser's
-   is muted so the ranking is legible in greyscale. */
-.app-shell .pp-compare-score {
-  font-size: 2rem;
-  line-height: 0.95;
-}
-
-.app-shell .pp-compare-card:not(.pp-compare-card-win) .pp-compare-score {
-  color: var(--color-text-muted);
-}
-
-/* Each attempt on its own dark stage, matching the target above it. */
-.app-shell .pp-compare-card canvas,
-.app-shell .pp-compare-empty {
-  border-radius: var(--radius-md);
-  background: var(--app-stage);
-  color: var(--app-stage-muted);
 }
 
 /* --------------------------------------------------------- MULTIPLAYER ---
@@ -756,6 +667,40 @@
   color: var(--color-primary-text);
 }
 
+/*
+ * WHEN THE ROW IS BOTH.
+ *
+ * `.mp-lb-row-you` is declared after `.mp-lb-row-win`, so on a row that is both
+ * - you won the round - the primary tint simply overwrote the winner tint and
+ * the row stopped looking like the winner's. The medal is no help there: it
+ * follows the standing, so it can sit on a different player entirely, which left
+ * the verdict line as the only surviving winner signal.
+ *
+ * The two states compose instead of fighting. Winning is the louder fact, so it
+ * keeps the background; being you is carried by a primary ring inside the row.
+ * Both existing colours, no new ones, and the YOU tag is untouched.
+ */
+.app-shell .mp-lb-row-win.mp-lb-row-you > td {
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-card));
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
+/* The ring has to close at the ends of the row, which are the only cells with a
+   left/right border of their own. */
+.app-shell .mp-lb-row-win.mp-lb-row-you > td:first-child {
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
+.app-shell .mp-lb-row-win.mp-lb-row-you > td:last-child {
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-primary) 55%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+
 /* The running total is what decides the room, so it is the largest thing in
    the row - Version B's hierarchy. */
 .app-shell .mp-lb-total {
@@ -800,44 +745,527 @@
   .app-shell .mp-lb-total {
     font-size: 1.1rem;
   }
-
-  .app-shell .pp-compare-score {
-    font-size: 1.7rem;
-  }
 }
 
-/* ---------------------------------------------------------------------------
- * 2 PLAYERS  -  the verdict, stated before the evidence
+/* ===========================================================================
+ * DEVICE-FEEDBACK POLISH  -  from a real Mi 8 install of Version B
  *
- * One line, read in well under a second: mark, label, name, margin. The winner
- * is carried by FOUR independent signals across this screen - this banner, the
- * trophy, the 2px border on the winning card and the score weight - so it
- * survives greyscale and colour-blindness rather than leaning on the green.
- * ------------------------------------------------------------------------- */
-.app-shell .pp-verdict {
+ * Two things the emulated check could not show, both found on the device.
+ * ======================================================================== */
+
+/* ------------------------------------------------- 1 · Classic's shape ---
+ * On the device the Classic tile came out as an empty dark square. The cause
+ * was not this stylesheet's colour: global.css sets an EXPLICIT
+ * `.home-card-preview .shape-icon { color: var(--accent-purple-text) }`, which
+ * is #5b3fa6 in light mode - 2.34:1 on the stage, invisible - and an explicit
+ * rule on the child beats the stage's inherited ink, so the parent could never
+ * win. (It was also three 52px icons, ~204px of content, inside a 64px tile.)
+ *
+ * HomeScreen now renders a single real catalog shape under .app-mode-shape,
+ * which this file owns outright, so neither problem can recur.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-mode-shape {
+  /* Beats global.css's .shape-icon { color: var(--color-primary) } on
+     specificity, and there is no .home-card-preview ancestor here to fight. */
+  color: var(--app-stage-accent);
+  width: 82%;
+  height: 82%;
+}
+
+/* The stage has to be SQUARE. `align-self: stretch` made it 64x96 on the taller
+   Classic card, and an SVG preserves its aspect ratio, so the shape drew at the
+   shorter side and floated in a tall box - 42x55 as measured. A square tile
+   gives the drawing the whole stage, which is the point of it. */
+.app-shell .app-mode-classic .app-mode-art {
+  align-self: center;
+  aspect-ratio: 1;
+  height: auto;
+}
+
+/* -------------------------------------------------- 2 · Home's header ---
+ * SCOPED TO HOME ONLY. Eighteen other screens render the same AppHeader
+ * (Result, 2 Players, Multiplayer, Settings, Shop...), and none of them was
+ * reviewed for this change, so every rule below is under `.app-home` - the
+ * class HomeScreen puts on its own root and nothing else does.
+ *
+ * What the device showed: global.css's mobile rule makes .app-header-actions
+ * `flex-basis:100%; justify-content:center`, and .app-header-actions-break
+ * splits it in two. So Home opened with a 19px title, a 12px subtitle and TWO
+ * centred chip rows - three stacked centred bands - above content that is all
+ * left-aligned cards. Hence "old chrome, new cards".
+ *
+ * Nothing is removed, no destination changes, and the distance to Classic gets
+ * SHORTER rather than longer.
+ * ------------------------------------------------------------------------ */
+
+/* (2) Tighter vertical rhythm - the whole point is to reach Classic sooner. */
+.app-shell .app-home .app-header {
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+/* (3) A page header, not a hero: the title takes the display face at a calmer
+   size and the subtitle stops competing with it. */
+.app-shell .app-home .app-header-text h1 {
+  font-family: var(--app-display);
+  font-size: 1.12rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.app-shell .app-home .app-header-text p {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* (1) + (4) One left edge, and one tight band.
+ *
+ * Deliberately NO background or border on this row. Every chip inside it
+ * already has its own card surface, so a container would be a card inside a
+ * card - which is what the first attempt produced.
+ *
+ * The forced wrap point in global.css is also LEFT ALONE. Hiding it looked
+ * tempting, but it exists (per its own comment there) to keep the icons in
+ * balanced rows instead of stranding a lone Settings gear - and removing it did
+ * exactly that. So the row keeps its two balanced bands; they are simply
+ * aligned to the cards' left edge and pulled tighter together. */
+.app-shell .app-home .app-header-actions {
+  justify-content: flex-start;
+  row-gap: var(--space-1);
+}
+
+
+/* ===========================================================================
+ * CLASSIC RESULT  -  Version B, as its own layout
+ *
+ * ClassicResultNative renders this screen's sections in the approved order, so
+ * the `order` rules that used to live here are gone: there is nothing left to
+ * reorder. What is left is proportion and emphasis.
+ *
+ * Everything is still under `.app-shell`, so none of it reaches the web, and
+ * `.app-result` keeps it off the other six screens that render a comparison.
+ * ======================================================================== */
+
+/* The screen is a column with its own rhythm; global.css centres children, which
+   is what the compact header and the full-width cards need overridden. */
+.app-shell .app-result {
+  gap: var(--space-3);
+  align-items: stretch;
+  padding-bottom: var(--space-4);
+}
+
+/* ------------------------------------------------------- compact header ---
+ * Back, "Result", shape name. Roughly 48px against the global header's 164.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-result-head {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin: 0 0 var(--space-3);
+  width: 100%;
+  min-height: 44px;
+}
+
+.app-shell .app-result-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* 44px, so the one control up here is still a full-size target. */
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  color: var(--color-text);
+  font-family: var(--app-display);
+  font-size: 1.3rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.app-shell .app-result-title {
+  font-family: var(--app-display);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.app-shell .app-result-shape {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+/* -------------------------------------------------------------- stage ----
+ * The drawing, on the real dark stage the canvas now paints itself.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-result-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--app-stage);
+  border: 1px solid var(--app-stage-line);
+}
+
+/* Capped on the SHELL, which is what global.css sizes (max-width + aspect-ratio)
+   with the canvas at 100% inside it. The canvas element is untouched.
+
+   200px, not the natural 320 and not the 236 this started at. Measured at
+   392x738: every 36px taken off the stage moves the primary action up by 36,
+   and 200 is what keeps `Next Shape` fully above the fold together with the
+   tip moved below the actions. The bitmap is still painted at full
+   resolution; only the display size changes. */
+.app-shell .app-result-stage .drawing-canvas-shell {
+  max-width: 200px;
+}
+
+/* The canvas paints its own dark ground in this variant, so the 2px light border
+   global.css gives every .drawing-canvas would ring it on the stage.
+
+   Border only: `background` on a canvas is a no-op here, since the bitmap is
+   filled with real pixels by ShapeOverlayCanvas. */
+.app-shell .app-result-stage .drawing-canvas-dark {
+  border-color: var(--app-stage-line);
+}
+
+/* Legend and guide sit ON the stage here, so they take the stage's ink. */
+.app-shell .app-result-stage .overlay-legend,
+.app-shell .app-result-stage .guide-toggle-label {
+  margin: 0;
+  color: var(--app-stage-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.app-shell .app-result-stage .guide-toggle-row {
+  gap: var(--space-2);
+}
+
+/* --------------------------------------------------------- result card ---
+ * Score, status, metrics and tip in ONE card, as Version B has it.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-result-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.app-shell .app-result-scorerow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.app-shell .app-result-scorebox {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The number is the headline. No unit, no label - the product does not present
+   this score as a percentage. */
+.app-shell .app-result-score {
+  font-family: var(--app-display);
+  font-size: clamp(3rem, 15vw, 3.6rem);
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.88;
+  color: var(--color-primary);
+}
+
+/* score.message, supporting the number rather than competing with it. The green
+   celebration band is not rendered on this screen at all. */
+.app-shell .app-result-message {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+/* Stars, "New best" and the stored best, stacked tight on the right - the three
+   used to be three separate full-width bands. */
+.app-shell .app-result-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Solid success fill with --color-on-success ink, which is the design system's
+   own tested pairing (5.10:1 light, 7.74:1 dark). A 16% tint with
+   --color-success as ink measured 4.11:1 in light mode - under 4.5:1 for text
+   this small. */
+.app-shell .app-result-best {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--color-success);
+  color: var(--color-on-success);
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.app-shell .app-result-bestline {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ metrics ----
+ * Label · bar · value. The bar width is the real sub-score, set inline by the
+ * component; nothing here computes anything.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-result-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--color-border);
+  list-style: none;
+}
+
+.app-shell .app-result-metric {
+  display: grid;
+  grid-template-columns: 82px 1fr 30px;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.app-shell .app-result-metric-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.app-shell .app-result-bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-text-muted) 20%, transparent);
+  overflow: hidden;
+}
+
+.app-shell .app-result-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--color-primary);
+}
+
+.app-shell .app-result-metric-value {
+  font-family: var(--app-display);
+  font-size: 0.85rem;
+  font-weight: 900;
+  text-align: right;
+  color: var(--color-text);
+}
+
+/* ---------------------------------------------------------------- tip ----
+ * The real improvementTip, as its own quiet block BELOW the actions.
+ *
+ * It gets a card surface and a border because it no longer sits inside one:
+ * the page background it used to tint against is now what it would sit on,
+ * which would leave it edgeless. Full width, and visually the lightest thing
+ * on the screen - it is the last thing to read, not the first.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-result-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.app-shell .app-result-tip-label {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-primary-text);
+}
+
+/* -------------------------------------------------------------- actions --
+ * Primary full width, the two ways back beside each other beneath it.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-result-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.app-shell .app-result-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-fill);
+  color: #ffffff;
+  font-family: var(--app-display);
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.app-shell .app-result-secondaries {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.app-shell .app-result-secondary {
+  flex: 1;
+  min-height: 46px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.app-shell .app-result-primary:active,
+.app-shell .app-result-secondary:active {
+  transform: translateY(1px);
+}
+
+/* --------------------------------------------------- narrow phones -------- */
+@media (max-width: 380px) {
+  .app-shell .app-result-stage .drawing-canvas-shell {
+    max-width: 180px;
+  }
+
+  .app-shell .app-result-metric {
+    grid-template-columns: 74px 1fr 28px;
+    gap: var(--space-2);
+  }
+}
+
+/* ===========================================================================
+ * 2 PLAYERS RESULT  -  Version B, as its own layout
+ *
+ * PassPlayResultNative renders this screen, so there are no `.pp-compare-*`
+ * rules left here: that markup is now web-only, and dressing it up was what
+ * produced the screen the device showed - a 365px empty stage above the two
+ * drawings and a leaderboard repeating what they already said.
+ *
+ * Everything is under `.app-shell`, so none of it reaches the web, and `.pp-nres`
+ * keeps it off every other native screen.
+ * ======================================================================== */
+
+/* ------------------------------------------------------ compact chrome ---
+ * The header is NOT modified and NOT replaced - AppHeader is shared by 19
+ * screens and its Back button carries the real guarded handler, the one that
+ * raises "Quit game?" before a match is destroyed. So the header stays exactly
+ * as it is and only its heavy half is hidden: coins, chest, crown, share and
+ * settings are chrome for choosing what to play, not for reading a result, and
+ * together with the rank badge they cost about 220px of a 738px screen.
+ *
+ * `:has()` is this file's neighbour idiom - site.css already hides the header
+ * and the rank badge on two screens the same way. Where it is unsupported the
+ * rule is simply skipped and the full header stays: longer than intended, never
+ * broken. (The Mi 8 this was checked on runs Chrome 151.)
+ * ------------------------------------------------------------------------ */
+.app-shell .screen:has(.pp-nres) .app-header-actions,
+.app-shell .screen:has(.pp-nres) > .social-badge {
+  display: none;
+}
+
+.app-shell .screen:has(.pp-nres) .app-header {
+  margin-bottom: var(--space-2);
+}
+
+/* ------------------------------------------------------------- layout ---- */
+.app-shell .pp-nres {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+/* The round, as context rather than a heading of its own. */
+.app-shell .pp-nres-round {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* -------------------------------------------------------------- verdict --
+ * One line, read in well under a second: mark, label, name, margin. The winner
+ * is carried by FOUR independent signals across this screen - this banner, the
+ * glyph on the card, the 2px border and the score weight - so it survives
+ * greyscale rather than leaning on the green.
+ * ------------------------------------------------------------------------ */
+.app-shell .pp-nres-verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
   padding: var(--space-3) var(--space-4);
   border: 1px solid color-mix(in srgb, var(--app-two) 40%, transparent);
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--app-two) 12%, var(--color-card));
 }
 
-.app-shell .pp-verdict-mark {
+/* A tie has no winner to celebrate, so it drops the green entirely rather than
+   colouring both players as if they had won. */
+.app-shell .pp-nres-verdict-tie {
+  border-color: var(--color-border);
+  background: var(--color-card);
+}
+
+.app-shell .pp-nres-verdict-mark {
   flex-shrink: 0;
   font-size: 1.35rem;
   line-height: 1;
 }
 
-.app-shell .pp-verdict-text {
+.app-shell .pp-nres-verdict-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.app-shell .pp-verdict-label {
+.app-shell .pp-nres-verdict-label {
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -845,7 +1273,11 @@
   color: var(--app-two);
 }
 
-.app-shell .pp-verdict-name {
+.app-shell .pp-nres-verdict-tie .pp-nres-verdict-label {
+  color: var(--color-text-muted);
+}
+
+.app-shell .pp-nres-verdict-name {
   font-family: var(--app-display);
   font-size: 1.15rem;
   font-weight: 900;
@@ -857,7 +1289,7 @@
   white-space: nowrap;
 }
 
-.app-shell .pp-verdict-margin {
+.app-shell .pp-nres-verdict-margin {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -865,7 +1297,7 @@
   flex-shrink: 0;
 }
 
-.app-shell .pp-verdict-margin-label {
+.app-shell .pp-nres-verdict-margin-label {
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -873,10 +1305,753 @@
   color: var(--color-text-muted);
 }
 
-.app-shell .pp-verdict-margin-value {
+.app-shell .pp-nres-verdict-margin-value {
+  font-family: var(--app-display);
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ evidence ---
+ * Side by side, directly under the verdict, because that is what makes the
+ * screen a comparison instead of two results in sequence.
+ * ------------------------------------------------------------------------ */
+.app-shell .pp-nres-evidence {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  align-items: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-shell .pp-nres-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+.app-shell .pp-nres-card-win {
+  border-width: 2px;
+  border-color: var(--app-two);
+  /* -1px of padding absorbs the extra border, so the two cards stay the same
+     height and the pair does not shift when the winner changes. */
+  padding: calc(var(--space-2) - 1px);
+}
+
+.app-shell .pp-nres-card-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  min-width: 0;
+}
+
+.app-shell .pp-nres-card-mark {
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.app-shell .pp-nres-card-name {
+  font-family: var(--app-display);
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The drawing. ShapeOverlayCanvas paints the dark ground itself in this
+   variant, so this only has to hold the square. */
+.app-shell .pp-nres-card-stage,
+.app-shell .pp-nres-reference-tile {
+  display: block;
+}
+
+.app-shell .pp-nres-card-stage .drawing-canvas-dark {
+  border-color: var(--app-stage-line);
+}
+
+/* Symmetry for a player who never picked up the pen, so the zero is explained
+   rather than looking like a rendering failure. */
+.app-shell .pp-nres-card-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  background: var(--app-stage);
+  color: var(--app-stage-muted);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+/* The ROUND score - points, so no percent sign. The loser's is muted, which is
+   the fourth signal and the one that works in greyscale. */
+.app-shell .pp-nres-card-score {
+  font-family: var(--app-display);
+  font-size: 1.7rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+  color: var(--color-text-muted);
+}
+
+.app-shell .pp-nres-card-win .pp-nres-card-score {
+  color: var(--app-two);
+}
+
+.app-shell .pp-nres-card-detail {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* ----------------------------------------------------------- reference ---
+ * The shape, small. Every attempt above is already drawn over the dashed
+ * guide, so this is a reminder, not the subject. It used to be a 320px panel
+ * holding a 132px drawing, because global.css sizes the CANVAS while the SHELL
+ * keeps `aspect-ratio:1/1; max-width:320px` - the same trap the Classic home
+ * tile hit. Sizing the shell is what actually makes it small.
+ * ------------------------------------------------------------------------ */
+.app-shell .pp-nres-reference {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.app-shell .pp-nres-reference-tile {
+  flex-shrink: 0;
+  width: 64px;
+}
+
+.app-shell .pp-nres-reference-tile .drawing-canvas-dark {
+  border-width: 1px;
+  border-color: var(--app-stage-line);
+}
+
+/*
+ * Quieter than the verdict and the scores. It was set at the same 800 weight and
+ * 0.12em tracking as the TOTAL label, which gave a caption for a thumbnail the
+ * same voice as the numbers that decided the round. Size is held at 0.7rem
+ * (11.2px) rather than dropped further - below 11px it stops being legible on
+ * the device - so the de-emphasis is carried by weight and tracking instead.
+ */
+.app-shell .pp-nres-reference-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------------------- total ---
+ * The cumulative score, and nothing else. The full leaderboard that used to sit
+ * here repeated the round score and the accuracy/speed breakdown that the two
+ * cards above already carry; `totalScore` was the only column it added.
+ *
+ * Labelled TOTAL precisely because the big numbers above are ROUND scores, and
+ * the two must never read as the same quantity.
+ * ------------------------------------------------------------------------ */
+/*
+ * A grid, not a flex run. As one line the four values read as a single crowded
+ * sentence - "TOTAL Maya 69 Tom 38" - and a long name pushed the numbers around.
+ * Two equal 1fr columns fix both: each player owns a column of the same width,
+ * the name sits directly above the number that belongs to it, and a long name
+ * truncates inside its own column instead of squeezing the other player's.
+ */
+.app-shell .pp-nres-total {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  align-items: center;
+  column-gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+}
+
+.app-shell .pp-nres-total-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* Leader first - the game's own standings order, not re-sorted here. */
+.app-shell .pp-nres-total-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+/* A hairline between the two columns, so which number belongs to which name is
+   settled by position rather than by reading order. */
+.app-shell .pp-nres-total-entry:last-child {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--color-border);
+}
+
+.app-shell .pp-nres-total-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * No "+" here, unlike the cards above. That sign is what makes a round score
+ * read as something ADDED this round; the total is a standing figure, so it does
+ * not get one - which is half of what keeps the two quantities apart.
+ */
+.app-shell .pp-nres-total-value {
+  font-family: var(--app-display);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--color-text);
+}
+
+/* ------------------------------------------------------------- actions --- */
+.app-shell .pp-nres-actions {
+  display: flex;
+  width: 100%;
+}
+
+.app-shell .pp-nres-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-fill);
+  color: #ffffff;
+  font-family: var(--app-display);
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.app-shell .pp-nres-primary:active {
+  transform: translateY(1px);
+}
+
+/*
+ * The coach mark follows the actions, so a first-round hint cannot push the
+ * button it is describing off the screen. Tighter and smaller than the shared
+ * .mp-coach, because down here it is a footnote rather than the guidance the
+ * multiplayer room shows mid-play.
+ *
+ * The INK is deliberately left alone. --color-text-muted on the accent tint
+ * measures 4.14:1, under 4.5:1 for text this size, so the secondary reading is
+ * carried by size and weight and the text keeps --color-text at 13.4:1.
+ */
+.app-shell .pp-nres .mp-coach {
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* --------------------------------------------------- narrow phones -------- */
+@media (max-width: 380px) {
+  .app-shell .pp-nres-card-score {
+    font-size: 1.45rem;
+  }
+
+  .app-shell .pp-nres-reference-tile {
+    width: 52px;
+  }
+}
+
+/* ===========================================================================
+ * CLASSIC ACTIVE GAME  -  Show and Draw
+ *
+ * ClassicGameplayNative renders these two states. Everything is under
+ * `.app-shell`, so none of it reaches the web, and `.app-play` keeps it off
+ * every other native screen - including the eight other DrawingCanvas callers.
+ *
+ * THE DRAWING SURFACE IS NOT SIZED HERE. `.drawing-canvas-shell` keeps
+ * global.css's `max-width:320px; aspect-ratio:1/1`, and the canvas keeps its
+ * CANVAS_SIZE backing buffer. Nothing in this block sets a width, a height or
+ * an aspect ratio on the canvas or its shell. That is deliberate: pointer
+ * coordinates are mapped through `canvas.width / rect.width`, so scoring is
+ * invariant to the displayed size - but the cosmetic pen overlay writes those
+ * same backing-space coordinates as CSS pixels, so its alignment is NOT. Not
+ * resizing the surface is what keeps that unchanged.
+ * ======================================================================== */
+
+/* `.screen` centres its children and opens with 32px of air. This screen is a
+   column of full-width blocks and the canvas wants that air back. Only the TOP
+   padding is overridden - the bottom keeps global.css's calc() with the
+   navigation-bar inset, which is load-bearing under edge-to-edge. */
+.app-shell .app-play {
+  align-items: stretch;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+}
+
+/* --------------------------------------------------------------- header ---
+ * AppHeader is neither modified nor used here. It carries the app-level nav row
+ * - chest, crown, achievements, share, settings - which is a dashboard, and
+ * mid-round every one of its rows is height taken from the canvas. Same tokens,
+ * three fewer rows: back, what you are drawing, what it is worth, coins.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-play-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.app-shell .app-play-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* 44px: the one navigation control up here stays a full-size target. */
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  color: var(--color-text);
+  font-family: var(--app-display);
+  font-size: 1.3rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.app-shell .app-play-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.app-shell .app-play-shape {
+  font-family: var(--app-display);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Best and pass score are present but quiet. During a round the game outranks
+   the economy. */
+.app-shell .app-play-sub {
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell .app-play-coins {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ---------------------------------------------------------------- phase ---
+ * A secondary indicator, under the instruction. It says WHERE you are; the line
+ * above says WHAT TO DO, and that is the one that has to be read first.
+ *
+ * Two pills because the product has two visible steps; `analyzing` keeps Draw
+ * lit rather than inventing a third.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-play-phase {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 28px;
+}
+
+.app-shell .app-play-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-card);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text);
+}
+
+/* The lit pill carries a dot as well as the tint, so which step you are in is
+   readable in greyscale. */
+.app-shell .app-play-pill-on {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-card));
+  color: var(--color-primary-text);
+}
+
+.app-shell .app-play-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.app-shell .app-play-pill-rule {
+  width: 14px;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* ---------------------------------------------------------------- stage ---
+ * ONE surface for the whole round, and the same one in both phases: same panel,
+ * same canvas node, same position, same size, same border, same radius. The
+ * shape is shown here and then drawn here.
+ *
+ * An earlier pass gave Show its own dark stage - a second canvas painted over
+ * this one. It measured fine and read wrong: on the device Show and Draw looked
+ * like two different screens rather than one surface changing state. Gone, along
+ * with the `visibility: hidden` that hid the real surface behind it.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-play-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+}
+
+/*
+ * One frame, not two. global.css gives every .drawing-canvas a 2px border, which
+ * inside this panel draws a second ring just inside the panel's own. The panel is
+ * the frame here, so the canvas's border goes transparent.
+ *
+ * `border-color`, never `border: none` - removing the border would shrink the
+ * canvas box by 4px, which changes `rect.width` and therefore the display scale.
+ * Keeping the box byte-identical is the whole point.
+ */
+.app-shell .app-play-stage .drawing-canvas {
+  border-color: transparent;
+  /*
+   * `background` reaches under the border by default, so a transparent border on
+   * a canvas whose CSS background is #ffffff draws a white halo - which is
+   * exactly what appeared around the dark Show stage. Clipping to the padding
+   * box keeps the white ground where the bitmap is and out of the border.
+   */
+  background-clip: padding-box;
+}
+
+/* --------------------------------------------------------- instruction ---
+ * The primary line, in one place at one size in every phase.
+ *
+ * It used to be two different things: 1.35rem under the stage in Show, 0.95rem
+ * tucked into the phase row in Draw. That made "Study the shape" and "Now draw
+ * it" - the same kind of instruction, one step apart - look like different kinds
+ * of information, and it moved the surface between the phases.
+ *
+ * ONE LINE, FIXED HEIGHT, on purpose. The coached round swaps in longer strings,
+ * and a row that could wrap would shift the surface between Show and Draw. The
+ * height is fixed so it cannot, and the size is set so the longest real string
+ * still fits on one line at 392px - no string is shortened or hidden to achieve
+ * that.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-play-instruction {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  font-family: var(--app-display);
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+/* ----------------------------------------------------------------- tray ---
+ * One tray, not four buttons. A row of separate controls at different weights
+ * is what made Show Guide, Undo and Done all look equally like the way forward.
+ *
+ * There is no eraser cell: CYDI has no eraser. The two cells the design calls
+ * "pen" are the product's real ink and pen-skin menus, kept as they are.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-play-tray {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  /*
+   * The slack goes ABOVE the tray, not below Done.
+   *
+   * global.css caps the drawing surface at 320px and that cap is not touched
+   * here, so on a 738px screen about 145px is left over. The design puts Done at
+   * the bottom and calls its position muscle memory, so the leftover height is
+   * spent lifting the canvas away from the tray rather than stranding the two
+   * controls in the middle with dead space under them.
+   */
+  margin-top: auto;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  /* NEVER `overflow: hidden` - the ink and pen dropdowns are absolutely
+     positioned children of their triggers and would be clipped away. */
+}
+
+.app-shell .app-play-tool {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  /* 64px, not the design's 56: the real ink and pen triggers are 44px circles,
+     and a label under a 44px control does not fit in 56. Every cell matches
+     them so the tray stays one object. */
+  min-height: 64px;
+  padding: 0 2px;
+  border-radius: 12px;
+  color: var(--color-text-muted);
+}
+
+.app-shell .app-play-tool-btn {
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-shell .app-play-tool-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The selected state is a filled tile, not a tint on the icon. */
+.app-shell .app-play-tool-on {
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: var(--color-primary-text);
+}
+
+.app-shell .app-play-tool-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.app-shell .app-play-tool-on .app-play-tool-label {
+  font-weight: 800;
+}
+
+/* Guide is a toggle rather than an action, so a hairline sets it apart from the
+   three drawing controls. */
+.app-shell .app-play-tray-rule {
+  flex: 0 0 1px;
+  margin: 12px 2px;
+  background: var(--color-border);
+}
+
+/* The two menus keep their own markup; the tray only has to stop them adding a
+   second box around a control that is already a circle. */
+.app-shell .app-play-tool .pen-color-menu,
+.app-shell .app-play-tool .pen-skin-menu {
+  display: block;
+}
+
+/*
+ * The dropdowns open UPWARD on this screen only.
+ *
+ * global.css positions both at `top: calc(100% + space-2)`, which was right when
+ * the triggers sat under the canvas with the button row below them. In this
+ * layout the tray is directly above Done at the bottom of the screen, and a
+ * roughly 260px list opening downward would run off the bottom - on a screen
+ * that is deliberately not scrollable while drawing. Direction only: the
+ * triggers, the lists, the locked-item behaviour and the shop routing are all
+ * untouched.
+ */
+.app-shell .app-play-tray .pen-color-dropdown,
+.app-shell .app-play-tray .pen-skin-dropdown {
+  top: auto;
+  bottom: calc(100% + var(--space-2));
+}
+
+/* ----------------------------------------------------------------- done ---
+ * The only filled element on the screen and the only full-width one. Undo and
+ * Guide live inside the tray, so neither can be mistaken for the way forward.
+ * ------------------------------------------------------------------------ */
+.app-shell .app-play-done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 52px;
+  margin-top: var(--space-1);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-fill);
+  color: #ffffff;
+  font-family: var(--app-display);
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.app-shell .app-play-done:active {
+  transform: translateY(1px);
+}
+
+/* --------------------------------------------------- narrow phones -------- */
+@media (max-width: 380px) {
+  .app-shell .app-play-instruction {
+    font-size: 1.1rem;
+  }
+
+  .app-shell .app-play-tool-label {
+    font-size: 0.66rem;
+  }
+}
+
+
+/* ===========================================================================
+ * MULTIPLAYER RESULT  -  who won, where you are, what happens next
+ *
+ * Scoped to `.mp-results`, which PlayTogetherRoom puts on the ROUND_RESULTS and
+ * FINAL_RESULTS containers only. The lobby, the shape peek and the drawing
+ * screen are untouched and keep the full header.
+ *
+ * WHAT THIS FIXES. Measured on a 392x738 device with a full room of eight - a
+ * supported size, not an edge case - the primary action sat 139px below the fold,
+ * and 221px below it in round one with the coach mark. The screen answered "who
+ * won" and "where am I" and then hid "what happens next".
+ *
+ * Three things buy that back, none of them a scrolling table: the app-level nav
+ * row goes, the coach mark moves below the action, and the result rows tighten
+ * to roughly the density the final standings already use.
+ * ======================================================================== */
+
+/* ---------------------------------------------------------- result chrome ---
+ * The header is NOT modified and NOT replaced - its Back button keeps the real
+ * handler that leaves the room. Only its heavy half is hidden: coins, chest,
+ * crown, share and settings are chrome for choosing what to play, and together
+ * with the rank badge they cost 186px above a competitive result.
+ *
+ * `:has()` is this codebase's idiom for exactly this - site.css does it for two
+ * screens, appShell.css for the 2 Players result. Where it is unsupported the
+ * rule is skipped and the full header stays: longer than intended, never broken.
+ * ------------------------------------------------------------------------ */
+.app-shell .screen:has(.mp-results) .app-header-actions,
+.app-shell .screen:has(.mp-results) > .social-badge {
+  display: none;
+}
+
+.app-shell .screen:has(.mp-results) .app-header {
+  margin-bottom: var(--space-2);
+}
+
+/* Context, left-aligned like every other compact header in the app. `.mp-stage`
+   centres its children, which left this line floating mid-width. */
+.app-shell .mp-results .mp-round-label {
+  align-self: flex-start;
+}
+
+/* ---------------------------------------------------------------- verdict ---
+ * One line, read before the table. The winner is still carried by the medal and
+ * the tinted row as well, so it survives greyscale.
+ * ------------------------------------------------------------------------ */
+.app-shell .mp-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  align-self: flex-start;
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+}
+
+.app-shell .mp-verdict-mark {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.app-shell .mp-verdict-name {
+  font-family: var(--app-display);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ dense rows ---
+ * Result-only. The round rows carry a two-line score cell and ran to 58px each,
+ * which is 72px of a full room spent on padding. This brings them to about the
+ * 49px the final standings already use, and nothing is dropped: medal, rank,
+ * nickname, YOU/HOST/AWAY tags, the round score with its accuracy/speed
+ * breakdown, the total, and the winner and you highlights all stay.
+ * ------------------------------------------------------------------------ */
+.app-shell .mp-results .mp-leaderboard {
+  border-spacing: 0 4px;
+}
+
+.app-shell .mp-results .mp-lb-row > td {
+  padding: 6px 8px;
+}
+
+.app-shell .mp-results .mp-lb-breakdown {
+  line-height: 1.2;
+}
+
+.app-shell .mp-results .mp-leaderboard th {
+  padding-top: 0;
+  padding-bottom: 2px;
+}
+
+/* The champion line is the verdict on the final screen, so it gets the weight
+   the round verdict gets - it is not a section heading. */
+.app-shell .mp-results .mp-final-heading {
   font-family: var(--app-display);
   font-size: 1.15rem;
   font-weight: 900;
   letter-spacing: -0.02em;
-  color: var(--color-text);
 }

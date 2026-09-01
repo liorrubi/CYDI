@@ -113,3 +113,26 @@ export function ShopIcon({ size = 17 }: IconProps) {
     </svg>
   );
 }
+
+/** A curved arrow doubling back - Undo. */
+export function UndoIcon({ size = 22 }: IconProps) {
+  return (
+    <svg {...BASE} width={size} height={size}>
+      <path d="M4 9h10.5a4.5 4.5 0 0 1 0 9H8" />
+      <path d="M7.5 5.5L4 9l3.5 3.5" />
+    </svg>
+  );
+}
+
+/**
+ * A dashed star - the reference guide. Dashed rather than solid because that is
+ * exactly how the guide is drawn on the canvas, so the control looks like the
+ * thing it toggles.
+ */
+export function GuideIcon({ size = 22 }: IconProps) {
+  return (
+    <svg {...BASE} width={size} height={size}>
+      <path d="M12 4.5l2.6 6.4 6.9.3-5.4 4.3 1.9 6.6L12 18.3 6 22.1l1.9-6.6L2.5 11.2l6.9-.3z" strokeDasharray="3.2 3" />
+    </svg>
+  );
+}

@@ -18,6 +18,12 @@ type DrawingCanvasProps = {
   disabled?: boolean;
   ghostPath?: DrawingPath;
   showGhost?: boolean;
+  /**
+   * Draw the ghost solid instead of dashed. Defaults to false, so every existing
+   * caller and every other phase renders exactly as before - only the Classic
+   * preview opts in.
+   */
+  ghostSolid?: boolean;
   strokeColor?: PenColorId;
   /** Cosmetic pen skin for the follow-the-pointer overlay. Defaults to the player's equipped skin; never affects strokes or scoring. */
   penSkin?: PenSkinId;
@@ -115,6 +121,17 @@ export function drawSegmentedStroke(
 // and deliberately distinct from every purchasable pen ink color.
 const GHOST_STROKE_COLOR = "#2563eb";
 const GHOST_STROKE_OPTIONS: StrokeOptions = { lineWidth: 6, dash: [12, 8] };
+/*
+ * The same line, undashed - for the phase where the shape is the thing to
+ * memorise rather than a reference to trace over.
+ *
+ * On the device the dashed line read as "guide" in both phases, so the shape you
+ * are being asked to remember looked like scaffolding. Solid and dashed now
+ * carry that distinction: solid is the target, dashed is the guide you draw
+ * against. Same colour and same width, so it is one line in two states rather
+ * than two different marks.
+ */
+const GHOST_SOLID_OPTIONS: StrokeOptions = { lineWidth: 6 };
 
 // Diamond ink glitter --------------------------------------------------------
 // Only the Diamond Blue pen sprinkles sparkles as it draws. They live in a
@@ -162,6 +179,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     disabled = false,
     ghostPath,
     showGhost = false,
+    ghostSolid = false,
     strokeColor = DEFAULT_PEN_COLOR,
     penSkin = getSelectedSkin(),
     onChange,
@@ -293,7 +311,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     if (showGhost && ghostPath) {
-      drawSegmentedStroke(ctx, ghostPath.points, ghostPath.breaks ?? [], GHOST_STROKE_COLOR, GHOST_STROKE_OPTIONS);
+      drawSegmentedStroke(
+        ctx,
+        ghostPath.points,
+        ghostPath.breaks ?? [],
+        GHOST_STROKE_COLOR,
+        ghostSolid ? GHOST_SOLID_OPTIONS : GHOST_STROKE_OPTIONS,
+      );
     }
 
     drawSegmentedUserStroke(ctx, pointsRef.current, segmentBreaksRef.current, strokeColor);
@@ -303,7 +327,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(functi
   useEffect(() => {
     redraw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ghostPath, showGhost, width, height, strokeColor]);
+  }, [ghostPath, showGhost, ghostSolid, width, height, strokeColor]);
 
   useImperativeHandle(ref, () => ({
     clear() {

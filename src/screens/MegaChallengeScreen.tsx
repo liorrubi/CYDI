@@ -3,6 +3,7 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
+import { solidTargetInPreview } from "../app/targetRendering";
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
@@ -444,6 +445,7 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
           disabled={phase !== "drawing"}
           ghostPath={showTargetGhost ? target : undefined}
           showGhost={showTargetGhost}
+          ghostSolid={solidTargetInPreview(phase === "preview")}
           strokeColor={penColor}
           penSkin={penSkin}
           onChange={setAttemptPath}

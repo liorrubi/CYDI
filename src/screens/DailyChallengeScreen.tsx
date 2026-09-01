@@ -3,6 +3,7 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DailyLeaderboardTable from "../components/DailyLeaderboardTable";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
+import { solidTargetInPreview } from "../app/targetRendering";
 import DrawingTutorialOverlay from "../components/DrawingTutorialOverlay";
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
@@ -408,6 +409,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
           disabled={phase !== "drawing"}
           ghostPath={phase === "preview" ? target : undefined}
           showGhost={phase === "preview"}
+          ghostSolid={solidTargetInPreview(phase === "preview")}
           strokeColor={penColor}
           penSkin={penSkin}
           onChange={setAttemptPath}

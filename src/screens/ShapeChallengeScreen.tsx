@@ -8,6 +8,10 @@ import DrawingTutorialOverlay from "../components/DrawingTutorialOverlay";
 import PenColorMenu from "../components/PenColorMenu";
 import PenSkinMenu from "../components/PenSkinMenu";
 import ScoreCard from "../components/ScoreCard";
+import ClassicResultNative from "../app/ClassicResultNative";
+import ClassicGameplayNative from "../app/ClassicGameplayNative";
+import { solidTargetInPreview } from "../app/targetRendering";
+import { Capacitor } from "@capacitor/core";
 import ResultComparison from "../components/ResultComparison";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
 import StarRating from "../components/StarRating";
@@ -1062,8 +1066,97 @@ function ShapePlay({
   if (phase === "result" && result && attemptPath) {
     const passed = result.total >= passScore;
     const resultTip = improvementTip(result);
+
+    /*
+     * The conditional pieces this screen already renders, built once and handed
+     * to whichever layout is used - so neither branch re-implements them and the
+     * reward, tutorial and discovery behaviour is identical on both.
+     */
+    const offerNode =
+      doubleOfferAmount !== null ? (
+        <DoubleCoinsOffer
+          amount={doubleOfferAmount}
+          onResolved={handleDoubleOfferResolved}
+          placement="shape_challenge_double_reward"
+          deferExplainer={showResultTutorial}
+        />
+      ) : null;
+
+    const notesNode = (
+      <>
+        {!practice && !canGoToNextShape && nextIndex < shapes.length && (
+          <p className="result-actions-note">Score {passScore}+ to unlock the next shape.</p>
+        )}
+        {practice && (
+          <p className="result-actions-note">Practice round - this score isn&rsquo;t saved and unlocks nothing.</p>
+        )}
+        {showResultTutorial && (
+          <div className="result-actions-hint-row">
+            {canGoToNextShape && <span aria-hidden="true" />}
+            <p className="result-actions-tutorial">
+              {canGoToNextShape
+                ? "\u{1F446} Tap Next to continue."
+                : practice
+                  ? "\u{1F446} Tap Try Again for another go."
+                  : "\u{1F446} Tap Try Again to beat the pass score."}
+            </p>
+          </div>
+        )}
+        {showCreateDiscovery && (
+          <div className="create-discovery-card">
+            <p className="create-discovery-title">✏️ Make your own challenge</p>
+            <p className="create-discovery-text">Draw any shape and send it to a friend to see who copies it best.</p>
+            <Button variant="secondary" onClick={handleCreateDiscoveryAccepted}>
+              Create a Challenge
+            </Button>
+          </div>
+        )}
+      </>
+    );
+
+    /*
+     * ANDROID gets the approved Version B layout. Same data, same handlers and
+     * the same decision about which action is primary - only the presentation
+     * differs. The web falls through to the existing markup, unchanged.
+     */
+    if (Capacitor.isNativePlatform()) {
+      return (
+        <ClassicResultNative
+          shapeName={shape.name}
+          onBack={handleBackToMapFromResult}
+          stage={<ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} variant="dark" />}
+          score={result}
+          isNewBest={isNewBest}
+          stars={<StarRating score={result.total} size={22} />}
+          bestLabel={previousBest !== undefined && bestScore !== undefined ? `Your best ${bestScore}%` : null}
+          tip={resultTip}
+          onPrimary={canGoToNextShape ? handleNextShapeFromResult : handleTryAgainFromResult}
+          primaryLabel={canGoToNextShape ? "Next Shape" : "Try Again"}
+          primaryClassName={showResultTutorial ? "coach-pulse" : undefined}
+          onRetry={canGoToNextShape ? handleTryAgainFromResult : undefined}
+          onHome={handleBackToMapFromResult}
+          homeLabel="Back to Map"
+          actionsRef={resultActionsRef}
+          offer={offerNode}
+          extras={notesNode}
+        />
+      );
+    }
+
     return (
-      <div className="screen">
+      /*
+       * `app-result` is a hook for the native skin ONLY, so appShell.css can put
+       * this screen's sections in the approved order without moving any JSX.
+       *
+       * It has to be specific to Classic's result: `.screen` is every screen's
+       * root, and seven screens render ResultComparison, so an unscoped reorder
+       * would silently rearrange Daily, Mega, Special, Artist Pack and the
+       * shared-result screens too - none of which were reviewed for it.
+       *
+       * Web is unaffected: every rule using this class also requires
+       * `.app-shell`, which only exists on native.
+       */
+      <div className="screen app-result">
         {/* The header's back arrow takes the same exit as the Back to Map button below -
             it must not be a side door that leaves the ×2 offer unresolved and uncounted. */}
         <AppHeader
@@ -1162,6 +1255,114 @@ function ShapePlay({
     );
   }
 
+  /*
+   * The instruction for this phase, decided exactly where it was decided before
+   * - including the rule that the preview countdown appears only in the first
+   * coached round. Both layouts print this same string, so neither can drift.
+   */
+  const instruction = firstRoundCoach
+    ? phase === "preview"
+      ? `👀 Look at the shape · ${previewSecondsLeft}`
+      : phase === "drawing"
+        ? hasStroke
+          ? "👆 Tap Done when you finish"
+          : "✏️ Draw it!"
+        : phase === "analyzing"
+          ? "Analyzing..."
+          : ""
+    : phase === "preview"
+      ? "Study the shape"
+      : phase === "drawing"
+        ? "Now draw it"
+        : phase === "analyzing"
+          ? "Analyzing..."
+          : "";
+
+  /*
+   * The live drawing surface, built once and shared by both layouts: same props,
+   * same backing size, same wrapper class, never remounted mid-round. Nothing
+   * about the canvas differs between web and Android.
+   */
+  const onNativePlatform = Capacitor.isNativePlatform();
+  const canvasNode = (
+    <div className="canvas-wrapper">
+      <DrawingCanvas
+        ref={canvasRef}
+        width={CANVAS_SIZE}
+        height={CANVAS_SIZE}
+        disabled={phase !== "drawing"}
+        ghostPath={showTargetGhost ? target : undefined}
+        showGhost={showTargetGhost}
+        /*
+         * Solid in Show, dashed in Draw - so the shape to remember does not look
+         * like the guide you trace against. `phase === "preview"` only, which is
+         * why turning the guide on during Draw still gets the dashed line.
+         *
+         * Native only: the web Classic layout has not been reviewed for this and
+         * keeps the render it has today.
+         */
+        ghostSolid={solidTargetInPreview(phase === "preview")}
+        strokeColor={penColor}
+        penSkin={penSkin}
+        onChange={setAttemptPath}
+        onComplete={setAttemptPath}
+      />
+    </div>
+  );
+
+  const inkControl = (
+    <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={onNavigateToShop} />
+  );
+  const penControl = (
+    <PenSkinMenu
+      selected={penSkin}
+      inkColor={penInkGlyphColor(penColor)}
+      onSelect={handleSelectPenSkin}
+      onLockedSkinClick={(id) => onNavigateToShop(undefined, id)}
+    />
+  );
+
+  /*
+   * ANDROID gets the approved Show/Draw layout. Same phases, same strings, same
+   * controls, same handlers - only the arrangement differs. The web falls
+   * through to the existing markup below, unchanged.
+   */
+  if (onNativePlatform) {
+    return (
+      <ClassicGameplayNative
+        phase={phase === "result" ? "analyzing" : phase}
+        shapeName={shape.name}
+        subtitle={`Best: ${bestLabel} · Pass score: ${passScore}+`}
+        onBack={onBackToMap}
+        onNavigateToShop={() => onNavigateToShop()}
+        /*
+         * ONE canvas for the whole round. There is no separate Show stage: this
+         * same element already draws the target during preview (see
+         * `showTargetGhost` above), so Show and Draw are not two surfaces that
+         * resemble each other - they are the same node, at the same position and
+         * size, with the ghost lifting when the drawing starts.
+         *
+         * An earlier pass layered a dark overlay canvas over this during
+         * preview. On the device that broke the thing it was meant to serve: the
+         * two phases read as different screens instead of one surface changing
+         * state. Removed.
+         */
+        canvas={canvasNode}
+        instruction={instruction}
+        coached={firstRoundCoach}
+        inkControl={inkControl}
+        penControl={penControl}
+        onUndo={handleUndo}
+        undoDisabled={!attemptPath || attemptPath.points.length === 0}
+        guideEnabled={guideEnabled}
+        onToggleGuide={() => setGuideEnabled((enabled) => !enabled)}
+        onDone={handleDone}
+        donePulse={firstRoundCoach && hasStroke}
+        overlays={showDrawingTutorial && <DrawingTutorialOverlay onDismiss={dismissDrawingTutorial} />}
+      />
+    );
+  }
+
   return (
     <div className="screen">
       <AppHeader
@@ -1190,30 +1391,12 @@ function ShapePlay({
           {phase === "analyzing" && "Analyzing..."}
         </p>
       )}
-      <div className="canvas-wrapper">
-        <DrawingCanvas
-          ref={canvasRef}
-          width={CANVAS_SIZE}
-          height={CANVAS_SIZE}
-          disabled={phase !== "drawing"}
-          ghostPath={showTargetGhost ? target : undefined}
-          showGhost={showTargetGhost}
-          strokeColor={penColor}
-          penSkin={penSkin}
-          onChange={setAttemptPath}
-          onComplete={setAttemptPath}
-        />
-      </div>
+      {canvasNode}
       {phase === "drawing" && (
         <>
           <div className="pen-tools-row">
-            <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={onNavigateToShop} />
-            <PenSkinMenu
-              selected={penSkin}
-              inkColor={penInkGlyphColor(penColor)}
-              onSelect={handleSelectPenSkin}
-              onLockedSkinClick={(id) => onNavigateToShop(undefined, id)}
-            />
+            {inkControl}
+            {penControl}
           </div>
           <div className="button-row">
             <Button variant="secondary" onClick={() => setGuideEnabled((enabled) => !enabled)}>

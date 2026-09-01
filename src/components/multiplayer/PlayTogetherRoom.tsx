@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "../Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../DrawingCanvas";
+import { solidTargetInPreview } from "../../app/targetRendering";
 import MultiplayerLeaderboard from "./MultiplayerLeaderboard";
 import RoomCodeCard from "./RoomCodeCard";
 import RoundCoachMark from "./RoundCoachMark";
@@ -550,6 +551,7 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
               disabled={!canDrawNow(phase, submitted, submitting)}
               ghostPath={showsTargetShape(phase) ? target : undefined}
               showGhost={showsTargetShape(phase)}
+              ghostSolid={solidTargetInPreview(showsTargetShape(phase))}
               strokeColor={penColor}
               onChange={setAttempt}
               onComplete={setAttempt}
@@ -602,8 +604,14 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
       )}
 
       {/* -------------------------------------------------- ROUND_RESULTS -- */}
+      {/*
+        * `mp-results` is a marker for the native skin ONLY: it lets appShell.css
+        * trim the app-level nav row on the two result phases without touching
+        * the lobby, the shape peek or the drawing screen, all of which keep the
+        * full header. Nothing outside that stylesheet reads it.
+        */}
       {phase === "ROUND_RESULTS" && (
-        <div className="mp-stage">
+        <div className="mp-stage mp-results">
           <p className="mp-round-label">{roundLabel}</p>
 
           {!revealDone ? (
@@ -616,9 +624,25 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
             />
           ) : (
             <>
-              <MultiplayerLeaderboard players={players} yourSeatId={you?.seatId ?? null} highlightSeatIds={winner ? [winner.seatId] : null} />
+              {/*
+                * The verdict, stated. The tinted row already carries it, but
+                * WinnerReveal - the only place that says it in words - is gone by
+                * the time this screen settles, so the answer to "who won" was
+                * left to be inferred from a colour.
+                *
+                * `winner` is null when nobody submitted, and then there is no
+                * winner to name and no line.
+                */}
+              {winner && (
+                <p className="mp-verdict">
+                  <span className="mp-verdict-mark" aria-hidden="true">
+                    🏆
+                  </span>
+                  <strong className="mp-verdict-name">{winner.nickname}</strong> wins the round
+                </p>
+              )}
 
-              {showCoach && <RoundCoachMark text="Scores add up across every round — there's plenty of time to catch up." />}
+              <MultiplayerLeaderboard players={players} yourSeatId={you?.seatId ?? null} highlightSeatIds={winner ? [winner.seatId] : null} />
 
               {hostControlFor(phase, isHost) === "next" ? (
                 <Button className="mp-primary-action" onClick={() => send({ type: "next" })}>
@@ -634,6 +658,10 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
                   Waiting for the host to start the next round
                 </p>
               )}
+
+              {/* After the action, not before it. What happens next is primary;
+                  a first-round hint is secondary help and must not push it down. */}
+              {showCoach && <RoundCoachMark text="Scores add up across every round — there's plenty of time to catch up." />}
             </>
           )}
         </div>
@@ -641,7 +669,8 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
 
       {/* -------------------------------------------------- FINAL_RESULTS -- */}
       {phase === "FINAL_RESULTS" && (
-        <div className="mp-stage">
+        /* No second verdict here: the champion heading below already states it. */
+        <div className="mp-stage mp-results">
           {!revealDone ? (
             <WinnerReveal
               nickname={champion?.nickname ?? null}
@@ -661,13 +690,6 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
                 highlightSeatIds={champion ? [champion.seatId] : null}
                 showRoundScore={false}
               />
-              {/* Local-device progression only: never sent to the room, never shown for a peer. */}
-              {award && (
-                <>
-                  <SocialPointsAward points={award.points} total={award.total} />
-                  <SocialProgressCard previousTotal={award.previousTotal} total={award.total} pointsAwarded={award.points} />
-                </>
-              )}
               <div className="button-row mp-final-actions">
                 <Button variant="secondary" onClick={onExit}>
                   Exit
@@ -687,6 +709,25 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
                   <span className="mp-hint mp-hint-inline">Only the host can start a rematch</span>
                 )}
               </div>
+
+              {/*
+                * Local-device progression only: never sent to the room, never
+                * shown for a peer.
+                *
+                * AFTER the actions, not before. These two cards are 228px tall
+                * together, and in a full room of eight that pushed Exit and Play
+                * Again 103px below the fold - the screen answered "who won" and
+                * "where am I" and then hid "what happens next". The award is a
+                * reward to read once the decision is made, so it follows it.
+                * Ordering only: nothing about the awarding, the gameSerial key or
+                * what is stored has changed.
+                */}
+              {award && (
+                <>
+                  <SocialPointsAward points={award.points} total={award.total} />
+                  <SocialProgressCard previousTotal={award.previousTotal} total={award.total} pointsAwarded={award.points} />
+                </>
+              )}
             </>
           )}
         </div>

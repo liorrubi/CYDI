@@ -50,6 +50,9 @@ make you work it out, and Multiplayer results now fit a full room of eight with
 the next action still in view. Nothing about scoring, timing or how the game
 plays has changed.
 
+Analytics now records app version on all events and build identity on app opens,
+enabling release/build-level analysis without changing existing totals.
+
 ## 0.39.1 - 2026-08-23
 
 Fixes for the two drawing faults reported from real multiplayer play, plus the

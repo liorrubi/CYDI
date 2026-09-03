@@ -6,6 +6,8 @@ import {
   israelDateKey,
   monthlyRange,
   normalizeAnalyticsPlatform,
+  normalizeAppBuild,
+  normalizeAppVersion,
   validateEventParams,
   weeklyRange,
   type AnalyticsEventName,
@@ -44,6 +46,10 @@ import {
 // separate the two.
 const MAX_BODY_BYTES = 1024;
 const FUNNEL_EVENTS = new Set<AnalyticsEventName>(["game_started", "game_completed", "result_shared"]);
+// The only event that gets a per-BUILD breakdown. One launch counter is enough to
+// see which builds are in the field; putting unbounded-cardinality SHAs on every
+// event would grow the stored counter maps without limit.
+const BUILD_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["app_open"]);
 // Round results carrying a score: the plain one and its SEO-practice twin, which is
 // aggregated separately on purpose so the report's averageScore/passRate (computed
 // from shape_completed alone) stay a real-play baseline.
@@ -59,6 +65,18 @@ type EventCounters = {
   // buckets recorded before this field existed; events from app versions that
   // predate it land under "unknown" rather than being guessed into a platform.
   byPlatform?: Record<string, number>;
+  // Which release the event came from (APP_VERSION), for every event. Live
+  // versions are a handful of keys at a time, like byPlatform, so keeping it on
+  // all events costs nothing; the strict format guard in normalizeAppVersion is
+  // what stops a hostile client turning this into arbitrary-key storage. Absent
+  // on day buckets recorded before this field existed, and events from clients
+  // that predate it land under "unknown" rather than being guessed into a release.
+  byAppVersion?: Record<string, number>;
+  // app_open ONLY - which BUILD (short git SHA) is in the field. Deliberately not
+  // kept on every event: SHAs are unbounded cardinality, and one key per build per
+  // event would grow these maps without limit. app_open alone answers "which
+  // builds are actually running" at a fixed, tiny cost.
+  byAppBuild?: Record<string, number>;
   byGameType?: Record<string, number>;
   byCategory?: Record<string, number>;
   byContentKey?: Record<string, number>;
@@ -124,15 +142,22 @@ function mergeKeyMaps(a: Record<string, number> | undefined, b: Record<string, n
 }
 
 /** Only game_started/game_completed/result_shared (the funnel the report computes rates from) get gameType/category/contentKey breakdowns - no breakdown is invented for the other 5 events, which just get a total. */
-function incrementEvent(
+export function incrementEvent(
   counters: AllCounters,
   eventName: AnalyticsEventName,
   params: Record<string, unknown>,
   platform: AnalyticsPlatform,
+  appVersion: string = "unknown",
+  appBuild: string = "unknown",
 ): AllCounters {
   const existing = counters[eventName] ?? { total: 0 };
   const updated: EventCounters = { ...existing, total: existing.total + 1 };
   updated.byPlatform = incrementKeyMap(existing.byPlatform, platform);
+  updated.byAppVersion = incrementKeyMap(existing.byAppVersion, appVersion);
+  // Build breakout is app_open only - see the byAppBuild note on EventCounters.
+  if (BUILD_BREAKOUT_EVENTS.has(eventName)) {
+    updated.byAppBuild = incrementKeyMap(existing.byAppBuild, appBuild);
+  }
   if (FUNNEL_EVENTS.has(eventName)) {
     const gameType = params.gameType as string;
     const category = params.category as string;
@@ -161,7 +186,7 @@ function mergeOptionalSum(a: number | undefined, b: number | undefined): number 
   return (a ?? 0) + (b ?? 0);
 }
 
-function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
+export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
   const merged: AllCounters = { ...a };
   for (const eventName of ANALYTICS_EVENT_NAMES) {
     const be = b[eventName];
@@ -170,6 +195,11 @@ function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
     merged[eventName] = {
       total: ae.total + be.total,
       byPlatform: mergeKeyMaps(ae.byPlatform, be.byPlatform),
+      // Undefined on either side (a bucket recorded before these fields existed)
+      // stays undefined when both are - mergeKeyMaps already handles that, so no
+      // legacy bucket gains a phantom key.
+      byAppVersion: mergeKeyMaps(ae.byAppVersion, be.byAppVersion),
+      byAppBuild: mergeKeyMaps(ae.byAppBuild, be.byAppBuild),
       byGameType: mergeKeyMaps(ae.byGameType, be.byGameType),
       byCategory: mergeKeyMaps(ae.byCategory, be.byCategory),
       byContentKey: mergeKeyMaps(ae.byContentKey, be.byContentKey),
@@ -235,6 +265,11 @@ export class AnalyticsDO {
     const audience = normalizeAnalyticsAudience(b?.isInternal);
     const installationId = normalizeAnalyticsId(b?.installationId);
     const sessionId = normalizeAnalyticsId(b?.sessionId);
+    // Same contract as the four above: optional, format-guarded, never a reason to
+    // drop an event. Both are recorded into whichever audience bucket was selected,
+    // so a QA build and a production build of the same release stay comparable.
+    const appVersion = normalizeAppVersion(b?.appVersion);
+    const appBuild = normalizeAppBuild(b?.appBuild);
 
     const dateKey = israelDateKey(Date.now());
     const alltimeKey = this.alltimeStorageKey(audience);
@@ -246,8 +281,8 @@ export class AnalyticsDO {
       this.state.storage.get<UsageBucket>(usageKey),
     ]);
 
-    const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params, platform);
-    const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params, platform);
+    const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params, platform, appVersion, appBuild);
+    const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params, platform, appVersion, appBuild);
     const currentUsage = usage ?? emptyUsageBucket();
     const updatedUsage = recordUsageIds(currentUsage, audience, platform, installationId, sessionId);
 

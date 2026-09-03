@@ -6,6 +6,8 @@ import {
   monthlyRange,
   isAnalyticsEventName,
   normalizeAnalyticsPlatform,
+  normalizeAppVersion,
+  normalizeAppBuild,
   ANALYTICS_EVENT_NAMES,
 } from "./analyticsSchema.ts";
 import { sanitizeParams } from "./analytics.ts";
@@ -296,4 +298,63 @@ test("the bonus events are a distinct namespace - no collision with the plain fu
     assert.equal(ANALYTICS_EVENT_NAMES.filter((n) => n === name).length, 1, `${name} appears exactly once`);
   }
   assert.equal(ANALYTICS_EVENT_NAMES.filter((n) => n.startsWith("reward_bonus_")).length, 5);
+});
+
+// --- appVersion / appBuild: strict FORMAT guards, because unlike `platform` these
+// --- cannot be a closed set. An unguarded string here would be an arbitrary-key
+// --- write primitive against a counter map held in one Durable Object value.
+
+test("normalizeAppVersion accepts a real product version", () => {
+  assert.equal(normalizeAppVersion("0.40.0"), "0.40.0");
+  assert.equal(normalizeAppVersion("1.0.0"), "1.0.0");
+  assert.equal(normalizeAppVersion("12.34.567"), "12.34.567");
+});
+
+test("normalizeAppVersion returns unknown for a client that sends nothing", () => {
+  assert.equal(normalizeAppVersion(undefined), "unknown");
+  assert.equal(normalizeAppVersion(null), "unknown");
+  assert.equal(normalizeAppVersion(""), "unknown");
+});
+
+test("normalizeAppVersion refuses malformed and hostile values", () => {
+  for (const bad of [
+    "0.40",            // too few segments
+    "0.40.0.1",        // too many
+    "v0.40.0",         // prefixed
+    "0.40.0-rc1",      // suffixed
+    "0.40.0 ",         // trailing space
+    "123.4.5",         // segment over the length cap
+    "abc",
+    "../../etc/passwd",
+    "<script>",
+    1,
+    true,
+    {},
+    [],
+  ]) {
+    assert.equal(normalizeAppVersion(bad as unknown), "unknown", `rejects ${JSON.stringify(bad)}`);
+  }
+});
+
+test("normalizeAppVersion cannot be used to store arbitrary text server-side", () => {
+  assert.equal(normalizeAppVersion("9".repeat(300)), "unknown");
+  assert.equal(normalizeAppVersion("1.2." + "3".repeat(200)), "unknown");
+});
+
+test("normalizeAppBuild accepts a short git SHA", () => {
+  assert.equal(normalizeAppBuild("05dccc1"), "05dccc1");
+  assert.equal(normalizeAppBuild("62b7e91abcd"), "62b7e91abcd");
+});
+
+test("normalizeAppBuild rejects the timestamp fallback resolveAppBuild() produces without git", () => {
+  // vite.config.ts falls back to "YYYY-MM-DD HH:MM" when git is unavailable -
+  // per-build-environment noise, not a build identity, so it must not become a key.
+  assert.equal(normalizeAppBuild("2026-09-03 12:56"), "unknown");
+  assert.equal(normalizeAppBuild("test"), "unknown");
+});
+
+test("normalizeAppBuild refuses malformed and hostile values", () => {
+  for (const bad of ["", "05DCCC1", "05dccc", "0".repeat(64), "ghijklm", "05dccc1 ", undefined, null, 7, {}] ) {
+    assert.equal(normalizeAppBuild(bad as unknown), "unknown", `rejects ${JSON.stringify(bad)}`);
+  }
 });

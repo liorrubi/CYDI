@@ -580,6 +580,50 @@ export function normalizeAnalyticsPlatform(value: unknown): AnalyticsPlatform {
     : "unknown";
 }
 
+/**
+ * Which release an event came from - `APP_VERSION`, the hand-bumped product
+ * version that `android/app/build.gradle`'s versionName already mirrors. Rides
+ * alongside `params` like `platform` does, for the same reason: no per-event
+ * schema change and no collision with the sanitizeParams denylist.
+ *
+ * Web and Android ship independently, so at any moment the live site and the
+ * live APK can legitimately report DIFFERENT versions - that difference is the
+ * point of the dimension, and nothing here assumes they match.
+ *
+ * The version cannot be a closed set (new releases keep appearing), so instead
+ * the FORMAT is closed: unlike `platform`, an unguarded string field here would
+ * be an arbitrary-key write primitive against the counter map that lives in one
+ * Durable Object value. Same reasoning as analyticsUsage's ID_PATTERN.
+ */
+const APP_VERSION_PATTERN = /^\d{1,2}\.\d{1,2}\.\d{1,3}$/;
+
+/** Strict-format coercion; "unknown" for missing values (clients older than this field) and for anything malformed or hostile. */
+export function normalizeAppVersion(value: unknown): string {
+  return typeof value === "string" && APP_VERSION_PATTERN.test(value) ? value : "unknown";
+}
+
+/**
+ * Which BUILD an event came from - `APP_BUILD`, the short git SHA Vite injects
+ * at build time. It is what distinguishes two web deploys of the same
+ * `APP_VERSION`, and a local QA APK from the shipped release of the same
+ * version.
+ *
+ * SHAs are unbounded cardinality, so this is deliberately NOT broken out on
+ * every event - only on `app_open` (see worker/analyticsDO.ts), which is enough
+ * to see which builds are actually in the field.
+ *
+ * `resolveAppBuild()` in vite.config.ts falls back to a "YYYY-MM-DD HH:MM"
+ * timestamp when git is unavailable. That fallback is per-build-environment
+ * noise rather than a build identity, so it is deliberately rejected here and
+ * counted as "unknown".
+ */
+const APP_BUILD_PATTERN = /^[0-9a-f]{7,12}$/;
+
+/** Strict-format coercion: short hex SHA only. Timestamp fallbacks, missing values and hostile input all become "unknown". */
+export function normalizeAppBuild(value: unknown): string {
+  return typeof value === "string" && APP_BUILD_PATTERN.test(value) ? value : "unknown";
+}
+
 // --- Asia/Jerusalem date-range helpers, shared by ingestion (day bucket key) and the
 // --- admin report (daily/weekly/monthly range math). ---
 

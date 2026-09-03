@@ -10,6 +10,7 @@
 
 import { Capacitor } from "@capacitor/core";
 
+import { APP_BUILD, APP_VERSION } from "../app/constants";
 import { getInstallationId, getSessionId, isInternalDevice } from "./analyticsIdentity";
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
 import { apiFetch } from "./nativeApi";
@@ -138,6 +139,45 @@ const consoleDebugProvider: AnalyticsProvider = {
   },
 };
 
+/**
+ * The ingest envelope for one event.
+ *
+ * `platform` rides alongside params (never inside them) so the Worker can split
+ * Android-app usage from website usage without a per-event schema change.
+ * "android" | "ios" | "web" only - a coarse build-type label, not a device or
+ * user identifier.
+ *
+ * installationId/sessionId/isInternal ride in the same envelope, for the same
+ * reason: they let the server count installations and sessions (instead of only
+ * events) and keep our own QA devices out of the real-player numbers, without
+ * touching a single per-event schema. All three are locally generated and
+ * anonymous - see analyticsIdentity.ts.
+ *
+ * appVersion/appBuild follow the identical pattern, so activity can be analysed
+ * per release: `APP_VERSION` is the product version (the same constant
+ * build.gradle's versionName mirrors), `APP_BUILD` the short git SHA that tells
+ * two deploys of one version apart. Both are read from the constants rather than
+ * duplicated here, so there is still exactly one source of truth.
+ *
+ * Every one of these is optional on the server: an app version that predates any
+ * of them still validates and is counted, landing under "unknown".
+ *
+ * Extracted from the provider purely so it can be unit-tested without a network
+ * or a native bridge - the provider's behaviour is unchanged.
+ */
+export function buildAnalyticsEnvelope(eventName: AnalyticsEventName, params: AnalyticsParams) {
+  return {
+    eventName,
+    params,
+    platform: Capacitor.getPlatform(),
+    installationId: getInstallationId(),
+    sessionId: getSessionId(),
+    isInternal: isInternalDevice(),
+    appVersion: APP_VERSION,
+    appBuild: APP_BUILD,
+  };
+}
+
 // Ships the event to the game's own Cloudflare Worker (POST /api/analytics/event),
 // which validates it against the same per-event schema (analyticsSchema.ts) and rolls
 // it into aggregate-only counters server-side - see worker/analyticsDO.ts. Never
@@ -149,25 +189,7 @@ const cloudflareAnalyticsProvider: AnalyticsProvider = {
       apiFetch("/api/analytics/event", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // `platform` rides alongside params (never inside them) so the Worker can
-        // split Android-app usage from website usage without a per-event schema
-        // change. "android" | "ios" | "web" only - a coarse build-type label, not
-        // a device or user identifier.
-        //
-        // installationId/sessionId/isInternal ride in the same envelope, for the same
-        // reason: they let the server count installations and sessions (instead of only
-        // events) and keep our own QA devices out of the real-player numbers, without
-        // touching a single per-event schema. All three are locally generated and
-        // anonymous - see analyticsIdentity.ts. Every one of them is optional on the
-        // server: an app version that predates this still validates and is counted.
-        body: JSON.stringify({
-          eventName,
-          params,
-          platform: Capacitor.getPlatform(),
-          installationId: getInstallationId(),
-          sessionId: getSessionId(),
-          isInternal: isInternalDevice(),
-        }),
+        body: JSON.stringify(buildAnalyticsEnvelope(eventName, params)),
         keepalive: true,
       }).catch(() => {});
     } catch {

@@ -71,6 +71,28 @@ export type SocialRankParam = (typeof SOCIAL_RANK_PARAMS)[number];
 export const TUTORIAL_TYPE_PARAMS = ["classicModeIntro", "twoPlayers", "multiplayerHost", "multiplayerGuest"] as const;
 export type TutorialTypeParam = (typeof TUTORIAL_TYPE_PARAMS)[number];
 
+/**
+ * Where a Google Play CTA was shown / clicked, for the web -> Play install
+ * funnel. A CLOSED union, and deliberately a short one: the Worker keeps a
+ * `bySurface` breakdown for the two play_store_* events (see
+ * SURFACE_BREAKOUT_EVENTS in worker/analyticsDO.ts), and this validator is what
+ * bounds that map's cardinality no matter what a client sends.
+ *
+ * "results" is any plain Classic web result; the three seo_* ids are the shape
+ * landing pages whose practice round lands on that same result screen (see
+ * app/playStoreCta.ts, which is the only thing that decides between them).
+ * Never a path, never free text.
+ *
+ * Every id here is a surface that can actually render a CTA today. There is
+ * deliberately NO "home": the web home screen's "Get the Android App" card is
+ * currently unreachable on both platforms (HomeScreen.tsx renders it only
+ * inside `!onWeb`, while its own showGetTheApp is `!isAndroidApp()`), so a
+ * surface for it could report nothing but zeroes. Add one here explicitly if
+ * and when a real CTA lands on the Game Hub.
+ */
+export const PLAY_STORE_SURFACE_PARAMS = ["results", "seo_circle", "seo_star", "seo_heart"] as const;
+export type PlayStoreSurfaceParam = (typeof PLAY_STORE_SURFACE_PARAMS)[number];
+
 export type EventParamsMap = {
   app_open: Record<string, never>;
   shape_completed: { category: CategoryId; starRating: number; passed: boolean; isNewBest: boolean };
@@ -195,6 +217,21 @@ export type EventParamsMap = {
   /** A challenge was created and saved - from the discovery prompt or anywhere else,
    * so this doubles as the overall "challenges created" measure. */
   challenge_created: Record<string, never>;
+
+  // --- Web -> Google Play install funnel -----------------------------------
+  // A pair, and it has to be a pair: the click alone cannot tell a surface that
+  // converts well from one that is simply shown far more often, so the
+  // impression is the denominator of a per-surface CTR
+  // (play_store_click / play_store_cta_shown, split by `surface`).
+  //
+  // Unlike most non-funnel events, `surface` is NOT dropped on ingest - the
+  // Worker keeps a bounded `bySurface` map for exactly these two events, which
+  // is what makes the split reportable at all. Emitted on the WEB only; the
+  // Android app never renders a CTA to its own listing.
+  /** The CTA actually rendered - once per genuine appearance, never per rerender (app/playStoreCta.ts). */
+  play_store_cta_shown: { surface: PlayStoreSurfaceParam };
+  /** The player opened the Play Store listing from that CTA. */
+  play_store_click: { surface: PlayStoreSurfaceParam };
 };
 
 export type AnalyticsEventName = keyof EventParamsMap;
@@ -234,6 +271,8 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "create_discovery_shown",
   "create_discovery_accepted",
   "challenge_created",
+  "play_store_cta_shown",
+  "play_store_click",
   "mp_room_created",
   "mp_player_joined",
   "mp_game_started",
@@ -475,6 +514,8 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   create_discovery_shown: (p) => validateNoParams(p),
   create_discovery_accepted: (p) => validateNoParams(p),
   challenge_created: (p) => validateNoParams(p),
+  play_store_cta_shown: (p) => validatePlayStoreEvent(p),
+  play_store_click: (p) => validatePlayStoreEvent(p),
 };
 
 /** The two tutorial outcomes share a payload: which explanation, and nothing else. */
@@ -482,6 +523,17 @@ function validateTutorialEvent<E extends "tutorial_completed" | "tutorial_skippe
   if (!isRecord(p) || !hasExactKeys(p, ["tutorialType"])) return { valid: false };
   if (typeof p.tutorialType !== "string" || !(TUTORIAL_TYPE_PARAMS as readonly string[]).includes(p.tutorialType)) return { valid: false };
   return { valid: true, params: { tutorialType: p.tutorialType as TutorialTypeParam } as EventParamsMap[E] };
+}
+
+/**
+ * The install-funnel pair. Shared so the impression and the click can never
+ * disagree about what a surface is - a CTR whose numerator and denominator
+ * accepted different values would be worse than no CTR at all.
+ */
+function validatePlayStoreEvent<E extends "play_store_cta_shown" | "play_store_click">(p: unknown): ValidationResult<E> {
+  if (!isRecord(p) || !hasExactKeys(p, ["surface"])) return { valid: false };
+  if (typeof p.surface !== "string" || !(PLAY_STORE_SURFACE_PARAMS as readonly string[]).includes(p.surface)) return { valid: false };
+  return { valid: true, params: { surface: p.surface as PlayStoreSurfaceParam } as EventParamsMap[E] };
 }
 
 /** Events that carry no params at all. Anything in the payload is a bug, and a rejected event is safer than a leaked one. */

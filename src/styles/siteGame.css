@@ -130,7 +130,11 @@
 /* ---------------------------------------------------------------- cards --- */
 
 .site-game .card,
-.site-game .home-card {
+.site-game .home-card,
+/* The install CTA on the result screen carries its own surface rather than using
+   `.card` (see global.css), so it has to be named here or it would render as a
+   light panel on the dark stage. */
+.site-game .play-store-cta-card {
   background-color: var(--site-panel);
   border: 1px solid var(--site-hairline);
   border-radius: 20px;

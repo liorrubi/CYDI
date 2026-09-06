@@ -4622,6 +4622,36 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Web -> Google Play install CTA on the Classic result screen. Same in-flow card
+   geometry as the create-discovery prompt above rather than a reuse of that class:
+   the two are shown under different rules and one of them changing its look must
+   not silently drag the other with it. Registered under `.site-game` in
+   siteGame.css too - a card class that exists only here renders as a light panel
+   on the dark web skin. */
+.play-store-cta-card {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-card);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.play-store-cta-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.play-store-cta-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
 /* --- Phone-only result-screen compaction ----------------------------------
    Purely spacing and one headline size: every score component, the stars, the
    reward offer and the tip all still render, with the same wording. The point is

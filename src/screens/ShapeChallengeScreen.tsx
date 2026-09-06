@@ -66,6 +66,14 @@ import {
   shouldShowFirstRoundCoach,
   shouldShowResultActionsTutorial,
 } from "../services/tutorialStore";
+import {
+  ctaImpressionStep,
+  initialCtaImpressionState,
+  resultSurfaceForPath,
+  shouldShowPlayStoreCta,
+  type CtaImpressionState,
+} from "../app/playStoreCta";
+import { PLAY_STORE_URL } from "../services/nativeShare";
 import { recordOfferSkipped } from "../app/rewardOfferNudge";
 import { isRewardedAdAvailable } from "../services/ads";
 import { trackEvent } from "../services/analytics";
@@ -930,6 +938,48 @@ function ShapePlay({
     trackEvent("create_discovery_accepted", {});
     onNavigateToCreate();
   }
+
+  /*
+   * Web -> Google Play install CTA. Web only, for two separate reasons: the
+   * native result screen returns ClassicResultNative above (so the markup is
+   * unreachable there anyway), and the impression EVENT below would still fire
+   * on Android without the platform check - pointing the app's own players at
+   * the listing they already installed from.
+   *
+   * The surface is read from the live pathname on every result rather than
+   * captured once, because a landing path is never rewritten by in-app
+   * navigation: a visitor who arrived on /draw-a-perfect-star stays attributed
+   * to seo_star for that visit, which is the attribution the funnel wants.
+   */
+  const playStoreSurface = resultSurfaceForPath(window.location.pathname);
+  // The "one message at a time" rule and its practice-round exception both live in
+  // app/playStoreCta.ts, so they can be tested without rendering this screen.
+  const showPlayStoreCta = shouldShowPlayStoreCta({
+    isNative: Capacitor.isNativePlatform(),
+    atResult: phase === "result",
+    practice,
+    resultTutorialVisible: showResultTutorial,
+    createDiscoveryVisible: showCreateDiscovery,
+    doubleOfferPending: doubleOfferAmount !== null,
+  });
+
+  // Exactly one play_store_cta_shown per genuine appearance - the rule itself
+  // lives in app/playStoreCta.ts so it can be tested without rendering. Holding
+  // it in a ref rather than relying on the effect's dependency list is what
+  // makes a StrictMode double-invoke (and a remount that preserves the ref) a
+  // no-op instead of a second impression inflating the CTR denominator.
+  const playStoreCtaImpressionRef = useRef<CtaImpressionState>(initialCtaImpressionState());
+  useEffect(() => {
+    const step = ctaImpressionStep(playStoreCtaImpressionRef.current, showPlayStoreCta, playStoreSurface);
+    playStoreCtaImpressionRef.current = step.state;
+    if (step.emit) trackEvent("play_store_cta_shown", { surface: step.emit });
+  }, [showPlayStoreCta, playStoreSurface]);
+
+  function handlePlayStoreCtaClick() {
+    playSelectSound();
+    trackEvent("play_store_click", { surface: playStoreSurface });
+    window.open(PLAY_STORE_URL, "_blank", "noopener");
+  }
   // The coached result screen must not point at a button below the fold. On a
   // short phone viewport (~740px) the score card plus the x2 offer push the
   // continue actions off screen, so the round that says "Tap Next" scrolls them
@@ -1243,6 +1293,19 @@ function ShapePlay({
             <p className="create-discovery-text">Draw any shape and send it to a friend to see who copies it best.</p>
             <Button variant="secondary" onClick={handleCreateDiscoveryAccepted}>
               Create a Challenge
+            </Button>
+          </div>
+        )}
+        {/* Install CTA - in flow, below the continue actions and their notes, so
+            Try Again / Next Shape keep the top of the screen and nothing here can
+            stand between the player and the next round. Never a modal, never a
+            gate: ignoring it costs nothing and the round is already over. */}
+        {showPlayStoreCta && (
+          <div className="play-store-cta-card">
+            <p className="play-store-cta-title">📱 Take CYDI with you</p>
+            <p className="play-store-cta-text">Play CYDI on your phone — free on Google Play.</p>
+            <Button variant="secondary" onClick={handlePlayStoreCtaClick}>
+              Get the Android App
             </Button>
           </div>
         )}

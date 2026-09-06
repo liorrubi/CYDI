@@ -54,6 +54,13 @@ const BUILD_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["app_open"]);
 // aggregated separately on purpose so the report's averageScore/passRate (computed
 // from shape_completed alone) stay a real-play baseline.
 const SCORED_EVENTS = new Set<AnalyticsEventName>(["shape_completed", "shape_practice_completed"]);
+// The web -> Google Play install funnel, and the ONLY events whose `surface` param
+// survives ingest. Every other non-funnel event's params are validated and then
+// dropped here, which for this pair would have meant a CTR that could never be split
+// by surface. Cardinality is safe for the same reason byPlatform's is: the client
+// schema's PLAY_STORE_SURFACE_PARAMS is a closed five-value union, re-validated
+// server-side before this runs, so the map cannot grow past five keys.
+const SURFACE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["play_store_cta_shown", "play_store_click"]);
 // Hard cap for period=range so a single report read stays one multi-key storage get
 // (Durable Object storage allows up to 128 keys per get; a month is plenty for the admin page).
 const MAX_RANGE_DAYS = 31;
@@ -77,6 +84,12 @@ type EventCounters = {
   // event would grow these maps without limit. app_open alone answers "which
   // builds are actually running" at a fixed, tiny cost.
   byAppBuild?: Record<string, number>;
+  // play_store_cta_shown / play_store_click ONLY - which surface the CTA was seen
+  // or clicked on, so the install funnel's CTR can be read per surface. Bounded to
+  // the five ids of PLAY_STORE_SURFACE_PARAMS by the schema validation that runs
+  // before this. Absent on every other event, and on day buckets recorded before
+  // this field existed.
+  bySurface?: Record<string, number>;
   byGameType?: Record<string, number>;
   byCategory?: Record<string, number>;
   byContentKey?: Record<string, number>;
@@ -158,6 +171,10 @@ export function incrementEvent(
   if (BUILD_BREAKOUT_EVENTS.has(eventName)) {
     updated.byAppBuild = incrementKeyMap(existing.byAppBuild, appBuild);
   }
+  // Install-funnel surface breakout - see SURFACE_BREAKOUT_EVENTS.
+  if (SURFACE_BREAKOUT_EVENTS.has(eventName)) {
+    updated.bySurface = incrementKeyMap(existing.bySurface, params.surface as string);
+  }
   if (FUNNEL_EVENTS.has(eventName)) {
     const gameType = params.gameType as string;
     const category = params.category as string;
@@ -200,6 +217,7 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       // legacy bucket gains a phantom key.
       byAppVersion: mergeKeyMaps(ae.byAppVersion, be.byAppVersion),
       byAppBuild: mergeKeyMaps(ae.byAppBuild, be.byAppBuild),
+      bySurface: mergeKeyMaps(ae.bySurface, be.bySurface),
       byGameType: mergeKeyMaps(ae.byGameType, be.byGameType),
       byCategory: mergeKeyMaps(ae.byCategory, be.byCategory),
       byContentKey: mergeKeyMaps(ae.byContentKey, be.byContentKey),

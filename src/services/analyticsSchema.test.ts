@@ -9,6 +9,7 @@ import {
   normalizeAppVersion,
   normalizeAppBuild,
   ANALYTICS_EVENT_NAMES,
+  PLAY_STORE_SURFACE_PARAMS,
 } from "./analyticsSchema.ts";
 import { sanitizeParams } from "./analytics.ts";
 
@@ -172,6 +173,58 @@ test("reward_* events are a distinct namespace from rewarded_ad_* (no accidental
   // Each validates independently under its own schema entry.
   assert.equal(validateEventParams("reward_ad_completed", { placement: "daily_retry" }).valid, true);
   assert.equal(validateEventParams("rewarded_ad_completed", { placement: "daily_retry" }).valid, true);
+});
+
+// --- Web -> Google Play install funnel -------------------------------------
+
+test("both play_store_* events accept every approved surface", () => {
+  for (const eventName of ["play_store_cta_shown", "play_store_click"] as const) {
+    for (const surface of PLAY_STORE_SURFACE_PARAMS) {
+      assert.equal(validateEventParams(eventName, { surface }).valid, true, `${eventName}/${surface}`);
+    }
+  }
+});
+
+test("both play_store_* events are registered names with a validator", () => {
+  for (const eventName of ["play_store_cta_shown", "play_store_click"] as const) {
+    assert.equal(isAnalyticsEventName(eventName), true, eventName);
+    assert.ok(ANALYTICS_EVENT_NAMES.includes(eventName), `${eventName} missing from ANALYTICS_EVENT_NAMES`);
+  }
+});
+
+test("play_store_* events reject an unknown surface, a missing surface, and an extra key", () => {
+  assert.equal(validateEventParams("play_store_click", { surface: "seo_pentagon" }).valid, false);
+  // Removed from the union because the card it named cannot render - see the note
+  // on PLAY_STORE_SURFACE_PARAMS. It must be rejected, not quietly counted.
+  assert.equal(validateEventParams("play_store_click", { surface: "home" }).valid, false);
+  assert.equal(validateEventParams("play_store_click", {}).valid, false);
+  assert.equal(validateEventParams("play_store_cta_shown", { surface: "results", extra: 1 }).valid, false);
+  assert.equal(validateEventParams("play_store_cta_shown", { source: "results" }).valid, false);
+});
+
+test("play_store_* events reject a wrong-typed surface and a raw pathname", () => {
+  assert.equal(validateEventParams("play_store_click", { surface: 3 }).valid, false);
+  // The surface is a closed id, never the URL it was derived from - a path would
+  // both fail this union and be a far higher-cardinality key server-side.
+  assert.equal(validateEventParams("play_store_click", { surface: "/draw-a-perfect-star" }).valid, false);
+});
+
+// The click is the numerator and the impression the denominator of one rate, so a
+// value either one accepted alone would produce a CTR that cannot be computed.
+test("the impression and the click accept and reject exactly the same surfaces", () => {
+  for (const candidate of [...PLAY_STORE_SURFACE_PARAMS, "seo_pentagon", "home", "", "RESULTS"]) {
+    assert.equal(
+      validateEventParams("play_store_cta_shown", { surface: candidate }).valid,
+      validateEventParams("play_store_click", { surface: candidate }).valid,
+      String(candidate),
+    );
+  }
+});
+
+test("sanitizeParams does not strip surface, and the surviving params still validate", () => {
+  const clean = sanitizeParams({ surface: "seo_heart" });
+  assert.deepEqual(clean, { surface: "seo_heart" });
+  assert.equal(validateEventParams("play_store_click", clean).valid, true);
 });
 
 // --- Weekly range helper: Israel week = Sunday-Saturday ---

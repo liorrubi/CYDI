@@ -116,3 +116,87 @@ test("internal and external stay separate buckets, each keeping its own versions
   assert.deepEqual(both.app_open?.byAppVersion, { "0.40.0": 1, "0.39.1": 1 });
   assert.equal(both.app_open?.total, 2);
 });
+
+// --- Web -> Google Play install funnel: the bySurface breakout ---------------
+//
+// Same guarantees the appVersion/appBuild dimensions above are held to: additive,
+// bounded, confined to the events that declare it, and harmless to buckets
+// recorded before it existed.
+
+test("bySurface exists ONLY on the two play_store_* events", () => {
+  const shown = incrementEvent({}, "play_store_cta_shown", { surface: "results" }, "web", "0.40.0", "05dccc1");
+  const clicked = incrementEvent({}, "play_store_click", { surface: "seo_star" }, "web", "0.40.0", "05dccc1");
+  assert.deepEqual(shown.play_store_cta_shown?.bySurface, { results: 1 });
+  assert.deepEqual(clicked.play_store_click?.bySurface, { seo_star: 1 });
+
+  // A `surface` sent on any other event is validated away client-side and, even if
+  // it reached here, must never open a breakout map on an event that never declared one.
+  const started = incrementEvent({}, "game_started", { gameType: "shapeChallenge", surface: "results" }, "web", "0.40.0", "05dccc1");
+  const opened = incrementEvent({}, "app_open", { surface: "results" }, "web", "0.40.0", "05dccc1");
+  assert.equal(started.game_started?.bySurface, undefined);
+  assert.equal(opened.app_open?.bySurface, undefined);
+});
+
+test("the play_store_* events get no build breakout, and app_open gets no surface one", () => {
+  const clicked = incrementEvent({}, "play_store_click", { surface: "seo_circle" }, "web", "0.40.0", "05dccc1");
+  assert.equal(clicked.play_store_click?.byAppBuild, undefined);
+  // The dimensions every event keeps are still there.
+  assert.deepEqual(clicked.play_store_click?.byPlatform, { web: 1 });
+  assert.deepEqual(clicked.play_store_click?.byAppVersion, { "0.40.0": 1 });
+  assert.equal(clicked.play_store_click?.total, 1);
+});
+
+test("every surface accumulates side by side without touching totals", () => {
+  let counters = incrementEvent({}, "play_store_cta_shown", { surface: "results" }, "web", "0.40.0", "05dccc1");
+  for (const surface of ["seo_circle", "seo_star", "seo_heart", "results"]) {
+    counters = incrementEvent(counters, "play_store_cta_shown", { surface }, "web", "0.40.0", "05dccc1");
+  }
+  assert.deepEqual(counters.play_store_cta_shown?.bySurface, {
+    results: 2,
+    seo_circle: 1,
+    seo_star: 1,
+    seo_heart: 1,
+  });
+  assert.equal(counters.play_store_cta_shown?.total, 5);
+});
+
+test("impressions and clicks are counted independently, so a CTR is derivable per surface", () => {
+  let counters = incrementEvent({}, "play_store_cta_shown", { surface: "seo_star" }, "web", "0.40.0", "05dccc1");
+  for (let i = 0; i < 3; i += 1) {
+    counters = incrementEvent(counters, "play_store_cta_shown", { surface: "seo_star" }, "web", "0.40.0", "05dccc1");
+  }
+  counters = incrementEvent(counters, "play_store_click", { surface: "seo_star" }, "web", "0.40.0", "05dccc1");
+  const shown = counters.play_store_cta_shown?.bySurface?.seo_star ?? 0;
+  const clicked = counters.play_store_click?.bySurface?.seo_star ?? 0;
+  assert.equal(shown, 4);
+  assert.equal(clicked, 1);
+  assert.equal(clicked / shown, 0.25);
+});
+
+test("surface maps merge across buckets, and a legacy bucket stays legacy", () => {
+  const day1 = incrementEvent({}, "play_store_click", { surface: "results" }, "web", "0.40.0", "05dccc1");
+  const day2 = incrementEvent({}, "play_store_click", { surface: "seo_heart" }, "web", "0.40.0", "05dccc1");
+  const merged = mergeCounters(day1, day2);
+  assert.deepEqual(merged.play_store_click?.bySurface, { results: 1, seo_heart: 1 });
+  assert.equal(merged.play_store_click?.total, 2);
+
+  // A day bucket written before bySurface existed has no such map; merging two of
+  // them must leave it absent rather than inventing an empty object.
+  const legacyA = { play_store_click: { total: 3 } };
+  const legacyB = { play_store_click: { total: 2 } };
+  const legacyMerged = mergeCounters(legacyA, legacyB);
+  assert.equal(legacyMerged.play_store_click?.bySurface, undefined);
+  assert.equal(legacyMerged.play_store_click?.total, 5);
+
+  // And merging a legacy bucket with a new one keeps only the new one's surfaces,
+  // rather than back-attributing history that was never recorded.
+  const mixed = mergeCounters(legacyA, day2);
+  assert.deepEqual(mixed.play_store_click?.bySurface, { seo_heart: 1 });
+  assert.equal(mixed.play_store_click?.total, 4);
+});
+
+test("adding the funnel events leaves every pre-existing counter byte-identical", () => {
+  const before = incrementEvent({}, "game_started", { gameType: "shapeChallenge", category: "geometric", contentKey: "circle" }, "web", "0.40.0", "05dccc1");
+  const after = incrementEvent(before, "play_store_click", { surface: "results" }, "web", "0.40.0", "05dccc1");
+  assert.deepEqual(after.game_started, before.game_started);
+});

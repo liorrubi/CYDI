@@ -75,7 +75,7 @@ import {
 } from "../app/playStoreCta";
 import { PLAY_STORE_URL } from "../services/nativeShare";
 import { recordOfferSkipped } from "../app/rewardOfferNudge";
-import { isRewardedAdAvailable } from "../services/ads";
+import { isRewardedAdAvailable, preloadRewardedAd } from "../services/ads";
 import { trackEvent } from "../services/analytics";
 import {
   clearProgress,
@@ -888,6 +888,21 @@ function ShapePlay({
     if (phase !== "preview") return;
     const timeoutId = window.setTimeout(() => {
       trackEvent("game_started", { gameType: roundGameType(practice), category, contentKey: shape.id });
+      // Start warming a rewarded ad the moment drawing begins. DoubleCoinsOffer also
+      // preloads, but it does so from its own mount effect - i.e. once the offer is
+      // ALREADY on screen - and a rewarded video needs seconds the player does not
+      // spend there. Drawing takes far longer than a load, so by the time the offer
+      // appears the ad is usually ready and the offer's own preload becomes a no-op.
+      //
+      // Deliberately fire-and-forget, and deliberately NOT gated here: every gate that
+      // matters already lives inside preloadRewardedAd -> rewardedBlockReason(), which
+      // checks the format flag, the remote kill switch, UMP consent (canRequestAds), a
+      // registered adapter and a configured ad unit, in that order. Calling it earlier
+      // changes WHEN that guarded entry point runs, never WHETHER it may request. On
+      // web there is no adapter, so this returns silently and nothing is requested.
+      // Its `state !== "idle"` guard is what keeps this and the offer's preload from
+      // ever becoming two requests.
+      void preloadRewardedAd("shape_challenge_double_reward");
       setPhase("drawing");
     }, previewDurationMs);
     return () => window.clearTimeout(timeoutId);

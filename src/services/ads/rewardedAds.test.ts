@@ -554,3 +554,120 @@ test("AdMob adapter maps plugin results to the reward contract", async () => {
   });
   assert.equal(await dismissed.showRewarded(), null);
 });
+
+// --- Early preload (ShapeChallengeScreen warms the ad at drawing start) --------------
+//
+// The offer's own preload runs from DoubleCoinsOffer's mount effect, i.e. once the
+// offer is already on screen. ShapeChallengeScreen now also preloads at the
+// preview -> drawing transition, so the load has the whole drawing phase to finish.
+// These tests pin the properties that make having BOTH call sites safe.
+
+test("two preloads for one round issue exactly one adapter load", async () => {
+  const { calls } = makeSpyAdapter(async () => null);
+  // Drawing starts (screen), then the offer mounts and preloads again.
+  await preloadRewardedAd(PLACEMENT);
+  await preloadRewardedAd(PLACEMENT);
+  assert.deepEqual(calls.filter((c) => c.startsWith("load:")).length, 1);
+  assert.equal(calls.filter((c) => c === "initialize").length, 1);
+});
+
+test("concurrent preloads share one in-flight request", async () => {
+  const { calls } = makeSpyAdapter(async () => null);
+  await Promise.all([preloadRewardedAd(PLACEMENT), preloadRewardedAd(PLACEMENT), preloadRewardedAd(PLACEMENT)]);
+  assert.equal(calls.filter((c) => c.startsWith("load:")).length, 1);
+});
+
+test("an early preload leaves the ad ready, and the later show reuses it without loading again", async () => {
+  const { calls } = makeSpyAdapter(async () => ({ type: "coins", amount: 10 }));
+  await preloadRewardedAd(PLACEMENT);
+  assert.equal(isRewardedAdReady(), true, "ad must survive from drawing start to the offer");
+  const loadsBeforeShow = calls.filter((c) => c.startsWith("load:")).length;
+
+  const result = await showRewardedAd(PLACEMENT);
+  assert.equal(result.status, "rewarded");
+  assert.equal(calls.filter((c) => c.startsWith("load:")).length, loadsBeforeShow, "show must not re-load");
+});
+
+test("a ready ad is not consumed by anything other than a show", async () => {
+  makeSpyAdapter(async () => null);
+  await preloadRewardedAd(PLACEMENT);
+  // Stand-ins for everything that happens between drawing and the result screen.
+  assert.equal(isRewardedAdAvailable(), true);
+  assert.equal(isRewardedAdReady(), true);
+  assert.equal(isRewardedAdReady(), true);
+});
+
+test("an early preload never requests before UMP consent allows it", async () => {
+  const { calls } = makeSpyAdapter(async () => null);
+  registerAdConsentGate(() => false);
+  const events = recordEvents();
+
+  await preloadRewardedAd(PLACEMENT);
+
+  assert.deepEqual(calls, [], "no initialize, no load - nothing may reach the SDK");
+  assert.deepEqual(events, [], "a blocked preload is silent; it is not a failed request");
+  assert.equal(isRewardedAdReady(), false);
+});
+
+test("an early preload is blocked by the remote kill switch too", async () => {
+  const { calls } = makeSpyAdapter(async () => null);
+  registerRemoteAdsGate(() => false);
+  await preloadRewardedAd(PLACEMENT);
+  assert.deepEqual(calls, []);
+});
+
+test("on web (no adapter registered) the early preload is a silent no-op", async () => {
+  const events = recordEvents();
+  await preloadRewardedAd(PLACEMENT);
+  assert.deepEqual(events, [], "web must stay exactly as it was: no request, no lifecycle event");
+  assert.equal(isRewardedAdReady(), false);
+});
+
+test("when the early preload fails, the offer's own show still attempts its own load", async () => {
+  let attempt = 0;
+  const calls: string[] = [];
+  registerAdAdapter({
+    name: "flaky",
+    initialize: async () => {
+      calls.push("initialize");
+    },
+    loadRewarded: async () => {
+      attempt += 1;
+      calls.push(`load:${attempt}`);
+      if (attempt === 1) throw new Error("no fill");
+    },
+    showRewarded: async () => {
+      calls.push("show");
+      return { type: "coins", amount: 3 };
+    },
+  });
+
+  await preloadRewardedAd(PLACEMENT);
+  assert.equal(isRewardedAdReady(), false, "the early preload failed");
+
+  // The fallback path: DoubleCoinsOffer's Watch Ad still loads and shows.
+  const result = await showRewardedAd(PLACEMENT);
+  assert.equal(result.status, "rewarded");
+  assert.deepEqual(calls, ["initialize", "load:1", "load:2", "show"]);
+});
+
+test("a failed early preload is reported once, not swallowed and not double-counted", async () => {
+  registerAdAdapter({
+    name: "failing",
+    initialize: async () => undefined,
+    loadRewarded: async () => {
+      throw new Error("no fill");
+    },
+    showRewarded: async () => null,
+  });
+  const events = recordEvents();
+  await preloadRewardedAd(PLACEMENT);
+  assert.equal(events.filter((e) => e === "unavailable").length, 1);
+  assert.equal(events.filter((e) => e === "shown").length, 0, "a preload must never show an ad");
+});
+
+test("preload never shows an ad by itself", async () => {
+  const { calls } = makeSpyAdapter(async () => ({ type: "coins", amount: 1 }));
+  await preloadRewardedAd(PLACEMENT);
+  assert.equal(calls.includes("show"), false);
+});

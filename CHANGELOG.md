@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.41.0 - 2026-09-17
+
+Web only. CYDI could not answer the one question that matters after posting a
+video - "did that send anyone, and did they play?" - because nothing in the
+stack recorded where a visit came from. The first-party analytics had no
+referrer or campaign field at all, and the Cloudflare Web Analytics beacon in
+`index.html` has never actually loaded, because its build-time token was never
+set and the guard there fails closed. This release adds the first-party half.
+The beacon is deliberately left as it is.
+
+**Where a visit came from is now recorded, as five short labels.** Source,
+medium, campaign, content and term are worked out once when a visit lands -
+from the campaign tags on the link, and failing that from the domain that
+linked to us - and then ride along with every event of that visit next to the
+platform and version fields (`src/services/analyticsAttribution.ts`,
+`analyticsAttributionStore.ts`). Every spelling of YouTube collapses onto one
+label, including the `android-app://` referrer a link opened from the YouTube
+app produces; a visit with no tag and no external referrer is "direct".
+
+**Only labels are kept.** A referrer is cut down to its bare host before
+anything is stored, so no full address - neither the one you arrived at nor the
+one you came from - ever leaves the device. The privacy policy has a matching
+paragraph.
+
+**Attribution lasts exactly one session.** It holds for the whole visit,
+including across the separate documents the SEO pages are and across a reload
+that drops the tags from the address bar, and it is gone once the session
+rolls over. A tab left open for a week cannot keep crediting the campaign that
+opened it.
+
+**The report answers it per source, campaign and video.** Arrivals and the
+game funnel are broken down by all three, and installations and sessions are
+counted per source, so "42 sessions from the Short, 18 of them played" is one
+request. Admin → `/admin/analytics` gains a "Where visits came from" card that
+opens with that sentence already written out for the video currently being
+promoted.
+
+**`/s/cat`** redirects to the homepage carrying that video's tags - a link
+short enough to read off a phone screen and type, which the full tagged URL is
+not, and which a raw video id would not be either. The tags come from a map in
+the Worker, never from the slug, so an unknown alias lands on a clean homepage
+instead of inventing a campaign.
+
+Nothing about existing data changed. The new field is optional end to end:
+events from builds already in the field are counted exactly as before and get
+no source row rather than a made-up one, and day buckets already in storage
+read unchanged. No migration. Android sends no attribution at all - there is no
+link or referrer inside the app, and calling that "direct" would bury the
+website's own direct traffic under the entire app audience.
+
 ## 0.40.0 - 2026-08-28
 
 Two halves. The public site gets the pages it never had, and the Android app

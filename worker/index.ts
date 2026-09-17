@@ -16,6 +16,7 @@ import {
 } from "../src/content/catalogSchema";
 import { ADS_CONFIG_KV_KEY, isValidRemoteAdsConfig, parseRemoteAdsConfig } from "../src/services/ads/remoteAdsConfigSchema";
 import { isRoomCode, MP_LIMITS, ROOM_CODE_ALPHABET } from "../src/multiplayer/protocol";
+import { campaignLinkForPath, campaignRedirectUrl, CAMPAIGN_PATH_PREFIX } from "./campaignLinks";
 import { canonicalUrl, renderSeoSection, robotsTxt, seoPageForPath, sitemapXml, type SeoPage } from "./seoPages";
 import { CONTENT_PATHS, contentPageForPath, renderContentDocument } from "./contentPages";
 
@@ -573,6 +574,13 @@ export default {
 
     if (url.pathname === "/api/analytics/event" && request.method === "POST") return forwardToAnalyticsDO(request, env, "/event");
     if (url.pathname === "/api/analytics/report" && request.method === "GET") return forwardToAnalyticsDO(request, env, "/report");
+
+    // Short campaign aliases (/s/cat). The tags come from the server-side map, never
+    // from the slug, and an unknown slug lands on a clean homepage rather than
+    // inventing a campaign - see worker/campaignLinks.ts.
+    if (url.pathname.startsWith(CAMPAIGN_PATH_PREFIX) && (request.method === "GET" || request.method === "HEAD")) {
+      return Response.redirect(campaignRedirectUrl(url.origin, campaignLinkForPath(url.pathname)), 302);
+    }
 
     if (url.pathname === "/robots.txt" && request.method === "GET") return textResponse(robotsTxt(), "text/plain; charset=utf-8");
     if (url.pathname === "/sitemap.xml" && request.method === "GET")

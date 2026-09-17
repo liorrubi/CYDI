@@ -517,6 +517,10 @@ export function robotsTxt(): string {
     // Player-generated share links - thin, duplicate SPA shells. Also served
     // with X-Robots-Tag: noindex, which is what actually keeps them out.
     "Disallow: /c/",
+    // Campaign aliases (/s/<slug>) - redirects to the tagged homepage, nothing of
+    // their own to index. Keeping crawlers out also stops them manufacturing
+    // campaign traffic in the analytics by following the alias.
+    "Disallow: /s/",
     "",
     `Sitemap: ${CANONICAL_ORIGIN}/sitemap.xml`,
     "",

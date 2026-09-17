@@ -72,7 +72,13 @@ test("the same id on two platforms or two audiences lands in separate segments",
   let bucket = recordUsageIds(emptyUsageBucket(), "external", "web", "aaaaaaaaaaaa", "111111111111");
   bucket = recordUsageIds(bucket, "external", "android", "bbbbbbbbbbbb", "222222222222");
   bucket = recordUsageIds(bucket, "internal", "android", "cccccccccccc", "333333333333");
-  assert.deepEqual(Object.keys(bucket.segments).sort(), ["external|android", "external|web", "internal|android"]);
+  // Spelled through the helper rather than as literals: the key gained three
+  // attribution fields, and what this test is about is that the audience/platform
+  // split still puts these three events in three different segments.
+  assert.deepEqual(
+    Object.keys(bucket.segments).sort(),
+    [usageSegmentKey("external", "android"), usageSegmentKey("external", "web"), usageSegmentKey("internal", "android")].sort(),
+  );
 });
 
 test("the per-day id cap stops growth and marks the day truncated", () => {
@@ -83,7 +89,7 @@ test("the per-day id cap stops growth and marks the day truncated", () => {
   assert.equal(bucket.truncated, undefined);
   const overflowed = recordUsageIds(bucket, "external", "web", "ffffffffffff", null);
   assert.equal(overflowed.truncated, true);
-  assert.equal(overflowed.segments["external|web"].installations.length, MAX_INSTALLATION_IDS_PER_DAY);
+  assert.equal(overflowed.segments[usageSegmentKey("external", "web")].installations.length, MAX_INSTALLATION_IDS_PER_DAY);
   // Still capped, and no further rewrite once the flag is already set.
   assert.equal(recordUsageIds(overflowed, "external", "web", "eeeeeeeeeeee", null), overflowed);
 });

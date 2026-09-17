@@ -11,6 +11,7 @@
 import { Capacitor } from "@capacitor/core";
 
 import { APP_BUILD, APP_VERSION } from "../app/constants";
+import { getAttribution } from "./analyticsAttributionStore";
 import { getInstallationId, getSessionId, isInternalDevice } from "./analyticsIdentity";
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
 import { apiFetch } from "./nativeApi";
@@ -159,6 +160,14 @@ const consoleDebugProvider: AnalyticsProvider = {
  * two deploys of one version apart. Both are read from the constants rather than
  * duplicated here, so there is still exactly one source of truth.
  *
+ * `attribution` follows the same pattern again: the five short normalized labels
+ * describing where THIS VISIT came from (see analyticsAttribution.ts). It rides
+ * the envelope rather than params for the usual two reasons - no per-event schema
+ * change, and no collision with the sanitizeParams denylist - plus a third: it is
+ * resolved once per session at landing, so every event of a visit carries the same
+ * value instead of each call site having to know about campaigns. It contains no
+ * URL and no referrer, only labels like "youtube" / "shorts" / "cydi_shorts".
+ *
  * Every one of these is optional on the server: an app version that predates any
  * of them still validates and is counted, landing under "unknown".
  *
@@ -175,6 +184,15 @@ export function buildAnalyticsEnvelope(eventName: AnalyticsEventName, params: An
     isInternal: isInternalDevice(),
     appVersion: APP_VERSION,
     appBuild: APP_BUILD,
+    // Web only, and omitted entirely (not sent as "direct") inside the Android app.
+    // The app is loaded from the APK at "/" with no URL and no referrer, so every
+    // native event would otherwise report source=direct and pile the app's whole
+    // audience into the same row as people who typed the website's address - making
+    // the one number this dimension exists to answer unreadable. With the field
+    // absent, native events are counted exactly as they are today and `bySource`
+    // stays a purely website measure. Attributing app INSTALLS is a different
+    // mechanism (the Play Install Referrer) and deliberately not in scope here.
+    ...(Capacitor.isNativePlatform() ? {} : { attribution: getAttribution() }),
   };
 }
 

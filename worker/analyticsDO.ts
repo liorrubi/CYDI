@@ -14,6 +14,13 @@ import {
   type AnalyticsPlatform,
 } from "../src/services/analyticsSchema";
 import {
+  ATTRIBUTION_DIMENSIONS,
+  ATTRIBUTION_OTHER,
+  normalizeAttribution,
+  type Attribution,
+  type AttributionDimension,
+} from "../src/services/analyticsAttribution";
+import {
   emptyUsageBucket,
   isAudienceFilter,
   mergeUsageBuckets,
@@ -44,7 +51,12 @@ import {
 // reconstructed or re-attributed backwards. They therefore read as "external", which
 // is the same meaning those numbers already had. Only days recorded from here on can
 // separate the two.
-const MAX_BODY_BYTES = 1024;
+// Raised from 1024 when the envelope gained `attribution`: five short labels, each
+// capped at 32 characters by normalizeAttributionValue, add at most ~200 bytes. The
+// limit exists to stop a client posting bulk data, not to police the envelope's own
+// growth, and an event that overflowed it would be REJECTED - so the headroom moves
+// with the envelope rather than silently costing us the largest events.
+const MAX_BODY_BYTES = 1536;
 const FUNNEL_EVENTS = new Set<AnalyticsEventName>(["game_started", "game_completed", "result_shared"]);
 // The only event that gets a per-BUILD breakdown. One launch counter is enough to
 // see which builds are in the field; putting unbounded-cardinality SHAs on every
@@ -61,6 +73,21 @@ const SCORED_EVENTS = new Set<AnalyticsEventName>(["shape_completed", "shape_pra
 // schema's PLAY_STORE_SURFACE_PARAMS is a closed five-value union, re-validated
 // server-side before this runs, so the map cannot grow past five keys.
 const SURFACE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["play_store_cta_shown", "play_store_click"]);
+// Which events carry a where-did-this-visit-come-from breakdown. Deliberately a short
+// list rather than every event (the byPlatform treatment): attribution values are
+// caller-controlled, so each event added here multiplies stored keys by the number of
+// live campaigns. These four answer everything the campaign reporting asks - arrivals
+// (app_open) and the funnel those arrivals did or didn't complete.
+const ATTRIBUTION_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
+  "app_open",
+  "game_started",
+  "game_completed",
+  "result_shared",
+]);
+// Per-map cardinality cap, the counter-side twin of MAX_USAGE_SEGMENTS. Existing keys
+// always keep counting; only a NEW key past the cap folds into ATTRIBUTION_OTHER, so a
+// flood of forged campaigns cannot grow one day's storage value without bound.
+const MAX_ATTRIBUTION_KEYS = 50;
 // Hard cap for period=range so a single report read stays one multi-key storage get
 // (Durable Object storage allows up to 128 keys per get; a month is plenty for the admin page).
 const MAX_RANGE_DAYS = 31;
@@ -90,6 +117,18 @@ type EventCounters = {
   // before this. Absent on every other event, and on day buckets recorded before
   // this field existed.
   bySurface?: Record<string, number>;
+  // ATTRIBUTION_BREAKOUT_EVENTS only - where the visit that produced this event came
+  // from. `bySource` is the campaign twin of byPlatform; byCampaign/byUtmContent split
+  // it further by utm_campaign / utm_content. All three are capped at
+  // MAX_ATTRIBUTION_KEYS distinct keys. Absent on every other event, and on day
+  // buckets recorded before attribution existed - such a day reports no source rows at
+  // all rather than attributing its history to "direct", which would be a guess.
+  //
+  // Named byUtmContent, not byContent, so it can never be mistaken for byContentKey
+  // above - that one is the SHAPE that was drawn, this one is the ad creative.
+  bySource?: Record<string, number>;
+  byCampaign?: Record<string, number>;
+  byUtmContent?: Record<string, number>;
   byGameType?: Record<string, number>;
   byCategory?: Record<string, number>;
   byContentKey?: Record<string, number>;
@@ -117,11 +156,24 @@ type RangeBuckets = {
 
 /** The game-funnel side of a usage summary, pulled from counters that already exist - no new storage. */
 function gameTotals(counts: AllCounters): UsageGameTotals {
+  // Left undefined (not {}) when neither funnel event carries an attribution map -
+  // a range from before attribution existed then reports source rows with real
+  // installations and zero games, rather than implying the games were attributed.
+  const started = counts.game_started;
+  const completed = counts.game_completed;
+  const gamesByAttribution: NonNullable<UsageGameTotals["gamesByAttribution"]> = {};
+  for (const dimension of ATTRIBUTION_DIMENSIONS) {
+    const field = ATTRIBUTION_COUNTER_FIELD[dimension];
+    if (!started?.[field] && !completed?.[field]) continue;
+    gamesByAttribution[dimension] = { started: started?.[field] ?? {}, completed: completed?.[field] ?? {} };
+  }
+
   return {
-    gamesStarted: counts.game_started?.total ?? 0,
-    gamesCompleted: counts.game_completed?.total ?? 0,
-    gamesStartedByPlatform: counts.game_started?.byPlatform ?? {},
-    gamesCompletedByPlatform: counts.game_completed?.byPlatform ?? {},
+    gamesStarted: started?.total ?? 0,
+    gamesCompleted: completed?.total ?? 0,
+    gamesStartedByPlatform: started?.byPlatform ?? {},
+    gamesCompletedByPlatform: completed?.byPlatform ?? {},
+    gamesByAttribution: Object.keys(gamesByAttribution).length > 0 ? gamesByAttribution : undefined,
   };
 }
 
@@ -147,6 +199,20 @@ function incrementKeyMap(map: Record<string, number> | undefined, key: string): 
   return next;
 }
 
+/** incrementKeyMap for caller-controlled keys: an already-counted key keeps counting exactly, a new one past the cap is counted under ATTRIBUTION_OTHER instead of being dropped or growing the map. */
+function incrementCappedKeyMap(map: Record<string, number> | undefined, key: string, cap: number): Record<string, number> {
+  const existing = map ?? {};
+  const safeKey = key in existing || Object.keys(existing).length < cap ? key : ATTRIBUTION_OTHER;
+  return incrementKeyMap(existing, safeKey);
+}
+
+/** The counter map each attribution dimension writes to - one place, so ingestion, merging and reporting cannot drift apart. */
+const ATTRIBUTION_COUNTER_FIELD = {
+  source: "bySource",
+  campaign: "byCampaign",
+  content: "byUtmContent",
+} as const satisfies Record<AttributionDimension, keyof EventCounters>;
+
 function mergeKeyMaps(a: Record<string, number> | undefined, b: Record<string, number> | undefined): Record<string, number> | undefined {
   if (!a && !b) return undefined;
   const merged: Record<string, number> = { ...(a ?? {}) };
@@ -162,11 +228,21 @@ export function incrementEvent(
   platform: AnalyticsPlatform,
   appVersion: string = "unknown",
   appBuild: string = "unknown",
+  attribution?: Attribution,
 ): AllCounters {
   const existing = counters[eventName] ?? { total: 0 };
   const updated: EventCounters = { ...existing, total: existing.total + 1 };
   updated.byPlatform = incrementKeyMap(existing.byPlatform, platform);
   updated.byAppVersion = incrementKeyMap(existing.byAppVersion, appVersion);
+  // Campaign breakout - see ATTRIBUTION_BREAKOUT_EVENTS. Skipped entirely when the
+  // client sent no attribution, so an older build's events stay shaped exactly as
+  // they are today instead of gaining an "unknown" source key.
+  if (attribution && ATTRIBUTION_BREAKOUT_EVENTS.has(eventName)) {
+    for (const dimension of ATTRIBUTION_DIMENSIONS) {
+      const field = ATTRIBUTION_COUNTER_FIELD[dimension];
+      updated[field] = incrementCappedKeyMap(existing[field], attribution[dimension], MAX_ATTRIBUTION_KEYS);
+    }
+  }
   // Build breakout is app_open only - see the byAppBuild note on EventCounters.
   if (BUILD_BREAKOUT_EVENTS.has(eventName)) {
     updated.byAppBuild = incrementKeyMap(existing.byAppBuild, appBuild);
@@ -218,6 +294,9 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byAppVersion: mergeKeyMaps(ae.byAppVersion, be.byAppVersion),
       byAppBuild: mergeKeyMaps(ae.byAppBuild, be.byAppBuild),
       bySurface: mergeKeyMaps(ae.bySurface, be.bySurface),
+      bySource: mergeKeyMaps(ae.bySource, be.bySource),
+      byCampaign: mergeKeyMaps(ae.byCampaign, be.byCampaign),
+      byUtmContent: mergeKeyMaps(ae.byUtmContent, be.byUtmContent),
       byGameType: mergeKeyMaps(ae.byGameType, be.byGameType),
       byCategory: mergeKeyMaps(ae.byCategory, be.byCategory),
       byContentKey: mergeKeyMaps(ae.byContentKey, be.byContentKey),
@@ -288,6 +367,12 @@ export class AnalyticsDO {
     // so a QA build and a production build of the same release stay comparable.
     const appVersion = normalizeAppVersion(b?.appVersion);
     const appBuild = normalizeAppBuild(b?.appBuild);
+    // Same contract once more - optional, coerced to a closed alphabet, never a
+    // reason to drop an event. `undefined` (not a normalized "unknown" attribution)
+    // when the client sent nothing at all, so the counter breakouts below can tell
+    // "this build predates attribution" apart from "this visit was unattributable"
+    // and only the second one gets a row.
+    const attribution = b?.attribution === undefined ? undefined : normalizeAttribution(b.attribution);
 
     const dateKey = israelDateKey(Date.now());
     const alltimeKey = this.alltimeStorageKey(audience);
@@ -299,10 +384,10 @@ export class AnalyticsDO {
       this.state.storage.get<UsageBucket>(usageKey),
     ]);
 
-    const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params, platform, appVersion, appBuild);
-    const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params, platform, appVersion, appBuild);
+    const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params, platform, appVersion, appBuild, attribution);
+    const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params, platform, appVersion, appBuild, attribution);
     const currentUsage = usage ?? emptyUsageBucket();
-    const updatedUsage = recordUsageIds(currentUsage, audience, platform, installationId, sessionId);
+    const updatedUsage = recordUsageIds(currentUsage, audience, platform, installationId, sessionId, attribution);
 
     await Promise.all([
       this.state.storage.put(alltimeKey, updatedAlltime),

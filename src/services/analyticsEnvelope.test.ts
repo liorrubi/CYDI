@@ -48,6 +48,35 @@ test("every event gets the version, not just app_open", () => {
   }
 });
 
+test("attribution is a website field: present on web, absent inside the native app", () => {
+  // Capacitor reports "web" under the test runner, so the positive case is the one
+  // asserted here; the negative is asserted through the same predicate the envelope
+  // uses, so the two can never disagree about which surface is which.
+  const envelope = buildAnalyticsEnvelope("app_open", {});
+  assert.equal(Capacitor.isNativePlatform(), false, "sanity: the runner is the web surface");
+  assert.equal("attribution" in envelope, !Capacitor.isNativePlatform());
+});
+
+test("the envelope carries the visit's attribution, on every event and not just the first", () => {
+  // No DOM here, so the landing resolves to "direct" - what matters is that the field
+  // is present and well-formed on every event, which is what lets the server break
+  // any event down by campaign without a per-event schema change.
+  for (const name of ["app_open", "game_started", "game_completed"] as const) {
+    const { attribution } = buildAnalyticsEnvelope(name, {});
+    assert.deepEqual(Object.keys(attribution).sort(), ["campaign", "content", "medium", "source", "term"], name);
+    assert.equal(attribution.source, "direct", name);
+  }
+});
+
+test("the envelope carries no URL or referrer, only the normalized labels", () => {
+  // The whole envelope is serialized to the ingest endpoint, so this is the real
+  // data-minimization boundary: whatever ends up here is what leaves the device.
+  const serialized = JSON.stringify(buildAnalyticsEnvelope("app_open", {}));
+  assert.ok(!serialized.includes("http://"), serialized);
+  assert.ok(!serialized.includes("https://"), serialized);
+  assert.ok(!serialized.includes("utm_"), serialized);
+});
+
 test("the envelope still carries every pre-existing field - no semantics changed", () => {
   const envelope = buildAnalyticsEnvelope("game_started", { gameType: "shapeChallenge" });
   for (const key of ["eventName", "params", "platform", "installationId", "sessionId", "isInternal"]) {

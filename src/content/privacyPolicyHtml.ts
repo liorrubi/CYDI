@@ -138,6 +138,14 @@ export const PRIVACY_POLICY_HTML = `
   installations and sessions there were on a given day, and are kept only for the days they were counted in.
   Clearing the app's or browser's local data starts a new random number.
 </p>
+<p class="status-text">
+  On the website, an analytics event also carries a short label describing how that visit reached us — for
+  example “youtube”, “shorts” or the name of a campaign — taken from the campaign tags in the link you
+  followed and, failing that, from the domain of the site that linked to us. We record only these short
+  labels: never the full address you arrived at, never the full address you came from, and nothing about
+  the page you were reading. The labels are read once when the visit starts and are used only to count how
+  many visits and sessions each source brought.
+</p>
 
 <h3>Advertising (Android app)</h3>
 <p class="status-text">

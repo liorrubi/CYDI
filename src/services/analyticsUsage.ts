@@ -12,6 +12,12 @@
 // sessions", plus the game counters that already existed. No event is stored per id,
 // no id is ever joined to anything, no IP or personal field is involved anywhere.
 
+import {
+  ATTRIBUTION_OTHER,
+  ATTRIBUTION_UNKNOWN,
+  type Attribution,
+  type AttributionDimension,
+} from "./analyticsAttribution";
 import type { AnalyticsPlatform } from "./analyticsSchema";
 
 /** Real players vs. our own devices (QA, development, demos). Kept in physically separate storage buckets so a test round can never land in the real-player numbers. */
@@ -47,16 +53,28 @@ export function normalizeAnalyticsId(value: unknown): string | null {
 export const MAX_INSTALLATION_IDS_PER_DAY = 1500;
 export const MAX_SESSION_IDS_PER_DAY = 3000;
 
+// Attribution values come from a URL anyone can type, so the number of distinct
+// SEGMENTS a day can hold is capped as hard as the number of ids. Past the cap a new
+// combination still records its ids, but under the ATTRIBUTION_OTHER labels - so the
+// audience/platform totals (the numbers that existed before attribution) stay exact
+// no matter what a hostile client sends, and only the campaign breakdown degrades.
+// Real traffic uses a handful: one platform x a few sources x one or two campaigns.
+export const MAX_USAGE_SEGMENTS = 64;
+
 export type UsageIdSets = { installations: string[]; sessions: string[] };
-/** Keyed by `${audience}|${platform}` - a flat map keeps the whole day in one storage value (one get, one put). */
+/** Keyed by `${audience}|${platform}|${source}|${campaign}|${content}` - a flat map keeps the whole day in one storage value (one get, one put). Buckets written before attribution existed hold two-part keys and are read as "unknown" on the three new fields; they are never re-attributed. */
 export type UsageBucket = { segments: Record<string, UsageIdSets>; truncated?: boolean };
 
 export function emptyUsageBucket(): UsageBucket {
   return { segments: {} };
 }
 
-export function usageSegmentKey(audience: AnalyticsAudience, platform: AnalyticsPlatform): string {
-  return `${audience}|${platform}`;
+/** Attribution is optional so a caller that does not have one (and every pre-attribution call site) produces the "unknown" segment rather than a differently-shaped key. */
+export function usageSegmentKey(audience: AnalyticsAudience, platform: AnalyticsPlatform, attribution?: Attribution): string {
+  const source = attribution?.source ?? ATTRIBUTION_UNKNOWN;
+  const campaign = attribution?.campaign ?? ATTRIBUTION_UNKNOWN;
+  const content = attribution?.content ?? ATTRIBUTION_UNKNOWN;
+  return `${audience}|${platform}|${source}|${campaign}|${content}`;
 }
 
 function segmentAudience(key: string): string {
@@ -67,10 +85,47 @@ function segmentPlatform(key: string): string {
   return key.split("|")[1] ?? "unknown";
 }
 
+// Index in the segment key for each attribution dimension, in the order
+// usageSegmentKey writes them. A legacy two-part key has none of these, so every
+// lookup falls back to "unknown" rather than reading undefined into a counter key.
+const SEGMENT_DIMENSION_INDEX: Record<AttributionDimension, number> = { source: 2, campaign: 3, content: 4 };
+
+function segmentDimension(key: string, dimension: AttributionDimension): string {
+  return key.split("|")[SEGMENT_DIMENSION_INDEX[dimension]] ?? ATTRIBUTION_UNKNOWN;
+}
+
 function totalIds(bucket: UsageBucket, pick: (sets: UsageIdSets) => string[]): number {
   let count = 0;
   for (const sets of Object.values(bucket.segments)) count += pick(sets).length;
   return count;
+}
+
+/**
+ * The segment this event belongs in, degraded to the ATTRIBUTION_OTHER labels when
+ * the day has already reached MAX_USAGE_SEGMENTS distinct segments.
+ *
+ * An existing segment is always reused - the cap only ever blocks the creation of a
+ * NEW one, so a campaign that was already being counted today keeps being counted
+ * exactly, and only genuinely new combinations fold into the overflow bucket.
+ */
+function segmentKeyWithinCap(
+  bucket: UsageBucket,
+  audience: AnalyticsAudience,
+  platform: AnalyticsPlatform,
+  attribution?: Attribution,
+): string {
+  const key = usageSegmentKey(audience, platform, attribution);
+  if (key in bucket.segments) return key;
+  if (Object.keys(bucket.segments).length < MAX_USAGE_SEGMENTS) return key;
+  // Audience and platform are preserved on purpose: those totals predate attribution
+  // and must stay exact even when the campaign breakdown is saturated.
+  return usageSegmentKey(audience, platform, {
+    source: ATTRIBUTION_OTHER,
+    medium: ATTRIBUTION_OTHER,
+    campaign: ATTRIBUTION_OTHER,
+    content: ATTRIBUTION_OTHER,
+    term: ATTRIBUTION_OTHER,
+  });
 }
 
 /**
@@ -86,8 +141,9 @@ export function recordUsageIds(
   platform: AnalyticsPlatform,
   installationId: string | null,
   sessionId: string | null,
+  attribution?: Attribution,
 ): UsageBucket {
-  const key = usageSegmentKey(audience, platform);
+  const key = segmentKeyWithinCap(bucket, audience, platform, attribution);
   const existing = bucket.segments[key] ?? { installations: [], sessions: [] };
 
   const addInstallation = installationId !== null && !existing.installations.includes(installationId);
@@ -138,6 +194,15 @@ export type UsageGameTotals = {
   gamesCompleted: number;
   gamesStartedByPlatform: Record<string, number>;
   gamesCompletedByPlatform: Record<string, number>;
+  /**
+   * Per attribution dimension, the same two counts keyed by that dimension's value -
+   * read out of the counter maps the Durable Object already keeps, so no new storage.
+   *
+   * Optional, and absent rather than empty for a range that predates attribution: a
+   * source row then reports its real installations/sessions with zero games, which is
+   * the truth, instead of claiming games it cannot attribute.
+   */
+  gamesByAttribution?: Partial<Record<AttributionDimension, { started: Record<string, number>; completed: Record<string, number> }>>;
 };
 
 export type UsagePlatformSummary = {
@@ -155,6 +220,20 @@ export type UsagePlatformSummary = {
 export type UsageSummary = UsagePlatformSummary & {
   audience: AudienceFilter;
   byPlatform: Record<string, UsagePlatformSummary>;
+  /**
+   * Where the visits came from. `bySource.youtube` is the headline answer to "did the
+   * Short drive traffic"; byCampaign/byContent split that by utm_campaign and
+   * utm_content (for CYDI, the individual video).
+   *
+   * These rows are NOT mutually exclusive across a multi-day range: one installation
+   * that arrives from YouTube on Monday and returns directly on Tuesday is counted in
+   * both `bySource.youtube` and `bySource.direct`, so the rows can sum to more than
+   * the range total. Within a single session an installation has exactly one
+   * attribution, so a daily report does not overlap.
+   */
+  bySource: Record<string, UsagePlatformSummary>;
+  byCampaign: Record<string, UsagePlatformSummary>;
+  byContent: Record<string, UsagePlatformSummary>;
   /** A per-day id cap was hit somewhere in this range: installations/sessions are a floor, not an exact count. */
   truncated: boolean;
 };
@@ -217,10 +296,58 @@ export function summarizeUsage(bucket: UsageBucket, audience: AudienceFilter, to
     sessions += sessionIds.size;
   }
 
+  const byDimension = (dimension: AttributionDimension): Record<string, UsagePlatformSummary> =>
+    summarizeByDimension(bucket, audience, totals, dimension);
+
   return {
     audience,
     ...platformSummary(installations, sessions, totals.gamesStarted, totals.gamesCompleted),
     byPlatform,
+    bySource: byDimension("source"),
+    byCampaign: byDimension("campaign"),
+    byContent: byDimension("content"),
     truncated: bucket.truncated === true,
   };
+}
+
+/**
+ * One attribution dimension's rows, built exactly like byPlatform: distinct ids come
+ * from the day's segments, game counts from the counter maps.
+ *
+ * A value that appears in the counters but has no ids (or the reverse) still gets a
+ * row, so a source is never silently missing from one side of the funnel.
+ */
+function summarizeByDimension(
+  bucket: UsageBucket,
+  audience: AudienceFilter,
+  totals: UsageGameTotals,
+  dimension: AttributionDimension,
+): Record<string, UsagePlatformSummary> {
+  const games = totals.gamesByAttribution?.[dimension];
+  const values = new Set<string>([
+    ...Object.keys(bucket.segments)
+      .filter((key) => audience === "all" || segmentAudience(key) === audience)
+      .map((key) => segmentDimension(key, dimension)),
+    ...Object.keys(games?.started ?? {}),
+    ...Object.keys(games?.completed ?? {}),
+  ]);
+
+  const rows: Record<string, UsagePlatformSummary> = {};
+  for (const value of values) {
+    const installationIds = new Set<string>();
+    const sessionIds = new Set<string>();
+    for (const [key, sets] of Object.entries(bucket.segments)) {
+      if (segmentDimension(key, dimension) !== value) continue;
+      if (audience !== "all" && segmentAudience(key) !== audience) continue;
+      for (const id of sets.installations) installationIds.add(id);
+      for (const id of sets.sessions) sessionIds.add(id);
+    }
+    rows[value] = platformSummary(
+      installationIds.size,
+      sessionIds.size,
+      games?.started[value] ?? 0,
+      games?.completed[value] ?? 0,
+    );
+  }
+  return rows;
 }

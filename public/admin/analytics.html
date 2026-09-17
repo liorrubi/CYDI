@@ -76,6 +76,12 @@
     td { border-bottom: 1px solid #f0f1f8; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     .footnote { font-size: 11.5px; color: #8a8da3; margin-top: 8px; }
+    /* Attribution: same table language as everywhere else, plus a highlight for the
+       Short currently being promoted so it can be found without reading the column. */
+    .attr-group + .attr-group { margin-top: 18px; }
+    .attr-headline { font-size: 13px; color: #3a3d55; background: rgba(91, 91, 247, 0.08); border-radius: 12px; padding: 11px 13px; margin-bottom: 14px; }
+    .attr-headline strong { color: #5b5bf7; }
+    tr.attr-current td { background: rgba(91, 91, 247, 0.08); font-weight: 600; }
     details > summary { cursor: pointer; font-size: 15px; font-weight: 600; color: #3a3d55; padding: 2px 0; }
     details[open] > summary { margin-bottom: 10px; }
     .status-line { font-size: 14px; color: #6b6e85; }
@@ -127,6 +133,12 @@
           <h3 class="section-title">Installations &amp; sessions</h3>
           <div class="table-scroll" id="usage-table"></div>
           <p class="footnote" id="usage-note"></p>
+        </div>
+        <div class="card" id="attribution-card" hidden>
+          <h3 class="section-title">Where visits came from</h3>
+          <p class="attr-headline" id="attr-headline"></p>
+          <div id="attr-groups"></div>
+          <p class="footnote" id="attr-note"></p>
         </div>
         <div class="card" id="platform-card" hidden>
           <h3 class="section-title">App vs. web</h3>
@@ -529,6 +541,149 @@
         byId("usage-card").hidden = false;
       }
 
+      // The Short currently being promoted, so its row can be found at a glance
+      // instead of read out of the list. This is the utm_content value in the link -
+      // see the campaign URL in the release notes.
+      var CURRENT_SHORT_ID = "N4H7VTj59A0";
+
+      // "unknown" means two different things depending on the column, and conflating
+      // them would be the easiest way to misread this whole section:
+      //   - source: only ever legacy traffic, recorded before attribution shipped. A
+      //     live visit always resolves to at least "direct".
+      //   - campaign/content: a live, counted visit that arrived on an untagged link.
+      // "direct" is never legacy - it is a real visit with no campaign and no external
+      // referrer (typed, bookmarked, or a referrer the browser withheld).
+      var SOURCE_LABELS = {
+        direct: "Direct — typed, bookmarked or referrer withheld",
+        unknown: "Not recorded — visit predates attribution",
+        other: "Other — beyond the per-day source cap",
+        youtube: "YouTube",
+      };
+      var CAMPAIGN_LABELS = {
+        unknown: "Untagged — link carried no utm_campaign",
+        other: "Other — beyond the per-day cap",
+      };
+      var CONTENT_LABELS = {
+        unknown: "Untagged — link carried no utm_content",
+        other: "Other — beyond the per-day cap",
+      };
+
+      /**
+       * One attribution dimension as a table. Rows are NOT summed: over a multi-day
+       * range one installation can appear under two sources (arrived from the Short on
+       * Monday, came back directly on Tuesday), so a total row would overstate reach.
+       * The note under the card says so rather than showing a number that looks
+       * authoritative and is not.
+       */
+      function attributionGroup(title, rows, labels, markCurrentShort) {
+        // No separate heading: the first column header already names the dimension,
+        // exactly as the "Platform" and "Game type" tables above do.
+        var group = el("div", "attr-group");
+        var keys = Object.keys(rows).sort(function (a, b) {
+          return rows[b].sessions - rows[a].sessions || rows[b].installations - rows[a].installations;
+        });
+        var cells = keys.map(function (key) {
+          var r = rows[key];
+          var label = labels[key] || key;
+          if (markCurrentShort && key === CURRENT_SHORT_ID) label = key + " — current Short";
+          return [
+            label,
+            fmtInt(r.installations),
+            fmtInt(r.sessions),
+            fmtInt(r.gamesStarted),
+            fmtInt(r.gamesCompleted),
+            r.gamesStarted > 0 ? fmtRate(rateOf(r.gamesCompleted, r.gamesStarted)) : "—",
+          ];
+        });
+        var scroll = el("div", "table-scroll");
+        var table = makeTable(
+          [
+            { label: title },
+            { label: "Installations", num: true },
+            { label: "Sessions", num: true },
+            { label: "Started", num: true },
+            { label: "Completed", num: true },
+            { label: "Completion", num: true },
+          ],
+          cells
+        );
+        if (markCurrentShort) {
+          // Applied after the fact so the shared makeTable helper stays untouched.
+          var bodyRows = table.tBodies[0].rows;
+          keys.forEach(function (key, i) {
+            if (key === CURRENT_SHORT_ID) bodyRows[i].className = "attr-current";
+          });
+        }
+        scroll.appendChild(table);
+        group.appendChild(scroll);
+        return group;
+      }
+
+      /** Answers "did the Short send traffic, and did those visitors play?" in one line. */
+      function shortHeadline(byContent) {
+        var row = byContent && byContent[CURRENT_SHORT_ID];
+        if (!row) {
+          return "Current Short " + CURRENT_SHORT_ID + ": no visits recorded in this period.";
+        }
+        var played =
+          row.gamesStarted > 0
+            ? row.gamesStarted + " games started, " + row.gamesCompleted + " completed (" + fmtRate(rateOf(row.gamesCompleted, row.gamesStarted)) + " completion)"
+            : "no games started";
+        return (
+          "Current Short " +
+          CURRENT_SHORT_ID +
+          ": " +
+          fmtInt(row.sessions) +
+          " sessions · " +
+          fmtInt(row.installations) +
+          " installations · " +
+          played +
+          "."
+        );
+      }
+
+      function renderAttribution(report) {
+        var usage = report.usage;
+        var groups = byId("attr-groups");
+        var headline = byId("attr-headline");
+        var note = byId("attr-note");
+        clear(groups);
+
+        if (!usage || !usage.bySource) {
+          headline.textContent = "Traffic sources are counted per day, so they are not available for the all-time view.";
+          note.textContent = "";
+          byId("attribution-card").hidden = false;
+          return;
+        }
+
+        var sourceKeys = Object.keys(usage.bySource);
+        var onlyLegacy = sourceKeys.length === 0 || (sourceKeys.length === 1 && sourceKeys[0] === "unknown");
+        if (onlyLegacy) {
+          headline.textContent = "No traffic sources recorded in this period — these days predate attribution.";
+          note.textContent = "";
+          byId("attribution-card").hidden = false;
+          return;
+        }
+
+        headline.textContent = shortHeadline(usage.byContent);
+        groups.appendChild(attributionGroup("Source", usage.bySource, SOURCE_LABELS, false));
+        groups.appendChild(attributionGroup("Campaign", usage.byCampaign, CAMPAIGN_LABELS, false));
+        groups.appendChild(attributionGroup("Short / creative", usage.byContent, CONTENT_LABELS, true));
+
+        var notes = [
+          "Website only — the Android app carries no link or referrer, so app activity is not counted here.",
+          "“Direct” is a real visit with no campaign tag and no external referrer; “Not recorded” is older traffic from before attribution shipped. They are never the same thing.",
+        ];
+        if (report.startDate !== report.endDate) {
+          // The one genuinely misleading reading, called out where it happens.
+          notes.push(
+            "Rows are not additive over a multi-day range: one installation that arrives from the Short on one day and returns directly on another is counted in both rows, so these can sum to more than the range total above. A single day never overlaps."
+          );
+        }
+        note.textContent = notes.join(" ");
+        byId("attribution-card").hidden = false;
+      }
+
       function renderPlatforms(report) {
         var counts = report.counts || {};
         var opens = (counts.app_open && counts.app_open.byPlatform) || {};
@@ -662,6 +817,7 @@
         byId("charts-card").hidden = true;
         byId("gametype-card").hidden = true;
         byId("usage-card").hidden = true;
+        byId("attribution-card").hidden = true;
         byId("platform-card").hidden = true;
         byId("adsummary-card").hidden = true;
         byId("topcontent-card").hidden = true;
@@ -687,6 +843,7 @@
             renderCharts(report);
             renderGameTypes(report);
             renderUsage(report);
+            renderAttribution(report);
             renderPlatforms(report);
             renderAdSummary(report);
             renderTopContent(report);

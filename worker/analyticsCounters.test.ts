@@ -200,3 +200,93 @@ test("adding the funnel events leaves every pre-existing counter byte-identical"
   const after = incrementEvent(before, "play_store_click", { surface: "results" }, "web", "0.40.0", "05dccc1");
   assert.deepEqual(after.game_started, before.game_started);
 });
+
+// --- Rewarded-ad failures: the byReason breakout -----------------------------
+//
+// Same guarantees as the two breakouts above - additive, bounded, confined to the
+// events that declare it, harmless to buckets recorded before it existed - plus one
+// of its own: the value is a closed union, so no free-text key can ever be stored.
+
+test("byReason exists ONLY on the two rewarded_ad_* events that carry a reason", () => {
+  const failed = incrementEvent({}, "rewarded_ad_failed", { placement: "doubleCoins", reason: "timeout" }, "android", "0.44.0", "4a44dc9");
+  const unavailable = incrementEvent({}, "rewarded_ad_unavailable", { placement: "doubleCoins", reason: "consent_blocked" }, "android", "0.44.0", "4a44dc9");
+  assert.deepEqual(failed.rewarded_ad_failed?.byReason, { timeout: 1 });
+  assert.deepEqual(unavailable.rewarded_ad_unavailable?.byReason, { consent_blocked: 1 });
+
+  // reward_ad_failed is the OFFER-funnel twin, a different event carrying only
+  // `placement` - it must not gain a reason map even if a reason reached here.
+  const offerFailed = incrementEvent({}, "reward_ad_failed", { placement: "doubleCoins", reason: "timeout" }, "android", "0.44.0", "4a44dc9");
+  assert.equal(offerFailed.reward_ad_failed?.byReason, undefined);
+  assert.equal(offerFailed.reward_ad_failed?.total, 1);
+
+  // And no unrelated event opens one either.
+  const opened = incrementEvent({}, "app_open", { reason: "timeout" }, "android", "0.44.0", "4a44dc9");
+  assert.equal(opened.app_open?.byReason, undefined);
+});
+
+test("a reason outside AD_FAILURE_REASONS opens no key at all", () => {
+  // handleEvent rejects these before they reach storage; this is the direct-call
+  // guarantee, so a bad value can never become a free-text key.
+  for (const reason of ["ECONNRESET: socket hang up", "", "TIMEOUT", 42, null, undefined]) {
+    const counters = incrementEvent({}, "rewarded_ad_failed", { placement: "doubleCoins", reason }, "android", "0.44.0", "4a44dc9");
+    assert.equal(counters.rewarded_ad_failed?.byReason, undefined, `${String(reason)} stores no reason`);
+    // The event itself is still counted - a breakout we cannot shape is never a
+    // reason to lose the event.
+    assert.equal(counters.rewarded_ad_failed?.total, 1);
+    assert.deepEqual(counters.rewarded_ad_failed?.byPlatform, { android: 1 });
+  }
+});
+
+test("every reason accumulates side by side without touching totals", () => {
+  let counters = incrementEvent({}, "rewarded_ad_failed", { placement: "doubleCoins", reason: "timeout" }, "android", "0.44.0", "4a44dc9");
+  for (const reason of ["sdk_error", "timeout", "load_failed"]) {
+    counters = incrementEvent(counters, "rewarded_ad_failed", { placement: "doubleCoins", reason }, "android", "0.44.0", "4a44dc9");
+  }
+  assert.deepEqual(counters.rewarded_ad_failed?.byReason, { timeout: 2, sdk_error: 1, load_failed: 1 });
+  assert.equal(counters.rewarded_ad_failed?.total, 4);
+  assert.deepEqual(counters.rewarded_ad_failed?.byAppVersion, { "0.44.0": 4 });
+});
+
+test("existing counters are byte-identical with and without a reason", () => {
+  // The daily report's shape for every OTHER event must not move at all.
+  const withReason = incrementEvent({}, "rewarded_ad_failed", { placement: "doubleCoins", reason: "sdk_error" }, "android", "0.44.0", "4a44dc9").rewarded_ad_failed!;
+  const without = incrementEvent({}, "rewarded_ad_failed", { placement: "doubleCoins", reason: "not-a-reason" }, "android", "0.44.0", "4a44dc9").rewarded_ad_failed!;
+  assert.equal(withReason.total, without.total);
+  assert.deepEqual(withReason.byPlatform, without.byPlatform);
+  assert.deepEqual(withReason.byAppVersion, without.byAppVersion);
+  // The rewarded events get no build/surface/attribution breakouts either way.
+  for (const key of ["byAppBuild", "bySurface", "bySource", "byGameType", "scoredCount"] as const) {
+    assert.equal(withReason[key], undefined, `${key} stays absent`);
+    assert.equal(without[key], undefined, `${key} stays absent`);
+  }
+
+  const other = incrementEvent({}, "game_started", { gameType: "shapeChallenge", category: "geometric", contentKey: "circle" }, "web", "0.44.0", "4a44dc9");
+  const after = incrementEvent(other, "rewarded_ad_failed", { placement: "doubleCoins", reason: "timeout" }, "android", "0.44.0", "4a44dc9");
+  assert.deepEqual(after.game_started, other.game_started);
+});
+
+test("reason maps survive the merge a range report is built from", () => {
+  // period=range/weekly/monthly reads one bucket per day and mergeCounters them, so
+  // a dimension that merges wrong is invisible on the daily report and silently
+  // wrong on every multi-day one.
+  const day1 = incrementEvent({}, "rewarded_ad_failed", { placement: "doubleCoins", reason: "timeout" }, "android", "0.44.0", "4a44dc9");
+  const day2 = incrementEvent({}, "rewarded_ad_failed", { placement: "doubleCoins", reason: "sdk_error" }, "android", "0.44.0", "4a44dc9");
+  const day3 = incrementEvent({}, "rewarded_ad_failed", { placement: "doubleCoins", reason: "timeout" }, "android", "0.44.0", "4a44dc9");
+  const merged = mergeCounters(mergeCounters(day1, day2), day3);
+  assert.deepEqual(merged.rewarded_ad_failed?.byReason, { timeout: 2, sdk_error: 1 });
+  assert.equal(merged.rewarded_ad_failed?.total, 3);
+
+  // A day bucket written before byReason existed has no such map; merging two of
+  // them must leave it absent rather than inventing an empty object.
+  const legacyA = { rewarded_ad_failed: { total: 4 } };
+  const legacyB = { rewarded_ad_failed: { total: 1 } };
+  const legacyMerged = mergeCounters(legacyA, legacyB);
+  assert.equal(legacyMerged.rewarded_ad_failed?.byReason, undefined);
+  assert.equal(legacyMerged.rewarded_ad_failed?.total, 5);
+
+  // And merging history with a new day keeps only the new day's reasons, rather than
+  // back-attributing failures whose reason was never stored.
+  const mixed = mergeCounters(legacyA, day2);
+  assert.deepEqual(mixed.rewarded_ad_failed?.byReason, { sdk_error: 1 });
+  assert.equal(mixed.rewarded_ad_failed?.total, 5);
+});

@@ -13,6 +13,7 @@ import {
   type AnalyticsEventName,
   type AnalyticsPlatform,
 } from "../src/services/analyticsSchema";
+import { isAdFailureReason } from "../src/services/ads/adTypes";
 import {
   ATTRIBUTION_DIMENSIONS,
   ATTRIBUTION_OTHER,
@@ -73,6 +74,14 @@ const SCORED_EVENTS = new Set<AnalyticsEventName>(["shape_completed", "shape_pra
 // schema's PLAY_STORE_SURFACE_PARAMS is a closed five-value union, re-validated
 // server-side before this runs, so the map cannot grow past five keys.
 const SURFACE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["play_store_cta_shown", "play_store_click"]);
+// The two rewarded-ad lifecycle events that already carry a `reason`, and the ONLY
+// events that get a per-reason breakdown. Without it a failure reads as a bare count
+// and cannot be told apart from a timeout, an SDK error or a consent block. Safe for
+// the same reason bySurface is: `reason` is AD_FAILURE_REASONS, a closed nine-value
+// union re-validated server-side by validateEventParams before this runs, so the map
+// cannot grow past nine keys. The offer-funnel twin `reward_ad_failed` is a DIFFERENT
+// event that carries only `placement` - it is deliberately not here.
+const REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad_failed", "rewarded_ad_unavailable"]);
 // Which events carry a where-did-this-visit-come-from breakdown. Deliberately a short
 // list rather than every event (the byPlatform treatment): attribution values are
 // caller-controlled, so each event added here multiplies stored keys by the number of
@@ -117,6 +126,12 @@ type EventCounters = {
   // before this. Absent on every other event, and on day buckets recorded before
   // this field existed.
   bySurface?: Record<string, number>;
+  // REASON_BREAKOUT_EVENTS only - why a rewarded ad could not be served or shown,
+  // so a failure can be diagnosed (timeout vs. sdk_error vs. consent_blocked...)
+  // instead of only counted. Bounded to the nine ids of AD_FAILURE_REASONS. Absent
+  // on every other event, and on day buckets recorded before this field existed -
+  // such a day reports no reason rows at all rather than guessing them.
+  byReason?: Record<string, number>;
   // ATTRIBUTION_BREAKOUT_EVENTS only - where the visit that produced this event came
   // from. `bySource` is the campaign twin of byPlatform; byCampaign/byUtmContent split
   // it further by utm_campaign / utm_content. All three are capped at
@@ -251,6 +266,14 @@ export function incrementEvent(
   if (SURFACE_BREAKOUT_EVENTS.has(eventName)) {
     updated.bySurface = incrementKeyMap(existing.bySurface, params.surface as string);
   }
+  // Rewarded-ad failure breakout - see REASON_BREAKOUT_EVENTS. The isAdFailureReason
+  // guard is belt-and-braces: handleEvent already rejects the whole event when the
+  // reason is missing or outside the union, so a stored event always has a valid one.
+  // It matters because this function is exported and called directly - a bad value
+  // must leave the map untouched rather than open a free-text key.
+  if (REASON_BREAKOUT_EVENTS.has(eventName) && isAdFailureReason(params.reason)) {
+    updated.byReason = incrementKeyMap(existing.byReason, params.reason);
+  }
   if (FUNNEL_EVENTS.has(eventName)) {
     const gameType = params.gameType as string;
     const category = params.category as string;
@@ -294,6 +317,7 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byAppVersion: mergeKeyMaps(ae.byAppVersion, be.byAppVersion),
       byAppBuild: mergeKeyMaps(ae.byAppBuild, be.byAppBuild),
       bySurface: mergeKeyMaps(ae.bySurface, be.bySurface),
+      byReason: mergeKeyMaps(ae.byReason, be.byReason),
       bySource: mergeKeyMaps(ae.bySource, be.bySource),
       byCampaign: mergeKeyMaps(ae.byCampaign, be.byCampaign),
       byUtmContent: mergeKeyMaps(ae.byUtmContent, be.byUtmContent),

@@ -40,6 +40,10 @@ import {
 // any client-side catalog swap can have happened, so it states the build-time
 // counts - the same ones the rest of this file uses.
 import { siteFaq } from "../src/content/siteContent";
+// The one list of challenges, shared with the site's own rendering of this page
+// (src/site/SiteChallenges.tsx) so the crawlable links and the cards a visitor
+// sees can never be different sets.
+import { DRAWING_CHALLENGES } from "../src/content/drawingChallenges";
 
 /**
  * The app's real listing URL. Duplicated from src/services/nativeShare.ts rather
@@ -342,7 +346,44 @@ const TWO_PLAYER: SeoPage = {
 };
 
 /** Pages the Worker rewrites the <head> of and injects copy into. */
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
+
+/*
+ * The practice directory. It is a landing path rather than a content page
+ * because it belongs to the site's own visual language - SiteChallenges.tsx
+ * renders it in the 3a shell - and the block below is what a crawler, or anyone
+ * with JavaScript off, reads instead.
+ *
+ * Its link list IS the page: built from DRAWING_CHALLENGES, so adding a
+ * challenge adds a crawlable link here and a card there from one edit.
+ */
+const DRAWING_CHALLENGES_PAGE: SeoPage = {
+  path: "/drawing-challenges",
+  title: "Drawing Challenges - Practice One Shape at a Time | CYDI",
+  description:
+    "Free single-shape drawing challenges: redraw a circle, a star, a heart or a dog from memory and get scored out of 100. No sign-up, nothing to unlock, plays in the browser.",
+  h1: "Drawing Challenges",
+  paragraphs: [
+    "Each challenge is one shape, on its own. You study the target for a few seconds, it disappears, you redraw it freehand, and CYDI scores how close you got - then draws your attempt over the target so you can see where it drifted.",
+    "They are practice rounds: scored for real, and they change nothing in your game. No coins, no best score, no unlocks - so a challenge is playable whether or not you have reached its category in the Shape Challenge.",
+  ],
+  linkGroup: {
+    heading: "Pick a challenge",
+    items: DRAWING_CHALLENGES.map((challenge) => ({
+      href: challenge.href,
+      label: challenge.name,
+      description: challenge.note,
+    })),
+  },
+  links: [
+    { href: "/draw-shapes-online", label: "Browse every shape by category" },
+    { href: "/how-to-play", label: "How the score is worked out" },
+    { href: "/", label: "CYDI home" },
+  ],
+  cta: { href: "/drawing-accuracy-test", label: "Test Your Drawing Accuracy" },
+  androidCta: true,
+};
+
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list

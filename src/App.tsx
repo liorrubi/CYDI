@@ -39,6 +39,7 @@ import PlayTogetherScreen from "./screens/PlayTogetherScreen";
  */
 const SiteHome = lazy(() => import("./site/SiteHome"));
 const SeoPracticePage = lazy(() => import("./site/SeoPracticePage"));
+const SiteChallenges = lazy(() => import("./site/SiteChallenges"));
 /**
  * The 3a skin for the browser game entry screens. Lazy for the same reason as
  * the pages above - it must not reach the Android WebView - and mounted only on
@@ -54,7 +55,7 @@ const SiteGameSkin = lazy(() => import("./site/SiteGameSkin"));
 function SiteChunkFallback() {
   return <div style={{ minHeight: "100dvh", background: "#14151f" }} aria-busy="true" />;
 }
-import { toAchievements, toDailyChallenge, toFriendChallengeIntro, toHome, toPassPlay,
+import { toAchievements, toChallengesHub, toDailyChallenge, toFriendChallengeIntro, toHome, toPassPlay,
   toPlayTogether, toSeoLanding, toShapeChallenge, toSharedArtistResult, toSharedResult,
   toSiteHome } from "./app/routes";
 import { resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
@@ -207,7 +208,7 @@ function isSkinnedGameScreen(screen: Screen): boolean {
 
 /** The web-only public-site surfaces, which no in-game overlay belongs on. */
 function isSiteScreen(screen: Screen): boolean {
-  return screen.name === "siteHome" || screen.name === "seoLanding";
+  return screen.name === "siteHome" || screen.name === "seoLanding" || screen.name === "challengesHub";
 }
 
 type AppProps = {
@@ -240,6 +241,9 @@ export default function App({ landing }: AppProps) {
     }
     // Landing pages keep their URL (unlike the share paths above) - it is the
     // canonical, indexed address of this page, not a payload to consume.
+    // A site page rather than a destination in the game: the hub starts nothing,
+    // it links to the challenge pages, each of which still owns its own round.
+    if (landing?.page === "challenges") return toChallengesHub();
     if (landing?.mode === "playTogether") return toPlayTogether();
     if (landing?.mode === "passPlay") return toPassPlay();
     // A shape-focused landing path now opens the 4a presentation instead of
@@ -681,6 +685,12 @@ export default function App({ landing }: AppProps) {
                   onOpenGameMenu={() => enterGame(toHome(), PLAY_PATH)}
                   onDailyChallenge={() => enterGame(toDailyChallenge(), PLAY_PATH)}
                 />
+              </Suspense>
+            );
+          case "challengesHub":
+            return (
+              <Suspense fallback={<SiteChunkFallback />}>
+                <SiteChallenges onPlay={() => enterGame(toShapeChallenge(), CLASSIC_PATH)} />
               </Suspense>
             );
           case "seoLanding": {

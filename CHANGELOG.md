@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.43.1 - 2026-09-18
+
+Web only, presentation only. `/drawing-challenges` shipped yesterday as a
+standalone white content document, which is not what the rest of the site looks
+like: walking Home → Practice shapes left the CYDI design language behind at the
+first click.
+
+It is now rendered by the site itself. The page moved from the content-page
+system to the landing-page system, so it is built from `SiteShell`,
+`.site-hero`, `.site-shapegrid` and `.site-shapecard` - the same shell, heading
+hierarchy and card the practice pages already use - and each card previews its
+target with `SiteShape`, the game's own shape renderer, on the light drawing
+surface those cards already have. Nothing new was invented to make it fit.
+
+The four challenges now come from one shared list
+(`src/content/drawingChallenges.ts`), read both by the Worker for the crawlable
+block and by the page for its cards, so the links a crawler follows and the
+cards a visitor taps cannot become different sets. The grid is `auto-fit`, so
+Spiral, Snail, Bear, Pig and Owl will drop into it without the page being
+touched again.
+
+Everything else is deliberately identical: same URL, same title, description,
+canonical, H1, sitemap entry and internal links; same four destinations; same
+practice behaviour. `/s/dog`, attribution and progression are untouched.
+
 ## 0.43.0 - 2026-09-18
 
 Web only. The single-shape challenges now have a home of their own:

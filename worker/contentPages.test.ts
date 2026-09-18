@@ -7,7 +7,6 @@
 // they can never collide with the game's SEO paths.
 
 import assert from "node:assert/strict";
-import { DRAWING_CHALLENGES_HREF } from "../src/content/siteContent.ts";
 import test from "node:test";
 
 import {
@@ -116,42 +115,5 @@ test("the sitemap lists every content page", () => {
   }
   for (const page of SEO_PAGES) {
     assert.ok(xml.includes(`<loc>${canonicalUrl(page.path)}</loc>`), `${page.path} missing from sitemap`);
-  }
-});
-
-test("the drawing-challenges hub is a real page, and the only practice directory", () => {
-  const hub = contentPageForPath("/drawing-challenges");
-  assert.ok(hub, "the hub page is missing");
-  // A content page, so it is in CONTENT_PATHS - which is what worker/index.ts
-  // hands the sitemap. A hub nobody can find is not a hub.
-  assert.ok(CONTENT_PATHS.includes("/drawing-challenges"), "the hub is not in CONTENT_PATHS, so it is not in the sitemap");
-  assert.equal(DRAWING_CHALLENGES_HREF, hub.path, "the app links somewhere the Worker does not serve");
-
-  const html = renderContentDocument(hub);
-  assert.equal([...html.matchAll(/<h1>/g)].length, 1);
-  assert.match(html, /<link rel="canonical" href="https:\/\/playcydi\.com\/drawing-challenges">/);
-  // Every challenge that exists is a card, each with its own thumbnail and a
-  // link a crawler can follow.
-  for (const href of [
-    "/draw-a-perfect-circle",
-    "/draw-a-perfect-star",
-    "/draw-a-perfect-heart",
-    "/draw-a-dog-from-memory",
-  ]) {
-    assert.match(html, new RegExp(`<a class="cydi-card-link" href="${href}">`), `no card for ${href}`);
-  }
-  assert.equal([...html.matchAll(/class="cydi-card"/g)].length, 4);
-  assert.equal([...html.matchAll(/<img src="\/images\/seo\/challenge-[a-z]+\.svg" alt="[^"]{20,}"/g)].length, 4);
-});
-
-test("every card thumbnail the hub references is really in public/", async () => {
-  const { existsSync } = await import("node:fs");
-  const { fileURLToPath } = await import("node:url");
-  const html = renderContentDocument(contentPageForPath("/drawing-challenges")!);
-  const sources = [...html.matchAll(/<img src="([^"]+)"/g)].map((match) => match[1]);
-  assert.ok(sources.length > 0);
-  for (const src of sources) {
-    const file = fileURLToPath(new URL(`../public${src}`, import.meta.url));
-    assert.ok(existsSync(file), `missing thumbnail: public${src}`);
   }
 });

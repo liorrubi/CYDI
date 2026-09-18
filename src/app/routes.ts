@@ -20,6 +20,11 @@ export function toSeoLanding(): Screen {
   return { name: "seoLanding" };
 }
 
+/** The drawing-challenges hub (web only) - a site page, not a way into a round. */
+export function toChallengesHub(): Screen {
+  return { name: "challengesHub" };
+}
+
 export function toHome(): Screen {
   return { name: "home" };
 }

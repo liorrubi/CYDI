@@ -172,11 +172,40 @@ test("the shape hub points at the challenge directory instead of repeating it", 
     hub.links.some((link) => link.href === "/drawing-challenges"),
     "the hub should link to the challenge directory",
   );
-  // And nowhere else grows one either - a second directory is the thing this
-  // replaced.
-  for (const page of SEO_PAGES) {
-    assert.equal(page.linkGroup, undefined, `${page.path} carries a practice directory of its own`);
+  // Exactly one page carries the directory, and it is the hub - a second copy
+  // of this list is the thing the hub replaced.
+  const withDirectory = SEO_PAGES.filter((page) => page.linkGroup).map((page) => page.path);
+  assert.deepEqual(withDirectory, ["/drawing-challenges"]);
+});
+
+test("the challenges hub lists every challenge, from the one shared list", async () => {
+  const { DRAWING_CHALLENGES } = await import("../content/drawingChallenges.ts");
+  const { DRAWING_CHALLENGES_HREF } = await import("../content/siteContent.ts");
+  const hub = seoPageForPath("/drawing-challenges")!;
+  assert.equal(DRAWING_CHALLENGES_HREF, hub.path, "the site links somewhere the Worker does not serve");
+  assert.deepEqual(
+    hub.linkGroup!.items.map((item) => item.href),
+    DRAWING_CHALLENGES.map((challenge) => challenge.href),
+  );
+  // Every challenge it advertises is a page that really exists, so the hub can
+  // never link into a 404.
+  for (const challenge of DRAWING_CHALLENGES) {
+    assert.ok(LANDING_PATHS.includes(challenge.href), `${challenge.href} is not a landing page`);
+    assert.ok(seoPageForPath(challenge.href), `${challenge.href} has no Worker metadata`);
   }
+  // And the crawler gets those links as plain anchors, not as script.
+  const html = renderSeoSection(hub);
+  for (const challenge of DRAWING_CHALLENGES) {
+    assert.match(html, new RegExp(`<a href="${challenge.href}">`), `hub does not render a link to ${challenge.href}`);
+  }
+  assert.equal([...html.matchAll(/<h1>/g)].length, 1);
+});
+
+test("the hub is a site page: it opens no game screen", () => {
+  const landing = landingPageForPath("/drawing-challenges")!;
+  assert.equal(landing.page, "challenges");
+  assert.equal(landing.shape, undefined, "the hub must not open a round");
+  assert.equal(landing.mode, undefined, "the hub must not open a mode");
 });
 
 test("every challenge page links back to the directory", () => {

@@ -21,6 +21,12 @@ import type { CategoryId } from "../content/contentRepository";
 export type LandingPage = {
   path: string;
   /**
+   * A site page rather than a way into the game. "challenges" is the drawing
+   * challenges hub: it renders in the site shell and starts nothing - every card
+   * on it is a link to a challenge page, which still owns its own round.
+   */
+  page?: "challenges";
+  /**
    * Which mode the page opens. Omitted means Shape Challenge, which is what
    * every shape-focused landing page wants. The two social pages would be
    * actively misleading without this: someone arriving from a page about
@@ -69,6 +75,7 @@ const LANDING_PAGES: LandingPage[] = [
   { path: "/draw-a-perfect-star", shape: STAR },
   { path: "/draw-a-perfect-heart", shape: HEART },
   { path: "/draw-a-dog-from-memory", shape: DOG },
+  { path: "/drawing-challenges", page: "challenges" },
   { path: "/draw-shapes-online" },
   { path: "/multiplayer-drawing-game", mode: "playTogether" },
   { path: "/2-player-drawing-game-one-phone", mode: "passPlay" },

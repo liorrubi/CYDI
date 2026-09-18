@@ -1450,6 +1450,51 @@
   text-decoration: underline;
 }
 
+/*
+ * The drawing-challenges hub reuses .site-shapecard as it is. Only three things
+ * differ from the six-up practice strip that card was built for: a two-up grid
+ * (these carry a line of copy and a CTA, not just a name), the copy block, and
+ * the CTA line itself.
+ */
+.site-shapegrid-challenges {
+  /* auto-fit, not a fixed count: four cards sit four-up on a desktop, two-up on a
+     tablet and one-up on a phone, and the next challenges added drop into the
+     same grid without it being redesigned. */
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+}
+
+.site-challengecard .site-shapecard-art {
+  /* The six-up strip this card comes from is small enough for a square. Here a
+     card can be 300px wide, and a square would make the preview taller than the
+     rest of the card put together. */
+  aspect-ratio: 4 / 3;
+  max-height: 190px;
+}
+
+.site-challengecard {
+  gap: 10px;
+}
+
+.site-challengecard-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.site-challengecard-go {
+  margin-top: auto;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-primary-text);
+}
+
+.site-challenges-note {
+  margin: 22px 0 0;
+  max-width: 62ch;
+  color: var(--color-text-muted);
+}
+
 /* ------------------------------------------------------ daily teaser ----- */
 
 /* One slim card, after the three modes - a secondary feature, not a grid. */
@@ -2270,6 +2315,12 @@
     grid-template-columns: repeat(4, 1fr);
   }
 
+  /* The challenge cards size themselves; the six-up strip's breakpoints would
+     squeeze them into columns far narrower than their own minimum. */
+  .site-shapegrid-challenges {
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  }
+
   .site-stepgrid,
   .site-criteria {
     grid-template-columns: repeat(2, 1fr);
@@ -2299,6 +2350,10 @@
 @media (max-width: 620px) {
   .site-shapegrid {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .site-shapegrid-challenges {
+    grid-template-columns: 1fr;
   }
 
   .site-stepgrid {

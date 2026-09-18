@@ -12,6 +12,8 @@ export type Screen =
   | { name: "siteHome" }
   /** WEB ONLY - the SEO/practice landing presentation (art direction 4a). */
   | { name: "seoLanding" }
+  /** Web only: the drawing-challenges hub, rendered in the site shell. */
+  | { name: "challengesHub" }
   | { name: "home" }
   | { name: "create" }
   | { name: "list" }

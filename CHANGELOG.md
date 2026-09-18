@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.43.3 - 2026-09-18
+
+Web only. The "Browse categories" row at the bottom of every practice page was
+twelve filled pills with a hover state - they read as buttons, they were plain
+spans, and a practice page is the one place that could not honour a press
+anyway: it holds no progression state and must not imply any.
+
+They are now plain muted names separated by middots, with one real link under
+them -  to , where unlocked and
+locked categories, the unlock cost and the coin balance actually live. The names
+are still a list, still in catalogue order, and still in the rendered page for
+search engines. No progression or unlock logic was touched, and no coin or lock
+state was added to a practice page.
+
 ## 0.43.2 - 2026-09-18
 
 Web only, copy. The challenges hub now says what it is not: one muted line under

@@ -288,14 +288,25 @@ export default function SeoPracticePage({ shape, onPractice, onPlay }: SeoPracti
           <span className="site-kicker" id="site-categories-heading">
             Browse categories
           </span>
-          {/* One chip per catalog category, in catalog order - not a fixed list. */}
-          <ul className="site-chips">
+          {/*
+            * Names, in catalog order - and deliberately NOT controls. These used
+            * to be pills, which read as buttons a visitor could press: they never
+            * were, and a practice page is the one place that could not honour
+            * them anyway. It holds no progression state and must not imply any -
+            * which category is unlocked, what the next one costs and what the
+            * balance is all live on /draw-shapes-online, which the link below
+            * leads to. Still a real list, so the category names stay crawlable.
+            */}
+          <ul className="site-catnames">
             {categories.map((category) => (
-              <li key={category.id}>
-                <span className="site-chip">{category.name}</span>
-              </li>
+              <li key={category.id}>{category.name}</li>
             ))}
           </ul>
+          <p className="site-visually-spaced">
+            <a className="site-textlink" href="/draw-shapes-online">
+              Explore all {counts.shapes} shapes <span aria-hidden="true">→</span>
+            </a>
+          </p>
           <p className="site-meta site-visually-spaced">
             {counts.shapes} shapes · {counts.categories} categories · {spellNumber(FIRST_ROUND_PREVIEW_SECONDS)} seconds to
             study your first shape

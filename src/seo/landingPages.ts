@@ -69,12 +69,18 @@ const HEART = { category: "symbols" as CategoryId, shapeId: "sym-heart", practic
 // the round is real and scored, and it still persists nothing.
 const DOG = { category: "animals" as CategoryId, shapeId: "ani-dog", practice: true as const };
 
+// The cat's Short predates the rule that every Short gets its own page; this is
+// that page, brought in line with the dog's. Fifth in Animals, so it needs the
+// same practice exception - the round is real and scored, and persists nothing.
+const CAT = { category: "animals" as CategoryId, shapeId: "ani-cat", practice: true as const };
+
 const LANDING_PAGES: LandingPage[] = [
   { path: "/drawing-accuracy-test", shape: CIRCLE },
   { path: "/draw-a-perfect-circle", shape: CIRCLE },
   { path: "/draw-a-perfect-star", shape: STAR },
   { path: "/draw-a-perfect-heart", shape: HEART },
   { path: "/draw-a-dog-from-memory", shape: DOG },
+  { path: "/draw-a-cat-from-memory", shape: CAT },
   { path: "/drawing-challenges", page: "challenges" },
   { path: "/draw-shapes-online" },
   { path: "/multiplayer-drawing-game", mode: "playTogether" },

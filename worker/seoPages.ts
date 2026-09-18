@@ -347,6 +347,35 @@ const TWO_PLAYER: SeoPage = {
 
 /** Pages the Worker rewrites the <head> of and injects copy into. */
 
+
+/*
+ * The cat's page, added after the dog's and built the same way: the Cat Short
+ * went out before the rule that a Short lands on its own challenge, and /s/cat
+ * now points here instead of at the home screen.
+ */
+const CAT_FROM_MEMORY: SeoPage = {
+  path: "/draw-a-cat-from-memory",
+  title: "Draw a Cat From Memory - Memory Drawing Challenge | CYDI",
+  description:
+    "Study a cat outline for a few seconds, watch it disappear, then draw it from memory and get an instant score out of 100. Free, no sign-up, plays in the browser.",
+  h1: "Draw a Cat From Memory",
+  paragraphs: [
+    "The cat is on screen for a couple of seconds. Then it is gone, the canvas clears, and you draw it back from memory - the head, the two ears, the eyes and the whiskers. Your line is scored against the target and laid over it afterwards, so you can see which part of it you remembered and which part you invented.",
+    "A face is harder to redraw than it looks, because the features have to land in the right place relative to each other, not just be present. Most people get a good head and then find the ears too small and the whiskers too low.",
+    "This is a practice round: played and scored for real, and it changes nothing in your game - no coins, no best score, no unlocks - so you can take it as often as you like, whether or not you have reached Animals in the Shape Challenge.",
+  ],
+  links: [
+    { href: "/draw-a-dog-from-memory", label: "Draw a dog from memory" },
+    { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
+    { href: "/how-to-play", label: "How the score is worked out" },
+    { href: "/", label: "CYDI home" },
+  ],
+  cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
+  androidCta: true,
+  faq: true,
+};
+
 /*
  * The practice directory. It is a landing path rather than a content page
  * because it belongs to the site's own visual language - SiteChallenges.tsx
@@ -383,7 +412,7 @@ const DRAWING_CHALLENGES_PAGE: SeoPage = {
   androidCta: true,
 };
 
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list

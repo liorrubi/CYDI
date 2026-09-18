@@ -50,6 +50,12 @@ export const DRAWING_CHALLENGES: DrawingChallenge[] = [
     shapeId: "sym-heart",
   },
   {
+    href: "/draw-a-cat-from-memory",
+    name: "Draw a cat from memory",
+    note: "Ears, whiskers and all - from memory, once the target has gone.",
+    shapeId: "ani-cat",
+  },
+  {
     href: "/draw-a-dog-from-memory",
     name: "Draw a dog from memory",
     note: "The target disappears before you start. Redraw it from memory.",

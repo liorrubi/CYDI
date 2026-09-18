@@ -10,11 +10,11 @@ import { resolveAttribution } from "../src/services/analyticsAttribution.ts";
 
 const ORIGIN = "https://playcydi.com";
 const EXPECTED =
-  "https://playcydi.com/?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=N4H7VTj59A0";
+  "https://playcydi.com/draw-a-cat-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=N4H7VTj59A0";
 const EXPECTED_DOG =
   "https://playcydi.com/draw-a-dog-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=n8aojqnxidc";
 
-test("/s/cat redirects to the fully tagged homepage", () => {
+test("/s/cat redirects to the fully tagged cat challenge", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
 });
 
@@ -59,10 +59,11 @@ test("/s/dog resolves to exactly the Dog Short's attribution", () => {
 });
 
 test("a landing path is only ever taken from the map", () => {
-  // /s/cat has no path of its own and must still land on the homepage - adding the
-  // dog's destination must not have moved anybody else's.
-  assert.equal(CAMPAIGN_SLUGS.cat.path, undefined);
-  assert.equal(new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat"))).pathname, "/");
+  // Every alias lands on the challenge its Short was about - the cat's page was
+  // added after its Short, so this one moved off the homepage deliberately. Its
+  // tags did not change with it.
+  assert.equal(CAMPAIGN_SLUGS.cat.path, "/draw-a-cat-from-memory");
+  assert.equal(CAMPAIGN_SLUGS.cat.content, "N4H7VTj59A0");
   // And every path in the map is one of our own landing pages, never an off-site URL.
   for (const [slug, link] of Object.entries(CAMPAIGN_SLUGS)) {
     if (link.path === undefined) continue;

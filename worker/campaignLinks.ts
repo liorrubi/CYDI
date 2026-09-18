@@ -41,7 +41,13 @@ export const CAMPAIGN_PATH_PREFIX = "/s/";
  * the viewer looking twice.
  */
 export const CAMPAIGN_SLUGS: Record<string, CampaignLink> = {
-  cat: { source: "youtube", medium: "shorts", campaign: "cydi_shorts", content: "N4H7VTj59A0" },
+  cat: {
+    source: "youtube",
+    medium: "shorts",
+    campaign: "cydi_shorts",
+    content: "N4H7VTj59A0",
+    path: "/draw-a-cat-from-memory",
+  },
   dog: {
     source: "youtube",
     medium: "shorts",

@@ -79,7 +79,12 @@ test("only a page dedicated to one out-of-reach shape asks for a practice round"
   // shape pages that would otherwise land a new visitor on the category map -
   // never on the hub, and never on the circle, which needs no exception.
   const practicePaths = LANDING_PATHS.filter((path) => landingPageForPath(path)?.shape?.practice);
-  assert.deepEqual(practicePaths.sort(), ["/draw-a-dog-from-memory", "/draw-a-perfect-heart", "/draw-a-perfect-star"]);
+  assert.deepEqual(practicePaths.sort(), [
+    "/draw-a-cat-from-memory",
+    "/draw-a-dog-from-memory",
+    "/draw-a-perfect-heart",
+    "/draw-a-perfect-star",
+  ]);
 });
 
 test("the Google Play link is the app's real listing URL, not a second guess at it", async () => {
@@ -209,7 +214,7 @@ test("the hub is a site page: it opens no game screen", () => {
 });
 
 test("every challenge page links back to the directory", () => {
-  for (const path of ["/draw-a-perfect-star", "/draw-a-perfect-heart", "/draw-a-dog-from-memory"]) {
+  for (const path of ["/draw-a-perfect-star", "/draw-a-perfect-heart", "/draw-a-dog-from-memory", "/draw-a-cat-from-memory"]) {
     const page = seoPageForPath(path)!;
     assert.ok(
       page.links.some((link) => link.href === "/drawing-challenges"),

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.44.0 - 2026-09-18
+
+Web only. The cat catches up with the dog.
+
+**A cat challenge page: /draw-a-cat-from-memory.** The Cat Short went out before
+the rule that every Short lands on its own challenge, so its alias has been
+pointing at the home screen ever since. The page opens the real catalogue cat as
+a practice round - study, hide, draw, score - built on the same practice flow as
+the other four, so no new drawing code exists and scoring is untouched. It
+persists nothing: no coins, no best score, no completion, no unlock, and it
+plays whether or not Animals has been bought.
+
+**/s/cat now lands there.** Only the destination moved; the tags are exactly the
+ones the Cat Short has always carried, `utm_content=N4H7VTj59A0` included. This
+does NOT consume one of the ten pre-authorized Short mappings - the cat predates
+that grant, and the dog is still #1 of the ten.
+
+**The hub lists five.** Cat sits between Heart and Dog on /drawing-challenges,
+same card, same preview treatment, same grid.
+
 ## 0.43.3 - 2026-09-18
 
 Web only. The "Browse categories" row at the bottom of every practice page was

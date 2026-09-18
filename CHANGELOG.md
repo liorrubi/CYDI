@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.44.1 - 2026-09-18
+
+Web only, and nothing in the game changes.
+
+**A branded install link: /android.** It is a permanent (301) redirect to the
+Google Play listing, so anywhere the Android link is shown - the Facebook Page's
+links, a post, a reply in a forum - it reads `playcydi.com` instead of a bare
+store URL. Implemented in the Worker next to the campaign aliases
+(`worker/index.ts`, `worker/seoPages.ts`); the store URL itself is still the one
+`PLAY_STORE_URL` constant the rest of the site uses.
+
+Only `utm_*` parameters travel with the visitor, so a tagged install link keeps
+its campaign; everything else in the query string is dropped. An incoming `id`
+in particular never reaches Play, which reads the app to install from exactly
+that parameter - forwarding it would have turned our own link into an installer
+for whatever app the URL named. `worker/androidRedirect.test.ts` pins that down.
+
+The route has no page of its own, so it stays out of the sitemap and is
+disallowed in robots.txt, the same treatment `/s/` gets.
+
 ## 0.44.0 - 2026-09-18
 
 Web only. The cat catches up with the dog.

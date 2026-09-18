@@ -17,7 +17,7 @@ import {
 import { ADS_CONFIG_KV_KEY, isValidRemoteAdsConfig, parseRemoteAdsConfig } from "../src/services/ads/remoteAdsConfigSchema";
 import { isRoomCode, MP_LIMITS, ROOM_CODE_ALPHABET } from "../src/multiplayer/protocol";
 import { campaignLinkForPath, campaignRedirectUrl, CAMPAIGN_PATH_PREFIX } from "./campaignLinks";
-import { canonicalUrl, renderSeoSection, robotsTxt, seoPageForPath, sitemapXml, type SeoPage } from "./seoPages";
+import { ANDROID_PATH, androidRedirectUrl, canonicalUrl, renderSeoSection, robotsTxt, seoPageForPath, sitemapXml, type SeoPage } from "./seoPages";
 import { CONTENT_PATHS, contentPageForPath, renderContentDocument } from "./contentPages";
 
 export { AnalyticsDO, DailyChallengeDO, RoomDO };
@@ -580,6 +580,15 @@ export default {
     // inventing a campaign - see worker/campaignLinks.ts.
     if (url.pathname.startsWith(CAMPAIGN_PATH_PREFIX) && (request.method === "GET" || request.method === "HEAD")) {
       return Response.redirect(campaignRedirectUrl(url.origin, campaignLinkForPath(url.pathname)), 302);
+    }
+
+    // The branded install link. /android is a permanent redirect to the Play listing,
+    // so anywhere the URL is shown it reads playcydi.com rather than a bare store URL.
+    // 301 rather than the aliases' 302 because the destination is the app's own
+    // listing and is not going to move - see androidRedirectUrl for what (little) of
+    // the request travels with it.
+    if ((url.pathname === ANDROID_PATH || url.pathname === `${ANDROID_PATH}/`) && (request.method === "GET" || request.method === "HEAD")) {
+      return Response.redirect(androidRedirectUrl(url.search), 301);
     }
 
     if (url.pathname === "/robots.txt" && request.method === "GET") return textResponse(robotsTxt(), "text/plain; charset=utf-8");

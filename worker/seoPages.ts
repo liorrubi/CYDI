@@ -53,6 +53,25 @@ import { DRAWING_CHALLENGES } from "../src/content/drawingChallenges";
  */
 export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.playcydi.cydi";
 
+/** The branded install link: /android sends a visitor to the Play listing above. */
+export const ANDROID_PATH = "/android";
+
+/**
+ * Where /android lands. The destination is the constant above and nothing else -
+ * only utm_* tags are carried over from the request, so a shared install link can
+ * keep its campaign without letting anyone aim the route somewhere new. An incoming
+ * `id` in particular is dropped rather than appended: Play reads the app to install
+ * from that parameter, and forwarding it would turn our own link into an installer
+ * for whatever app the URL named.
+ */
+export function androidRedirectUrl(search: string): string {
+  const target = new URL(PLAY_STORE_URL);
+  for (const [key, value] of new URLSearchParams(search)) {
+    if (key.startsWith("utm_")) target.searchParams.set(key, value);
+  }
+  return target.toString();
+}
+
 export type SeoPage = {
   /** Canonical path, no trailing slash (except the homepage's "/"). */
   path: string;
@@ -608,6 +627,9 @@ export function robotsTxt(): string {
     // their own to index. Keeping crawlers out also stops them manufacturing
     // campaign traffic in the analytics by following the alias.
     "Disallow: /s/",
+    // The branded install link - a permanent redirect to the Play listing, with no
+    // page of its own to index.
+    "Disallow: /android",
     "",
     `Sitemap: ${CANONICAL_ORIGIN}/sitemap.xml`,
     "",

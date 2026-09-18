@@ -79,7 +79,7 @@ test("only a page dedicated to one out-of-reach shape asks for a practice round"
   // shape pages that would otherwise land a new visitor on the category map -
   // never on the hub, and never on the circle, which needs no exception.
   const practicePaths = LANDING_PATHS.filter((path) => landingPageForPath(path)?.shape?.practice);
-  assert.deepEqual(practicePaths.sort(), ["/draw-a-perfect-heart", "/draw-a-perfect-star"]);
+  assert.deepEqual(practicePaths.sort(), ["/draw-a-dog-from-memory", "/draw-a-perfect-heart", "/draw-a-perfect-star"]);
 });
 
 test("the Google Play link is the app's real listing URL, not a second guess at it", async () => {
@@ -167,7 +167,7 @@ test("the hub links to each individual shape page under a visible heading", () =
   assert.equal(hub.linkGroup?.heading, "Practice individual shapes");
   assert.deepEqual(
     hub.linkGroup?.items.map((item) => item.href),
-    ["/draw-a-perfect-circle", "/draw-a-perfect-star", "/draw-a-perfect-heart"],
+    ["/draw-a-perfect-circle", "/draw-a-perfect-star", "/draw-a-perfect-heart", "/draw-a-dog-from-memory"],
   );
   // Every item carries its own anchor text and explanation - a bare list of
   // shape names is not a useful internal link.

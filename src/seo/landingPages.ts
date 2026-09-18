@@ -57,11 +57,18 @@ const CIRCLE = { category: "geometric" as CategoryId, shapeId: "circle" };
 const STAR = { category: "geometric" as CategoryId, shapeId: "star-5", practice: true as const };
 const HEART = { category: "symbols" as CategoryId, shapeId: "sym-heart", practice: true as const };
 
+// The dog is the landing spot for the Dog Short's /s/dog link, so the page has to
+// open the very shape the video showed. It sits sixth in Animals - a category that
+// costs coins - so it needs the same practice exception as the star and the heart:
+// the round is real and scored, and it still persists nothing.
+const DOG = { category: "animals" as CategoryId, shapeId: "ani-dog", practice: true as const };
+
 const LANDING_PAGES: LandingPage[] = [
   { path: "/drawing-accuracy-test", shape: CIRCLE },
   { path: "/draw-a-perfect-circle", shape: CIRCLE },
   { path: "/draw-a-perfect-star", shape: STAR },
   { path: "/draw-a-perfect-heart", shape: HEART },
+  { path: "/draw-a-dog-from-memory", shape: DOG },
   { path: "/draw-shapes-online" },
   { path: "/multiplayer-drawing-game", mode: "playTogether" },
   { path: "/2-player-drawing-game-one-phone", mode: "passPlay" },

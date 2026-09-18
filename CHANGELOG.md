@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.42.0 - 2026-09-18
+
+Web only. The Dog Short now has somewhere to send people that continues the
+video instead of ending it.
+
+**A dog challenge page: `/draw-a-dog-from-memory`.** It opens the real catalogue
+Dog as a practice round - study the outline, watch it disappear, draw it back,
+get the normal score - and it reuses the practice flow the star and heart pages
+already run on (`src/seo/landingPages.ts`), so there is no second drawing engine
+and no change to scoring. The round persists nothing: no coins, no best score,
+no completion, no category unlock, and the result screen says so. That matters
+here because Dog sits inside Animals, a category most visitors have not
+unlocked; a practice round is how the page can promise that shape and keep the
+promise without handing anything out.
+
+The page carries its own title, description, canonical, H1 and FAQ block like
+the other shape pages (`worker/seoPages.ts`), is in the sitemap, and is linked
+from the shape hub's practice list. It is one page, for one experiment - not a
+page per shape.
+
+**`/s/dog` lands on it.** Campaign aliases can now name a destination path
+(`worker/campaignLinks.ts`), so `/s/dog` redirects to the dog page carrying the
+Dog Short's tags instead of dropping the viewer on the home screen. The path
+comes from the server-side map, never from the request, for the same reason the
+tags do. `/s/cat` is untouched and still lands on the homepage, `/s/` stays out
+of `robots.txt`, and the attribution and session behaviour behind all of it is
+unchanged.
+
 ## 0.41.0 - 2026-09-17
 
 Web only. CYDI could not answer the one question that matters after posting a

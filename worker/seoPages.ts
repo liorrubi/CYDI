@@ -229,6 +229,39 @@ const PERFECT_HEART: SeoPage = {
   faq: true,
 };
 
+/*
+ * The one page written for a specific video rather than for a search query: it is
+ * where /s/dog sends someone who just watched the Dog Short, so the promise it has
+ * to keep is "the same challenge you just watched, now your turn". The copy is
+ * deliberately short - the playable target is the content, and every extra
+ * paragraph pushes it further from the reader's thumb.
+ *
+ * It is also a genuine standalone page ("draw a dog from memory" is a real query),
+ * which is why it carries the same metadata, canonical and FAQ treatment as the
+ * shape pages rather than being a thin redirect target.
+ */
+const DOG_FROM_MEMORY: SeoPage = {
+  path: "/draw-a-dog-from-memory",
+  title: "Draw a Dog From Memory - Memory Drawing Challenge | CYDI",
+  description:
+    "Study a dog outline for a few seconds, watch it disappear, then draw it from memory and get an instant score out of 100. Free, no sign-up, plays in the browser.",
+  h1: "Draw a Dog From Memory",
+  paragraphs: [
+    "Look at the dog above for a couple of seconds. It disappears, the canvas clears, and you draw it back from memory - ears, muzzle, eyes and all. The score comes straight after, with your line laid over the target so you can see exactly where your memory drifted.",
+    "Drawing from memory is a different problem from tracing. The outline is gone when your hand starts moving, so what you are really redrawing is what you noticed: how far apart the ears sit, how low the muzzle hangs, how wide the head is against its height. Most people get the head about right and discover the ears moved.",
+    "The round here is a practice round. It is played and scored exactly like the real thing, and it changes nothing in your game - no coins, no unlocks, no best score - so you can take it as many times as you like before you go and play the rest.",
+  ],
+  links: [
+    { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
+    { href: "/draw-a-perfect-heart", label: "Draw a perfect heart" },
+    { href: "/how-to-play", label: "How the score is worked out" },
+    { href: "/", label: "CYDI home" },
+  ],
+  cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
+  androidCta: true,
+  faq: true,
+};
+
 const DRAW_SHAPES: SeoPage = {
   path: "/draw-shapes-online",
   title: "Draw Shapes Online - Free Shape Drawing Game | CYDI",
@@ -258,6 +291,11 @@ const DRAW_SHAPES: SeoPage = {
         href: "/draw-a-perfect-heart",
         label: "Draw a perfect heart",
         description: "Two mirrored lobes, plus a dip and a point that both have to sit on the centre line.",
+      },
+      {
+        href: "/draw-a-dog-from-memory",
+        label: "Draw a dog from memory",
+        description: "The target disappears before you start - redraw the dog from what you remember of it.",
       },
     ],
   },
@@ -325,7 +363,7 @@ const TWO_PLAYER: SeoPage = {
 };
 
 /** Pages the Worker rewrites the <head> of and injects copy into. */
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list

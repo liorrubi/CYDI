@@ -5,12 +5,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { campaignLinkForPath, campaignRedirectUrl, CAMPAIGN_SLUGS } from "./campaignLinks.ts";
-import { robotsTxt } from "./seoPages.ts";
+import { robotsTxt, LANDING_PATHS } from "./seoPages.ts";
 import { resolveAttribution } from "../src/services/analyticsAttribution.ts";
 
 const ORIGIN = "https://playcydi.com";
 const EXPECTED =
   "https://playcydi.com/?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=N4H7VTj59A0";
+const EXPECTED_DOG =
+  "https://playcydi.com/draw-a-dog-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=n8aojqnxidc";
 
 test("/s/cat redirects to the fully tagged homepage", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
@@ -40,10 +42,40 @@ test("the creative id keeps its case through the whole round trip", () => {
   assert.equal(CAMPAIGN_SLUGS.cat.content, "N4H7VTj59A0");
 });
 
+test("/s/dog lands on the dog challenge page, tagged, not on the homepage", () => {
+  // The point of this alias: someone who just watched the Dog Short gets the dog
+  // challenge itself, not a home screen they then have to navigate.
+  assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/dog")), EXPECTED_DOG);
+  assert.equal(new URL(EXPECTED_DOG).pathname, "/draw-a-dog-from-memory");
+});
+
+test("/s/dog resolves to exactly the Dog Short's attribution", () => {
+  const target = new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/dog")));
+  const attribution = resolveAttribution({ search: target.search, referrer: "", origin: ORIGIN });
+  assert.equal(attribution.source, "youtube");
+  assert.equal(attribution.medium, "shorts");
+  assert.equal(attribution.campaign, "cydi_shorts");
+  assert.equal(attribution.content, "n8aojqnxidc");
+});
+
+test("a landing path is only ever taken from the map", () => {
+  // /s/cat has no path of its own and must still land on the homepage - adding the
+  // dog's destination must not have moved anybody else's.
+  assert.equal(CAMPAIGN_SLUGS.cat.path, undefined);
+  assert.equal(new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat"))).pathname, "/");
+  // And every path in the map is one of our own landing pages, never an off-site URL.
+  for (const [slug, link] of Object.entries(CAMPAIGN_SLUGS)) {
+    if (link.path === undefined) continue;
+    assert.ok(link.path.startsWith("/"), `${slug} path is not site-relative`);
+    assert.ok(!link.path.startsWith("//"), `${slug} path could leave the site`);
+    assert.ok(LANDING_PATHS.includes(link.path), `${slug} points at ${link.path}, which is not a landing page`);
+  }
+});
+
 // --- The negative half ---
 
 test("an unknown slug produces no campaign at all", () => {
-  for (const path of ["/s/unknown", "/s/dog", "/s/", "/s/cydi_shorts", "/s/N4H7VTj59A0"]) {
+  for (const path of ["/s/unknown", "/s/bird", "/s/", "/s/cydi_shorts", "/s/N4H7VTj59A0"]) {
     assert.equal(campaignLinkForPath(path), null, path);
     const url = campaignRedirectUrl(ORIGIN, campaignLinkForPath(path));
     assert.equal(url, "https://playcydi.com/", path);

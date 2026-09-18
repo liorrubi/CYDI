@@ -20,6 +20,17 @@ export type CampaignLink = {
   campaign: string;
   /** The creative this alias stands for - for CYDI, the YouTube video id, case-sensitive. */
   content: string;
+  /**
+   * Where the alias lands, when the homepage is not the right answer. Used where a
+   * Short has a page of its own that continues it - /s/dog opens the dog challenge
+   * the video was about, so the viewer draws the shape they just watched instead of
+   * arriving at the generic home screen and having to find it.
+   *
+   * A landing path only: it is one of our own SEO landing pages, and the tags are
+   * appended to it exactly as they would be on the homepage, so attribution
+   * resolves identically either way.
+   */
+  path?: string;
 };
 
 export const CAMPAIGN_PATH_PREFIX = "/s/";
@@ -31,6 +42,13 @@ export const CAMPAIGN_PATH_PREFIX = "/s/";
  */
 export const CAMPAIGN_SLUGS: Record<string, CampaignLink> = {
   cat: { source: "youtube", medium: "shorts", campaign: "cydi_shorts", content: "N4H7VTj59A0" },
+  dog: {
+    source: "youtube",
+    medium: "shorts",
+    campaign: "cydi_shorts",
+    content: "n8aojqnxidc",
+    path: "/draw-a-dog-from-memory",
+  },
 };
 
 /**
@@ -57,11 +75,15 @@ export function campaignLinkForPath(pathname: string): CampaignLink | null {
  */
 export function campaignRedirectUrl(origin: string, link: CampaignLink | null): string {
   if (link === null) return `${origin}/`;
+  // The landing path comes from the MAP, never from the request, for the same reason
+  // the tags do: a path taken from the URL would let anyone aim our campaign traffic
+  // anywhere, including off-site.
+  const target = link.path ?? "/";
   const params = new URLSearchParams({
     utm_source: link.source,
     utm_medium: link.medium,
     utm_campaign: link.campaign,
     utm_content: link.content,
   });
-  return `${origin}/?${params.toString()}`;
+  return `${origin}${target}?${params.toString()}`;
 }

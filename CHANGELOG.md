@@ -8,7 +8,7 @@ spans, and a practice page is the one place that could not honour a press
 anyway: it holds no progression state and must not imply any.
 
 They are now plain muted names separated by middots, with one real link under
-them -  to , where unlocked and
+them - "Explore all 276 shapes" to /draw-shapes-online, where unlocked and
 locked categories, the unlock cost and the coin balance actually live. The names
 are still a list, still in catalogue order, and still in the rendered page for
 search engines. No progression or unlock logic was touched, and no coin or lock

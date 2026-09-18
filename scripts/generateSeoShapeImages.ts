@@ -256,12 +256,38 @@ function scoringOverlayImage(): string {
   );
 }
 
+/**
+ * A card thumbnail for the drawing-challenges hub: the target on its own, no
+ * annotation lines, no legend. Same generator the game draws from, so a card
+ * shows the shape the challenge behind it really asks for.
+ */
+function challengeThumb(shapeId: string, title: string, description: string): string {
+  const { svgPath } = shapeOutline(shapeId);
+  return svg(title, description, outlineMarkup(svgPath));
+}
+
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "images", "seo");
 const FILES: [string, string][] = [
   ["draw-a-perfect-star-five-point-star-symmetry-guide.svg", starImage()],
   ["draw-a-perfect-heart-symmetry-and-curve-guide.svg", heartImage()],
   ["draw-a-perfect-circle-radius-and-closing-guide.svg", circleImage()],
   ["how-to-play-attempt-over-target.svg", scoringOverlayImage()],
+  [
+    "challenge-circle.svg",
+    challengeThumb("circle", "The CYDI circle target", "A single closed circle outline, drawn as one unbroken dark line on white."),
+  ],
+  [
+    "challenge-star.svg",
+    challengeThumb("star-5", "The CYDI five-point star target", "A five-pointed star outline with ten straight edges, drawn as one dark line on white."),
+  ],
+  [
+    "challenge-heart.svg",
+    challengeThumb("sym-heart", "The CYDI heart target", "A heart outline with two mirrored lobes and a bottom point, drawn as one dark line on white."),
+  ],
+  [
+    "challenge-dog.svg",
+    challengeThumb("ani-dog", "The CYDI dog target", "A dog's head outline with two hanging ears, eyes and a muzzle, drawn in dark lines on white."),
+  ],
 ];
 
 mkdirSync(OUT_DIR, { recursive: true });

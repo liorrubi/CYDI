@@ -26,79 +26,8 @@ import { SEO_PAGES, renderSeoSection } from "../../worker/seoPages";
 import {
   CRAWLABLE_BLOCK_CLASS,
   CRAWLABLE_BLOCK_SELECTOR,
-  PRACTICE_LIST_PATHS,
-  PRACTICE_LIST_SELECTOR,
-  PRACTICE_SECTION_HREF,
-  PRACTICE_SECTION_ID,
-  keepPracticeList,
   removeCrawlableBlock,
 } from "./crawlableBlock";
-
-/**
- * A block with the children the Worker really emits, in the order it emits them.
- * Hand-built rather than parsed: this file runs under plain Node with no DOM, and
- * the only behaviour under test is which children survive.
- */
-function fakeBlock({ withList = true } = {}) {
-  const make = (name: string) => ({ name, removed: false, remove() { this.removed = true; },
-    querySelector: () => null, previousElementSibling: null as unknown, classList: { add() {} },
-    children: [] as unknown[] });
-  const nav = make("nav");
-  const h1 = make("h1");
-  const para = make("p");
-  const heading = make("h2.practice");
-  const list = make("ul.cydi-seo-practice");
-  const faq = make("dl.faq");
-  const foot = make("p.foot");
-  list.previousElementSibling = heading;
-  const children = withList ? [nav, h1, para, heading, list, faq, foot] : [nav, h1, para, faq, foot];
-  const added: string[] = [];
-  const block = {
-    name: "section.cydi-seo",
-    removed: false,
-    remove() { this.removed = true; },
-    classList: { add: (token: string) => added.push(token) },
-    children,
-    querySelector: (sel: string) => (sel === PRACTICE_LIST_SELECTOR && withList ? list : null),
-  };
-  const root = { querySelector: (sel: string) => (sel === CRAWLABLE_BLOCK_SELECTOR ? block : null) };
-  return { root, block, nav, h1, para, heading, list, faq, foot, added };
-}
-
-test("on the hub the practice list stays and the rest of the block goes", () => {
-  const { root, block, nav, h1, para, heading, list, faq, foot, added } = fakeBlock();
-  assert.equal(keepPracticeList(root as never), "kept");
-  // The list and its own heading survive - and nothing else does, including the
-  // block's <h1>, which is what keeps the page to a single one.
-  assert.equal(list.removed, false);
-  assert.equal(heading.removed, false);
-  for (const gone of [nav, h1, para, faq, foot]) assert.equal(gone.removed, true);
-  assert.equal(block.removed, false, "the block itself must stay - it holds the list");
-  assert.deepEqual(added, ["cydi-seo-practice-only"]);
-});
-
-test("a page with no practice list still has its block removed whole", () => {
-  const { root, block } = fakeBlock({ withList: false });
-  assert.equal(keepPracticeList(root as never), "removed");
-  assert.equal(block.removed, true);
-});
-
-test("keeping the list is scoped to the shape hub, and that page really ships one", () => {
-  assert.deepEqual(PRACTICE_LIST_PATHS, ["/draw-shapes-online"]);
-  for (const path of PRACTICE_LIST_PATHS) {
-    const page = SEO_PAGES.find((candidate) => candidate.path === path);
-    assert.ok(page, `${path} is not an SEO page`);
-    assert.ok(page.linkGroup && page.linkGroup.items.length > 0, `${path} has no practice list to keep`);
-    // The four the hub is expected to offer, in the Worker's own order.
-    assert.deepEqual(page.linkGroup.items.map((item) => item.href), [
-      "/draw-a-perfect-circle",
-      "/draw-a-perfect-star",
-      "/draw-a-perfect-heart",
-      "/draw-a-dog-from-memory",
-    ]);
-    assert.match(renderSeoSection(page), new RegExp(`<ul class="cydi-seo-practice">`));
-  }
-});
 
 /** Counts `<section class="… cydi-seo …">` openings in raw HTML. */
 function blockCount(html: string): number {
@@ -167,16 +96,4 @@ test("the takeover asks for the block by the agreed selector, nothing else", () 
     },
   });
   assert.deepEqual(asked, [CRAWLABLE_BLOCK_SELECTOR]);
-});
-
-test("the practice list has a stable anchor, and the home page's link aims at it", () => {
-  // Three places have to agree: the Worker renders the id, the home page links to
-  // it, and the takeover scrolls to it. They all read the constant - this proves
-  // the Worker's HTML really carries the id that constant names.
-  const hub = SEO_PAGES.find((page) => page.path === PRACTICE_LIST_PATHS[0])!;
-  assert.match(renderSeoSection(hub), new RegExp(`<h2 class="cydi-seo-h2" id="${PRACTICE_SECTION_ID}">`));
-  assert.equal(PRACTICE_SECTION_HREF, `${PRACTICE_LIST_PATHS[0]}#${PRACTICE_SECTION_ID}`);
-  // The anchor sits on the heading of the list, not on some other h2 (the FAQ
-  // block uses the same class on pages that have one).
-  assert.equal([...renderSeoSection(hub).matchAll(new RegExp(`id="${PRACTICE_SECTION_ID}"`, "g"))].length, 1);
 });

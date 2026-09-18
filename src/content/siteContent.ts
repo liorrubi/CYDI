@@ -127,6 +127,13 @@ export const SITE_MODES: SiteMode[] = [
  * nav. The game menu at /play is reached from the hero, not from here, so the
  * header stays three items on every screen size.
  */
+/**
+ * The practice directory: one page listing every single-shape challenge that has
+ * a page of its own. Served whole by the Worker (worker/contentPages.ts); the app
+ * only ever links to it, which is why this is a path and not a route.
+ */
+export const DRAWING_CHALLENGES_HREF = "/drawing-challenges";
+
 export const SITE_NAV: { href: string; label: string; mode: SiteMode["id"] }[] = [
   { href: "/play/classic", label: "Classic", mode: "classic" },
   { href: "/2-player-drawing-game-one-phone", label: "2 Players", mode: "passPlay" },

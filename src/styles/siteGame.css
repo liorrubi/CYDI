@@ -675,3 +675,26 @@
     font-size: 0.8rem;
   }
 }
+
+/*
+ * One line under the shape hub, out to /drawing-challenges. Quiet on purpose:
+ * the categories above it are the page, and this is a way sideways, not a
+ * second directory bolted to the bottom of the game.
+ */
+.site-game .site-game-practice {
+  margin: 4px 0 0;
+  padding: 0 16px 8px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.site-game .site-game-practice a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.site-game .site-game-practice a:hover {
+  color: var(--color-primary-text);
+  text-decoration: underline;
+}

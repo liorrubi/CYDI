@@ -189,6 +189,7 @@ const PERFECT_STAR: SeoPage = {
   links: [
     { href: "/draw-a-perfect-heart", label: "Draw a perfect heart" },
     { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
     { href: "/drawing-accuracy-test", label: "Take the drawing accuracy test" },
     { href: "/how-to-play", label: "How the score is worked out" },
     { href: "/", label: "CYDI home" },
@@ -220,6 +221,7 @@ const PERFECT_HEART: SeoPage = {
   links: [
     { href: "/draw-a-perfect-star", label: "Draw a perfect star" },
     { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
     { href: "/drawing-accuracy-test", label: "Take the drawing accuracy test" },
     { href: "/how-to-play", label: "How the score is worked out" },
     { href: "/", label: "CYDI home" },
@@ -254,6 +256,7 @@ const DOG_FROM_MEMORY: SeoPage = {
   links: [
     { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
     { href: "/draw-a-perfect-heart", label: "Draw a perfect heart" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
     { href: "/how-to-play", label: "How the score is worked out" },
     { href: "/", label: "CYDI home" },
   ],
@@ -274,35 +277,11 @@ const DRAW_SHAPES: SeoPage = {
     "Every shape flashes up as a target for a couple of seconds, you redraw it freehand on the cleared canvas, and you get a scored comparison right away with your line laid over the target. Clearing a shape unlocks the next one in its category, so the targets get harder as your hand gets steadier, and further categories are unlocked with the coins you earn along the way.",
     "Best scores are saved per shape in your browser, which makes it easy to come back and beat your own record on the shapes that beat you.",
   ],
-  linkGroup: {
-    heading: "Practice individual shapes",
-    items: [
-      {
-        href: "/draw-a-perfect-circle",
-        label: "Draw a perfect circle",
-        description: "One unbroken curve, no corners to aim at, and it has to close exactly where it started.",
-      },
-      {
-        href: "/draw-a-perfect-star",
-        label: "Draw a perfect star",
-        description: "Five arms of equal length, tips at equal spacing, and ten straight edges to keep straight.",
-      },
-      {
-        href: "/draw-a-perfect-heart",
-        label: "Draw a perfect heart",
-        description: "Two mirrored lobes, plus a dip and a point that both have to sit on the centre line.",
-      },
-      {
-        href: "/draw-a-dog-from-memory",
-        label: "Draw a dog from memory",
-        description: "The target disappears before you start - redraw the dog from what you remember of it.",
-      },
-    ],
-  },
   paragraphsAfterLinkGroup: [
     "Once a shape stops beating you, the same drawing and the same scoring work with other people: play a multiplayer drawing game against friends on their own devices, or a two-player game taking turns on one phone.",
   ],
   links: [
+    { href: "/drawing-challenges", label: "Practice individual drawing challenges" },
     { href: "/multiplayer-drawing-game", label: "Multiplayer drawing game" },
     { href: "/2-player-drawing-game-one-phone", label: "2 player drawing game on one phone" },
     { href: "/how-to-play", label: "How scoring, stars and coins work" },
@@ -447,12 +426,8 @@ export function renderSeoSection(page: SeoPage): string {
     .join("");
   // Headed block of prominent internal links (the hub's practice list). Plain
   // <a href> with real anchor text, so each target is crawlable from here.
-  // The heading carries an id so the home page can link straight to this list
-  // (/draw-shapes-online#practice-shapes). It is the same anchor with or without
-  // JavaScript: the block ships it, and the client keeps this heading when it
-  // trims the block on the hub - see src/site/crawlableBlock.ts.
   const linkGroup = page.linkGroup
-    ? `<h2 class="cydi-seo-h2" id="practice-shapes">${escapeHtml(page.linkGroup.heading)}</h2>` +
+    ? `<h2 class="cydi-seo-h2">${escapeHtml(page.linkGroup.heading)}</h2>` +
       `<ul class="cydi-seo-practice">` +
       page.linkGroup.items
         .map(
@@ -510,11 +485,6 @@ export function renderSeoSection(page: SeoPage): string {
     `.cydi-seo ul.cydi-seo-practice li{display:flex;flex-direction:column;gap:.15rem}` +
     `.cydi-seo ul.cydi-seo-practice a{font-weight:600}` +
     `.cydi-seo ul.cydi-seo-practice span{font-size:.9rem;opacity:.75}` +
-    // When the app keeps only the practice list (the shape hub - see
-    // src/site/crawlableBlock.ts), the block has no nav and no h1 above the
-    // heading any more, so it loses the padding that was leading up to them.
-    `.cydi-seo-practice-only{padding-top:1.5rem}` +
-    `.cydi-seo-practice-only .cydi-seo-h2{margin-top:0}` +
     `.cydi-seo-faq{margin:0 0 1rem}` +
     `.cydi-seo-faq dt{font-weight:600;margin:0 0 .2rem}` +
     `.cydi-seo-faq dd{margin:0 0 .9rem;opacity:.85}` +

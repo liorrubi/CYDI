@@ -30,7 +30,6 @@
  */
 import { Fragment, useState } from "react";
 import SiteShell from "./SiteShell";
-import { PRACTICE_SECTION_HREF } from "./crawlableBlock";
 import RotatingHeroShape, { useHeroShapes } from "./RotatingHeroShape";
 import type { HeroPhase } from "./HeroDrawing";
 import { runtimeCatalogCounts } from "./siteShapes";
@@ -40,6 +39,7 @@ import { getCoins } from "../services/coinsStore";
 import { getCurrentStreak } from "../services/dailyStreakStore";
 import { DAILY_PRIZE_COINS, MP_ROOM_CODE_LENGTH } from "../content/publicFacts";
 import {
+  DRAWING_CHALLENGES_HREF,
   MULTIPLAYER_INTRO,
   MULTIPLAYER_ROUND_STEPS,
   passPlaySteps,
@@ -163,11 +163,11 @@ export default function SiteHome({ onPlayClassic, onOpenGameMenu, onDailyChallen
                 </span>
                 <span className="site-more-sub">Daily Challenge, create your own, saved challenges &amp; Shop</span>
               </button>
-              {/* One quiet line to the shape hub's practice list - the four
-                  single-shape challenges anyone can play without unlocking a
-                  category. A plain <a>, so it is a normal navigation into the
-                  hub at that section, and it costs the hero nothing. */}
-              <a className="site-practice-link" href={PRACTICE_SECTION_HREF}>
+              {/* One quiet line to the drawing-challenges hub - the single-shape
+                  challenges anyone can play without unlocking a category. A plain
+                  <a>: that page is served whole by the Worker, so this is an
+                  ordinary navigation, and it costs the hero nothing. */}
+              <a className="site-practice-link" href={DRAWING_CHALLENGES_HREF}>
                 Practice shapes <span aria-hidden="true">→</span>
               </a>
               <div className="site-metarow">

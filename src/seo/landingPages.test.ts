@@ -162,17 +162,30 @@ test("the CTA re-opens the mode when the app has drifted back to home", () => {
   assert.equal(landingCtaMode(undefined, "home"), null);
 });
 
-test("the hub links to each individual shape page under a visible heading", () => {
+test("the shape hub points at the challenge directory instead of repeating it", () => {
+  // The directory of single-shape challenges lives on ONE page now
+  // (/drawing-challenges, worker/contentPages.ts). The shape hub links to it and
+  // no longer carries a second copy of the same list.
   const hub = seoPageForPath("/draw-shapes-online")!;
-  assert.equal(hub.linkGroup?.heading, "Practice individual shapes");
-  assert.deepEqual(
-    hub.linkGroup?.items.map((item) => item.href),
-    ["/draw-a-perfect-circle", "/draw-a-perfect-star", "/draw-a-perfect-heart", "/draw-a-dog-from-memory"],
+  assert.equal(hub.linkGroup, undefined, "the hub must not carry its own practice directory");
+  assert.ok(
+    hub.links.some((link) => link.href === "/drawing-challenges"),
+    "the hub should link to the challenge directory",
   );
-  // Every item carries its own anchor text and explanation - a bare list of
-  // shape names is not a useful internal link.
-  for (const item of hub.linkGroup!.items) {
-    assert.ok(item.label.length > 0 && item.description.length > 20, `thin practice link: ${item.href}`);
+  // And nowhere else grows one either - a second directory is the thing this
+  // replaced.
+  for (const page of SEO_PAGES) {
+    assert.equal(page.linkGroup, undefined, `${page.path} carries a practice directory of its own`);
+  }
+});
+
+test("every challenge page links back to the directory", () => {
+  for (const path of ["/draw-a-perfect-star", "/draw-a-perfect-heart", "/draw-a-dog-from-memory"]) {
+    const page = seoPageForPath(path)!;
+    assert.ok(
+      page.links.some((link) => link.href === "/drawing-challenges"),
+      `${path} does not link back to the challenge directory`,
+    );
   }
 });
 
@@ -217,8 +230,8 @@ test("the rendered copy block is crawlable HTML: real headings, links and image 
   assert.match(star, /<a href="\/draw-shapes-online">/);
 
   const hub = renderSeoSection(seoPageForPath("/draw-shapes-online")!);
-  assert.match(hub, /<h2[^>]*>Practice individual shapes<\/h2>/);
-  for (const href of ["/draw-a-perfect-circle", "/draw-a-perfect-star", "/draw-a-perfect-heart"]) {
+  assert.match(hub, /<h1>Draw Shapes Online<\/h1>/);
+  for (const href of ["/drawing-challenges", "/multiplayer-drawing-game", "/how-to-play"]) {
     assert.match(hub, new RegExp(`<a href="${href}">`), `hub does not render a plain link to ${href}`);
   }
 });

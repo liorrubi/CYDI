@@ -894,7 +894,107 @@ const ACCESSIBILITY: ContentPage = {
 };
 
 /** Every page this module serves. */
-export const CONTENT_PAGES: ContentPage[] = [HOW_TO_PLAY, ABOUT, CONTACT, TERMS, ACCESSIBILITY, PRIVACY];
+
+// ------------------------------------------------------ drawing challenges ----
+
+/**
+ * The practice directory: one card per single-shape challenge that exists.
+ *
+ * It is a content page rather than a landing page because it is not a way into
+ * the game - it is a way into the challenge pages, each of which opens its own
+ * practice round. That also keeps it out of the app bundle entirely: this page
+ * is served whole by the Worker, with no client-side JavaScript to hydrate.
+ *
+ * Adding a challenge later is one entry in CHALLENGES below plus its own page.
+ * Nothing here is generated from the catalogue: a card only exists once there is
+ * a real page behind it, so the hub can never list a challenge that is not there.
+ */
+type Challenge = { href: string; name: string; note: string; image: string; alt: string };
+
+const CHALLENGES: Challenge[] = [
+  {
+    href: "/draw-a-perfect-circle",
+    name: "Draw a perfect circle",
+    note: "One unbroken curve, no corners to aim at, and it has to close exactly where it started.",
+    image: "/images/seo/challenge-circle.svg",
+    alt: "The CYDI circle target: a single closed circle outline",
+  },
+  {
+    href: "/draw-a-perfect-star",
+    name: "Draw a perfect star",
+    note: "Five arms of equal length, tips at equal spacing, and ten straight edges to keep straight.",
+    image: "/images/seo/challenge-star.svg",
+    alt: "The CYDI five-point star target: ten straight edges meeting at five tips",
+  },
+  {
+    href: "/draw-a-perfect-heart",
+    name: "Draw a perfect heart",
+    note: "Two mirrored lobes, plus a dip and a point that both have to sit on the centre line.",
+    image: "/images/seo/challenge-heart.svg",
+    alt: "The CYDI heart target: two mirrored lobes above a bottom point",
+  },
+  {
+    href: "/draw-a-dog-from-memory",
+    name: "Draw a dog from memory",
+    note: "The target disappears before you start - redraw the dog from what you remember of it.",
+    image: "/images/seo/challenge-dog.svg",
+    alt: "The CYDI dog target: a dog's head outline with two hanging ears, eyes and a muzzle",
+  },
+];
+
+function renderChallengeCards(items: Challenge[]): string {
+  return (
+    `<ul class="cydi-cards">` +
+    items
+      .map(
+        (item) =>
+          `<li class="cydi-card">` +
+          `<a class="cydi-card-link" href="${escapeAttribute(item.href)}">` +
+          `<img src="${escapeAttribute(item.image)}" alt="${escapeAttribute(item.alt)}" ` +
+          `width="400" height="400" loading="lazy" decoding="async">` +
+          `<span class="cydi-card-name">${escapeHtml(item.name)}</span>` +
+          `<span class="cydi-card-note">${escapeHtml(item.note)}</span>` +
+          `<span class="cydi-card-go">Play this challenge &rarr;</span>` +
+          `</a></li>`,
+      )
+      .join("") +
+    `</ul>`
+  );
+}
+
+const DRAWING_CHALLENGES: ContentPage = {
+  path: "/drawing-challenges",
+  title: "Drawing Challenges - Practice One Shape at a Time | CYDI",
+  description:
+    "Free single-shape drawing challenges: redraw a circle, a star, a heart or a dog from memory and get scored out of 100. No sign-up, nothing to unlock, plays in the browser.",
+  h1: "Drawing Challenges",
+  blocks: [
+    {
+      kind: "p",
+      html:
+        "Each challenge is one shape, on its own. You study the target for a few seconds, it disappears, " +
+        "you redraw it freehand, and CYDI scores how close you got - then draws your attempt over the target " +
+        "so you can see where it drifted.",
+    },
+    { kind: "raw", html: renderChallengeCards(CHALLENGES) },
+    {
+      kind: "note",
+      html:
+        "These are practice rounds. They are scored for real, and they change nothing in your game: no coins, " +
+        "no best score, no unlocks - so a challenge is playable whether or not you have reached its category in " +
+        'the <a href="/draw-shapes-online">Shape Challenge</a>.',
+    },
+    {
+      kind: "p",
+      html:
+        'More challenges are added as they are made. If you would rather work through the whole library in order, ' +
+        'the <a href="/draw-shapes-online">shape hub</a> has all the categories, and ' +
+        '<a href="/how-to-play">how to play</a> explains what the score is actually measuring.',
+    },
+  ],
+};
+
+export const CONTENT_PAGES: ContentPage[] = [HOW_TO_PLAY, ABOUT, CONTACT, TERMS, ACCESSIBILITY, PRIVACY, DRAWING_CHALLENGES];
 
 export const CONTENT_PATHS: string[] = CONTENT_PAGES.map((page) => page.path);
 
@@ -985,6 +1085,18 @@ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,s
 -webkit-text-size-adjust:100%}
 a{color:var(--link)}
 .cydi-shell{max-width:47rem;margin:0 auto;padding:0 1.15rem}
+.cydi-cards{list-style:none;margin:1.5rem 0 .5rem;padding:0;display:grid;gap:1rem;grid-template-columns:1fr}
+@media (min-width:34rem){.cydi-cards{grid-template-columns:1fr 1fr}}
+.cydi-card{background:var(--card);border:1px solid var(--line);border-radius:.85rem;overflow:hidden;
+display:flex;flex-direction:column}
+.cydi-card a.cydi-card-link{display:flex;flex-direction:column;gap:.15rem;padding:0 1rem 1rem;
+text-decoration:none;color:inherit}
+.cydi-card a.cydi-card-link:hover .cydi-card-name{text-decoration:underline}
+.cydi-card img{display:block;width:100%;height:auto;max-height:9.5rem;object-fit:contain;
+background:#fff;border-bottom:1px solid var(--line);padding:.75rem}
+.cydi-card-name{font-weight:700;color:var(--link);margin-top:.85rem}
+.cydi-card-note{font-size:.92rem;color:var(--muted)}
+.cydi-card-go{font-size:.9rem;font-weight:600;color:var(--link);margin-top:.5rem}
 header.cydi-head{border-bottom:1px solid var(--line);background:var(--card)}
 .cydi-brand{display:inline-block;padding:1rem 0 .35rem;font-size:1.15rem;font-weight:700;
 letter-spacing:.02em;color:var(--text);text-decoration:none}

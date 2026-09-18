@@ -18,6 +18,7 @@
  */
 import type { ReactNode } from "react";
 import { useCrawlableBlockTakeover } from "./crawlableBlock";
+import { DRAWING_CHALLENGES_HREF } from "../content/siteContent";
 import "../styles/site.css";
 import "../styles/siteGame.css";
 
@@ -52,6 +53,17 @@ export default function SiteGameSkin({
    */
   useCrawlableBlockTakeover();
 
+  /*
+   * The shape hub keeps one line out to the practice directory. Web only, and
+   * deliberately here rather than inside ShapeChallengeScreen: that screen is
+   * shared with Android, where /drawing-challenges does not exist. Matched on the
+   * path for the same reason the strip below is - this shell wraps several game
+   * screens and only this one is the hub.
+   */
+  const onShapeHub =
+    typeof window !== "undefined" &&
+    window.location.pathname.replace(/\/+$/, "") === "/draw-shapes-online";
+
   return (
     <div className="site-game">
       {/* Same bypass and landmark the site shell provides, so /play,
@@ -63,6 +75,13 @@ export default function SiteGameSkin({
       </a>
       <main className="site-main" id="main-content" tabIndex={-1}>
         {children}
+        {onShapeHub && (
+          <p className="site-game-practice">
+            <a href={DRAWING_CHALLENGES_HREF}>
+              Practice individual drawing challenges <span aria-hidden="true">→</span>
+            </a>
+          </p>
+        )}
       </main>
       {/* One quiet line back to the site, so the game is somewhere you entered
           rather than somewhere you got stuck. Not a game control: it sits

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.43.0 - 2026-09-18
+
+Web only. The single-shape challenges now have a home of their own:
+**`/drawing-challenges`**.
+
+Until now the only directory of them was a list inside the shape hub's crawlable
+block, which meant it either sat at the very bottom of the game screen - after
+the categories, Artist Packs and Reset Progress - or was invisible to anyone
+running JavaScript. Neither is a destination. The new page is a proper one: a
+card per challenge, each with the real target drawn from the game's own
+generator, a line about what the shape asks of you, and a link into it. It is a
+plain server-rendered content page (`worker/contentPages.ts`), so it carries its
+own title, description, canonical and sitemap entry, and needs no JavaScript at
+all.
+
+- **Home page**: the existing `Practice shapes →` line now leads there.
+- **Shape hub**: the practice list is gone from the bottom of the screen and is
+  replaced by one line - `Practice individual drawing challenges →` - so the
+  page keeps the internal link without wearing the whole directory. The hub's
+  crawlable block no longer carries a second copy of the list either, which
+  leaves exactly one practice directory on the site.
+- Each challenge page links back to the hub, and the takeover in
+  `src/site/crawlableBlock.ts` is back to what it always was: remove the block,
+  no special cases.
+
+Adding the next challenge is one entry in the hub's list plus its own page.
+Nothing here touches progression: these rounds still cost nothing, unlock
+nothing and are playable whether or not their category is bought. `/s/dog` and
+every other campaign alias are unchanged.
+
 ## 0.42.2 - 2026-09-18
 
 Web only. One line on the home page - `Practice shapes →`, under "More

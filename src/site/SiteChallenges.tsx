@@ -67,6 +67,28 @@ export default function SiteChallenges({ onPlay }: SiteChallengesProps) {
               <span className="site-metarow-dot" aria-hidden="true" />
               <span className="site-meta">Plays in the browser</span>
             </div>
+            {/* What this page is NOT. A visitor who arrives from a Short has no
+                way of knowing that these four challenges are a practice corner
+                of a much larger game - so say it once, quietly, with the way in
+                next to it. Counts come from the live catalog, like every other
+                number on the site. */}
+            <div className="site-challenges-scope">
+              <p className="site-challenges-scope-text">
+                Practice mode - individual challenges only. The full CYDI game has {counts.shapes} shapes across{" "}
+                {counts.categories} categories, progression, multiplayer and more.
+              </p>
+              <a
+                className="site-cta-ghost site-challenges-scope-cta"
+                href="/play/classic"
+                onClick={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+                  event.preventDefault();
+                  onPlay();
+                }}
+              >
+                Play the full game <span aria-hidden="true">→</span>
+              </a>
+            </div>
           </div>
         </div>
       </section>

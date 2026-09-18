@@ -1495,6 +1495,39 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * "This is the practice corner" - one line under the hero meta row, with the way
+ * into the full game next to it. Muted and small on purpose: the cards below are
+ * the page, and this is the footnote that stops them being mistaken for it.
+ */
+.site-challenges-scope {
+  /* One row where there is width for it, so the note costs the cards a line
+     rather than a block: copy left, the way into the full game right. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 14px 0 0;
+}
+
+.site-challenges-scope-text {
+  margin: 0;
+  flex: 1 1 22rem;
+  max-width: 52ch;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.site-challenges-scope-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------ daily teaser ----- */
 
 /* One slim card, after the three modes - a secondary feature, not a grid. */

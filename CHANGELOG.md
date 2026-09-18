@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.43.2 - 2026-09-18
+
+Web only, copy. The challenges hub now says what it is not: one muted line under
+the hero - "Practice mode - individual challenges only. The full CYDI game has
+276 shapes across 12 categories, progression, multiplayer and more." - with a
+small ghost CTA beside it, "Play the full game", into Classic. Someone arriving
+from a Short had no way to tell that the four cards were a corner of a much
+larger game.
+
+Copy and CTA share one row where there is width for it, so the cards move down
+by about 100px on a desktop and not at all in kind: the counts come from the
+live catalogue, and the CTA is the same ghost button the practice pages already
+use.
+
 ## 0.43.1 - 2026-09-18
 
 Web only, presentation only. `/drawing-challenges` shipped yesterday as a

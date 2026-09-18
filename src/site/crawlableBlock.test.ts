@@ -28,6 +28,8 @@ import {
   CRAWLABLE_BLOCK_SELECTOR,
   PRACTICE_LIST_PATHS,
   PRACTICE_LIST_SELECTOR,
+  PRACTICE_SECTION_HREF,
+  PRACTICE_SECTION_ID,
   keepPracticeList,
   removeCrawlableBlock,
 } from "./crawlableBlock";
@@ -165,4 +167,16 @@ test("the takeover asks for the block by the agreed selector, nothing else", () 
     },
   });
   assert.deepEqual(asked, [CRAWLABLE_BLOCK_SELECTOR]);
+});
+
+test("the practice list has a stable anchor, and the home page's link aims at it", () => {
+  // Three places have to agree: the Worker renders the id, the home page links to
+  // it, and the takeover scrolls to it. They all read the constant - this proves
+  // the Worker's HTML really carries the id that constant names.
+  const hub = SEO_PAGES.find((page) => page.path === PRACTICE_LIST_PATHS[0])!;
+  assert.match(renderSeoSection(hub), new RegExp(`<h2 class="cydi-seo-h2" id="${PRACTICE_SECTION_ID}">`));
+  assert.equal(PRACTICE_SECTION_HREF, `${PRACTICE_LIST_PATHS[0]}#${PRACTICE_SECTION_ID}`);
+  // The anchor sits on the heading of the list, not on some other h2 (the FAQ
+  // block uses the same class on pages that have one).
+  assert.equal([...renderSeoSection(hub).matchAll(new RegExp(`id="${PRACTICE_SECTION_ID}"`, "g"))].length, 1);
 });

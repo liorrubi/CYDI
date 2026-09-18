@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.42.2 - 2026-09-18
+
+Web only. One line on the home page - `Practice shapes →`, under "More
+challenges" - now leads to the shape hub's practice list, so the four
+single-shape challenges are reachable from the front door instead of only from
+the hub itself or a direct link.
+
+The heading of that list carries an id (`#practice-shapes`), which the home page
+links to and which the client re-aims at after it trims the crawlable block: the
+browser scrolls to the anchor against the full server-rendered page, and the app
+then removes most of that block and renders the game above it, which moves the
+target by more than a screen. Nothing was duplicated onto the home page and the
+hero, its two buttons and the "More challenges" block are untouched.
+
 ## 0.42.1 - 2026-09-18
 
 Web only. The shape hub's "Practice individual shapes" list is now on screen for

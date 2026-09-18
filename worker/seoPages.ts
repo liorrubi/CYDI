@@ -447,8 +447,12 @@ export function renderSeoSection(page: SeoPage): string {
     .join("");
   // Headed block of prominent internal links (the hub's practice list). Plain
   // <a href> with real anchor text, so each target is crawlable from here.
+  // The heading carries an id so the home page can link straight to this list
+  // (/draw-shapes-online#practice-shapes). It is the same anchor with or without
+  // JavaScript: the block ships it, and the client keeps this heading when it
+  // trims the block on the hub - see src/site/crawlableBlock.ts.
   const linkGroup = page.linkGroup
-    ? `<h2 class="cydi-seo-h2">${escapeHtml(page.linkGroup.heading)}</h2>` +
+    ? `<h2 class="cydi-seo-h2" id="practice-shapes">${escapeHtml(page.linkGroup.heading)}</h2>` +
       `<ul class="cydi-seo-practice">` +
       page.linkGroup.items
         .map(

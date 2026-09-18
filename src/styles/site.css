@@ -1432,6 +1432,24 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * "Practice shapes" - one line under More challenges, to the hub's practice
+ * list. Quieter than that block on purpose: it is a shortcut for someone who
+ * wants a single shape, not a fourth call to action.
+ */
+.site-practice-link {
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.site-practice-link:hover {
+  color: var(--color-primary-text);
+  text-decoration: underline;
+}
+
 /* ------------------------------------------------------ daily teaser ----- */
 
 /* One slim card, after the three modes - a secondary feature, not a grid. */

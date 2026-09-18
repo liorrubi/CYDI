@@ -30,6 +30,7 @@
  */
 import { Fragment, useState } from "react";
 import SiteShell from "./SiteShell";
+import { PRACTICE_SECTION_HREF } from "./crawlableBlock";
 import RotatingHeroShape, { useHeroShapes } from "./RotatingHeroShape";
 import type { HeroPhase } from "./HeroDrawing";
 import { runtimeCatalogCounts } from "./siteShapes";
@@ -162,6 +163,13 @@ export default function SiteHome({ onPlayClassic, onOpenGameMenu, onDailyChallen
                 </span>
                 <span className="site-more-sub">Daily Challenge, create your own, saved challenges &amp; Shop</span>
               </button>
+              {/* One quiet line to the shape hub's practice list - the four
+                  single-shape challenges anyone can play without unlocking a
+                  category. A plain <a>, so it is a normal navigation into the
+                  hub at that section, and it costs the hero nothing. */}
+              <a className="site-practice-link" href={PRACTICE_SECTION_HREF}>
+                Practice shapes <span aria-hidden="true">→</span>
+              </a>
               <div className="site-metarow">
                 <span className="site-meta">Plays in the browser</span>
                 <span className="site-metarow-dot" aria-hidden="true" />

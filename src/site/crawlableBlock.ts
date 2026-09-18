@@ -60,6 +60,18 @@ export function removeCrawlableBlock(root: { querySelector(sel: string): { remov
 export const PRACTICE_LIST_SELECTOR = "ul.cydi-seo-practice";
 
 /**
+ * The id on that list's heading, and the link that aims at it.
+ *
+ * A contract in the same sense as the block selector: the Worker renders the id
+ * (worker/seoPages.ts), the home page links to it (SiteHome.tsx), and this module
+ * scrolls to it after the takeover has changed the page's height. All three read
+ * it from here, and crawlableBlock.test.ts asserts the Worker's HTML really
+ * carries it.
+ */
+export const PRACTICE_SECTION_ID = "practice-shapes";
+export const PRACTICE_SECTION_HREF = `/draw-shapes-online#${PRACTICE_SECTION_ID}`;
+
+/**
  * Paths where the block's practice list is kept on screen instead of being
  * removed with the rest of it.
  *
@@ -114,7 +126,19 @@ function normalizePath(pathname: string): string {
 export function useCrawlableBlockTakeover(): void {
   useEffect(() => {
     if (PRACTICE_LIST_PATHS.includes(normalizePath(window.location.pathname))) {
-      keepPracticeList(document);
+      const kept = keepPracticeList(document);
+      // Someone arriving on #practice-shapes has already been scrolled there by the
+      // browser, against the full block - and then the app renders the game above it
+      // and the rest of the block disappears, moving the target by well over a
+      // screen. Re-aim afterwards, twice: once on the next frame, and once more when
+      // the lazily-loaded game screen has painted and stopped changing the height.
+      // Scrolling only once lands the visitor past the section they asked for.
+      if (kept === "kept" && window.location.hash === `#${PRACTICE_SECTION_ID}`) {
+        const aim = () => document.getElementById(PRACTICE_SECTION_ID)?.scrollIntoView({ block: "start" });
+        requestAnimationFrame(aim);
+        const settle = window.setTimeout(aim, 400);
+        return () => window.clearTimeout(settle);
+      }
       return;
     }
     removeCrawlableBlock(document);

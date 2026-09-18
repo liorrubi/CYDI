@@ -56,8 +56,67 @@ export function removeCrawlableBlock(root: { querySelector(sel: string): { remov
   return true;
 }
 
+/** The practice list inside the block - the hub's "Practice individual shapes". */
+export const PRACTICE_LIST_SELECTOR = "ul.cydi-seo-practice";
+
+/**
+ * Paths where the block's practice list is kept on screen instead of being
+ * removed with the rest of it.
+ *
+ * Only the shape hub. That page's whole job is to send people to a shape, the
+ * list is the one part of the block that is a navigation aid rather than a
+ * restatement of the page, and without this it is markup only a crawler ever
+ * sees. Everywhere else the block still steps aside whole.
+ */
+export const PRACTICE_LIST_PATHS = ["/draw-shapes-online"];
+
+type TrimmableElement = {
+  children: ArrayLike<TrimmableElement>;
+  querySelector(sel: string): TrimmableElement | null;
+  previousElementSibling: TrimmableElement | null;
+  classList: { add(token: string): void };
+  remove(): void;
+};
+
+/**
+ * Hands the page over but keeps the practice list, in place, below the app.
+ *
+ * The list that survives is the Worker's own markup - same anchors, same
+ * descriptions, same styles - so there is exactly one copy of it on the page and
+ * nothing here has to be kept in step with the server's copy. Everything else in
+ * the block goes, including its <h1>, which is what keeps the page to one.
+ *
+ * The block already sits after #root, so "below the game" needs no moving.
+ */
+export function keepPracticeList(root: { querySelector(sel: string): TrimmableElement | null }): "kept" | "removed" | "none" {
+  const block = root.querySelector(CRAWLABLE_BLOCK_SELECTOR);
+  if (!block) return "none";
+  const list = block.querySelector(PRACTICE_LIST_SELECTOR);
+  // No list on this page: nothing worth keeping, so behave exactly as before.
+  if (!list) {
+    block.remove();
+    return "removed";
+  }
+  const heading = list.previousElementSibling;
+  for (const child of Array.from(block.children)) {
+    if (child === list || child === heading) continue;
+    child.remove();
+  }
+  block.classList.add("cydi-seo-practice-only");
+  return "kept";
+}
+
+/** Trailing slashes are stripped so "/draw-shapes-online/" behaves the same way. */
+function normalizePath(pathname: string): string {
+  return pathname.replace(/\/+$/, "") || "/";
+}
+
 export function useCrawlableBlockTakeover(): void {
   useEffect(() => {
+    if (PRACTICE_LIST_PATHS.includes(normalizePath(window.location.pathname))) {
+      keepPracticeList(document);
+      return;
+    }
     removeCrawlableBlock(document);
   }, []);
 }

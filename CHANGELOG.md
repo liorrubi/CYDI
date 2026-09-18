@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.42.1 - 2026-09-18
+
+Web only. The shape hub's "Practice individual shapes" list is now on screen for
+visitors, not just in the HTML for crawlers.
+
+The Worker has always served that list inside the crawlable block, and the app
+removed the whole block once it took the page over - so the four practice links
+(circle, star, heart, and now the dog) were markup nobody with JavaScript ever
+saw. On `/draw-shapes-online` only, the takeover now keeps the list and its
+heading and drops the rest of the block, including its `<h1>`, so the page still
+has exactly one (`src/site/crawlableBlock.ts`). It is the Worker's own markup
+that stays, so there is one copy of the list on the page and nothing to keep in
+step by hand; it sits where it was already sitting, below the game. Every other
+page still hands over exactly as before.
+
 ## 0.42.0 - 2026-09-18
 
 Web only. The Dog Short now has somewhere to send people that continues the

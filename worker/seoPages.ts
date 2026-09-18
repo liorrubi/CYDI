@@ -506,6 +506,11 @@ export function renderSeoSection(page: SeoPage): string {
     `.cydi-seo ul.cydi-seo-practice li{display:flex;flex-direction:column;gap:.15rem}` +
     `.cydi-seo ul.cydi-seo-practice a{font-weight:600}` +
     `.cydi-seo ul.cydi-seo-practice span{font-size:.9rem;opacity:.75}` +
+    // When the app keeps only the practice list (the shape hub - see
+    // src/site/crawlableBlock.ts), the block has no nav and no h1 above the
+    // heading any more, so it loses the padding that was leading up to them.
+    `.cydi-seo-practice-only{padding-top:1.5rem}` +
+    `.cydi-seo-practice-only .cydi-seo-h2{margin-top:0}` +
     `.cydi-seo-faq{margin:0 0 1rem}` +
     `.cydi-seo-faq dt{font-weight:600;margin:0 0 .2rem}` +
     `.cydi-seo-faq dd{margin:0 0 .9rem;opacity:.85}` +

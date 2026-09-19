@@ -74,6 +74,12 @@ const DOG = { category: "animals" as CategoryId, shapeId: "ani-dog", practice: t
 // same practice exception - the round is real and scored, and persists nothing.
 const CAT = { category: "animals" as CategoryId, shapeId: "ani-cat", practice: true as const };
 
+// The bear is where /s/bear lands someone who just watched the Bear Short.
+// Fourteenth in Animals - deeper than the cat or the dog - so it needs the same
+// practice exception as the others: the round is real and scored, and it persists
+// nothing.
+const BEAR = { category: "animals" as CategoryId, shapeId: "ani-bear", practice: true as const };
+
 const LANDING_PAGES: LandingPage[] = [
   { path: "/drawing-accuracy-test", shape: CIRCLE },
   { path: "/draw-a-perfect-circle", shape: CIRCLE },
@@ -81,6 +87,7 @@ const LANDING_PAGES: LandingPage[] = [
   { path: "/draw-a-perfect-heart", shape: HEART },
   { path: "/draw-a-dog-from-memory", shape: DOG },
   { path: "/draw-a-cat-from-memory", shape: CAT },
+  { path: "/draw-a-bear-from-memory", shape: BEAR },
   { path: "/drawing-challenges", page: "challenges" },
   { path: "/draw-shapes-online" },
   { path: "/multiplayer-drawing-game", mode: "playTogether" },

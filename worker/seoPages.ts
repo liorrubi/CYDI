@@ -396,6 +396,38 @@ const CAT_FROM_MEMORY: SeoPage = {
 };
 
 /*
+ * The bear's page, built like the dog's and the cat's: the Bear Short lands here
+ * through /s/bear, so the page has to open the very shape the video showed.
+ *
+ * Its copy is about what a bear actually costs a memory - the ears are part of the
+ * head outline rather than separate shapes, and the muzzle is the feature that
+ * moves - because a page that could be about any animal is worth nothing to a
+ * reader who came for this one.
+ */
+const BEAR_FROM_MEMORY: SeoPage = {
+  path: "/draw-a-bear-from-memory",
+  title: "Draw a Bear From Memory - Memory Drawing Challenge | CYDI",
+  description:
+    "Study a bear outline for a few seconds, watch it disappear, then draw it back from memory and get an instant score out of 100. Free, no sign-up, plays in the browser.",
+  h1: "Draw a Bear From Memory",
+  paragraphs: [
+    "The bear is on screen for a couple of seconds, then it is gone and the canvas is empty. You draw it back from memory - the round head, the two ears on top of it, the eyes, and the muzzle with its nose and mouth. Your line is scored against the target and laid over it afterwards, so you can see which parts you kept and which ones drifted.",
+    "A bear is mostly one round head, which sounds easy until the details have to land on it. The ears are the giveaway: they sit high on the outline rather than beside it, and in memory they tend to slide outwards and shrink. The muzzle is the other one - it belongs low on the face, and almost everyone draws it closer to the eyes than it really is.",
+    "This is a practice round: played and scored for real, and it changes nothing in your game - no coins, no best score, no unlocks - so you can take it as often as you like, whether or not you have reached Animals in the Shape Challenge.",
+  ],
+  links: [
+    { href: "/draw-a-cat-from-memory", label: "Draw a cat from memory" },
+    { href: "/draw-a-dog-from-memory", label: "Draw a dog from memory" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
+    { href: "/how-to-play", label: "How the score is worked out" },
+    { href: "/", label: "CYDI home" },
+  ],
+  cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
+  androidCta: true,
+  faq: true,
+};
+
+/*
  * The practice directory. It is a landing path rather than a content page
  * because it belongs to the site's own visual language - SiteChallenges.tsx
  * renders it in the 3a shell - and the block below is what a crawler, or anyone
@@ -407,8 +439,11 @@ const CAT_FROM_MEMORY: SeoPage = {
 const DRAWING_CHALLENGES_PAGE: SeoPage = {
   path: "/drawing-challenges",
   title: "Drawing Challenges - Practice One Shape at a Time | CYDI",
+  // Deliberately says "an animal" rather than naming one: the animal challenges are
+  // arriving one Short at a time (cat, dog, bear, and more to come), and a
+  // description that enumerates them goes stale on every release.
   description:
-    "Free single-shape drawing challenges: redraw a circle, a star, a heart or a dog from memory and get scored out of 100. No sign-up, nothing to unlock, plays in the browser.",
+    "Free single-shape drawing challenges: redraw a circle, a star, a heart or an animal from memory and get scored out of 100. No sign-up, nothing to unlock, plays in the browser.",
   h1: "Drawing Challenges",
   paragraphs: [
     "Each challenge is one shape, on its own. You study the target for a few seconds, it disappears, you redraw it freehand, and CYDI scores how close you got - then draws your attempt over the target so you can see where it drifted.",
@@ -431,7 +466,7 @@ const DRAWING_CHALLENGES_PAGE: SeoPage = {
   androidCta: true,
 };
 
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list

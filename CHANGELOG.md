@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.45.0 - 2026-09-19
+
+**The bear gets its own challenge page: /draw-a-bear-from-memory.** The Bear
+Short goes out today, and every Short now lands on the challenge it showed
+rather than on a home screen the viewer then has to navigate. Built exactly like
+the cat's and the dog's: the real catalogue Bear (`ani-bear`), the normal study
+countdown, the target disappearing, one attempt, and the game's own score.
+
+It is a practice round, so it grants and costs nothing - no coins, no best score,
+no unlock, no round counters - and it plays whether or not Animals has been
+reached in the Shape Challenge, which is the whole point of a page a stranger
+arrives on.
+
+The page is also a real SEO asset rather than a redirect target: its own title,
+description, H1 and self-referencing canonical, its own copy about what a bear
+actually costs a memory (the ears sit high on the head outline, and the muzzle is
+the feature that moves), and an entry in the sitemap.
+
+Bear also joins the hub at `/drawing-challenges`, from the same one list both
+sides of that page read, so the card and the crawlable link arrive together. The
+hub's description now says "an animal" instead of naming one - the animal
+challenges are arriving a Short at a time, and a list in a meta description goes
+stale on every release.
+
 ## 0.44.1 - 2026-09-18
 
 Web only, and nothing in the game changes.

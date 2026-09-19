@@ -80,6 +80,7 @@ test("only a page dedicated to one out-of-reach shape asks for a practice round"
   // never on the hub, and never on the circle, which needs no exception.
   const practicePaths = LANDING_PATHS.filter((path) => landingPageForPath(path)?.shape?.practice);
   assert.deepEqual(practicePaths.sort(), [
+    "/draw-a-bear-from-memory",
     "/draw-a-cat-from-memory",
     "/draw-a-dog-from-memory",
     "/draw-a-perfect-heart",

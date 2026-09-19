@@ -13,6 +13,8 @@ const EXPECTED =
   "https://playcydi.com/draw-a-cat-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=N4H7VTj59A0";
 const EXPECTED_DOG =
   "https://playcydi.com/draw-a-dog-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=n8aojqnxidc";
+const EXPECTED_BEAR =
+  "https://playcydi.com/draw-a-bear-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=OTByR2NtJk4";
 
 test("/s/cat redirects to the fully tagged cat challenge", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
@@ -102,6 +104,27 @@ test("paths that merely start with s are not aliases", () => {
   for (const path of ["/", "/shapes", "/s", "/sitemap.xml", "/how-to-play", "/c/abc123"]) {
     assert.equal(campaignLinkForPath(path), null, path);
   }
+});
+
+test("/s/bear lands on the bear challenge page, tagged, not on the homepage", () => {
+  assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/bear")), EXPECTED_BEAR);
+  assert.equal(new URL(EXPECTED_BEAR).pathname, "/draw-a-bear-from-memory");
+});
+
+test("/s/bear resolves to exactly the Bear Short's attribution", () => {
+  const target = new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/bear")));
+  const attribution = resolveAttribution({ search: target.search, referrer: "", origin: ORIGIN });
+  assert.equal(attribution.source, "youtube");
+  assert.equal(attribution.medium, "shorts");
+  assert.equal(attribution.campaign, "cydi_shorts");
+  assert.equal(attribution.content, "OTByR2NtJk4");
+});
+
+test("the bear creative id keeps its case", () => {
+  // OTByR2NtJk4 - two capitals in a row and a lone lowercase y. Lowercasing it
+  // anywhere would point the analytics row at a video that does not exist.
+  assert.equal(CAMPAIGN_SLUGS.bear.content, "OTByR2NtJk4");
+  assert.ok(EXPECTED_BEAR.includes("utm_content=OTByR2NtJk4"));
 });
 
 test("campaign aliases are kept out of the index", () => {

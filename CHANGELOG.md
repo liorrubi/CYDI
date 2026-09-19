@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.45.1 - 2026-09-19
+
+**/s/bear, the Bear Short's campaign alias.** The Short went public today, so the
+alias now exists and points at the challenge the video showed:
+`/draw-a-bear-from-memory`, carrying `utm_source=youtube`, `utm_medium=shorts`,
+`utm_campaign=cydi_shorts` and the Short's own video id as `utm_content`.
+
+The id is `OTByR2NtJk4` and it was taken from the published video's own link,
+never read off a screen: it has two capitals in a row and a lone lowercase y, and
+a single wrong character would file every click under a video that does not
+exist. `worker/campaignLinks.test.ts` now pins the whole round trip - the
+redirect, the landing path and the attribution the tags resolve to - for the bear
+the same way it already did for the cat and the dog.
+
+Nothing else changes: `/s/cat` and `/s/dog` are untouched, `/s/` stays out of the
+sitemap and disallowed in robots.txt, and an unknown slug still lands on a clean
+homepage with no tags at all.
+
 ## 0.45.0 - 2026-09-19
 
 **The bear gets its own challenge page: /draw-a-bear-from-memory.** The Bear

@@ -55,6 +55,13 @@ export const CAMPAIGN_SLUGS: Record<string, CampaignLink> = {
     content: "n8aojqnxidc",
     path: "/draw-a-dog-from-memory",
   },
+  bear: {
+    source: "youtube",
+    medium: "shorts",
+    campaign: "cydi_shorts",
+    content: "OTByR2NtJk4",
+    path: "/draw-a-bear-from-memory",
+  },
 };
 
 /**

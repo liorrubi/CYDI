@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.46.0 - 2026-09-20
+
+**The owl gets its own challenge page: /draw-an-owl-from-memory.** The Owl Short
+goes out today, and it lands on the challenge it showed rather than on a home
+screen. Same build as the bear's and the cat's: the real catalogue Owl
+(`ani-owl`), the normal study countdown, the target disappearing, one attempt,
+and the game's own score.
+
+A practice round, so it grants and costs nothing - no coins, no best score, no
+unlock, no round counters - and it plays whether or not Animals has been reached
+in the Shape Challenge.
+
+Its copy is about the two things a memory actually loses on an owl: the ear tufts
+are corners of the head outline rather than shapes added to it, and the eyes are
+far larger than anyone remembers - drawing them too small and too far apart is
+the single change that stops a drawing reading as an owl.
+
+Owl joins the hub at `/drawing-challenges` from the same one list both sides of
+that page read, so the card and the crawlable link arrive together.
+
 ## 0.45.1 - 2026-09-19
 
 **/s/bear, the Bear Short's campaign alias.** The Short went public today, so the

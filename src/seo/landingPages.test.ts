@@ -85,6 +85,7 @@ test("only a page dedicated to one out-of-reach shape asks for a practice round"
     "/draw-a-dog-from-memory",
     "/draw-a-perfect-heart",
     "/draw-a-perfect-star",
+    "/draw-an-owl-from-memory",
   ]);
 });
 

@@ -428,6 +428,36 @@ const BEAR_FROM_MEMORY: SeoPage = {
 };
 
 /*
+ * The owl's page, same build as the bear's: the Owl Short lands here through /s/owl.
+ *
+ * Its copy is about the two features a memory actually loses on an owl - the ear tufts,
+ * which are part of the head outline rather than shapes stuck on it, and the eyes, which
+ * are far larger than anyone remembers.
+ */
+const OWL_FROM_MEMORY: SeoPage = {
+  path: "/draw-an-owl-from-memory",
+  title: "Draw an Owl From Memory - Memory Drawing Challenge | CYDI",
+  description:
+    "Study an owl outline for a few seconds, watch it disappear, then draw it back from memory and get an instant score out of 100. Free, no sign-up, plays in the browser.",
+  h1: "Draw an Owl From Memory",
+  paragraphs: [
+    "The owl is on screen for a couple of seconds, then it is gone and the canvas is empty. You draw it back from memory - the body, the two ear tufts, the big round eyes, the beak between them, and the feet. Your line is scored against the target and laid over it afterwards, so you can see which parts you kept and which ones drifted.",
+    "An owl is two problems. The ear tufts are not shapes added to the head - they are corners of the outline itself, so the whole silhouette has to remember them while you draw it. Then the eyes: they are much bigger than they feel, and nearly everyone draws them too small and too far apart, which is the single change that makes a drawing stop reading as an owl.",
+    "This is a practice round: played and scored for real, and it changes nothing in your game - no coins, no best score, no unlocks - so you can take it as often as you like, whether or not you have reached Animals in the Shape Challenge.",
+  ],
+  links: [
+    { href: "/draw-a-bear-from-memory", label: "Draw a bear from memory" },
+    { href: "/draw-a-cat-from-memory", label: "Draw a cat from memory" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
+    { href: "/how-to-play", label: "How the score is worked out" },
+    { href: "/", label: "CYDI home" },
+  ],
+  cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
+  androidCta: true,
+  faq: true,
+};
+
+/*
  * The practice directory. It is a landing path rather than a content page
  * because it belongs to the site's own visual language - SiteChallenges.tsx
  * renders it in the 3a shell - and the block below is what a crawler, or anyone
@@ -466,7 +496,7 @@ const DRAWING_CHALLENGES_PAGE: SeoPage = {
   androidCta: true,
 };
 
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, OWL_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list

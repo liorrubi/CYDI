@@ -15,6 +15,8 @@ const EXPECTED_DOG =
   "https://playcydi.com/draw-a-dog-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=n8aojqnxidc";
 const EXPECTED_BEAR =
   "https://playcydi.com/draw-a-bear-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=OTByR2NtJk4";
+const EXPECTED_OWL =
+  "https://playcydi.com/draw-an-owl-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=FuEiFnzQuSY";
 
 test("/s/cat redirects to the fully tagged cat challenge", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
@@ -125,6 +127,26 @@ test("the bear creative id keeps its case", () => {
   // anywhere would point the analytics row at a video that does not exist.
   assert.equal(CAMPAIGN_SLUGS.bear.content, "OTByR2NtJk4");
   assert.ok(EXPECTED_BEAR.includes("utm_content=OTByR2NtJk4"));
+});
+
+test("/s/owl lands on the owl challenge page, tagged, not on the homepage", () => {
+  assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/owl")), EXPECTED_OWL);
+  assert.equal(new URL(EXPECTED_OWL).pathname, "/draw-an-owl-from-memory");
+});
+
+test("/s/owl resolves to exactly the Owl Short's attribution", () => {
+  const target = new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/owl")));
+  const attribution = resolveAttribution({ search: target.search, referrer: "", origin: ORIGIN });
+  assert.equal(attribution.source, "youtube");
+  assert.equal(attribution.medium, "shorts");
+  assert.equal(attribution.campaign, "cydi_shorts");
+  assert.equal(attribution.content, "FuEiFnzQuSY");
+});
+
+test("the owl creative id keeps its case", () => {
+  // FuEiFnzQuSY alternates case in a way no reader would reproduce from a screenshot.
+  assert.equal(CAMPAIGN_SLUGS.owl.content, "FuEiFnzQuSY");
+  assert.ok(EXPECTED_OWL.includes("utm_content=FuEiFnzQuSY"));
 });
 
 test("campaign aliases are kept out of the index", () => {

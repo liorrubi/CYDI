@@ -12,7 +12,7 @@
  *
  * Nothing is generated from the catalogue here on purpose: an entry exists only
  * once there is a real page behind it, so the hub can never advertise a
- * challenge that 404s. Adding the next one - Spiral, Snail, Pig - is
+ * challenge that 404s. Adding the next one - Spiral, Snail, Fox - is
  * one entry here plus its own landing page.
  *
  * `shapeId` is the catalogue id the card previews, drawn by the game's own
@@ -72,5 +72,11 @@ export const DRAWING_CHALLENGES: DrawingChallenge[] = [
     name: "Draw an owl from memory",
     note: "Ear tufts in the outline, and eyes bigger than anyone remembers.",
     shapeId: "ani-owl",
+  },
+  {
+    href: "/draw-a-pig-from-memory",
+    name: "Draw a pig from memory",
+    note: "The snout is the whole pig, and memory draws it too small.",
+    shapeId: "ani-pig",
   },
 ];

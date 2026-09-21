@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.47.0 - 2026-09-21
+
+**The pig gets its own challenge page: /draw-a-pig-from-memory.** The Pig Short
+goes out today and lands on the challenge it showed. Same build as the owl's and
+the bear's: the real catalogue Pig (`ani-pig`), the normal study countdown, the
+target disappearing, one attempt, and the game's own score.
+
+A practice round, so it grants and costs nothing - no coins, no best score, no
+unlock, no round counters - and it plays whether or not Animals has been reached
+in the Shape Challenge.
+
+Its copy is about the snout, because on a pig that is the whole identity: it is
+larger and sits lower on the face than memory puts it, and the usual miss is a
+neat small oval floating in the middle of the head. The ears are the other one -
+they fold forward as triangles rather than standing up as points.
+
+Pig joins the hub at `/drawing-challenges` from the same one list both sides of
+that page read.
+
 ## 0.46.1 - 2026-09-20
 
 **/s/owl, the Owl Short's campaign alias.** The Short is public, so the alias now

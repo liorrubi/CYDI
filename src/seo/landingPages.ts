@@ -85,6 +85,11 @@ const BEAR = { category: "animals" as CategoryId, shapeId: "ani-bear", practice:
 // persists nothing.
 const OWL = { category: "animals" as CategoryId, shapeId: "ani-owl", practice: true as const };
 
+// The pig is where /s/pig lands someone who just watched the Pig Short. Tenth in
+// Animals, so it needs the same practice exception: the round is real and scored, and it
+// persists nothing.
+const PIG = { category: "animals" as CategoryId, shapeId: "ani-pig", practice: true as const };
+
 const LANDING_PAGES: LandingPage[] = [
   { path: "/drawing-accuracy-test", shape: CIRCLE },
   { path: "/draw-a-perfect-circle", shape: CIRCLE },
@@ -94,6 +99,7 @@ const LANDING_PAGES: LandingPage[] = [
   { path: "/draw-a-cat-from-memory", shape: CAT },
   { path: "/draw-a-bear-from-memory", shape: BEAR },
   { path: "/draw-an-owl-from-memory", shape: OWL },
+  { path: "/draw-a-pig-from-memory", shape: PIG },
   { path: "/drawing-challenges", page: "challenges" },
   { path: "/draw-shapes-online" },
   { path: "/multiplayer-drawing-game", mode: "playTogether" },

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.47.1 - 2026-09-21
+
+**/s/pig, the Pig Short's campaign alias.** The Short is public, so the alias now
+exists and points at the challenge the video showed: `/draw-a-pig-from-memory`,
+carrying `utm_source=youtube`, `utm_medium=shorts`, `utm_campaign=cydi_shorts`
+and the Short's own video id as `utm_content`.
+
+The id is `yfj8ZejJdVs`, taken from the published video's own link rather than
+read off a screen - three scattered capitals and a digit that reads as a letter
+at small sizes, and one wrong character would file every click under a video that
+does not exist. `worker/campaignLinks.test.ts` pins the redirect, the landing path
+and the attribution the tags resolve to.
+
+`/s/cat`, `/s/dog`, `/s/bear` and `/s/owl` are untouched, `/s/` stays out of the
+sitemap and disallowed in robots.txt, and an unknown slug still lands on a clean
+homepage with no tags.
+
 ## 0.47.0 - 2026-09-21
 
 **The pig gets its own challenge page: /draw-a-pig-from-memory.** The Pig Short

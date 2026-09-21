@@ -17,6 +17,8 @@ const EXPECTED_BEAR =
   "https://playcydi.com/draw-a-bear-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=OTByR2NtJk4";
 const EXPECTED_OWL =
   "https://playcydi.com/draw-an-owl-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=FuEiFnzQuSY";
+const EXPECTED_PIG =
+  "https://playcydi.com/draw-a-pig-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=yfj8ZejJdVs";
 
 test("/s/cat redirects to the fully tagged cat challenge", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
@@ -147,6 +149,27 @@ test("the owl creative id keeps its case", () => {
   // FuEiFnzQuSY alternates case in a way no reader would reproduce from a screenshot.
   assert.equal(CAMPAIGN_SLUGS.owl.content, "FuEiFnzQuSY");
   assert.ok(EXPECTED_OWL.includes("utm_content=FuEiFnzQuSY"));
+});
+
+test("/s/pig lands on the pig challenge page, tagged, not on the homepage", () => {
+  assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/pig")), EXPECTED_PIG);
+  assert.equal(new URL(EXPECTED_PIG).pathname, "/draw-a-pig-from-memory");
+});
+
+test("/s/pig resolves to exactly the Pig Short's attribution", () => {
+  const target = new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/pig")));
+  const attribution = resolveAttribution({ search: target.search, referrer: "", origin: ORIGIN });
+  assert.equal(attribution.source, "youtube");
+  assert.equal(attribution.medium, "shorts");
+  assert.equal(attribution.campaign, "cydi_shorts");
+  assert.equal(attribution.content, "yfj8ZejJdVs");
+});
+
+test("the pig creative id keeps its case", () => {
+  // yfj8ZejJdVs - three capitals scattered through it, and a digit that reads as a
+  // letter at small sizes. Exactly the string a screenshot gets wrong.
+  assert.equal(CAMPAIGN_SLUGS.pig.content, "yfj8ZejJdVs");
+  assert.ok(EXPECTED_PIG.includes("utm_content=yfj8ZejJdVs"));
 });
 
 test("campaign aliases are kept out of the index", () => {

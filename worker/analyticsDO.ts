@@ -77,9 +77,9 @@ const SURFACE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["play_store_cta_sho
 // The two rewarded-ad lifecycle events that already carry a `reason`, and the ONLY
 // events that get a per-reason breakdown. Without it a failure reads as a bare count
 // and cannot be told apart from a timeout, an SDK error or a consent block. Safe for
-// the same reason bySurface is: `reason` is AD_FAILURE_REASONS, a closed nine-value
+// the same reason bySurface is: `reason` is AD_FAILURE_REASONS, a closed ten-value
 // union re-validated server-side by validateEventParams before this runs, so the map
-// cannot grow past nine keys. The offer-funnel twin `reward_ad_failed` is a DIFFERENT
+// cannot grow past ten keys. The offer-funnel twin `reward_ad_failed` is a DIFFERENT
 // event that carries only `placement` - it is deliberately not here.
 const REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad_failed", "rewarded_ad_unavailable"]);
 // Which events carry a where-did-this-visit-come-from breakdown. Deliberately a short

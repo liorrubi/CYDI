@@ -182,6 +182,29 @@ async function ensureInitialized(adapter: AdAdapter): Promise<void> {
 }
 
 /**
+ * Classify a rejected LOAD. The AdMob plugin rejects with the Google Mobile Ads
+ * SDK's own localized message and surfaces no numeric code (its Android side calls
+ * `call.reject(ex.getLocalizedMessage(), ex)`, where the second argument is a
+ * Throwable, not a code), so the message text is the only signal that reaches us.
+ * "No fill." is that SDK's wording for ERROR_CODE_NO_FILL (3) - verified on a real
+ * device against the production ad unit - and it is by far the most common outcome
+ * for a low-volume app. Matching it keeps an empty auction out of "sdk_error",
+ * where it used to masquerade as a broken SDK.
+ *
+ * Deliberately load-only: showRewardedAd() shows an ad that has already loaded, so
+ * a no-fill can never surface from a show. That catch keeps the timeout/sdk_error
+ * pair unchanged.
+ */
+function classifyLoadFailure(err: unknown): AdFailureReason {
+  if (!(err instanceof Error)) return "sdk_error";
+  // Our own withTimeout wording is checked first - a load we abandoned is a timeout
+  // no matter what the SDK would eventually have said.
+  if (err.message.includes("timed out")) return "timeout";
+  if (/no fill/i.test(err.message)) return "no_fill";
+  return "sdk_error";
+}
+
+/**
  * `reportFailure` decides who owns the analytics record for a failed load, so one
  * failure is never counted twice. A background preload owns its own failure (nobody
  * else will ever hear about it - that path used to fail completely silently, leaving
@@ -205,7 +228,7 @@ function startLoad(
       emit("loaded", placement, undefined, onEvent);
     } catch (err) {
       state = "idle";
-      lastLoadFailure = err instanceof Error && err.message.includes("timed out") ? "timeout" : "sdk_error";
+      lastLoadFailure = classifyLoadFailure(err);
       if (reportFailure) emit("unavailable", placement, lastLoadFailure, onEvent);
     } finally {
       loadPromise = null;

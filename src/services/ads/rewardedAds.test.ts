@@ -22,7 +22,7 @@ import {
 } from "./rewardedAds";
 import { AD_FLAGS, _setAdFlagsForTests, getAdUnitId, isAdFormatEnabled, type AdFeatureFlags } from "./adConfig";
 import { REWARDED_AD_PLACEMENTS, isRewardedAdPlacement, type RewardedAdPlacement } from "./adPlacements";
-import type { AdFormat, AdReward, RewardedAdLifecycleEvent } from "./adTypes";
+import type { AdFailureReason, AdFormat, AdReward, RewardedAdLifecycleEvent } from "./adTypes";
 import { connectAdAnalytics, mapLifecycleToAnalytics } from "./adAnalytics";
 import { createAdMobAdapter } from "./admobAdapter";
 import { validateEventParams, type AnalyticsEventName } from "../analyticsSchema";
@@ -59,6 +59,25 @@ function recordEvents(): RewardedAdLifecycleEvent[] {
   const events: RewardedAdLifecycleEvent[] = [];
   subscribeRewardedAdEvents("test-recorder", (event) => events.push(event));
   return events;
+}
+
+/** Same recorder, keeping the reason too - the classification tests need it. */
+function recordDetailed(): { event: RewardedAdLifecycleEvent; reason?: AdFailureReason }[] {
+  const seen: { event: RewardedAdLifecycleEvent; reason?: AdFailureReason }[] = [];
+  subscribeRewardedAdEvents("test-recorder", (event, detail) => seen.push({ event, reason: detail.reason }));
+  return seen;
+}
+
+/** An adapter whose load always rejects with `message` - the only thing the plugin gives us. */
+function registerLoadFailingAdapter(message: string): void {
+  registerAdAdapter({
+    name: "load-fails",
+    initialize: async () => {},
+    loadRewarded: async () => {
+      throw new Error(message);
+    },
+    showRewarded: async () => null,
+  });
 }
 
 beforeEach(() => {
@@ -175,6 +194,122 @@ test("a preload whose load fails reports it as unavailable", async () => {
   assert.equal(isRewardedAdReady(), false);
 });
 
+// --- Load-failure classification ---------------------------------------------------
+//
+// AdMob answers an empty auction with ERROR_CODE_NO_FILL (3), which the Capacitor
+// plugin surfaces to JS only as the message "No fill." - no numeric code survives the
+// bridge. That used to fall into the catch-all and report as "sdk_error", so a
+// perfectly healthy integration with nothing to serve read as a broken one. These
+// tests pin the three outcomes apart by the exact strings the plugin really produces.
+
+test("an empty auction reports no_fill, not sdk_error", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  registerLoadFailingAdapter("No fill."); // verbatim Google Mobile Ads wording for code 3
+  const seen = recordDetailed();
+
+  await preloadRewardedAd(PLACEMENT);
+
+  assert.deepEqual(
+    seen.filter((e) => e.event === "unavailable").map((e) => e.reason),
+    ["no_fill"],
+  );
+});
+
+test("no-fill matching survives the plugin's own punctuation and casing", async () => {
+  // The bundled plugin has a legacy helper that spells it "No fill" with no period;
+  // the SDK message carries one. Neither spelling may fall back to sdk_error.
+  for (const message of ["No fill", "No fill.", "no fill"]) {
+    _resetRewardedAdsForTests();
+    _setAdFlagsForTests(flags(true, true));
+    registerLoadFailingAdapter(message);
+    const seen = recordDetailed();
+
+    await preloadRewardedAd(PLACEMENT);
+
+    assert.deepEqual(
+      seen.filter((e) => e.event === "unavailable").map((e) => e.reason),
+      ["no_fill"],
+      message,
+    );
+  }
+});
+
+test("a load we abandon is still a timeout, never no_fill", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  _setAdTimeoutsForTests(30, 30);
+  registerAdAdapter({
+    name: "hung-load",
+    initialize: async () => {},
+    loadRewarded: () => new Promise(() => {}), // never settles
+    showRewarded: async () => null,
+  });
+  const seen = recordDetailed();
+
+  await preloadRewardedAd(PLACEMENT);
+
+  assert.deepEqual(
+    seen.filter((e) => e.event === "unavailable").map((e) => e.reason),
+    ["timeout"],
+  );
+});
+
+test("any other load rejection is still sdk_error", async () => {
+  for (const message of ["Internal error", "Network Error", "App Id Missing", ""]) {
+    _resetRewardedAdsForTests();
+    _setAdFlagsForTests(flags(true, true));
+    registerLoadFailingAdapter(message);
+    const seen = recordDetailed();
+
+    await preloadRewardedAd(PLACEMENT);
+
+    assert.deepEqual(
+      seen.filter((e) => e.event === "unavailable").map((e) => e.reason),
+      ["sdk_error"],
+      message || "(empty message)",
+    );
+  }
+});
+
+test("a non-Error rejection cannot crash the classifier", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  registerAdAdapter({
+    name: "throws-string",
+    initialize: async () => {},
+    loadRewarded: async () => {
+      throw "No fill."; // eslint-disable-line no-throw-literal -- a rogue adapter may do this
+    },
+    showRewarded: async () => null,
+  });
+  const seen = recordDetailed();
+
+  await preloadRewardedAd(PLACEMENT);
+
+  assert.deepEqual(
+    seen.filter((e) => e.event === "unavailable").map((e) => e.reason),
+    ["sdk_error"],
+    "only a real Error carries a message we may read",
+  );
+});
+
+test("reclassifying changes the reason only - event counts and analytics shape hold", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  registerLoadFailingAdapter("No fill.");
+  const seen = recordDetailed();
+
+  await preloadRewardedAd(PLACEMENT);
+
+  assert.equal(seen.filter((e) => e.event === "unavailable").length, 1, "still exactly one failure event");
+  assert.equal(seen.filter((e) => e.event === "loaded").length, 0, "a failed load is never a loaded ad");
+  assert.equal(isRewardedAdReady(), false);
+
+  // The analytics bridge keeps emitting the same event name, and no_fill must pass the
+  // shared schema - otherwise the Worker would reject the whole event and we would lose
+  // the very data this change exists to surface.
+  const mapped = mapLifecycleToAnalytics("unavailable", { placement: PLACEMENT, reason: "no_fill" });
+  assert.equal(mapped?.eventName, "rewarded_ad_unavailable");
+  assert.equal(validateEventParams("rewarded_ad_unavailable" as AnalyticsEventName, mapped?.params).valid, true);
+});
+
 test("a successful preload reports loaded and never unavailable", async () => {
   _setAdFlagsForTests(flags(true, true));
   makeSpyAdapter(async () => ({ type: "coins", amount: 5 }));
@@ -192,7 +327,7 @@ test("a load started by showRewardedAd reports the failure exactly once", async 
     name: "failing-load",
     initialize: async () => {},
     loadRewarded: async () => {
-      throw new Error("no fill");
+      throw new Error("Internal error");
     },
     showRewarded: async () => null,
   });

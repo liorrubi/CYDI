@@ -43,6 +43,12 @@ export const AD_FAILURE_REASONS = [
   "load_failed",
   /** A load/show exceeded its time budget. */
   "timeout",
+  /**
+   * The ad network had no ad to return (Google Mobile Ads ERROR_CODE_NO_FILL).
+   * A normal auction outcome for a low-volume app, NOT a fault - kept apart from
+   * "sdk_error" so an empty inventory never reads as a broken integration.
+   */
+  "no_fill",
   /** The SDK threw/rejected while loading or showing. */
   "sdk_error",
 ] as const;

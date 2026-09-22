@@ -186,8 +186,27 @@ android {
         // snapshot, which only the Worker in this same commit sends. The Worker
         // and the web build must go out together or a rematch stops earning
         // Social Points. See worker/roomDO.ts handleStart.
-        versionCode 30
-        versionName "0.40.0"
+        //
+        // 31-40: NEVER UPLOADED. Local/QA builds only, while the app sat on 30 for
+        // three weeks of web-only releases (0.41.0-0.48.3). 40 is the one that
+        // matters: it is the debug-signed build still sitting on the MIUI test
+        // device, so any code the device must accept has to clear 40, not 30.
+        //
+        // 41 = 0.48.4, the first Android release since 0.40.0. Play's highest
+        // upload is 30 (bundle explorer, 22 Sep 2026: 14 bundles, 30 Active), so
+        // 31 would have sufficed for Play alone - 41 is chosen to clear the test
+        // device in the same bump, exactly as 17 did over the stale debug 16.
+        // Almost nothing here is user-visible: the 0.41-0.48 work was website and
+        // SEO. What Android actually gains is honest telemetry - rewarded no-fill
+        // told apart from a broken SDK, and real appVersion/appBuild on every
+        // event instead of "unknown".
+        //
+        // DEPLOYMENT ORDER: the client now emits reason "no_fill", which the
+        // Worker validates against AD_FAILURE_REASONS and DROPS the whole event
+        // if it does not know. The Worker must be deployed before this build
+        // reaches users, or the very failures it exists to measure vanish.
+        versionCode 41
+        versionName "0.48.4"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

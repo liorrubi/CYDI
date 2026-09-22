@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.48.4 - 2026-09-22
+
+**An empty auction was being reported as a broken SDK.** A rewarded load that AdMob
+answers with `ERROR_CODE_NO_FILL` reached analytics as `sdk_error`, because the reason
+mapping was a single binary test - "timed out", or else the catch-all. Having no ad to
+serve therefore looked exactly like a broken integration.
+
+It was not a theory: on 22 September, 41 failures in one day read as SDK faults, and
+no-fill had been ruled out early precisely because the reason said otherwise. A logcat
+capture on the device settled it - `AdMob.prepareRewardVideoAd` -> plugin error
+`"No fill."` -> `I/Ads: Ad failed to load : 3`.
+
+`classifyLoadFailure()` now tells the three apart. Our own timeout wording is checked
+first, so a load we abandoned stays a `timeout`; the SDK's "No fill." becomes
+`no_fill`; everything else is still `sdk_error`. The plugin hands JS no numeric code -
+its Android side rejects with a Throwable, not a code - so the message text is the only
+signal that crosses the bridge, and matching it is the whole change. Load-only on
+purpose: a show displays an ad that already loaded, so no-fill cannot surface there.
+
+**This is a diagnosis, not a fix.** No-fill is a normal auction outcome for a
+low-volume app, and nothing here makes an ad appear. What changes is that the daily
+report will now say "no inventory" instead of sending us after a phantom SDK bug.
+
+**Android returns after eighteen web-only releases.** 0.41.0-0.48.3 were website and
+SEO work, so the app has been on 0.40.0 since 1 September. This release carries no new
+native code - the Capacitor shell, plugins and configuration are untouched - and almost
+nothing users will notice. What it does carry is instrumentation the app has been
+missing: correct rewarded-failure reasons, and real `appVersion`/`appBuild` on every
+event instead of the `unknown` bucket every report has been reading around.
+
+Rewarded preloading still happens where it always has, when the offer mounts. Moving it
+earlier is a separate, already-tested change held back on purpose: it can only help
+when there is inventory to win, it cannot create fill, and it would raise request
+volume by about a third at the exact moment fill is measurably zero. It waits for a
+week of correctly-labelled data.
+
 ## 0.48.3 - 2026-09-22
 
 **/s/cat was pointing at the wrong video.** The mapping carried

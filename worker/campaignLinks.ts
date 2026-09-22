@@ -41,11 +41,17 @@ export const CAMPAIGN_PATH_PREFIX = "/s/";
  * the viewer looking twice.
  */
 export const CAMPAIGN_SLUGS: Record<string, CampaignLink> = {
+  // Corrected 22 Sep 2026: this carried N4H7VTj59A0, which is a different Short
+  // ("Can You Beat This Score?"), so every /s/cat click was filed under the wrong
+  // creative. The Cat Short is 28ntXVUs-cs, read from the live channel. Rows already
+  // recorded under the old id are left exactly as they are - they are a real record of
+  // what the redirect did at the time, and rewriting analytics history would be worse
+  // than a documented break in the series.
   cat: {
     source: "youtube",
     medium: "shorts",
     campaign: "cydi_shorts",
-    content: "N4H7VTj59A0",
+    content: "28ntXVUs-cs",
     path: "/draw-a-cat-from-memory",
   },
   dog: {

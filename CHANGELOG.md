@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.48.3 - 2026-09-22
+
+**/s/cat was pointing at the wrong video.** The mapping carried
+`utm_content=N4H7VTj59A0`, which is a different published Short - `Can You Beat This
+Score?` - so every click from the Cat Short has been filed under a creative the
+viewer never watched. The Cat Short is `28ntXVUs-cs`, read from the live channel
+rather than from our own records, which is how the mix-up survived this long.
+
+Only the id changed. `/s/cat` still lands on `/draw-a-cat-from-memory` with the same
+`utm_source=youtube`, `utm_medium=shorts` and `utm_campaign=cydi_shorts`, the Cat
+challenge page is untouched, and no other alias moved.
+
+**Historical analytics are deliberately left alone.** Rows already recorded under
+`N4H7VTj59A0` are a true record of what the redirect did at the time; rewriting them
+would destroy that. Read Cat traffic as `N4H7VTj59A0` before this release and
+`28ntXVUs-cs` after it.
+
+`worker/campaignLinks.test.ts` now pins the correct id, refuses the retired one
+anywhere in the map, requires every alias to name a distinct video, and asserts that
+no alias ever reaches the sitemap - the class of mistake this was.
+
 ## 0.48.2 - 2026-09-22
 
 **/s/star, the Star Short's campaign alias.** The Short is public, so the alias

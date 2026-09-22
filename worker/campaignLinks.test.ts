@@ -5,12 +5,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { campaignLinkForPath, campaignRedirectUrl, CAMPAIGN_SLUGS } from "./campaignLinks.ts";
-import { robotsTxt, LANDING_PATHS } from "./seoPages.ts";
+import { robotsTxt, sitemapXml, LANDING_PATHS } from "./seoPages.ts";
 import { resolveAttribution } from "../src/services/analyticsAttribution.ts";
 
 const ORIGIN = "https://playcydi.com";
 const EXPECTED =
-  "https://playcydi.com/draw-a-cat-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=N4H7VTj59A0";
+  "https://playcydi.com/draw-a-cat-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=28ntXVUs-cs";
 const EXPECTED_DOG =
   "https://playcydi.com/draw-a-dog-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=n8aojqnxidc";
 const EXPECTED_BEAR =
@@ -42,14 +42,32 @@ test("the redirect target resolves to exactly the intended attribution", () => {
   assert.equal(attribution.source, "youtube");
   assert.equal(attribution.medium, "shorts");
   assert.equal(attribution.campaign, "cydi_shorts");
-  assert.equal(attribution.content, "N4H7VTj59A0");
+  assert.equal(attribution.content, "28ntXVUs-cs");
 });
 
-test("the creative id keeps its case through the whole round trip", () => {
+test("the creative id keeps its case and its hyphen through the whole round trip", () => {
   // A YouTube id is case-sensitive; lowercasing it anywhere would point the row at a
-  // different video.
-  assert.ok(EXPECTED.includes("N4H7VTj59A0"));
-  assert.equal(CAMPAIGN_SLUGS.cat.content, "N4H7VTj59A0");
+  // different video. 28ntXVUs-cs opens with digits, carries a capital run and ends in a
+  // hyphenated tail - three things a slug helper or a hand-typed copy tends to destroy.
+  assert.ok(EXPECTED.includes("utm_content=28ntXVUs-cs"));
+  assert.equal(CAMPAIGN_SLUGS.cat.content, "28ntXVUs-cs");
+});
+
+test("the cat alias points at the Cat Short, not the Short it used to name", () => {
+  // Until 22 Sep 2026 this mapping carried N4H7VTj59A0, which is a DIFFERENT published
+  // Short ("Can You Beat This Score?"), so every /s/cat click was attributed to the
+  // wrong creative. This test exists to stop that id ever coming back.
+  assert.equal(CAMPAIGN_SLUGS.cat.content, "28ntXVUs-cs");
+  assert.notEqual(CAMPAIGN_SLUGS.cat.content, "N4H7VTj59A0");
+  for (const [slug, link] of Object.entries(CAMPAIGN_SLUGS)) {
+    assert.notEqual(link.content, "N4H7VTj59A0", `${slug} must not use the retired id`);
+  }
+});
+
+test("every alias names a distinct creative", () => {
+  // Two slugs sharing a video id is how the cat mix-up would have been caught earlier.
+  const ids = Object.values(CAMPAIGN_SLUGS).map((l) => l.content);
+  assert.equal(new Set(ids).size, ids.length, "two aliases point at the same video id");
 });
 
 test("/s/dog lands on the dog challenge page, tagged, not on the homepage", () => {
@@ -73,7 +91,7 @@ test("a landing path is only ever taken from the map", () => {
   // added after its Short, so this one moved off the homepage deliberately. Its
   // tags did not change with it.
   assert.equal(CAMPAIGN_SLUGS.cat.path, "/draw-a-cat-from-memory");
-  assert.equal(CAMPAIGN_SLUGS.cat.content, "N4H7VTj59A0");
+  assert.equal(CAMPAIGN_SLUGS.cat.content, "28ntXVUs-cs");
   // And every path in the map is one of our own landing pages, never an off-site URL.
   for (const [slug, link] of Object.entries(CAMPAIGN_SLUGS)) {
     if (link.path === undefined) continue;
@@ -221,6 +239,16 @@ test("the star creative id keeps its case and its hyphen", () => {
 
 test("campaign aliases are kept out of the index", () => {
   assert.ok(robotsTxt().includes("Disallow: /s/"));
+});
+
+test("no campaign alias ever reaches the sitemap", () => {
+  // An alias is a redirect, not a page: it must not be crawlable and must not be
+  // offered for indexing, however many of them the map grows to.
+  const xml = sitemapXml();
+  assert.ok(!xml.includes("/s/"), "sitemap must not contain the alias prefix");
+  for (const slug of Object.keys(CAMPAIGN_SLUGS)) {
+    assert.ok(!xml.includes(`/s/${slug}`), `/s/${slug} must not be in the sitemap`);
+  }
 });
 
 test("every configured slug is a usable, typeable alias", () => {

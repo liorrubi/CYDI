@@ -21,6 +21,8 @@ const EXPECTED_PIG =
   "https://playcydi.com/draw-a-pig-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=yfj8ZejJdVs";
 const EXPECTED_SNAIL =
   "https://playcydi.com/draw-a-snail-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=w8zzhQOdSas";
+const EXPECTED_STAR =
+  "https://playcydi.com/draw-a-perfect-star?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=vcbiASLg-Gk";
 
 test("/s/cat redirects to the fully tagged cat challenge", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
@@ -192,6 +194,29 @@ test("the snail creative id keeps its case", () => {
   // w8zzhQOdSas - a lone capital Q and O inside a run of lowercase, next to a digit.
   assert.equal(CAMPAIGN_SLUGS.snail.content, "w8zzhQOdSas");
   assert.ok(EXPECTED_SNAIL.includes("utm_content=w8zzhQOdSas"));
+});
+
+test("/s/star lands on the existing star challenge page, tagged", () => {
+  // The only alias so far whose destination was already an indexed page of its own
+  // before the Short existed - the mapping must point at it, not mint a new path.
+  assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/star")), EXPECTED_STAR);
+  assert.equal(new URL(EXPECTED_STAR).pathname, "/draw-a-perfect-star");
+});
+
+test("/s/star resolves to exactly the Star Short's attribution", () => {
+  const target = new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/star")));
+  const attribution = resolveAttribution({ search: target.search, referrer: "", origin: ORIGIN });
+  assert.equal(attribution.source, "youtube");
+  assert.equal(attribution.medium, "shorts");
+  assert.equal(attribution.campaign, "cydi_shorts");
+  assert.equal(attribution.content, "vcbiASLg-Gk");
+});
+
+test("the star creative id keeps its case and its hyphen", () => {
+  // vcbiASLg-Gk - two capital runs and a hyphen, which a lowercasing slug helper
+  // or a screenshot read would both destroy.
+  assert.equal(CAMPAIGN_SLUGS.star.content, "vcbiASLg-Gk");
+  assert.ok(EXPECTED_STAR.includes("utm_content=vcbiASLg-Gk"));
 });
 
 test("campaign aliases are kept out of the index", () => {

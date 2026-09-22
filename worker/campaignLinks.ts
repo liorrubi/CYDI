@@ -83,6 +83,16 @@ export const CAMPAIGN_SLUGS: Record<string, CampaignLink> = {
     content: "w8zzhQOdSas",
     path: "/draw-a-snail-from-memory",
   },
+  // The star Short is the first in the experimental format, and the first whose
+  // landing page already existed: /draw-a-perfect-star predates the Shorts series,
+  // so this alias adds a destination rather than creating one.
+  star: {
+    source: "youtube",
+    medium: "shorts",
+    campaign: "cydi_shorts",
+    content: "vcbiASLg-Gk",
+    path: "/draw-a-perfect-star",
+  },
 };
 
 /**

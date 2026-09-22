@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.48.2 - 2026-09-22
+
+**/s/star, the Star Short's campaign alias.** The Short is public, so the alias
+now exists. Unlike the five before it, its destination was already here:
+`/draw-a-perfect-star` has been an indexed page since long before the Shorts
+series, so this release adds a way in rather than a page - nothing about the star
+page, the challenges hub or any other alias changed.
+
+The tags are the usual ones - `utm_source=youtube`, `utm_medium=shorts`,
+`utm_campaign=cydi_shorts` - with the Short's own video id as `utm_content`. The
+id is `vcbiASLg-Gk`, taken from the published video's own link: it carries two
+capital runs and a hyphen, and lowercasing it or misreading one character would
+file every click under a video that does not exist.
+`worker/campaignLinks.test.ts` pins the redirect, the landing path, the
+attribution the tags resolve to, and the id's exact case.
+
+The five earlier aliases are untouched, `/s/` stays out of the sitemap and
+disallowed in robots.txt, and an unknown slug still lands on a clean homepage with
+no tags.
+
 ## 0.48.1 - 2026-09-22
 
 **/s/snail, the Snail Short's campaign alias.** The Short is public, so the alias

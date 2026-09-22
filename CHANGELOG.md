@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.48.1 - 2026-09-22
+
+**/s/snail, the Snail Short's campaign alias.** The Short is public, so the alias
+now exists and points at the challenge the video showed:
+`/draw-a-snail-from-memory`, carrying `utm_source=youtube`, `utm_medium=shorts`,
+`utm_campaign=cydi_shorts` and the Short's own video id as `utm_content`.
+
+The id is `w8zzhQOdSas`, taken from the published video's own link rather than
+read off a screen - a lone capital Q and O sit inside a run of lowercase next to a
+digit, and one wrong character would file every click under a video that does not
+exist. `worker/campaignLinks.test.ts` pins the redirect, the landing path and the
+attribution the tags resolve to.
+
+The four earlier aliases are untouched, `/s/` stays out of the sitemap and
+disallowed in robots.txt, and an unknown slug still lands on a clean homepage with
+no tags.
+
 ## 0.48.0 - 2026-09-22
 
 **The snail gets its own challenge page: /draw-a-snail-from-memory.** The Snail

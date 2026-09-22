@@ -19,6 +19,8 @@ const EXPECTED_OWL =
   "https://playcydi.com/draw-an-owl-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=FuEiFnzQuSY";
 const EXPECTED_PIG =
   "https://playcydi.com/draw-a-pig-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=yfj8ZejJdVs";
+const EXPECTED_SNAIL =
+  "https://playcydi.com/draw-a-snail-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=w8zzhQOdSas";
 
 test("/s/cat redirects to the fully tagged cat challenge", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
@@ -170,6 +172,26 @@ test("the pig creative id keeps its case", () => {
   // letter at small sizes. Exactly the string a screenshot gets wrong.
   assert.equal(CAMPAIGN_SLUGS.pig.content, "yfj8ZejJdVs");
   assert.ok(EXPECTED_PIG.includes("utm_content=yfj8ZejJdVs"));
+});
+
+test("/s/snail lands on the snail challenge page, tagged, not on the homepage", () => {
+  assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/snail")), EXPECTED_SNAIL);
+  assert.equal(new URL(EXPECTED_SNAIL).pathname, "/draw-a-snail-from-memory");
+});
+
+test("/s/snail resolves to exactly the Snail Short's attribution", () => {
+  const target = new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/snail")));
+  const attribution = resolveAttribution({ search: target.search, referrer: "", origin: ORIGIN });
+  assert.equal(attribution.source, "youtube");
+  assert.equal(attribution.medium, "shorts");
+  assert.equal(attribution.campaign, "cydi_shorts");
+  assert.equal(attribution.content, "w8zzhQOdSas");
+});
+
+test("the snail creative id keeps its case", () => {
+  // w8zzhQOdSas - a lone capital Q and O inside a run of lowercase, next to a digit.
+  assert.equal(CAMPAIGN_SLUGS.snail.content, "w8zzhQOdSas");
+  assert.ok(EXPECTED_SNAIL.includes("utm_content=w8zzhQOdSas"));
 });
 
 test("campaign aliases are kept out of the index", () => {

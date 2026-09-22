@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.48.0 - 2026-09-22
+
+**The snail gets its own challenge page: /draw-a-snail-from-memory.** The Snail
+Short goes out today and lands on the challenge it showed. Same build as the
+pig's and the owl's: the real catalogue Snail (`ani-snail`), the normal study
+countdown, the target disappearing, one attempt, and the game's own score.
+
+A practice round, so it grants and costs nothing - no coins, no best score, no
+unlock, no round counters - and it plays whether or not Animals has been reached
+in the Shape Challenge.
+
+Its copy is about the spiral, which is the one part of this shape a memory cannot
+fake: it has a real number of turns, it starts at the outer edge and ends at the
+centre, and it is the first thing that gets smoothed into a vague swirl. The
+other common miss is the shell's position - it sits on top of the foot rather
+than trailing behind it.
+
+Snail joins the hub at `/drawing-challenges` from the same one list both sides of
+that page read.
+
 ## 0.47.1 - 2026-09-21
 
 **/s/pig, the Pig Short's campaign alias.** The Short is public, so the alias now

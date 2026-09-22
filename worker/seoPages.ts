@@ -489,6 +489,37 @@ const PIG_FROM_MEMORY: SeoPage = {
 };
 
 /*
+ * The snail's page, same build as the pig's and the owl's: the Snail Short lands here
+ * through /s/snail.
+ *
+ * Its copy is about the spiral, which is the one part of this shape a memory cannot
+ * fake - it has a real number of turns, and it has to start at the outside and end at
+ * the middle of the shell rather than wander.
+ */
+const SNAIL_FROM_MEMORY: SeoPage = {
+  path: "/draw-a-snail-from-memory",
+  title: "Draw a Snail From Memory - Memory Drawing Challenge | CYDI",
+  description:
+    "Study a snail outline for a few seconds, watch it disappear, then draw it back from memory and get an instant score out of 100. Free, no sign-up, plays in the browser.",
+  h1: "Draw a Snail From Memory",
+  paragraphs: [
+    "The snail is on screen for a couple of seconds, then it is gone and the canvas is empty. You draw it back from memory - the long foot along the ground, the round shell sitting on it, the spiral wound inside that shell, and the two eye stalks rising from the head. Your line is scored against the target and laid over it afterwards, so you can see which parts you kept and which ones drifted.",
+    "The spiral is what makes this one hard. It has a real number of turns, it starts at the outer edge and finishes at the centre, and it is the first thing a memory smooths into a vague swirl. The other common miss is the shell's position: it sits on top of the foot, roughly above the middle of it, not trailing behind like a shell being dragged.",
+    "This is a practice round: played and scored for real, and it changes nothing in your game - no coins, no best score, no unlocks - so you can take it as often as you like, whether or not you have reached Animals in the Shape Challenge.",
+  ],
+  links: [
+    { href: "/draw-a-pig-from-memory", label: "Draw a pig from memory" },
+    { href: "/draw-an-owl-from-memory", label: "Draw an owl from memory" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
+    { href: "/how-to-play", label: "How the score is worked out" },
+    { href: "/", label: "CYDI home" },
+  ],
+  cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
+  androidCta: true,
+  faq: true,
+};
+
+/*
  * The practice directory. It is a landing path rather than a content page
  * because it belongs to the site's own visual language - SiteChallenges.tsx
  * renders it in the 3a shell - and the block below is what a crawler, or anyone
@@ -527,7 +558,7 @@ const DRAWING_CHALLENGES_PAGE: SeoPage = {
   androidCta: true,
 };
 
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, OWL_FROM_MEMORY, PIG_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, OWL_FROM_MEMORY, PIG_FROM_MEMORY, SNAIL_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list

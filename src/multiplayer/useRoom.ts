@@ -23,8 +23,31 @@ export type RoomView = {
   status: ConnectionStatus;
 };
 
-/** Measured from the lowest-latency ping seen so far: the sample with the least round-trip has the least uncertainty about where the server clock actually was. */
-const PING_INTERVAL_MS = 10_000;
+// Clock sync and liveness are two different jobs, and used to be done by one frame
+// every 10 seconds (B1). That frame carried a timestamp, so it had to wake RoomDO -
+// roughly 60% of all RoomDO requests on 23 Sep 2026 came from sockets doing nothing
+// but this. They are now separate:
+//
+//   - the offset is measured in a short BURST at connect, because bestRtt below keeps
+//     only the lowest-latency sample ever seen, so accuracy stops improving after a
+//     handful and a permanent 10-second cadence was buying nothing;
+//   - staying connected is proved by a fixed liveness frame the Cloudflare runtime
+//     answers on its own, without waking the object at all (protocol.ts
+//     WS_LIVENESS_PING).
+//
+/** Sample delays after connect. Four samples in six seconds: enough for bestRtt to settle, short enough to be right before the first countdown. */
+const CLOCK_BURST_DELAYS_MS = [0, 1_000, 3_000, 6_000];
+/** Two samples are enough to re-establish an offset that only drifted; a resume is not a fresh connection. */
+const CLOCK_RESYNC_DELAYS_MS = [0, 1_000];
+/**
+ * Liveness cadence. Deliberately SHORTER than roomSocket's SILENCE_BEFORE_PROBE_MS
+ * (20s): if the socket ever went quiet for longer, the watchdog would fire a real
+ * timestamped probe and put the billed wake straight back. Free frames at 15s are
+ * what keep that dormant.
+ */
+const LIVENESS_INTERVAL_MS = 15_000;
+/** Hidden for longer than this and the offset is treated as stale on return - a suspended WebView's clock can drift. */
+const STALE_HIDDEN_MS = 60_000;
 
 export function useRoom(transport: RoomTransport | null): RoomView {
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
@@ -65,12 +88,42 @@ export function useRoom(transport: RoomTransport | null): RoomView {
     if (transport.subscribeStatus) unsubscribeStatus = transport.subscribeStatus((next) => setStatus(next));
     else setStatus("open");
 
-    const ping = () => transport.send({ type: "ping", clientSentAt: Date.now() });
-    ping();
-    const interval = window.setInterval(ping, PING_INTERVAL_MS);
+    // --- clock sync: a burst now, and again only if a resume made it stale ---
+    const timers: number[] = [];
+    const clockPing = () => transport.send({ type: "ping", clientSentAt: Date.now() });
+    const burst = (delays: readonly number[]) => {
+      for (const delay of delays) {
+        if (delay === 0) clockPing();
+        else timers.push(window.setTimeout(clockPing, delay));
+      }
+    };
+    burst(CLOCK_BURST_DELAYS_MS);
+
+    // --- liveness: answered by the runtime, so this costs no DO request ---
+    const liveness = () => transport.send({ type: "lp" });
+    const livenessInterval = window.setInterval(liveness, LIVENESS_INTERVAL_MS);
+
+    let hiddenAt: number | null = null;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        return;
+      }
+      const away = hiddenAt === null ? 0 : Date.now() - hiddenAt;
+      hiddenAt = null;
+      // A short tab switch cannot have moved the clock meaningfully; a long
+      // suspension can, and every countdown on screen is rendered against it.
+      if (away >= STALE_HIDDEN_MS) {
+        bestRttRef.current = Number.POSITIVE_INFINITY;
+        burst(CLOCK_RESYNC_DELAYS_MS);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
-      window.clearInterval(interval);
+      for (const timer of timers) window.clearTimeout(timer);
+      window.clearInterval(livenessInterval);
+      document.removeEventListener("visibilitychange", onVisibility);
       unsubscribe();
       unsubscribeStatus();
     };

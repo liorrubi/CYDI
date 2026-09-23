@@ -38,6 +38,8 @@ import {
   MP_TIMINGS,
   parseClientFrame,
   sanitizeNickname,
+  WS_LIVENESS_PING,
+  WS_LIVENESS_PONG,
   speedScore,
   TIMED_PHASES,
   type ClientFrame,
@@ -155,6 +157,16 @@ export class RoomDO {
 
   constructor(state: DurableObjectState) {
     this.state = state;
+    // Ask the runtime to answer the liveness frame itself, without waking this
+    // object (B1). Registered in the constructor so it is in place for every
+    // socket, including ones restored after hibernation. Wrapped because it is an
+    // optimisation: a runtime without it must fall through to the handled "lp" case
+    // in webSocketMessage rather than losing the room.
+    try {
+      this.state.setWebSocketAutoResponse?.(new WebSocketRequestResponsePair(WS_LIVENESS_PING, WS_LIVENESS_PONG));
+    } catch {
+      // Older/unsupported runtime - liveness frames simply cost a wake, as before.
+    }
   }
 
   // ------------------------------------------------------------- storage ----
@@ -174,6 +186,15 @@ export class RoomDO {
       return (ws.deserializeAttachment() as SocketMeta) ?? { seatId: null };
     } catch {
       return { seatId: null };
+    }
+  }
+
+  /** Sends a pre-serialized frame, for the fixed liveness reply that must match byte for byte. */
+  private sendRaw(ws: WebSocket, raw: string): void {
+    try {
+      ws.send(raw);
+    } catch {
+      // Socket died between selection and send; the close handler cleans up.
     }
   }
 
@@ -494,6 +515,17 @@ export class RoomDO {
     const frame = parseClientFrame(parsed);
     if (!frame) return this.fail(ws, "bad_frame", "unrecognised or malformed frame");
 
+    // Liveness. Normally answered by the runtime before this handler ever runs; this
+    // is the fallback for a runtime without auto-response, and it must stay a no-op
+    // reply that touches neither storage nor room state.
+    if (frame.type === "lp") {
+      return this.sendRaw(ws, WS_LIVENESS_PONG);
+    }
+
+    // Clock sync. Still a real wake, because the reply has to carry a server
+    // timestamp - but the new client sends it in a short burst at connect and after
+    // a stale resume, not every ten seconds for the whole game. Old clients keep
+    // sending it on their old cadence and keep working unchanged.
     if (frame.type === "ping") {
       return this.send(ws, { type: "pong", clientSentAt: frame.clientSentAt ?? null, serverNow: Date.now() });
     }

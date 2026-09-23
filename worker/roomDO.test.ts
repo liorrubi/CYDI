@@ -17,7 +17,7 @@ import test from "node:test";
 import { RoomDO } from "./roomDO.ts";
 import { getShapeById } from "../src/engine/shapeLibrary.ts";
 import { resampleAllSegments, splitIntoSegments } from "../src/engine/normalizePath.ts";
-import { MP_LIMITS, MP_TIMINGS, toWirePath } from "../src/multiplayer/protocol.ts";
+import { MP_LIMITS, MP_TIMINGS, toWirePath, WS_LIVENESS_PING, WS_LIVENESS_PONG } from "../src/multiplayer/protocol.ts";
 import type { RoomSnapshot, ServerFrame } from "../src/multiplayer/protocol.ts";
 
 // ------------------------------------------------------------------ doubles ----
@@ -86,13 +86,30 @@ class FakeStorage {
 class FakeState {
   storage = new FakeStorage();
   sockets: FakeWS[] = [];
+  /** What the runtime was asked to auto-answer, if anything (B1). */
+  autoResponse: { request: string; response: string } | null = null;
   acceptWebSocket(ws: FakeWS) {
     this.sockets.push(ws);
   }
   getWebSockets(): FakeWS[] {
     return this.sockets.filter((w) => !w.closed);
   }
+  setWebSocketAutoResponse(pair: { request: string; response: string }) {
+    this.autoResponse = pair;
+  }
 }
+
+// workerd global, absent under plain node. The DO guards its use in a try/catch, so
+// without this stub the registration silently no-ops - defining it is what lets the
+// B1 cases below assert the pair was actually registered.
+(globalThis as Record<string, unknown>).WebSocketRequestResponsePair = class {
+  request: string;
+  response: string;
+  constructor(request: string, response: string) {
+    this.request = request;
+    this.response = response;
+  }
+};
 
 // ---------------------------------------------------------------- time control ----
 
@@ -976,4 +993,109 @@ test("a submit that does not move the deadline does not re-arm the alarm", async
   await h.send(h.host, { type: "submit", roundIndex: 0, path: perfectAttempt(shapeId) });
   assert.equal(h.host.snapshot().phase, "DRAWING", "one of two players has submitted; the window stands");
   assert.equal(h.state.storage.setAlarmCalls, setCalls, "the drawing deadline did not move");
+});
+
+// ------------------------------------------- liveness vs clock sync (B1) ----
+//
+// The 10-second clock ping used to be ~60% of all RoomDO requests, for sockets that
+// were doing nothing. Liveness moves to a fixed frame the runtime answers on its own;
+// the timestamped ping stays, because its reply must carry a server clock, but the
+// new client sends it in a burst rather than forever. Old clients keep their old
+// cadence and must keep working unchanged.
+
+test("the liveness pair is registered with the runtime", async () => {
+  const h = await makeRoom();
+  assert.deepEqual(
+    { request: h.state.autoResponse?.request, response: h.state.autoResponse?.response },
+    { request: WS_LIVENESS_PING, response: WS_LIVENESS_PONG },
+    "an inexact pair would silently start waking the object again",
+  );
+});
+
+test("the client's liveness frame is byte-identical to the registered request", () => {
+  // The transport serializes the typed frame; auto-response matches on the exact
+  // string, so a key-order or spacing change here breaks the optimisation silently.
+  assert.equal(JSON.stringify({ type: "lp" }), WS_LIVENESS_PING);
+});
+
+test("a liveness frame that reaches the handler is answered without touching the room", async () => {
+  const h = await makeLobby();
+  const storageOpsBefore = h.state.storage.map.size;
+  const attachmentsBefore = h.host.attachmentWrites;
+  h.host.sent.length = 0;
+
+  // The fallback path: a runtime without auto-response delivers this to the handler,
+  // where it must stay a no-op reply rather than an error.
+  await h.send(h.host, { type: "lp" });
+
+  assert.equal(h.host.sent.length, 1, "exactly one reply");
+  assert.equal(JSON.stringify(h.host.sent[0]), WS_LIVENESS_PONG);
+  assert.equal(h.host.last("error"), undefined, "must never read as a bad frame");
+  assert.equal(h.host.attachmentWrites, attachmentsBefore, "and must cost no storage operation");
+  assert.equal(h.state.storage.map.size, storageOpsBefore);
+});
+
+test("many liveness frames never touch room state", async () => {
+  const h = await makeLobby();
+  const snapshotsBefore = h.guest.sent.filter((f) => f.type === "snapshot").length;
+  for (let i = 0; i < 12; i++) {
+    advance(RATE_WINDOW_MS + 100);
+    await h.send(h.host, { type: "lp" });
+  }
+  assert.equal(h.guest.sent.filter((f) => f.type === "snapshot").length, snapshotsBefore, "no broadcast, no mutation");
+  assert.equal(h.host.snapshot().phase, "LOBBY");
+});
+
+test("an OLD client's timestamped ping still gets a server clock", async () => {
+  const h = await makeLobby();
+  const sentAt = Date.now();
+  await h.send(h.host, { type: "ping", clientSentAt: sentAt });
+  const pong = h.host.last("pong");
+  assert.equal(pong?.clientSentAt, sentAt);
+  assert.equal(typeof pong?.serverNow, "number", "clock-offset estimation depends on this");
+});
+
+test("an OLD client's 10-second ping cadence still works against the new server", async () => {
+  const h = await makeLobby();
+  for (let i = 0; i < 10; i++) {
+    advance(10_000);
+    await h.send(h.host, { type: "ping", clientSentAt: Date.now() });
+  }
+  assert.equal(h.host.sent.filter((f) => f.type === "pong").length, 10);
+  assert.equal(h.host.last("error"), undefined);
+});
+
+test("an old and a new client can play the same room together", async () => {
+  const h = await makeRoom();
+  const oldClient = h.connect();
+  const newClient = h.connect();
+  await h.join(oldClient, "Old", "player-old");
+  await h.join(newClient, "New", "player-new");
+
+  // Old keeps pinging with timestamps; new uses the liveness frame.
+  for (let i = 0; i < 3; i++) {
+    advance(RATE_WINDOW_MS + 100);
+    await h.send(oldClient, { type: "ping", clientSentAt: Date.now() });
+    await h.send(newClient, { type: "lp" });
+  }
+  assert.equal(oldClient.last("error"), undefined);
+  assert.equal(newClient.last("error"), undefined);
+
+  // And the game still runs for both.
+  await h.send(oldClient, { type: "start", rounds: 3, difficulty: "easy" });
+  assert.equal(oldClient.snapshot().phase, "COUNTDOWN");
+  assert.equal(newClient.snapshot().phase, "COUNTDOWN");
+  advance(MP_TIMINGS.COUNTDOWN_MS);
+  await h.fireAlarm();
+  assert.equal(newClient.snapshot().phase, "SHOW_SHAPE");
+  assert.equal(oldClient.snapshot().phase, "SHOW_SHAPE");
+});
+
+test("liveness frames are still rate limited", async () => {
+  const h = await makeLobby();
+  freshWindow(h.host);
+  for (let i = 0; i < 20; i++) await h.send(h.host, { type: "lp" });
+  assert.equal(h.host.last("error"), undefined);
+  await h.send(h.host, { type: "lp" });
+  assert.equal(h.host.last("error")?.code, "rate_limited", "the cheap frame must not be a flood loophole");
 });

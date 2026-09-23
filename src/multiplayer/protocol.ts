@@ -184,6 +184,29 @@ export function parseWirePath(value: unknown): WirePath | null {
 
 // ------------------------------------------------------- client -> server ----
 
+/**
+ * The liveness ping/pong pair, as EXACT wire strings (B1).
+ *
+ * Cloudflare's WebSocket hibernation runtime can answer one specific message with
+ * one specific reply without running the Durable Object at all
+ * (state.setWebSocketAutoResponse). That requires a byte-exact match on both sides,
+ * which is why these are frozen strings rather than anything serialized at runtime -
+ * change a space and the frame silently starts waking the object again.
+ *
+ * Why this exists: the client used to send a clock ping every 10 seconds purely to
+ * keep its offset fresh, and each one was a billed DO request - roughly 60% of all
+ * RoomDO requests on 23 Sep 2026, for a socket that was doing nothing. Liveness and
+ * clock sync are now separate concerns: this frame answers "still there?" for free,
+ * and the timestamped `ping` below is sent only when the offset actually needs
+ * refreshing.
+ *
+ * The server still HANDLES "lp" in webSocketMessage as a plain no-op reply. Auto
+ * response is an optimisation, not a contract: if it is unavailable or unregistered
+ * the frame must degrade to a cheap handled message, never to a "bad_frame" error.
+ */
+export const WS_LIVENESS_PING = '{"type":"lp"}';
+export const WS_LIVENESS_PONG = '{"type":"lP"}';
+
 export type ClientFrame =
   | { type: "join"; nickname: string; playerId: string; playerToken?: string }
   | { type: "setNickname"; nickname: string }
@@ -198,7 +221,13 @@ export type ClientFrame =
   | { type: "submit"; roundIndex: number; path: WirePath | null }
   | { type: "next" }
   | { type: "rematch" }
-  | { type: "ping"; clientSentAt?: number };
+  | { type: "ping"; clientSentAt?: number }
+  /**
+   * Liveness only - "is this socket still connected". Carries no timestamp and
+   * expects no information back, which is exactly what lets the runtime answer it
+   * without waking the Durable Object (see WS_LIVENESS_PING).
+   */
+  | { type: "lp" };
 
 /** Frames only the host may send. Everything else is allowed from any joined player. */
 export const HOST_ONLY_FRAMES: ReadonlySet<string> = new Set(["configure", "start", "next", "rematch"]);
@@ -271,6 +300,8 @@ export function parseClientFrame(raw: unknown): ClientFrame | null {
     }
     case "start":
       return { type: "start" };
+    case "lp":
+      return { type: "lp" };
     case "submit": {
       if (typeof f.roundIndex !== "number" || !Number.isInteger(f.roundIndex) || f.roundIndex < 0) return null;
       // Explicit null is the empty submission. `undefined` is not: a missing

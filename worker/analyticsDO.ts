@@ -122,6 +122,23 @@ const COUNTRY_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
 // specifically times out while Germany errors. Both halves are closed sets, so the
 // combined key cannot be arbitrary.
 const COUNTRY_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad_unavailable"]);
+// Country and app version crossed, because the two existing dimensions are separate
+// maps and therefore cannot answer the question that decides whether an Android
+// release is needed: are the Iranian failures coming from 0.48.4, from 0.50.0, or
+// from both equally? byCountry says where, byAppVersion says which build, neither
+// says both. Same four events as byCountry - the two rewarded ones plus the two
+// offer-shown denominators, because a version with more players in a country will
+// always produce more failures there.
+const COUNTRY_VERSION_BREAKOUT_EVENTS = COUNTRY_BREAKOUT_EVENTS;
+const COUNTRY_VERSION_REASON_BREAKOUT_EVENTS = COUNTRY_REASON_BREAKOUT_EVENTS;
+// appVersion is FORMAT-guarded, not value-guarded (normalizeAppVersion accepts any
+// d.d.d), so unlike country and reason it has no closed domain - which is exactly why
+// both crossed maps are capped rather than trusted. The cap, not the input, is the
+// bound. Overflow uses the same dedicated OTHER as byCountryReason: ZZ means unknown
+// COUNTRY, "unknown" means unknown VERSION, OTHER means the map filled up. Three
+// different facts, three different keys, never merged.
+const MAX_COUNTRY_VERSION_KEYS = 150;
+const MAX_COUNTRY_VERSION_REASON_KEYS = 200;
 /** The internal header index.ts puts the normalized code in. Not a client contract - anything a client sends under it is re-normalized and, being unvalidatable, lands in UNKNOWN_COUNTRY like any other junk. */
 export const COUNTRY_HEADER = "x-cydi-country";
 /** Country could not be determined: absent, Cloudflare's XX/T1, or malformed. */
@@ -229,6 +246,13 @@ type EventCounters = {
   // buckets recorded before these fields existed.
   byCountry?: Record<string, number>;
   byCountryReason?: Record<string, number>;
+  // COUNTRY_VERSION_BREAKOUT_EVENTS / COUNTRY_VERSION_REASON_BREAKOUT_EVENTS only -
+  // the same country, crossed with the app version, and for failures with the reason
+  // too: "IR|0.50.0", "IR|0.50.0|timeout". Capped rather than domain-bounded because
+  // appVersion is only format-guarded. Absent on every other event, and on day buckets
+  // recorded before these fields existed.
+  byCountryAppVersion?: Record<string, number>;
+  byCountryAppVersionReason?: Record<string, number>;
   // ATTRIBUTION_BREAKOUT_EVENTS only - where the visit that produced this event came
   // from. `bySource` is the campaign twin of byPlatform; byCampaign/byUtmContent split
   // it further by utm_campaign / utm_content. All three are capped at
@@ -403,6 +427,24 @@ export function incrementEvent(
       COUNTRY_REASON_OVERFLOW,
     );
   }
+  // The crossed pair. `appVersion` arrives already normalized by handleEvent, so an
+  // unknown build is the literal "unknown" rather than a missing segment.
+  if (COUNTRY_VERSION_BREAKOUT_EVENTS.has(eventName)) {
+    updated.byCountryAppVersion = incrementCappedKeyMap(
+      existing.byCountryAppVersion,
+      `${normalizeCountry(country)}|${appVersion}`,
+      MAX_COUNTRY_VERSION_KEYS,
+      COUNTRY_REASON_OVERFLOW,
+    );
+  }
+  if (COUNTRY_VERSION_REASON_BREAKOUT_EVENTS.has(eventName) && isAdFailureReason(params.reason)) {
+    updated.byCountryAppVersionReason = incrementCappedKeyMap(
+      existing.byCountryAppVersionReason,
+      `${normalizeCountry(country)}|${appVersion}|${params.reason}`,
+      MAX_COUNTRY_VERSION_REASON_KEYS,
+      COUNTRY_REASON_OVERFLOW,
+    );
+  }
   if (FUNNEL_EVENTS.has(eventName)) {
     const gameType = params.gameType as string;
     const category = params.category as string;
@@ -452,6 +494,8 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byRoundIndex: mergeKeyMaps(ae.byRoundIndex, be.byRoundIndex),
       byCountry: mergeKeyMaps(ae.byCountry, be.byCountry),
       byCountryReason: mergeKeyMaps(ae.byCountryReason, be.byCountryReason),
+      byCountryAppVersion: mergeKeyMaps(ae.byCountryAppVersion, be.byCountryAppVersion),
+      byCountryAppVersionReason: mergeKeyMaps(ae.byCountryAppVersionReason, be.byCountryAppVersionReason),
       bySource: mergeKeyMaps(ae.bySource, be.bySource),
       byCampaign: mergeKeyMaps(ae.byCampaign, be.byCampaign),
       byUtmContent: mergeKeyMaps(ae.byUtmContent, be.byUtmContent),

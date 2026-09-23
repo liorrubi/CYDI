@@ -600,3 +600,120 @@ test("adding country leaves byReason, byInstallAge and the pass-play maps untouc
   assert.deepEqual(quit.pp_abandoned?.byRoundIndex, { "2": 1 });
   assert.equal(quit.pp_abandoned?.byCountry, undefined);
 });
+
+// --- Rewarded ads: country crossed with app version --------------------------
+//
+// byCountry and byAppVersion are separate maps, so neither can say whether the
+// Iranian failures come from 0.48.4, from 0.50.0, or from both. These pin the
+// crossed keys, and the three fallbacks that must never be conflated: ZZ is an
+// unknown COUNTRY, "unknown" is an unknown VERSION, OTHER is cap overflow.
+
+test("country and app version are crossed on the four rewarded events", () => {
+  const ir50 = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.deepEqual(ir50.rewarded_ad_unavailable?.byCountryAppVersion, { "IR|0.50.0": 1 });
+  assert.deepEqual(ir50.rewarded_ad_unavailable?.byCountryAppVersionReason, { "IR|0.50.0|timeout": 1 });
+
+  const ir48 = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "sdk_error" }, "android", "0.48.4", "abc1234", undefined, "IR");
+  assert.deepEqual(ir48.rewarded_ad_unavailable?.byCountryAppVersion, { "IR|0.48.4": 1 });
+  assert.deepEqual(ir48.rewarded_ad_unavailable?.byCountryAppVersionReason, { "IR|0.48.4|sdk_error": 1 });
+
+  const de50 = incrementEvent({}, "rewarded_ad_loaded", { ...PLACEMENT }, "android", "0.50.0", "abc1234", undefined, "DE");
+  assert.deepEqual(de50.rewarded_ad_loaded?.byCountryAppVersion, { "DE|0.50.0": 1 });
+  assert.equal(de50.rewarded_ad_loaded?.byCountryAppVersionReason, undefined, "loaded carries no reason");
+
+  for (const name of OFFER_EVENTS) {
+    const offer = incrementEvent({}, name, { ...PLACEMENT }, "android", "0.50.0", "abc1234", undefined, "DE");
+    assert.deepEqual(offer[name]?.byCountryAppVersion, { "DE|0.50.0": 1 }, name + " is a denominator");
+    assert.equal(offer[name]?.byCountryAppVersionReason, undefined);
+  }
+});
+
+test("ZZ, unknown and OTHER mean three different things", () => {
+  // Unknown country, known version.
+  const noCountry = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "XX");
+  assert.deepEqual(noCountry.rewarded_ad_unavailable?.byCountryAppVersion, { "ZZ|0.50.0": 1 });
+
+  // Known country, unknown version - a client that predates the appVersion field.
+  const noVersion = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", undefined, undefined, undefined, "IR");
+  assert.deepEqual(noVersion.rewarded_ad_unavailable?.byCountryAppVersion, { "IR|unknown": 1 });
+  assert.deepEqual(noVersion.rewarded_ad_unavailable?.byCountryAppVersionReason, { "IR|unknown|timeout": 1 });
+
+  // Neither.
+  const neither = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "no_fill" }, "android", undefined, undefined, undefined, "T1");
+  assert.deepEqual(neither.rewarded_ad_unavailable?.byCountryAppVersion, { "ZZ|unknown": 1 });
+  assert.deepEqual(neither.rewarded_ad_unavailable?.byCountryAppVersionReason, { "ZZ|unknown|no_fill": 1 });
+});
+
+test("every reason crosses cleanly, and an invalid one opens no crossed key", () => {
+  let c = {};
+  for (const reason of ["timeout", "sdk_error", "no_fill", "timeout"] as const) {
+    c = incrementEvent(c, "rewarded_ad_unavailable", { ...PLACEMENT, reason }, "android", "0.50.0", "abc1234", undefined, "IR");
+  }
+  const e = (c as Record<string, { byCountryAppVersionReason?: Record<string, number>; byCountryAppVersion?: Record<string, number> }>).rewarded_ad_unavailable;
+  assert.deepEqual(e.byCountryAppVersionReason, { "IR|0.50.0|timeout": 2, "IR|0.50.0|sdk_error": 1, "IR|0.50.0|no_fill": 1 });
+  assert.deepEqual(e.byCountryAppVersion, { "IR|0.50.0": 4 }, "the pair counts every event regardless of reason");
+
+  const bad = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "kaboom" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.equal(bad.rewarded_ad_unavailable?.byCountryAppVersionReason, undefined);
+  assert.deepEqual(bad.rewarded_ad_unavailable?.byCountryAppVersion, { "IR|0.50.0": 1 }, "the event still counts");
+});
+
+test("appVersion is only format-guarded, so the crossed maps are bounded by their cap", () => {
+  // 160 distinct synthetic versions against one country - the cap, not the input, is
+  // what stops the map growing.
+  let c = {};
+  for (let i = 0; i < 160; i += 1) {
+    c = incrementEvent(c, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", `1.${i % 100}.${i}`, "abc1234", undefined, "IR");
+  }
+  const map = (c as Record<string, { byCountryAppVersion?: Record<string, number> }>).rewarded_ad_unavailable.byCountryAppVersion!;
+  assert.equal(Object.keys(map).length, 151, "150 real keys plus OTHER");
+  assert.ok(map.OTHER >= 1);
+  assert.equal(map.ZZ, undefined, "overflow is not the unknown-country key");
+  assert.equal(map.unknown, undefined, "overflow is not the unknown-version key");
+});
+
+test("unrelated events get no crossed breakdowns", () => {
+  const names = ["app_open", "game_started", "pp_abandoned", "rewarded_ad_requested", "first_open"] as const;
+  for (const name of names) {
+    const c = incrementEvent({}, name, { gameType: "shapeChallenge", placement: "shape_challenge_double_reward", roundIndex: 1, playerCount: 2, roundCount: 10, installAge: "h0_24" }, "android", "0.50.0", "abc1234", undefined, "IR");
+    assert.equal(c[name]?.byCountryAppVersion, undefined, name + " gets no byCountryAppVersion");
+    assert.equal(c[name]?.byCountryAppVersionReason, undefined, name + " gets no byCountryAppVersionReason");
+  }
+});
+
+test("the crossed maps survive the merge a range report is built from", () => {
+  const day1 = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  const day2 = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  const day3 = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "sdk_error" }, "android", "0.48.4", "abc1234", undefined, "DE");
+  const merged = mergeCounters(mergeCounters(day1, day2), day3);
+  assert.deepEqual(merged.rewarded_ad_unavailable?.byCountryAppVersion, { "IR|0.50.0": 2, "DE|0.48.4": 1 });
+  assert.deepEqual(merged.rewarded_ad_unavailable?.byCountryAppVersionReason, { "IR|0.50.0|timeout": 2, "DE|0.48.4|sdk_error": 1 });
+
+  // Buckets written before these fields existed stay without them.
+  const legacyA = { rewarded_ad_unavailable: { total: 5 } };
+  const legacyMerged = mergeCounters(legacyA, { rewarded_ad_unavailable: { total: 1 } });
+  assert.equal(legacyMerged.rewarded_ad_unavailable?.byCountryAppVersion, undefined);
+  assert.equal(legacyMerged.rewarded_ad_unavailable?.byCountryAppVersionReason, undefined);
+  assert.equal(legacyMerged.rewarded_ad_unavailable?.total, 6);
+
+  const mixed = mergeCounters(legacyA, day3);
+  assert.deepEqual(mixed.rewarded_ad_unavailable?.byCountryAppVersion, { "DE|0.48.4": 1 });
+  assert.equal(mixed.rewarded_ad_unavailable?.total, 6);
+});
+
+test("crossing changes nothing about the dimensions that already existed", () => {
+  const e = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "IR").rewarded_ad_unavailable!;
+  assert.deepEqual(e.byCountry, { IR: 1 }, "byCountry unchanged");
+  assert.deepEqual(e.byCountryReason, { "IR|timeout": 1 }, "byCountryReason unchanged");
+  assert.deepEqual(e.byAppVersion, { "0.50.0": 1 }, "byAppVersion unchanged");
+  assert.deepEqual(e.byReason, { timeout: 1 }, "byReason unchanged");
+  assert.deepEqual(e.byPlatform, { android: 1 });
+  assert.equal(e.total, 1);
+
+  const firstOpen = incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.deepEqual(firstOpen.first_open?.byInstallAge, { h0_24: 1 }, "byInstallAge unchanged");
+
+  const quit = incrementEvent({}, "pp_abandoned", { roundIndex: 2, playerCount: 2, roundCount: 10 }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.deepEqual(quit.pp_abandoned?.byRoundCount, { "10": 1 }, "pass-play unchanged");
+  assert.deepEqual(quit.pp_abandoned?.byRoundIndex, { "2": 1 });
+});

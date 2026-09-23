@@ -1,4 +1,10 @@
 import { AnalyticsDO, COUNTRY_HEADER, normalizeCountry } from "./analyticsDO";
+import {
+  ANALYTICS_BREAKER_KV_KEY,
+  isAnalyticsIngestDisabled,
+  isValidAnalyticsBreakerConfig,
+  parseAnalyticsBreaker,
+} from "./analyticsBreaker";
 import { DailyChallengeDO } from "./dailyChallengeDO";
 import { RoomDO } from "./roomDO";
 import { parseShareRecord, renderShareImage, shareTitleAndDescription } from "./shareImage";
@@ -460,6 +466,46 @@ async function handleAdsConfigPut(request: Request, env: Env): Promise<Response>
   return jsonNoStore({ ok: true, enabled: parsed.enabled });
 }
 
+// ---------- Analytics ingest circuit breaker ----------
+// The emergency lever described in analyticsBreaker.ts. Admin-only on BOTH verbs,
+// unlike the ads switch: no client reads this, so there is no reason to publish
+// whether telemetry is currently being shed.
+
+async function handleAnalyticsBreakerGet(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  const raw = await env.CONTENT_KV.get(ANALYTICS_BREAKER_KV_KEY);
+  // Reports the EFFECTIVE value, not the stored text: an unparseable value means
+  // ingest is running, and that is what the operator needs to see.
+  return jsonNoStore({ disabled: parseAnalyticsBreaker(raw), stored: raw });
+}
+
+async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    return jsonNoStore({ error: "invalid json" }, 400);
+  }
+  if (!isValidAnalyticsBreakerConfig(parsed)) {
+    return jsonNoStore({ error: "body must be exactly { disabled: boolean }" }, 400);
+  }
+  await env.CONTENT_KV.put(ANALYTICS_BREAKER_KV_KEY, JSON.stringify(parsed));
+  return jsonNoStore({ ok: true, disabled: parsed.disabled });
+}
+
+/**
+ * Ingest, unless the breaker says otherwise. The check happens HERE rather than
+ * inside the Durable Object on purpose: the whole point is to not reach the DO at
+ * all, since a DO request is itself the scarce resource. 204 (not 200) so the
+ * client's fire-and-forget POST succeeds and no retry is provoked - a shed event
+ * is deliberately lost, not deferred.
+ */
+export async function handleAnalyticsEvent(request: Request, env: Env): Promise<Response> {
+  if (await isAnalyticsIngestDisabled(env.CONTENT_KV)) return new Response(null, { status: 204 });
+  return forwardToAnalyticsDO(request, env, "/event");
+}
+
 // Every /api/daily/* request is forwarded to the single global DailyChallengeDO
 // instance, which processes requests one at a time (see dailyChallengeDO.ts).
 function forwardToDailyDO(request: Request, env: Env, path: string): Promise<Response> {
@@ -580,7 +626,12 @@ export default {
       return forwardToRoomDO(request, env, roomMatch[1], `/${roomMatch[2]}`);
     }
 
-    if (url.pathname === "/api/analytics/event" && request.method === "POST") return forwardToAnalyticsDO(request, env, "/event");
+    if (url.pathname === "/api/config/analytics-breaker") {
+      if (request.method === "GET") return handleAnalyticsBreakerGet(request, env);
+      if (request.method === "PUT") return handleAnalyticsBreakerPut(request, env);
+    }
+
+    if (url.pathname === "/api/analytics/event" && request.method === "POST") return handleAnalyticsEvent(request, env);
     if (url.pathname === "/api/analytics/report" && request.method === "GET") return forwardToAnalyticsDO(request, env, "/report");
 
     // Short campaign aliases (/s/cat). The tags come from the server-side map, never

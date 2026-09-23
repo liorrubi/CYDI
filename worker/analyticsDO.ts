@@ -193,6 +193,19 @@ const MAX_ATTRIBUTION_KEYS = 50;
 // (Durable Object storage allows up to 128 keys per get; a month is plenty for the admin page).
 const MAX_RANGE_DAYS = 31;
 
+/** The stored index of every date that has ever recorded an event. */
+const DAYS_KEY = "days";
+/**
+ * How long counter mutations may sit in memory before being written (see the write
+ * buffer on AnalyticsDO).
+ *
+ * The trade is linear and deliberate: longer means fewer rows written and a longer
+ * window of counters an eviction can lose. 15s puts the loss ceiling at roughly 45
+ * events even at the 23 Sep 2026 peak, while cutting rows written by ~90%. It is not
+ * tuned any finer than that because the risk, not the saving, is what bounds it.
+ */
+const FLUSH_INTERVAL_MS = 15_000;
+
 type EventCounters = {
   total: number;
   // Android app vs. website, for every event (the split is only ever 3-4 keys, so
@@ -522,9 +535,48 @@ export class AnalyticsDO {
   private state: DurableObjectState;
   private env: Env;
 
+  // --- write buffer -------------------------------------------------------
+  //
+  // Counters used to be read and written on EVERY event: 4 reads and 2-3 writes
+  // per `/event`, which at ~50k events/day is ~200k rows read and ~101k rows
+  // written - the whole Free-plan budget, spent by one endpoint (23 Sep 2026).
+  //
+  // Nothing about WHAT is counted changes here; only when it is persisted. The
+  // live counters are held in memory, mutated in place by each event, and
+  // written out on a timer. Because this is a SINGLE global instance
+  // (idFromName("analytics")) there is exactly one writer and no coordination
+  // problem - the same property that already made read-modify-write safe.
+  //
+  // The cost is bounded and deliberate: an eviction or crash loses at most one
+  // flush interval of counters. These are aggregate totals, not records, so the
+  // failure mode is a slightly low number rather than a missing event.
+  private counterCache = new Map<string, AllCounters>();
+  private usageCache = new Map<string, UsageBucket>();
+  private days: string[] = [];
+  /** Storage keys whose in-memory value is newer than what is stored. */
+  private dirty = new Set<string>();
+  private alarmPending = false;
+  /** The Israel date every buffered mutation belongs to; see the rollover flush in handleEvent. */
+  private bufferDate: string | null = null;
+
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.env = env;
+    // Nothing may read a half-loaded buffer: blockConcurrencyWhile holds every
+    // request (and the alarm) until the since-launch totals and the day index
+    // are in memory. Day/usage buckets are NOT loaded here - there is one per
+    // day since launch and only today's is ever written, so they are faulted in
+    // on first touch instead.
+    state.blockConcurrencyWhile(async () => {
+      const [external, internal, days] = await Promise.all([
+        state.storage.get<AllCounters>(this.alltimeStorageKey("external")),
+        state.storage.get<AllCounters>(this.alltimeStorageKey("internal")),
+        state.storage.get<string[]>(DAYS_KEY),
+      ]);
+      if (external) this.counterCache.set(this.alltimeStorageKey("external"), external);
+      if (internal) this.counterCache.set(this.alltimeStorageKey("internal"), internal);
+      this.days = days ?? [];
+    });
   }
 
   private dayStorageKey(dateKey: string, audience: AnalyticsAudience): string {
@@ -539,12 +591,84 @@ export class AnalyticsDO {
     return audience === "internal" ? "alltime:internal" : "alltime";
   }
 
-  private async recordDayIndex(dateKey: string): Promise<void> {
-    const days = (await this.state.storage.get<string[]>("days")) ?? [];
-    if (days.includes(dateKey)) return;
-    days.push(dateKey);
-    days.sort();
-    await this.state.storage.put("days", days);
+  /** The live counters for a key, faulted in from storage exactly once per instance. */
+  private async loadCounters(key: string): Promise<AllCounters> {
+    const cached = this.counterCache.get(key);
+    if (cached !== undefined) return cached;
+    const stored = (await this.state.storage.get<AllCounters>(key)) ?? {};
+    this.counterCache.set(key, stored);
+    return stored;
+  }
+
+  private async loadUsage(key: string): Promise<UsageBucket> {
+    const cached = this.usageCache.get(key);
+    if (cached !== undefined) return cached;
+    const stored = (await this.state.storage.get<UsageBucket>(key)) ?? emptyUsageBucket();
+    this.usageCache.set(key, stored);
+    return stored;
+  }
+
+  /**
+   * Arm the flush timer, once per dirty cycle.
+   *
+   * The alarm is the ONLY storage operation an event may cost, and only the
+   * first event of a cycle pays it - calling setAlarm() per event would write a
+   * row per event and give back nothing. A stale alarm left armed by an evicted
+   * instance is harmless: it fires, finds nothing dirty, and does nothing, which
+   * is why the constructor does not spend a read on getAlarm().
+   */
+  private async armFlush(): Promise<void> {
+    if (this.alarmPending || this.dirty.size === 0) return;
+    this.alarmPending = true;
+    await this.state.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
+  }
+
+  /**
+   * Persist every buffered key in one multi-key put.
+   *
+   * The dirty set is snapshotted and cleared BEFORE awaiting, so an event that
+   * arrives mid-write re-marks its own key and is picked up by the next cycle.
+   * That is safe precisely because each entry persists the WHOLE current value
+   * rather than a delta: a value mutated during the write is never half-saved,
+   * the next flush simply writes the newer whole. A failed put puts the keys
+   * back and rethrows, so the runtime retries the alarm instead of silently
+   * dropping the buffer.
+   */
+  private async flush(): Promise<void> {
+    if (this.dirty.size === 0) return;
+    const keys = [...this.dirty];
+    this.dirty.clear();
+    const entries: Record<string, unknown> = {};
+    for (const key of keys) {
+      if (key === DAYS_KEY) entries[key] = this.days;
+      else if (this.usageCache.has(key)) entries[key] = this.usageCache.get(key);
+      else entries[key] = this.counterCache.get(key);
+    }
+    try {
+      await this.state.storage.put(entries);
+    } catch (err) {
+      for (const key of keys) this.dirty.add(key);
+      throw err;
+    }
+  }
+
+  /** Flush timer. Re-arms itself only if work arrived while the write was in flight. */
+  async alarm(): Promise<void> {
+    this.alarmPending = false;
+    await this.flush();
+    await this.armFlush();
+  }
+
+  /** After a date rollover the previous day's buckets are persisted and no longer needed in memory; the two since-launch totals stay. */
+  private pruneDayCaches(currentDate: string): void {
+    for (const key of [...this.counterCache.keys()]) {
+      if ((key.startsWith("day:") || key.startsWith("dayint:")) && !key.endsWith(`:${currentDate}`)) {
+        this.counterCache.delete(key);
+      }
+    }
+    for (const key of [...this.usageCache.keys()]) {
+      if (key !== this.usageStorageKey(currentDate)) this.usageCache.delete(key);
+    }
   }
 
   /** Validates the whole event first; only touches storage (and only then) if it's fully valid - no partial save. */
@@ -577,29 +701,48 @@ export class AnalyticsDO {
     const attribution = b?.attribution === undefined ? undefined : normalizeAttribution(b.attribution);
 
     const dateKey = israelDateKey(Date.now());
+    // A buffer must never span two day buckets. Whatever is pending belongs to the
+    // previous Israel day, so it is persisted before the first event of the new one
+    // is counted - otherwise a flush landing after midnight would be attributed by
+    // its own key, which is right, but yesterday's tail would sit unwritten behind
+    // today's traffic indefinitely.
+    if (this.bufferDate !== null && this.bufferDate !== dateKey) {
+      await this.flush();
+      this.pruneDayCaches(dateKey);
+    }
+    this.bufferDate = dateKey;
+
     const alltimeKey = this.alltimeStorageKey(audience);
     const dayKey = this.dayStorageKey(dateKey, audience);
     const usageKey = this.usageStorageKey(dateKey);
     const [alltime, dayCounters, usage] = await Promise.all([
-      this.state.storage.get<AllCounters>(alltimeKey),
-      this.state.storage.get<AllCounters>(dayKey),
-      this.state.storage.get<UsageBucket>(usageKey),
+      this.loadCounters(alltimeKey),
+      this.loadCounters(dayKey),
+      this.loadUsage(usageKey),
     ]);
 
-    const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params, platform, appVersion, appBuild, attribution, country);
-    const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params, platform, appVersion, appBuild, attribution, country);
-    const currentUsage = usage ?? emptyUsageBucket();
-    const updatedUsage = recordUsageIds(currentUsage, audience, platform, installationId, sessionId, attribution);
+    // Identical counter shaping to before - incrementEvent is untouched, and every
+    // dimension (platform, app version/build, attribution, country, the crossed
+    // country maps, funnel and scored breakouts) is produced exactly as it was.
+    this.counterCache.set(alltimeKey, incrementEvent(alltime, eventName, params, platform, appVersion, appBuild, attribution, country));
+    this.counterCache.set(dayKey, incrementEvent(dayCounters, eventName, params, platform, appVersion, appBuild, attribution, country));
+    this.dirty.add(alltimeKey);
+    this.dirty.add(dayKey);
 
-    await Promise.all([
-      this.state.storage.put(alltimeKey, updatedAlltime),
-      this.state.storage.put(dayKey, updatedDay),
-      // Only when this event actually contributed an id nobody sent today - otherwise
-      // every single event would rewrite the whole day's id lists for nothing.
-      updatedUsage === currentUsage ? Promise.resolve() : this.state.storage.put(usageKey, updatedUsage),
-      this.recordDayIndex(dateKey),
-    ]);
+    // Still only when this event actually contributed an id nobody sent today, so a
+    // day's id lists are not re-marked dirty by every event that repeats them.
+    const updatedUsage = recordUsageIds(usage, audience, platform, installationId, sessionId, attribution);
+    if (updatedUsage !== usage) {
+      this.usageCache.set(usageKey, updatedUsage);
+      this.dirty.add(usageKey);
+    }
 
+    if (!this.days.includes(dateKey)) {
+      this.days = [...this.days, dateKey].sort();
+      this.dirty.add(DAYS_KEY);
+    }
+
+    await this.armFlush();
     return json({ ok: true });
   }
 
@@ -610,23 +753,33 @@ export class AnalyticsDO {
    * both well under Durable Object storage's 128-key limit for a single multi-key get.
    */
   private async readDayBuckets(startDate: string, endDate: string): Promise<RangeBuckets> {
-    const days = (await this.state.storage.get<string[]>("days")) ?? [];
-    const inRange = days.filter((day) => day >= startDate && day <= endDate);
+    // The in-memory index, not the stored one: today's date is added the moment its
+    // first event arrives, so a report taken before the first flush of a new day
+    // would otherwise not know that day exists at all.
+    const inRange = this.days.filter((day) => day >= startDate && day <= endDate);
     const result: RangeBuckets = { external: new Map(), internal: new Map(), usage: emptyUsageBucket() };
     if (inRange.length === 0) return result;
 
-    const counterKeys = inRange.flatMap((day) => [this.dayStorageKey(day, "external"), this.dayStorageKey(day, "internal")]);
+    // Anything already in the buffer is authoritative and is not re-read: the cached
+    // value either came from storage or supersedes it.
+    const counterKeys = inRange
+      .flatMap((day) => [this.dayStorageKey(day, "external"), this.dayStorageKey(day, "internal")])
+      .filter((key) => !this.counterCache.has(key));
+    const usageKeys = inRange.map((day) => this.usageStorageKey(day)).filter((key) => !this.usageCache.has(key));
     const [counters, usageBuckets] = await Promise.all([
-      this.state.storage.get<AllCounters>(counterKeys),
-      this.state.storage.get<UsageBucket>(inRange.map((day) => this.usageStorageKey(day))),
+      counterKeys.length > 0 ? this.state.storage.get<AllCounters>(counterKeys) : new Map<string, AllCounters>(),
+      usageKeys.length > 0 ? this.state.storage.get<UsageBucket>(usageKeys) : new Map<string, UsageBucket>(),
     ]);
 
     for (const day of inRange) {
-      const external = counters.get(this.dayStorageKey(day, "external"));
+      const externalKey = this.dayStorageKey(day, "external");
+      const external = this.counterCache.get(externalKey) ?? counters.get(externalKey);
       if (external) result.external.set(day, external);
-      const internal = counters.get(this.dayStorageKey(day, "internal"));
+      const internalKey = this.dayStorageKey(day, "internal");
+      const internal = this.counterCache.get(internalKey) ?? counters.get(internalKey);
       if (internal) result.internal.set(day, internal);
-      const usage = usageBuckets.get(this.usageStorageKey(day));
+      const usageKey = this.usageStorageKey(day);
+      const usage = this.usageCache.get(usageKey) ?? usageBuckets.get(usageKey);
       // Union across days, so an installation that played on three days counts once.
       if (usage) result.usage = mergeUsageBuckets(result.usage, usage);
     }
@@ -741,19 +894,17 @@ export class AnalyticsDO {
 
   /** The running since-launch totals ("alltime" bucket) that ingestion has always maintained - startDate reports the first day that ever recorded an event. */
   private async handleAlltimeReport(audience: AudienceFilter): Promise<Response> {
-    const [external, internal, days] = await Promise.all([
-      this.state.storage.get<AllCounters>(this.alltimeStorageKey("external")),
-      this.state.storage.get<AllCounters>(this.alltimeStorageKey("internal")),
-      this.state.storage.get<string[]>("days"),
+    // Buffered values, same reasoning as readDayBuckets: the since-launch totals are
+    // held in memory from construction onwards, so reading storage here would report
+    // whatever the last flush happened to have written.
+    const [external, internal] = await Promise.all([
+      this.loadCounters(this.alltimeStorageKey("external")),
+      this.loadCounters(this.alltimeStorageKey("internal")),
     ]);
     const today = israelDateKey(Date.now());
-    const startDate = days?.[0] ?? today;
+    const startDate = this.days[0] ?? today;
     const counts =
-      audience === "external"
-        ? (external ?? {})
-        : audience === "internal"
-          ? (internal ?? {})
-          : mergeCounters(external ?? {}, internal ?? {});
+      audience === "external" ? external : audience === "internal" ? internal : mergeCounters(external, internal);
     // No usage block here on purpose - see buildReport.
     return jsonNoStore(this.buildReport("alltime", startDate, today, audience, counts, null));
   }

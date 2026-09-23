@@ -26,10 +26,13 @@ class FakeWS {
   sent: ServerFrame[] = [];
   attachment: unknown = null;
   closed = false;
+  /** Attachment writes are a storage operation on a hibernatable socket, so the count is the thing under test in the B2 cases below. */
+  attachmentWrites = 0;
   send(raw: string) {
     this.sent.push(JSON.parse(raw) as ServerFrame);
   }
   serializeAttachment(value: unknown) {
+    this.attachmentWrites++;
     this.attachment = structuredClone(value);
   }
   deserializeAttachment() {
@@ -55,6 +58,9 @@ class FakeWS {
 class FakeStorage {
   map = new Map<string, unknown>();
   alarm: number | null = null;
+  /** Alarm operations are storage operations; the B3 cases assert the redundant ones are gone. */
+  setAlarmCalls = 0;
+  deleteAlarmCalls = 0;
   // Clone on both sides so the DO can never accidentally rely on a shared
   // object reference surviving a save/load, the way real serialization can't.
   async get<T>(key: string): Promise<T | undefined> {
@@ -68,9 +74,11 @@ class FakeStorage {
     this.map.clear();
   }
   async setAlarm(time: number) {
+    this.setAlarmCalls++;
     this.alarm = time;
   }
   async deleteAlarm() {
+    this.deleteAlarmCalls++;
     this.alarm = null;
   }
 }
@@ -832,4 +840,140 @@ test("a submit in the grace after the 20s deadline still scores accuracy but no 
   const me = h.host.snapshot().players.find((p) => p.nickname === "Host")!;
   assert.equal(me.roundSpeed, 0);
   assert.ok(me.roundAccuracy! > 80, "the drawing itself still counts");
+});
+
+/** Mirrors RATE_WINDOW_MS in roomDO.ts, which is module-private there. */
+const RATE_WINDOW_MS = 1000;
+
+// ---------------------------------------------------- storage-cost guards (P0.3) ----
+//
+// These do not change what the room does; they guard the two places it was paying
+// storage for nothing. On 23 Sep 2026 a representative game cost ~149 storage
+// operations, ~115 of them attachment writes performed by the 10-second keepalive
+// on its way past the rate limiter.
+
+test("an ordinary frame no longer rewrites the socket attachment", async () => {
+  const h = await makeLobby();
+  const writesAfterJoin = h.host.attachmentWrites;
+
+  for (let i = 0; i < 10; i++) {
+    advance(2_000);
+    await h.send(h.host, { type: "ping", clientSentAt: Date.now() });
+  }
+
+  assert.equal(h.host.attachmentWrites, writesAfterJoin, "a keepalive must cost no storage operation at all");
+  assert.equal(h.host.last("pong")?.type, "pong", "and must still be answered");
+});
+
+/** A clean rate window on a socket that has already spent frames joining, so the counts below are exact. */
+function freshWindow(ws: FakeWS) {
+  advance(RATE_WINDOW_MS + 500);
+  ws.sent.length = 0;
+}
+
+test("rate limiting still trips at RATE_MAX_FRAMES inside one window", async () => {
+  const h = await makeLobby();
+  freshWindow(h.host);
+
+  // 20 frames in the same second are fine; the 21st is not.
+  for (let i = 0; i < 20; i++) await h.send(h.host, { type: "ping", clientSentAt: Date.now() });
+  assert.equal(h.host.last("error"), undefined, "20 frames inside the window are allowed");
+
+  await h.send(h.host, { type: "ping", clientSentAt: Date.now() });
+  assert.equal(h.host.last("error")?.code, "rate_limited");
+});
+
+test("the rate window still resets once it has elapsed", async () => {
+  const h = await makeLobby();
+  freshWindow(h.host);
+  for (let i = 0; i < 21; i++) await h.send(h.host, { type: "ping", clientSentAt: Date.now() });
+  assert.equal(h.host.last("error")?.code, "rate_limited", "precondition: the window is used up");
+
+  freshWindow(h.host);
+  await h.send(h.host, { type: "ping", clientSentAt: Date.now() });
+  assert.equal(h.host.last("error"), undefined, "a new window starts clean");
+});
+
+test("rate limiting is per socket, not shared across the room", async () => {
+  const h = await makeLobby();
+  freshWindow(h.host);
+  freshWindow(h.guest);
+  for (let i = 0; i < 21; i++) await h.send(h.host, { type: "ping", clientSentAt: Date.now() });
+  assert.equal(h.host.last("error")?.code, "rate_limited");
+  await h.send(h.guest, { type: "ping", clientSentAt: Date.now() });
+  assert.equal(h.guest.last("error"), undefined, "the guest is unaffected by the host flooding");
+});
+
+test("a seat change still persists the attachment", async () => {
+  const h = await makeRoom();
+  const ws = h.connect();
+  const before = ws.attachmentWrites;
+  await h.join(ws, "Host", "player-host");
+  assert.ok(ws.attachmentWrites > before, "the seat must survive hibernation, so joining has to write it");
+  assert.equal((ws.attachment as { seatId: string | null }).seatId, ws.last("joined")?.seatId);
+});
+
+test("a reconnecting socket recovers its seat from the attachment alone", async () => {
+  const h = await makeLobby();
+  const seatId = (h.host.attachment as { seatId: string }).seatId;
+  const token = h.host.last("joined")!.playerToken;
+
+  // The old socket goes away; a fresh one reclaims the seat, which is the only
+  // thing the attachment has ever needed to carry across hibernation.
+  h.host.closed = true;
+  const revived = h.connect();
+  await h.join(revived, "Host", "player-host", token);
+  assert.equal((revived.attachment as { seatId: string }).seatId, seatId);
+  assert.equal(revived.last("joined")?.seatId, seatId);
+});
+
+test("rate limiting is enforced from scratch for a socket whose counter was never persisted", async () => {
+  const h = await makeLobby();
+  // A socket the object has no in-memory window for (the post-hibernation case):
+  // its attachment carries only a seat, and the limiter must still hold.
+  const fresh = h.connect();
+  advance(RATE_WINDOW_MS + 500);
+  for (let i = 0; i < 20; i++) await h.send(fresh, { type: "ping", clientSentAt: Date.now() });
+  assert.equal(fresh.last("error"), undefined);
+  await h.send(fresh, { type: "ping", clientSentAt: Date.now() });
+  assert.equal(fresh.last("error")?.code, "rate_limited");
+});
+
+test("an unchanged deadline performs no alarm storage operation", async () => {
+  const h = await makeLobby();
+  await h.send(h.host, { type: "start", rounds: 3, difficulty: "easy" });
+  const setCalls = h.state.storage.setAlarmCalls;
+  const deleteCalls = h.state.storage.deleteAlarmCalls;
+  const deadline = h.state.storage.alarm;
+
+  // Lobby chatter that changes the snapshot but not any deadline.
+  await h.send(h.guest, { type: "ping", clientSentAt: Date.now() });
+  await h.send(h.guest, { type: "ping", clientSentAt: Date.now() });
+
+  assert.equal(h.state.storage.setAlarmCalls, setCalls, "the same deadline must not be written twice");
+  assert.equal(h.state.storage.deleteAlarmCalls, deleteCalls);
+  assert.equal(h.state.storage.alarm, deadline, "and the armed deadline is unchanged");
+});
+
+test("a changed deadline is still scheduled", async () => {
+  const h = await makeLobby();
+  const before = h.state.storage.alarm;
+  await h.send(h.host, { type: "start", rounds: 3, difficulty: "easy" });
+  assert.notEqual(h.state.storage.alarm, before, "starting a game arms the countdown deadline");
+  assert.equal(h.host.snapshot().phase, "COUNTDOWN");
+
+  const countdownDeadline = h.state.storage.alarm;
+  advance(MP_TIMINGS.COUNTDOWN_MS);
+  await h.fireAlarm();
+  assert.equal(h.host.snapshot().phase, "SHOW_SHAPE");
+  assert.notEqual(h.state.storage.alarm, countdownDeadline, "and each phase re-arms for its own deadline");
+});
+
+test("a submit that does not move the deadline does not re-arm the alarm", async () => {
+  const h = await makeDrawing();
+  const setCalls = h.state.storage.setAlarmCalls;
+  const shapeId = h.host.snapshot().shapeId!;
+  await h.send(h.host, { type: "submit", roundIndex: 0, path: perfectAttempt(shapeId) });
+  assert.equal(h.host.snapshot().phase, "DRAWING", "one of two players has submitted; the window stands");
+  assert.equal(h.state.storage.setAlarmCalls, setCalls, "the drawing deadline did not move");
 });

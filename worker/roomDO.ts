@@ -101,8 +101,15 @@ type RoomState = {
   emptySince: number | null;
 };
 
-/** What a socket carries across hibernation. */
-type SocketMeta = { seatId: string | null; rateWindowStart: number; rateCount: number };
+/**
+ * What a socket carries across hibernation.
+ *
+ * The seat is the whole of it. Rate-limit bookkeeping used to live here too and was
+ * rewritten on every inbound frame; it is now in-memory only (see RoomDO.rateWindows).
+ * An attachment written by the previous deploy still carries those two extra fields
+ * and deserializes fine - only `seatId` is ever read.
+ */
+type SocketMeta = { seatId: string | null };
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
@@ -120,6 +127,31 @@ function newToken(): string {
 
 export class RoomDO {
   private state: DurableObjectState;
+
+  /**
+   * Per-socket frame counter for the CURRENT rate window, held in memory instead
+   * of in the hibernation attachment.
+   *
+   * It used to be serialized into the attachment on every inbound frame, which
+   * made a 10-second keepalive cost a storage write - ~115 of the ~149 storage
+   * operations a Play Together game spent (measured 23 Sep 2026). Persisting it
+   * bought nothing: the window is RATE_WINDOW_MS = 1s, an object cannot hibernate
+   * in the middle of a one-second flood, and any frame arriving after a
+   * hibernation gap is by definition more than a window later, so the count would
+   * have been reset on arrival regardless. Rate limiting is therefore exactly as
+   * strict as before - to exceed RATE_MAX_FRAMES you must send that many frames
+   * inside one second, during which this object is awake and counting.
+   *
+   * A WeakMap so a closed socket's entry goes away with the socket.
+   */
+  private rateWindows = new WeakMap<WebSocket, { windowStart: number; count: number }>();
+
+  /**
+   * The deadline currently armed in storage, or null for "no alarm". `undefined`
+   * means unknown (cold start), which forces the first reschedule to go through.
+   * See reschedule().
+   */
+  private scheduledAlarm: number | null | undefined = undefined;
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -139,9 +171,9 @@ export class RoomDO {
 
   private metaOf(ws: WebSocket): SocketMeta {
     try {
-      return (ws.deserializeAttachment() as SocketMeta) ?? { seatId: null, rateWindowStart: 0, rateCount: 0 };
+      return (ws.deserializeAttachment() as SocketMeta) ?? { seatId: null };
     } catch {
-      return { seatId: null, rateWindowStart: 0, rateCount: 0 };
+      return { seatId: null };
     }
   }
 
@@ -248,13 +280,28 @@ export class RoomDO {
     return candidates.length === 0 ? null : Math.min(...candidates);
   }
 
+  /**
+   * Arm/clear the alarm for the next deadline, skipping the storage call when the
+   * deadline has not actually moved.
+   *
+   * reschedule() is called after nearly every mutation, but most mutations do not
+   * change any deadline - a submit inside DRAWING, a rematch vote, a snapshot-only
+   * change - so the same timestamp was being written over and over. The desired
+   * deadline is cached in memory and compared first; `undefined` (cold start, or
+   * straight after an alarm fired) always goes through, so a fresh instance never
+   * assumes what storage holds.
+   */
   private async reschedule(room: RoomState): Promise<void> {
     const next = this.nextDeadline(room);
+    if (this.scheduledAlarm !== undefined && this.scheduledAlarm === next) return;
     if (next === null) await this.state.storage.deleteAlarm();
     else await this.state.storage.setAlarm(next);
+    this.scheduledAlarm = next;
   }
 
   async alarm(): Promise<void> {
+    // The runtime consumes the alarm when it fires, so whatever was armed is gone.
+    this.scheduledAlarm = null;
     const room = await this.load();
     if (!room) return;
     const now = Date.now();
@@ -423,17 +470,19 @@ export class RoomDO {
       return this.fail(ws, "bad_frame", "frame rejected");
     }
 
-    // Per-socket rate limiting, carried in the attachment so it survives
-    // hibernation along with the seat.
-    const meta = this.metaOf(ws);
+    // Per-socket rate limiting. In memory only - see the rateWindows field for why
+    // persisting this per frame was pure cost. The attachment is now written only
+    // where something that must survive hibernation actually changes (the seat), so
+    // an ordinary frame - a keepalive above all - performs no storage operation at
+    // all on its way in.
     const now = Date.now();
-    if (now - meta.rateWindowStart > RATE_WINDOW_MS) {
-      meta.rateWindowStart = now;
-      meta.rateCount = 0;
+    let window = this.rateWindows.get(ws);
+    if (window === undefined || now - window.windowStart > RATE_WINDOW_MS) {
+      window = { windowStart: now, count: 0 };
+      this.rateWindows.set(ws, window);
     }
-    meta.rateCount++;
-    ws.serializeAttachment(meta);
-    if (meta.rateCount > RATE_MAX_FRAMES) return this.fail(ws, "rate_limited", "slow down");
+    window.count++;
+    if (window.count > RATE_MAX_FRAMES) return this.fail(ws, "rate_limited", "slow down");
 
     let parsed: unknown;
     try {
@@ -509,7 +558,7 @@ export class RoomDO {
         }
       }
 
-      ws.serializeAttachment({ seatId: existing.seatId, rateWindowStart: Date.now(), rateCount: 0 } satisfies SocketMeta);
+      ws.serializeAttachment({ seatId: existing.seatId } satisfies SocketMeta);
       this.send(ws, { type: "joined", seatId: existing.seatId, playerToken: existing.playerToken, roomCode: room.roomCode, serverNow: Date.now() });
       await this.save(room);
       this.broadcast(room);
@@ -536,7 +585,7 @@ export class RoomDO {
     room.players.push(player);
     room.emptySince = null;
 
-    ws.serializeAttachment({ seatId: player.seatId, rateWindowStart: Date.now(), rateCount: 0 } satisfies SocketMeta);
+    ws.serializeAttachment({ seatId: player.seatId } satisfies SocketMeta);
     this.send(ws, { type: "joined", seatId: player.seatId, playerToken: player.playerToken, roomCode: room.roomCode, serverNow: Date.now() });
     await this.save(room);
     this.broadcast(room);
@@ -746,7 +795,7 @@ export class RoomDO {
       // Hibernation rather than server.accept(): a room idling in a lobby must
       // not pin this object in memory.
       this.state.acceptWebSocket(server);
-      server.serializeAttachment({ seatId: null, rateWindowStart: Date.now(), rateCount: 0 } satisfies SocketMeta);
+      server.serializeAttachment({ seatId: null } satisfies SocketMeta);
       // No snapshot yet - the socket is anonymous until it sends `join`.
       return new Response(null, { status: 101, webSocket: client });
     }

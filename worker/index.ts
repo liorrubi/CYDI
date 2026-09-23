@@ -501,9 +501,9 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
  * client's fire-and-forget POST succeeds and no retry is provoked - a shed event
  * is deliberately lost, not deferred.
  */
-export async function handleAnalyticsEvent(request: Request, env: Env): Promise<Response> {
+export async function handleAnalyticsEvent(request: Request, env: Env, path: "/event" | "/events" = "/event"): Promise<Response> {
   if (await isAnalyticsIngestDisabled(env.CONTENT_KV)) return new Response(null, { status: 204 });
-  return forwardToAnalyticsDO(request, env, "/event");
+  return forwardToAnalyticsDO(request, env, path);
 }
 
 // Every /api/daily/* request is forwarded to the single global DailyChallengeDO
@@ -631,7 +631,10 @@ export default {
       if (request.method === "PUT") return handleAnalyticsBreakerPut(request, env);
     }
 
-    if (url.pathname === "/api/analytics/event" && request.method === "POST") return handleAnalyticsEvent(request, env);
+    // Kept forever: every already-installed APK posts one event per request here, and
+    // there are months of them in the field. The batch route below is additive.
+    if (url.pathname === "/api/analytics/event" && request.method === "POST") return handleAnalyticsEvent(request, env, "/event");
+    if (url.pathname === "/api/analytics/events" && request.method === "POST") return handleAnalyticsEvent(request, env, "/events");
     if (url.pathname === "/api/analytics/report" && request.method === "GET") return forwardToAnalyticsDO(request, env, "/report");
 
     // Short campaign aliases (/s/cat). The tags come from the server-side map, never

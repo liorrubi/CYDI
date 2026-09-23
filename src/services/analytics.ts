@@ -15,7 +15,7 @@ import type { Attribution } from "./analyticsAttribution";
 import { getAttribution } from "./analyticsAttributionStore";
 import { getInstallationId, getSessionId, shouldReportAsInternal } from "./analyticsIdentity";
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
-import { apiFetch } from "./nativeApi";
+import { enqueueAnalyticsEvent } from "./analyticsQueue";
 
 export type { AnalyticsEventName };
 export type AnalyticsParams = Record<string, string | number | boolean>;
@@ -230,22 +230,23 @@ function attributionFor(eventName: AnalyticsEventName): { attribution?: Attribut
   return { attribution: installAttribution };
 }
 
-// Ships the event to the game's own Cloudflare Worker (POST /api/analytics/event),
-// which validates it against the same per-event schema (analyticsSchema.ts) and rolls
-// it into aggregate-only counters server-side - see worker/analyticsDO.ts. Never
-// blocks or throws into the caller; analytics must never break gameplay.
+// Ships the event to the game's own Cloudflare Worker, which validates it against the
+// same per-event schema (analyticsSchema.ts) and rolls it into aggregate-only counters
+// server-side - see worker/analyticsDO.ts. Never blocks or throws into the caller;
+// analytics must never break gameplay.
+//
+// Events are QUEUED and posted in batches to /api/analytics/events (see
+// analyticsQueue.ts) rather than one request per event. The envelope below is
+// byte-identical to what the single-event endpoint always received, and the server
+// counts a batch entry through exactly the same path - batching is transport only.
+// /api/analytics/event stays live forever for the APKs already in the field.
 const cloudflareAnalyticsProvider: AnalyticsProvider = {
   name: "cloudflare-worker",
   trackEvent(eventName, params) {
     try {
-      apiFetch("/api/analytics/event", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(buildAnalyticsEnvelope(eventName, params)),
-        keepalive: true,
-      }).catch(() => {});
+      enqueueAnalyticsEvent(buildAnalyticsEnvelope(eventName, params));
     } catch {
-      // fetch unavailable or threw synchronously - swallow, never break gameplay.
+      // Queue unavailable or threw synchronously - swallow, never break gameplay.
     }
   },
 };

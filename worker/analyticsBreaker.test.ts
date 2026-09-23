@@ -155,3 +155,51 @@ test("the cached answer expires so a flip is picked up without a deploy", async 
   assert.equal(await isAnalyticsIngestDisabled(kv, 1_031_000), false);
   assert.equal(kv.reads, 2);
 });
+
+// ------------------------------------------------ batch ingest (A4) ----------
+
+function batchRequest(): Request {
+  return new Request("https://playcydi.com/api/analytics/events", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ events: [{ eventName: "app_open", params: {} }] }),
+  });
+}
+
+async function ingestBatch(kvValue: string | null) {
+  _resetAnalyticsBreakerCacheForTests();
+  const kv = new FakeKv(kvValue);
+  const analytics = new FakeAnalyticsNamespace();
+  const env = { CONTENT_KV: kv, ANALYTICS_DO: analytics } as unknown as Parameters<typeof handleAnalyticsEvent>[1];
+  const response = await handleAnalyticsEvent(batchRequest(), env, "/events");
+  return { response, analytics };
+}
+
+test("breaker ON sheds the BATCH endpoint too, with zero DO access", async () => {
+  const { response, analytics } = await ingestBatch('{"disabled":true}');
+  assert.equal(response.status, 204);
+  assert.equal(analytics.fetches, 0, "a batch is 10 events' worth of DO work - it must be shed as well");
+});
+
+test("breaker OFF lets a batch through", async () => {
+  const { response, analytics } = await ingestBatch('{"disabled":false}');
+  assert.equal(response.status, 200);
+  assert.equal(analytics.fetches, 1);
+});
+
+test("a missing flag lets a batch through", async () => {
+  const { response, analytics } = await ingestBatch(null);
+  assert.equal(response.status, 200);
+  assert.equal(analytics.fetches, 1);
+});
+
+test("one breaker read covers both endpoints", async () => {
+  _resetAnalyticsBreakerCacheForTests();
+  const kv = new FakeKv('{"disabled":true}');
+  const analytics = new FakeAnalyticsNamespace();
+  const env = { CONTENT_KV: kv, ANALYTICS_DO: analytics } as unknown as Parameters<typeof handleAnalyticsEvent>[1];
+  assert.equal((await handleAnalyticsEvent(eventRequest(), env, "/event")).status, 204);
+  assert.equal((await handleAnalyticsEvent(batchRequest(), env, "/events")).status, 204);
+  assert.equal(kv.reads, 1, "the cached decision is shared, not read per endpoint");
+  assert.equal(analytics.fetches, 0);
+});

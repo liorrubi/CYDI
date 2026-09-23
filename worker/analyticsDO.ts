@@ -60,6 +60,15 @@ import {
 // growth, and an event that overflowed it would be REJECTED - so the headroom moves
 // with the envelope rather than silently costing us the largest events.
 const MAX_BODY_BYTES = 1536;
+/**
+ * Batch ingest limits (A4). The client flushes at 10, but the server accepts more so
+ * a client that queued through a long offline stretch can drain in one request rather
+ * than hammering the endpoint - which is the behaviour this whole change exists to
+ * avoid. Past the cap the batch is rejected outright rather than truncated, because
+ * silently dropping the tail would under-count without anyone noticing.
+ */
+const MAX_BATCH_EVENTS = 50;
+const MAX_BATCH_BODY_BYTES = MAX_BODY_BYTES * MAX_BATCH_EVENTS;
 const FUNNEL_EVENTS = new Set<AnalyticsEventName>(["game_started", "game_completed", "result_shared"]);
 // The only event that gets a per-BUILD breakdown. One launch counter is enough to
 // see which builds are in the field; putting unbounded-cardinality SHAs on every
@@ -701,13 +710,23 @@ export class AnalyticsDO {
   }
 
   /** Validates the whole event first; only touches storage (and only then) if it's fully valid - no partial save. */
-  private async handleEvent(body: unknown, country: string): Promise<Response> {
+  /**
+   * Count ONE envelope. The single-event endpoint and every entry of a batch go
+   * through here, so the two paths cannot drift: same validation, same closed-set
+   * coercion, same incrementEvent call, same buffer. A batch is a transport
+   * optimisation, never a second way of counting.
+   *
+   * Returns false for an envelope that fails validation. The caller decides what
+   * that means - 400 for a single event, a skipped entry for a batch - because a
+   * batch must not lose nine good events to one bad one.
+   */
+  private async ingestOne(body: unknown, country: string): Promise<boolean> {
     const b = body as Record<string, unknown> | null;
     const eventName = b?.eventName;
-    if (!isAnalyticsEventName(eventName)) return json({ error: "invalid event" }, 400);
+    if (!isAnalyticsEventName(eventName)) return false;
 
     const validated = validateEventParams(eventName, b?.params);
-    if (!validated.valid) return json({ error: "invalid params" }, 400);
+    if (!validated.valid) return false;
     const params = validated.params as unknown as Record<string, unknown>;
     // Coerced to a closed set, and never rejected: an event from an older client
     // that sends no platform is still recorded, just as "unknown". The three
@@ -771,19 +790,61 @@ export class AnalyticsDO {
       this.dirty.add(DAYS_KEY);
     }
 
-    // Durability happens HERE, inside the request, where the runtime's output gating
-    // guarantees the write lands before the response does.
-    //
-    // What this deliberately does not protect: the events buffered since the last
-    // boundary, if the stream then stops and the instance is evicted before another
-    // event arrives. That tail is at most MAX_PENDING_EVENTS, and it costs something
-    // only when the WHOLE app goes quiet - this is one global object aggregating
-    // every player, so its stream is near-continuous during active hours. Paying for
-    // an alarm to chase that tail costs more DO requests than the tail is worth, and
-    // DO requests are the tighter of the two limits.
     this.pendingEvents++;
+    return true;
+  }
+
+  /**
+   * Persist if either budget is due.
+   *
+   * Durability happens HERE, inside the request, where the runtime's output gating
+   * guarantees the write lands before the response does. A batch calls this ONCE
+   * after counting every entry, so ten events cost at most one write rather than ten.
+   *
+   * What this deliberately does not protect: the events buffered since the last
+   * boundary, if the stream then stops and the instance is evicted before another
+   * event arrives. That tail is at most MAX_PENDING_EVENTS, and it costs something
+   * only when the WHOLE app goes quiet - this is one global object aggregating every
+   * player, so its stream is near-continuous during active hours. Paying for an alarm
+   * to chase that tail costs more DO requests than the tail is worth, and DO requests
+   * are the tighter of the two limits.
+   */
+  private async flushIfDue(): Promise<void> {
     if (this.flushDue(Date.now())) await this.flush();
+  }
+
+  /** Single-event ingest, unchanged on the wire. Old clients keep using this forever. */
+  private async handleEvent(body: unknown, country: string): Promise<Response> {
+    const b = body as Record<string, unknown> | null;
+    // Split so the two failure modes stay distinguishable for a single event, which
+    // is the contract old clients already rely on.
+    if (!isAnalyticsEventName(b?.eventName)) return json({ error: "invalid event" }, 400);
+    if (!(await this.ingestOne(body, country))) return json({ error: "invalid params" }, 400);
+    await this.flushIfDue();
     return json({ ok: true });
+  }
+
+  /**
+   * Batch ingest (A4). One DO request, one flush decision, N counted events.
+   *
+   * Partial acceptance is deliberate: a malformed entry is skipped and reported in
+   * the response rather than failing the batch, so one bad event on a client can
+   * never cost the other nine. The whole-body shape is still all-or-nothing - a body
+   * that is not { events: [...] } is a client bug, not a data point.
+   */
+  private async handleEvents(body: unknown, country: string): Promise<Response> {
+    const b = body as Record<string, unknown> | null;
+    const events = b?.events;
+    if (!Array.isArray(events)) return json({ error: "body must be { events: [...] }" }, 400);
+    if (events.length === 0) return json({ error: "empty batch" }, 400);
+    if (events.length > MAX_BATCH_EVENTS) return json({ error: "batch too large" }, 400);
+
+    let accepted = 0;
+    for (const event of events) {
+      if (await this.ingestOne(event, country)) accepted++;
+    }
+    await this.flushIfDue();
+    return json({ ok: true, accepted, rejected: events.length - accepted });
   }
 
   /**
@@ -996,16 +1057,21 @@ export class AnalyticsDO {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === "/event" && request.method === "POST") {
+    if ((url.pathname === "/event" || url.pathname === "/events") && request.method === "POST") {
+      const batch = url.pathname === "/events";
       const bodyText = await request.text();
-      if (!bodyText || bodyText.length > MAX_BODY_BYTES) return json({ error: "invalid payload" }, 400);
+      const limit = batch ? MAX_BATCH_BODY_BYTES : MAX_BODY_BYTES;
+      if (!bodyText || bodyText.length > limit) return json({ error: "invalid payload" }, 400);
       let body: unknown;
       try {
         body = JSON.parse(bodyText);
       } catch {
         return json({ error: "invalid json" }, 400);
       }
-      return this.handleEvent(body, normalizeCountry(request.headers.get(COUNTRY_HEADER)));
+      // Country is resolved once per REQUEST, not per event - every envelope in a
+      // batch came from the same client on the same connection, so they share it.
+      const country = normalizeCountry(request.headers.get(COUNTRY_HEADER));
+      return batch ? this.handleEvents(body, country) : this.handleEvent(body, country);
     }
 
     if (url.pathname === "/report" && request.method === "GET") {

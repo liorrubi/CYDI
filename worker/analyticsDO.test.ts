@@ -485,3 +485,134 @@ test("invalid events are still rejected and never enter the buffer", async () =>
   await flush();
   assert.equal(storage.putCalls, 0, "a rejected event must leave nothing dirty");
 });
+
+// ------------------------------------------------------ batch ingest (A4) ----
+//
+// Batching is transport only. The load-bearing property is that a batch entry and a
+// single-event POST produce byte-identical counters, so the two endpoints can never
+// drift into counting differently for a mixed population of old and new clients.
+
+async function sendBatch(analytics: InstanceType<typeof AnalyticsDO>, events: unknown[], country = "IL") {
+  return analytics.fetch(
+    new Request("https://analytics.internal/events", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-cydi-country": country },
+      body: JSON.stringify({ events }),
+    }),
+  );
+}
+
+test("a batch counts exactly what the same events counted one at a time", async () => {
+  const single = await makeDO();
+  for (const envelope of SEQUENCE) await single.send(envelope);
+  await single.flush();
+
+  const batched = await makeDO();
+  await sendBatch(batched.analytics, SEQUENCE);
+  await batched.flush();
+
+  const dateKey = israelDateKey(clock);
+  assert.deepEqual(batched.storage.map.get(`day:${dateKey}`), single.storage.map.get(`day:${dateKey}`));
+  assert.deepEqual(batched.storage.map.get("alltime"), single.storage.map.get("alltime"));
+  assert.deepEqual(batched.storage.map.get(`usage:${dateKey}`), single.storage.map.get(`usage:${dateKey}`));
+});
+
+test("a batch of one is accepted", async () => {
+  const { analytics, storage, flush } = await makeDO();
+  const res = await sendBatch(analytics, [{ eventName: "app_open", params: {}, platform: "android" }]);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, accepted: 1, rejected: 0 });
+  await flush();
+  assert.equal((storage.map.get("alltime") as Record<string, { total: number }>).app_open.total, 1);
+});
+
+test("a full ten-event batch costs one DO request and at most one write", async () => {
+  const { analytics, storage } = await makeDO();
+  const events = Array.from({ length: 10 }, () => ({ eventName: "app_open", params: {}, platform: "android" }));
+  storage.resetCounters();
+  const res = await sendBatch(analytics, events);
+  assert.deepEqual(await res.json(), { ok: true, accepted: 10, rejected: 0 });
+  assert.ok(storage.putCalls <= 1, `ten events must not cost ten writes (got ${storage.putCalls})`);
+});
+
+test("a partial batch is accepted and stays buffered until a budget is due", async () => {
+  const { analytics, report } = await makeDO();
+  const res = await sendBatch(analytics, [
+    { eventName: "app_open", params: {}, platform: "android" },
+    { eventName: "app_open", params: {}, platform: "android" },
+    { eventName: "app_open", params: {}, platform: "android" },
+  ]);
+  assert.deepEqual(await res.json(), { ok: true, accepted: 3, rejected: 0 });
+  assert.equal((await report()).counts.app_open.total, 3, "still visible before it is written");
+});
+
+test("mixed valid and invalid entries keep the valid ones", async () => {
+  const { analytics, report } = await makeDO();
+  const res = await sendBatch(analytics, [
+    { eventName: "app_open", params: {}, platform: "android" },
+    { eventName: "not_a_real_event", params: {} },
+    { eventName: "game_started", params: { gameType: "nope" } },
+    { eventName: "app_open", params: {}, platform: "android" },
+    "not even an object",
+    null,
+  ]);
+  assert.deepEqual(await res.json(), { ok: true, accepted: 2, rejected: 4 }, "one bad entry must not cost the good ones");
+  assert.equal((await report()).counts.app_open.total, 2);
+});
+
+test("a malformed batch body is rejected whole", async () => {
+  const { analytics, storage } = await makeDO();
+  for (const body of [{ events: "nope" }, { events: {} }, {}, { events: [] }]) {
+    const res = await analytics.fetch(
+      new Request("https://analytics.internal/events", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-cydi-country": "IL" },
+        body: JSON.stringify(body),
+      }),
+    );
+    assert.equal(res.status, 400, `expected 400 for ${JSON.stringify(body)}`);
+  }
+  assert.equal(storage.putCalls, 0, "a rejected body must leave nothing dirty");
+});
+
+test("an oversized batch is rejected rather than silently truncated", async () => {
+  const { analytics } = await makeDO();
+  const events = Array.from({ length: 51 }, () => ({ eventName: "app_open", params: {}, platform: "android" }));
+  const res = await sendBatch(analytics, events);
+  assert.equal(res.status, 400);
+  assert.equal((await res.json() as { error: string }).error, "batch too large");
+});
+
+test("the same batch sent twice counts twice - the client must not retry", async () => {
+  // Documents WHY analyticsQueue.ts does not retry: there is no idempotency key
+  // here, so a re-sent batch is indistinguishable from real activity.
+  const { analytics, report } = await makeDO();
+  const events = [{ eventName: "app_open", params: {}, platform: "android" }];
+  await sendBatch(analytics, events);
+  await sendBatch(analytics, events);
+  assert.equal((await report()).counts.app_open.total, 2);
+});
+
+test("the single-event endpoint is byte-identical to before for old clients", async () => {
+  const { send, flush, storage } = await makeDO();
+  const res = await send({ eventName: "app_open", params: {}, platform: "android" });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true });
+  assert.equal((await send({ eventName: "nope", params: {} })).status, 400);
+  assert.equal((await send({ eventName: "game_started", params: { gameType: "bad" } })).status, 400);
+  await flush();
+  assert.equal((storage.map.get("alltime") as Record<string, { total: number }>).app_open.total, 1);
+});
+
+test("old single events and new batches can interleave into the same counters", async () => {
+  const { analytics, send, report } = await makeDO();
+  await send({ eventName: "app_open", params: {}, platform: "android", installationId: "aaaaaaaaaaaa", sessionId: "bbbbbbbbbbbb" });
+  await sendBatch(analytics, [
+    { eventName: "app_open", params: {}, platform: "android", installationId: "cccccccccccc", sessionId: "dddddddddddd" },
+    { eventName: "app_open", params: {}, platform: "web", installationId: "eeeeeeeeeeee", sessionId: "ffffffffffff" },
+  ]);
+  await send({ eventName: "app_open", params: {}, platform: "android", installationId: "aaaaaaaaaaaa", sessionId: "bbbbbbbbbbbb" });
+  const daily = await report();
+  assert.equal(daily.counts.app_open.total, 4);
+  assert.equal(daily.usage?.installations, 3, "usage ids are recorded from both paths");
+});

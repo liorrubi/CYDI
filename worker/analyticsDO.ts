@@ -342,6 +342,7 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byAppBuild: mergeKeyMaps(ae.byAppBuild, be.byAppBuild),
       bySurface: mergeKeyMaps(ae.bySurface, be.bySurface),
       byReason: mergeKeyMaps(ae.byReason, be.byReason),
+      byInstallAge: mergeKeyMaps(ae.byInstallAge, be.byInstallAge),
       bySource: mergeKeyMaps(ae.bySource, be.bySource),
       byCampaign: mergeKeyMaps(ae.byCampaign, be.byCampaign),
       byUtmContent: mergeKeyMaps(ae.byUtmContent, be.byUtmContent),

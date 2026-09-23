@@ -326,3 +326,38 @@ test("an install event with no attribution records no source row rather than a g
   assert.equal(counters.first_open?.bySource, undefined);
   assert.deepEqual(counters.first_open?.byInstallAge, { unknown: 1 });
 });
+
+test("byInstallAge survives the merge a range report is built from", () => {
+  // The twin of the byReason merge test above, and the reason it exists: byInstallAge
+  // was added to EventCounters and to incrementEvent but NOT to mergeCounters' explicit
+  // field list, so every report silently dropped it while the day buckets held it
+  // correctly. Ingestion tests alone could not catch that - only this path does.
+  const day1 = incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "bba5d10");
+  const day2 = incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "bba5d10");
+  const day3 = incrementEvent({}, "first_open", { installAge: "d7_30" }, "android", "0.50.0", "bba5d10");
+  const merged = mergeCounters(mergeCounters(day1, day2), day3);
+  assert.deepEqual(merged.first_open?.byInstallAge, { h0_24: 2, d7_30: 1 });
+  assert.equal(merged.first_open?.total, 3);
+
+  // A day bucket written before byInstallAge existed has no such map; merging two of
+  // them must leave it absent rather than inventing an empty object.
+  const legacyA = { first_open: { total: 4 } };
+  const legacyB = { first_open: { total: 1 } };
+  const legacyMerged = mergeCounters(legacyA, legacyB);
+  assert.equal(legacyMerged.first_open?.byInstallAge, undefined);
+  assert.equal(legacyMerged.first_open?.total, 5);
+
+  // And merging history with a new day keeps only the new day's buckets, rather than
+  // back-attributing installs whose age was never stored.
+  const mixed = mergeCounters(legacyA, day3);
+  assert.deepEqual(mixed.first_open?.byInstallAge, { d7_30: 1 });
+  assert.equal(mixed.first_open?.total, 5);
+
+  // install_attributed has no params at all, so a merge can never give it the map.
+  const attributed = mergeCounters(
+    incrementEvent({}, "install_attributed", {}, "android", "0.50.0", "bba5d10"),
+    incrementEvent({}, "install_attributed", {}, "android", "0.50.0", "bba5d10"),
+  );
+  assert.equal(attributed.install_attributed?.byInstallAge, undefined);
+  assert.equal(attributed.install_attributed?.total, 2);
+});

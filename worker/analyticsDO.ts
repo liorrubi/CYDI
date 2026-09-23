@@ -205,11 +205,19 @@ const DAYS_KEY = "days";
  */
 const FLUSH_INTERVAL_MS = 15_000;
 /**
- * Hard ceiling on buffered events regardless of elapsed time, so a burst cannot put
- * more than this many counter increments at risk. At the 23 Sep 2026 peak (~3
- * events/second) the time budget above is the binding one; during a spike this is.
+ * Hard ceiling on buffered events regardless of elapsed time, and in practice the
+ * binding budget: at yesterday's rate (~1 event/1.3s) five events accumulate in
+ * under 7 seconds, well inside the age budget above. So this, not the clock, is what
+ * actually decides how much an eviction can cost.
+ *
+ * Benchmarked at 5 against 10 on 23 Sep 2026. Ten writes 216 rows per 1,000 events
+ * and risks up to 9 per eviction; five writes 430 and risks up to 4. The extra rows
+ * are affordable - the projection lands at ~41k of the 100k daily cap against ~30k,
+ * both far from it - and rows written is not the limit that broke: DO requests are,
+ * and they are 1,000 per 1,000 events either way. Spending headroom we have on halving
+ * a loss we cannot otherwise bound is the better side of that trade.
  */
-const MAX_PENDING_EVENTS = 10;
+const MAX_PENDING_EVENTS = 5;
 
 type EventCounters = {
   total: number;

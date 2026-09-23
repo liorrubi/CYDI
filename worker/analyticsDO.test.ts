@@ -235,7 +235,7 @@ test("events between budget boundaries cost no write at all", async () => {
   const { send, storage } = await makeDO();
   await send({ eventName: "app_open", params: {}, platform: "android" });
   storage.resetCounters();
-  for (let i = 0; i < 9; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
+  for (let i = 0; i < 4; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
   assert.equal(storage.putCalls, 0, "an event inside the budget must not cost a write - that is the optimization");
   assert.equal(storage.keysWritten, 0);
 });
@@ -244,10 +244,10 @@ test("the pending-event budget forces a write during a burst", async () => {
   const { send, storage } = await makeDO();
   await send({ eventName: "app_open", params: {}, platform: "android" });
   storage.resetCounters();
-  // The clock is frozen, so only the 10-event ceiling can fire here.
-  for (let i = 0; i < 10; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
+  // The clock is frozen, so only the 5-event ceiling can fire here.
+  for (let i = 0; i < 5; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
   assert.equal(storage.putCalls, 1, "a burst must not put more than the ceiling at risk");
-  assert.equal((storage.map.get("alltime") as Record<string, { total: number }>).app_open.total, 11);
+  assert.equal((storage.map.get("alltime") as Record<string, { total: number }>).app_open.total, 6);
 });
 
 test("the time budget forces a write during a trickle", async () => {
@@ -321,13 +321,13 @@ test("a report includes events that have not been flushed yet", async () => {
   const { send, report, storage } = await makeDO();
   await send({ eventName: "app_open", params: {}, platform: "android", installationId: "aaaaaaaaaaaa", sessionId: "bbbbbbbbbbbb" });
   storage.resetCounters();
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 4; i++) {
     await send({ eventName: "app_open", params: {}, platform: "android", installationId: "aaaaaaaaaaaa", sessionId: "bbbbbbbbbbbb" });
   }
-  assert.equal(storage.putCalls, 0, "precondition: these six are still only in memory");
+  assert.equal(storage.putCalls, 0, "precondition: these four are still only in memory");
 
   const daily = await report();
-  assert.equal(daily.counts.app_open.total, 7);
+  assert.equal(daily.counts.app_open.total, 5);
   assert.equal(daily.usage?.installations, 1);
 });
 
@@ -467,7 +467,7 @@ test("an instance evicted mid-buffer loses only what the budget allows", async (
   // was meant to write later was already gone with the instance. Everything up to the
   // last budget boundary must therefore already be in storage, with no flush called.
   const first = await makeDO();
-  // 1 write-through + two full 10-event budgets = 21 durable, 4 still buffered.
+  // 1 write-through + four full 5-event budgets = 21 durable, 4 still buffered.
   for (let i = 0; i < 25; i++) await first.send({ eventName: "app_open", params: {}, platform: "android" });
 
   // Eviction: the instance and its buffer simply cease to exist. No alarm, no flush.

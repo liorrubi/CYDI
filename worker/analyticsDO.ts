@@ -196,8 +196,7 @@ const MAX_RANGE_DAYS = 31;
 /** The stored index of every date that has ever recorded an event. */
 const DAYS_KEY = "days";
 /**
- * How long counter mutations may sit in memory before being written (see the write
- * buffer on AnalyticsDO).
+ * How long counter mutations may sit in memory before the NEXT EVENT writes them out.
  *
  * The trade is linear and deliberate: longer means fewer rows written and a longer
  * window of counters an eviction can lose. 15s puts the loss ceiling at roughly 45
@@ -205,6 +204,12 @@ const DAYS_KEY = "days";
  * tuned any finer than that because the risk, not the saving, is what bounds it.
  */
 const FLUSH_INTERVAL_MS = 15_000;
+/**
+ * Hard ceiling on buffered events regardless of elapsed time, so a burst cannot put
+ * more than this many counter increments at risk. At the 23 Sep 2026 peak (~3
+ * events/second) the time budget above is the binding one; during a spike this is.
+ */
+const MAX_PENDING_EVENTS = 10;
 
 type EventCounters = {
   total: number;
@@ -548,16 +553,38 @@ export class AnalyticsDO {
   // problem - the same property that already made read-modify-write safe.
   //
   // The cost is bounded and deliberate: an eviction or crash loses at most one
-  // flush interval of counters. These are aggregate totals, not records, so the
+  // flush budget of counters. These are aggregate totals, not records, so the
   // failure mode is a slightly low number rather than a missing event.
+  //
+  // The flush is driven BY THE NEXT EVENT, never by an alarm.
+  //
+  // An alarm cannot do this job. A Durable Object is evicted from memory a few
+  // seconds after its last request, and an armed alarm does NOT keep it resident -
+  // the runtime simply re-instantiates it to run the handler, by which point the
+  // in-memory buffer died with the previous instance and there is nothing left to
+  // write. Verified against workerd on 23 Sep 2026: with a 15s alarm and no
+  // in-request flush, a report 11 seconds after the last event returned an empty
+  // counter set and storage had never been touched, while RoomDO's alarms - whose
+  // state lives in storage, not memory - kept advancing phases normally in the same
+  // runtime. An alarm short enough to beat eviction also fires mid-stream and
+  // flushes far more often than the budget below, which measured 3x the writes for
+  // no benefit. So there is no alarm here; the budgets are the whole mechanism.
   private counterCache = new Map<string, AllCounters>();
   private usageCache = new Map<string, UsageBucket>();
   private days: string[] = [];
   /** Storage keys whose in-memory value is newer than what is stored. */
   private dirty = new Set<string>();
-  private alarmPending = false;
   /** The Israel date every buffered mutation belongs to; see the rollover flush in handleEvent. */
   private bufferDate: string | null = null;
+  /**
+   * 0 on a fresh instance ON PURPOSE, so the first event after construction writes
+   * through immediately. That makes a trickle - one event, then an idle gap long
+   * enough to evict - behave exactly like the unbuffered code did, with no loss and
+   * no buffering to lose. Buffering only engages once events are actually arriving
+   * close together, which is the only case where it saves anything.
+   */
+  private lastFlushAt = 0;
+  private pendingEvents = 0;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -608,19 +635,9 @@ export class AnalyticsDO {
     return stored;
   }
 
-  /**
-   * Arm the flush timer, once per dirty cycle.
-   *
-   * The alarm is the ONLY storage operation an event may cost, and only the
-   * first event of a cycle pays it - calling setAlarm() per event would write a
-   * row per event and give back nothing. A stale alarm left armed by an evicted
-   * instance is harmless: it fires, finds nothing dirty, and does nothing, which
-   * is why the constructor does not spend a read on getAlarm().
-   */
-  private async armFlush(): Promise<void> {
-    if (this.alarmPending || this.dirty.size === 0) return;
-    this.alarmPending = true;
-    await this.state.storage.setAlarm(Date.now() + FLUSH_INTERVAL_MS);
+  /** True when the buffer has reached either budget and the current request must write it out. */
+  private flushDue(now: number): boolean {
+    return this.pendingEvents >= MAX_PENDING_EVENTS || now - this.lastFlushAt >= FLUSH_INTERVAL_MS;
   }
 
   /**
@@ -650,13 +667,17 @@ export class AnalyticsDO {
       for (const key of keys) this.dirty.add(key);
       throw err;
     }
+    this.lastFlushAt = Date.now();
+    this.pendingEvents = 0;
   }
 
-  /** Flush timer. Re-arms itself only if work arrived while the write was in flight. */
+  /**
+   * Nothing in this object ever arms an alarm (see the write-buffer comment above).
+   * The handler is kept only so that an alarm left armed by an earlier version of
+   * this code does the right thing when it fires rather than throwing.
+   */
   async alarm(): Promise<void> {
-    this.alarmPending = false;
     await this.flush();
-    await this.armFlush();
   }
 
   /** After a date rollover the previous day's buckets are persisted and no longer needed in memory; the two since-launch totals stay. */
@@ -742,7 +763,18 @@ export class AnalyticsDO {
       this.dirty.add(DAYS_KEY);
     }
 
-    await this.armFlush();
+    // Durability happens HERE, inside the request, where the runtime's output gating
+    // guarantees the write lands before the response does.
+    //
+    // What this deliberately does not protect: the events buffered since the last
+    // boundary, if the stream then stops and the instance is evicted before another
+    // event arrives. That tail is at most MAX_PENDING_EVENTS, and it costs something
+    // only when the WHOLE app goes quiet - this is one global object aggregating
+    // every player, so its stream is near-continuous during active hours. Paying for
+    // an alarm to chase that tail costs more DO requests than the tail is worth, and
+    // DO requests are the tighter of the two limits.
+    this.pendingEvents++;
+    if (this.flushDue(Date.now())) await this.flush();
     return json({ ok: true });
   }
 

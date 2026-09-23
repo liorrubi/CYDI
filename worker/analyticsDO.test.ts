@@ -8,9 +8,10 @@
 // So the first and most important test here is equivalence: the same event
 // sequence must leave storage holding exactly what the unbuffered read-modify-write
 // path produced, byte for byte. Everything after that guards the buffer itself -
-// that events cost no writes, that the alarm is armed once per cycle and not once
-// per event, that reports see unflushed state, that a day boundary cannot mix two
-// buckets, and that an event arriving mid-write is not lost.
+// that events between budget boundaries cost no writes, that no alarm is involved,
+// that a fresh instance writes through so a trickle cannot be lost, that eviction
+// costs at most one budget, that reports see unflushed state, that a day boundary
+// cannot mix two buckets, and that an event arriving mid-write is not lost.
 //
 // Driven through a hand-rolled DurableObjectState double, same approach as
 // roomDO.test.ts, so the suite stays inside the project's plain `node --test`
@@ -223,23 +224,61 @@ test("every dimension survives the buffer", async () => {
 
 // ---------------------------------------------------------- write discipline ----
 
-test("100 events perform zero storage writes before the flush", async () => {
+test("the first event on a fresh instance writes through, so a trickle can lose nothing", async () => {
   const { send, storage } = await makeDO();
-  for (let i = 0; i < 100; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
-  assert.equal(storage.putCalls, 0, "an event must not cost a write - that is the entire optimization");
+  await send({ eventName: "app_open", params: {}, platform: "android" });
+  assert.equal(storage.putCalls, 1, "a lone event followed by eviction must already be durable");
+  assert.equal((storage.map.get("alltime") as Record<string, { total: number }>).app_open.total, 1);
+});
+
+test("events between budget boundaries cost no write at all", async () => {
+  const { send, storage } = await makeDO();
+  await send({ eventName: "app_open", params: {}, platform: "android" });
+  storage.resetCounters();
+  for (let i = 0; i < 9; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
+  assert.equal(storage.putCalls, 0, "an event inside the budget must not cost a write - that is the optimization");
   assert.equal(storage.keysWritten, 0);
 });
 
-test("a dirty cycle arms the alarm once, not once per event", async () => {
-  const { send, storage, flush } = await makeDO();
-  for (let i = 0; i < 100; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
-  assert.equal(storage.setAlarmCalls, 1, "setAlarm per event would write a row per event and give nothing back");
-
-  // A second cycle after the flush arms exactly once more.
-  await flush();
+test("the pending-event budget forces a write during a burst", async () => {
+  const { send, storage } = await makeDO();
+  await send({ eventName: "app_open", params: {}, platform: "android" });
   storage.resetCounters();
-  for (let i = 0; i < 20; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
-  assert.equal(storage.setAlarmCalls, 1);
+  // The clock is frozen, so only the 10-event ceiling can fire here.
+  for (let i = 0; i < 10; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
+  assert.equal(storage.putCalls, 1, "a burst must not put more than the ceiling at risk");
+  assert.equal((storage.map.get("alltime") as Record<string, { total: number }>).app_open.total, 11);
+});
+
+test("the time budget forces a write during a trickle", async () => {
+  const { send, storage } = await makeDO();
+  await send({ eventName: "app_open", params: {}, platform: "android" });
+  storage.resetCounters();
+  await send({ eventName: "app_open", params: {}, platform: "android" });
+  assert.equal(storage.putCalls, 0);
+  setClock(clock + 15_001);
+  await send({ eventName: "app_open", params: {}, platform: "android" });
+  assert.equal(storage.putCalls, 1, "15s of buffering is the ceiling, enforced by the next event");
+  assert.equal((storage.map.get("alltime") as Record<string, { total: number }>).app_open.total, 3);
+  setClock(Date.UTC(2026, 8, 23, 9, 0, 0));
+});
+
+test("no alarm is ever armed", async () => {
+  // An alarm cannot rescue a buffer the runtime evicted with its instance, and one
+  // short enough to beat eviction fires mid-stream and multiplies the writes. The
+  // budgets are the whole mechanism, so nothing here may cost an alarm write.
+  const { send, storage } = await makeDO();
+  for (let i = 0; i < 100; i++) await send({ eventName: "app_open", params: {}, platform: "android" });
+  assert.equal(storage.setAlarmCalls, 0);
+  assert.equal(storage.alarm, null);
+});
+
+test("a stale alarm from an earlier version still flushes rather than throwing", async () => {
+  const { send, storage, analytics } = await makeDO();
+  await send({ eventName: "app_open", params: {}, platform: "android" }); // write-through
+  await send({ eventName: "app_open", params: {}, platform: "android" }); // buffered
+  await analytics.alarm();
+  assert.equal((storage.map.get("alltime") as Record<string, { total: number }>).app_open.total, 2);
 });
 
 test("a flush writes exactly the intended key set, in one put", async () => {
@@ -280,10 +319,12 @@ test("repeat ids do not re-dirty the usage bucket", async () => {
 
 test("a report includes events that have not been flushed yet", async () => {
   const { send, report, storage } = await makeDO();
-  for (let i = 0; i < 7; i++) {
+  await send({ eventName: "app_open", params: {}, platform: "android", installationId: "aaaaaaaaaaaa", sessionId: "bbbbbbbbbbbb" });
+  storage.resetCounters();
+  for (let i = 0; i < 6; i++) {
     await send({ eventName: "app_open", params: {}, platform: "android", installationId: "aaaaaaaaaaaa", sessionId: "bbbbbbbbbbbb" });
   }
-  assert.equal(storage.putCalls, 0, "precondition: nothing has been persisted");
+  assert.equal(storage.putCalls, 0, "precondition: these six are still only in memory");
 
   const daily = await report();
   assert.equal(daily.counts.app_open.total, 7);
@@ -320,7 +361,11 @@ test("events either side of Israel midnight land in different day buckets", asyn
   // timestamps are two hours apart and two Israel days apart.
   setClock(Date.UTC(2026, 8, 23, 18, 0, 0));
   const firstDay = israelDateKey(clock);
+  // The first writes through (fresh instance); the second stays in the buffer, so
+  // there is genuinely something pending when the day turns over.
   await send({ eventName: "app_open", params: {}, platform: "android" });
+  await send({ eventName: "app_open", params: {}, platform: "android" });
+  storage.resetCounters();
 
   setClock(Date.UTC(2026, 8, 23, 22, 0, 0));
   const secondDay = israelDateKey(clock);
@@ -328,20 +373,20 @@ test("events either side of Israel midnight land in different day buckets", asyn
 
   // The rollover itself must persist the previous day before counting the new one.
   await send({ eventName: "game_started", params: { gameType: "shapeChallenge", category: "animals", contentKey: "cat" }, platform: "android" });
-  assert.equal(storage.putCalls, 1, "the pending buffer is flushed on rollover, not left behind today's traffic");
-  assert.equal((storage.map.get(`day:${firstDay}`) as { app_open: { total: number } }).app_open.total, 1);
+  assert.ok(storage.putCalls >= 1, "the pending buffer is flushed on rollover, not left behind today's traffic");
+  assert.equal((storage.map.get(`day:${firstDay}`) as { app_open: { total: number } }).app_open.total, 2);
 
   await flush();
   const first = storage.map.get(`day:${firstDay}`) as Record<string, { total: number } | undefined>;
   const second = storage.map.get(`day:${secondDay}`) as Record<string, { total: number } | undefined>;
-  assert.equal(first.app_open?.total, 1);
+  assert.equal(first.app_open?.total, 2);
   assert.equal(first.game_started, undefined, "yesterday's bucket must not have gained today's event");
   assert.equal(second.game_started?.total, 1);
   assert.equal(second.app_open, undefined);
   assert.deepEqual(storage.map.get("days"), [firstDay, secondDay]);
   // alltime spans both, as it always has.
   const alltime = storage.map.get("alltime") as Record<string, { total: number }>;
-  assert.equal(alltime.app_open.total, 1);
+  assert.equal(alltime.app_open.total, 2);
   assert.equal(alltime.game_started.total, 1);
 
   setClock(Date.UTC(2026, 8, 23, 9, 0, 0));
@@ -380,7 +425,8 @@ test("a cold instance reports persisted history before receiving any event", asy
 
 test("an event arriving during a flush is not lost and is not marked clean", async () => {
   const { send, flush, storage, analytics } = await makeDO();
-  await send({ eventName: "app_open", params: {}, platform: "android" });
+  await send({ eventName: "app_open", params: {}, platform: "android" }); // write-through
+  await send({ eventName: "app_open", params: {}, platform: "android" }); // buffered
 
   storage.slowPut = true;
   const flushing = flush();
@@ -389,18 +435,19 @@ test("an event arriving during a flush is not lost and is not marked clean", asy
   await flushing;
   storage.slowPut = false;
 
-  // The interleaved event re-dirtied its keys, so a second cycle must be armed.
-  assert.ok(storage.alarm !== null, "work that arrived mid-flush must leave an alarm armed");
+  // The interleaved event re-dirtied its keys rather than riding on a write that
+  // had already been serialized, so the next flush must still pick it up.
   await analytics.alarm();
 
   const day = storage.map.get(`day:${israelDateKey(clock)}`) as Record<string, { total: number } | undefined>;
-  assert.equal(day.app_open?.total, 1);
+  assert.equal(day.app_open?.total, 2);
   assert.equal(day.game_started?.total, 1, "the mid-flush event must survive to storage");
 });
 
 test("a failed flush keeps the buffer dirty and retries on the next alarm", async () => {
   const { send, storage, analytics } = await makeDO();
-  await send({ eventName: "app_open", params: {}, platform: "android" });
+  await send({ eventName: "app_open", params: {}, platform: "android" }); // write-through
+  await send({ eventName: "app_open", params: {}, platform: "android" }); // buffered
 
   const workingPut = storage.put.bind(storage);
   storage.put = async () => {
@@ -411,7 +458,22 @@ test("a failed flush keeps the buffer dirty and retries on the next alarm", asyn
   storage.put = workingPut;
   await analytics.alarm();
   const day = storage.map.get(`day:${israelDateKey(clock)}`) as Record<string, { total: number }>;
-  assert.equal(day.app_open.total, 1, "a write that failed must not silently drop the buffer");
+  assert.equal(day.app_open.total, 2, "a write that failed must not silently drop the buffer");
+});
+
+test("an instance evicted mid-buffer loses only what the budget allows", async () => {
+  // The failure workerd exposed on 23 Sep 2026: the runtime drops an idle instance
+  // within ~10s, and an armed alarm does not keep it resident - so anything the alarm
+  // was meant to write later was already gone with the instance. Everything up to the
+  // last budget boundary must therefore already be in storage, with no flush called.
+  const first = await makeDO();
+  // 1 write-through + two full 10-event budgets = 21 durable, 4 still buffered.
+  for (let i = 0; i < 25; i++) await first.send({ eventName: "app_open", params: {}, platform: "android" });
+
+  // Eviction: the instance and its buffer simply cease to exist. No alarm, no flush.
+  const survivor = await makeDO(Object.fromEntries(first.storage.map.entries()));
+  const report = await survivor.report();
+  assert.equal(report.counts.app_open.total, 21, "everything up to the last budget boundary survived eviction");
 });
 
 // ----------------------------------------------------------------- rejection ----

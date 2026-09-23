@@ -476,3 +476,127 @@ test("byInstallAge survives the merge a range report is built from", () => {
   assert.equal(attributed.install_attributed?.byInstallAge, undefined);
   assert.equal(attributed.install_attributed?.total, 2);
 });
+
+// --- Rewarded ads: coarse country diagnostics --------------------------------
+//
+// Country is derived SERVER-SIDE (index.ts reads request.cf.country and passes the
+// normalized code in); the client never sends it. These pin the normalization, the
+// four events that get it, the country x reason pair on failures only, and the two
+// distinct fallbacks - ZZ means "country unknown", OTHER means "too many keys".
+
+const OFFER_EVENTS = ["reward_offer_shown", "reward_bonus_offer_shown"] as const;
+const PLACEMENT = { placement: "shape_challenge_double_reward" } as const;
+
+test("a real country code is kept as-is on every rewarded event that declares it", () => {
+  const unavailable = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  const loaded = incrementEvent({}, "rewarded_ad_loaded", { ...PLACEMENT }, "android", "0.50.0", "abc1234", undefined, "DE");
+  assert.deepEqual(unavailable.rewarded_ad_unavailable?.byCountry, { IR: 1 });
+  assert.deepEqual(loaded.rewarded_ad_loaded?.byCountry, { DE: 1 });
+  for (const name of OFFER_EVENTS) {
+    const offer = incrementEvent({}, name, { ...PLACEMENT }, "android", "0.50.0", "abc1234", undefined, "IL");
+    assert.deepEqual(offer[name]?.byCountry, { IL: 1 }, name + " is a denominator");
+  }
+});
+
+test("missing, Cloudflare-unknown and malformed codes all become ZZ", () => {
+  for (const raw of [undefined, null, "", "XX", "T1", "iran", "USA", "I", "12", 5, {}, "  "]) {
+    const c = incrementEvent({}, "rewarded_ad_loaded", { ...PLACEMENT }, "android", "0.50.0", "abc1234", undefined, raw as string);
+    assert.deepEqual(c.rewarded_ad_loaded?.byCountry, { ZZ: 1 }, JSON.stringify(raw) + " is unknown");
+  }
+  // Lowercase is a real code in the wrong case, not junk.
+  const lower = incrementEvent({}, "rewarded_ad_loaded", { ...PLACEMENT }, "android", "0.50.0", "abc1234", undefined, "ir");
+  assert.deepEqual(lower.rewarded_ad_loaded?.byCountry, { IR: 1 });
+});
+
+test("byCountryReason pairs the two closed sets, on failures only", () => {
+  let c = {};
+  const pairs = [["IR", "timeout"], ["IR", "sdk_error"], ["IR", "timeout"], ["DE", "no_fill"]] as const;
+  for (const [country, reason] of pairs) {
+    c = incrementEvent(c, "rewarded_ad_unavailable", { ...PLACEMENT, reason }, "android", "0.50.0", "abc1234", undefined, country);
+  }
+  const e = (c as Record<string, { byCountryReason?: Record<string, number>; byCountry?: Record<string, number>; total: number }>).rewarded_ad_unavailable;
+  assert.deepEqual(e.byCountryReason, { "IR|timeout": 2, "IR|sdk_error": 1, "DE|no_fill": 1 });
+  assert.deepEqual(e.byCountry, { IR: 3, DE: 1 });
+  assert.equal(e.total, 4);
+
+  // A reason outside AD_FAILURE_REASONS opens no combined key; the country still counts.
+  const bad = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "kaboom" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.equal(bad.rewarded_ad_unavailable?.byCountryReason, undefined);
+  assert.deepEqual(bad.rewarded_ad_unavailable?.byCountry, { IR: 1 });
+
+  // Events with no reason never get the pair.
+  const loaded = incrementEvent({}, "rewarded_ad_loaded", { ...PLACEMENT }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.equal(loaded.rewarded_ad_loaded?.byCountryReason, undefined);
+});
+
+test("ZZ and OTHER stay distinct - unknown country vs cardinality overflow", () => {
+  let c = {};
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let made = 0;
+  for (const a of letters) {
+    for (const b of letters) {
+      if (made >= 160) break;
+      c = incrementEvent(c, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, a + b);
+      made += 1;
+    }
+    if (made >= 160) break;
+  }
+  const map = (c as Record<string, { byCountryReason?: Record<string, number> }>).rewarded_ad_unavailable.byCountryReason!;
+  assert.equal(Object.keys(map).length, 151, "150 real keys plus the overflow key");
+  assert.ok(map.OTHER >= 1, "everything past the cap lands in OTHER");
+  assert.equal(map.ZZ, undefined, "overflow is never attributed to the unknown-country key");
+
+  // An unknown country still reaches ZZ|reason, not OTHER.
+  const unknown = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "sdk_error" }, "android", "0.50.0", "abc1234", undefined, "XX");
+  assert.deepEqual(unknown.rewarded_ad_unavailable?.byCountryReason, { "ZZ|sdk_error": 1 });
+});
+
+test("unrelated events get no country breakdowns", () => {
+  const names = ["app_open", "game_started", "pp_game_started", "rewarded_ad_requested", "reward_skipped"] as const;
+  for (const name of names) {
+    const c = incrementEvent({}, name, { gameType: "shapeChallenge", placement: "shape_challenge_double_reward", playerCount: 2, roundCount: 10, difficulty: "mixed" }, "android", "0.50.0", "abc1234", undefined, "IR");
+    assert.equal(c[name]?.byCountry, undefined, name + " gets no byCountry");
+    assert.equal(c[name]?.byCountryReason, undefined, name + " gets no byCountryReason");
+  }
+});
+
+test("country maps survive the merge a range report is built from", () => {
+  const day1 = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  const day2 = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  const day3 = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "sdk_error" }, "android", "0.50.0", "abc1234", undefined, "DE");
+  const merged = mergeCounters(mergeCounters(day1, day2), day3);
+  assert.deepEqual(merged.rewarded_ad_unavailable?.byCountry, { IR: 2, DE: 1 });
+  assert.deepEqual(merged.rewarded_ad_unavailable?.byCountryReason, { "IR|timeout": 2, "DE|sdk_error": 1 });
+  assert.equal(merged.rewarded_ad_unavailable?.total, 3);
+
+  // A bucket written before these fields existed stays without them.
+  const legacyA = { rewarded_ad_unavailable: { total: 7 } };
+  const legacyMerged = mergeCounters(legacyA, { rewarded_ad_unavailable: { total: 2 } });
+  assert.equal(legacyMerged.rewarded_ad_unavailable?.byCountry, undefined);
+  assert.equal(legacyMerged.rewarded_ad_unavailable?.byCountryReason, undefined);
+  assert.equal(legacyMerged.rewarded_ad_unavailable?.total, 9);
+
+  const mixed = mergeCounters(legacyA, day3);
+  assert.deepEqual(mixed.rewarded_ad_unavailable?.byCountry, { DE: 1 });
+  assert.equal(mixed.rewarded_ad_unavailable?.total, 8);
+});
+
+test("adding country leaves byReason, byInstallAge and the pass-play maps untouched", () => {
+  const withCountry = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "IR").rewarded_ad_unavailable!;
+  const without = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234").rewarded_ad_unavailable!;
+  assert.deepEqual(withCountry.byReason, without.byReason, "byReason is unchanged");
+  assert.deepEqual(withCountry.byPlatform, without.byPlatform);
+  assert.deepEqual(withCountry.byAppVersion, without.byAppVersion);
+  assert.equal(withCountry.total, without.total);
+  // No country argument at all still records the event, under ZZ.
+  assert.deepEqual(without.byCountry, { ZZ: 1 });
+
+  const firstOpen = incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.deepEqual(firstOpen.first_open?.byInstallAge, { h0_24: 1 }, "byInstallAge is unchanged");
+  assert.equal(firstOpen.first_open?.byCountry, undefined);
+
+  const quit = incrementEvent({}, "pp_abandoned", { roundIndex: 2, playerCount: 2, roundCount: 10 }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.deepEqual(quit.pp_abandoned?.byRoundCount, { "10": 1 });
+  assert.deepEqual(quit.pp_abandoned?.byRoundIndex, { "2": 1 });
+  assert.equal(quit.pp_abandoned?.byCountry, undefined);
+});

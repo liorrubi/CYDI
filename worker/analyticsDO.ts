@@ -102,6 +102,45 @@ const INSTALL_AGE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["first_open"]);
 // simply close the app and emit nothing.
 const ROUND_COUNT_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["pp_game_started", "pp_game_finished", "pp_abandoned"]);
 const ROUND_INDEX_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["pp_round_completed", "pp_abandoned"]);
+// Coarse country for the rewarded-ad diagnostics, derived SERVER-SIDE from the
+// request (see COUNTRY_HEADER below) and never sent by the client. Only the
+// two-letter code is kept: no IP, no city, no region, no coordinates, no ASN, and
+// nothing else from the Cloudflare request metadata. The code is the country of the
+// NETWORK REQUEST as Cloudflare sees it - a VPN reports its exit country, not where
+// the person is.
+//
+// Confined to four events on purpose. The two rewarded ones are the signal; the two
+// offer-shown ones are the DENOMINATOR, without which a country that simply has more
+// players always looks like it fails more.
+const COUNTRY_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
+  "rewarded_ad_unavailable",
+  "rewarded_ad_loaded",
+  "reward_offer_shown",
+  "reward_bonus_offer_shown",
+]);
+// Country alone says WHERE, reason alone says WHAT - only the pair says whether Iran
+// specifically times out while Germany errors. Both halves are closed sets, so the
+// combined key cannot be arbitrary.
+const COUNTRY_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad_unavailable"]);
+/** The internal header index.ts puts the normalized code in. Not a client contract - anything a client sends under it is re-normalized and, being unvalidatable, lands in UNKNOWN_COUNTRY like any other junk. */
+export const COUNTRY_HEADER = "x-cydi-country";
+/** Country could not be determined: absent, Cloudflare's XX/T1, or malformed. */
+export const UNKNOWN_COUNTRY = "ZZ";
+/** Cardinality overflow for byCountryReason - deliberately NOT UNKNOWN_COUNTRY, so "we do not know the country" and "too many distinct keys" stay separate facts. */
+const COUNTRY_REASON_OVERFLOW = "OTHER";
+// 249 assigned ISO codes x 9 AD_FAILURE_REASONS is 2,241 worst case, which is a real
+// fraction of a Durable Object value. Real traffic uses a few dozen, so the cap only
+// ever bites under a forged flood.
+const MAX_COUNTRY_REASON_KEYS = 150;
+
+/** Two-letter ISO-style code, uppercased; everything else (missing, XX, T1, malformed) becomes UNKNOWN_COUNTRY. */
+export function normalizeCountry(value: unknown): string {
+  if (typeof value !== "string") return UNKNOWN_COUNTRY;
+  const code = value.trim().toUpperCase();
+  // T1 (Tor) fails the pattern anyway; named so the intent survives a pattern change.
+  if (!/^[A-Z]{2}$/.test(code) || code === "XX" || code === "T1") return UNKNOWN_COUNTRY;
+  return code;
+}
 /** Highest index any game can reach, derived from the longest option so a new length cannot silently overflow the map. */
 const MAX_ROUND_INDEX = Math.max(...ROUND_COUNT_OPTIONS) - 1;
 
@@ -183,6 +222,13 @@ type EventCounters = {
   // day buckets recorded before these fields existed.
   byRoundCount?: Record<string, number>;
   byRoundIndex?: Record<string, number>;
+  // COUNTRY_BREAKOUT_EVENTS / COUNTRY_REASON_BREAKOUT_EVENTS only - the coarse country
+  // of the request, and for rewarded failures the country paired with the reason.
+  // Bounded to the ISO code domain plus UNKNOWN_COUNTRY, and byCountryReason is capped
+  // with its own COUNTRY_REASON_OVERFLOW key. Absent on every other event, and on day
+  // buckets recorded before these fields existed.
+  byCountry?: Record<string, number>;
+  byCountryReason?: Record<string, number>;
   // ATTRIBUTION_BREAKOUT_EVENTS only - where the visit that produced this event came
   // from. `bySource` is the campaign twin of byPlatform; byCampaign/byUtmContent split
   // it further by utm_campaign / utm_content. All three are capped at
@@ -266,9 +312,14 @@ function incrementKeyMap(map: Record<string, number> | undefined, key: string): 
 }
 
 /** incrementKeyMap for caller-controlled keys: an already-counted key keeps counting exactly, a new one past the cap is counted under ATTRIBUTION_OTHER instead of being dropped or growing the map. */
-function incrementCappedKeyMap(map: Record<string, number> | undefined, key: string, cap: number): Record<string, number> {
+function incrementCappedKeyMap(
+  map: Record<string, number> | undefined,
+  key: string,
+  cap: number,
+  overflowKey: string = ATTRIBUTION_OTHER,
+): Record<string, number> {
   const existing = map ?? {};
-  const safeKey = key in existing || Object.keys(existing).length < cap ? key : ATTRIBUTION_OTHER;
+  const safeKey = key in existing || Object.keys(existing).length < cap ? key : overflowKey;
   return incrementKeyMap(existing, safeKey);
 }
 
@@ -295,6 +346,7 @@ export function incrementEvent(
   appVersion: string = "unknown",
   appBuild: string = "unknown",
   attribution?: Attribution,
+  country: string = UNKNOWN_COUNTRY,
 ): AllCounters {
   const existing = counters[eventName] ?? { total: 0 };
   const updated: EventCounters = { ...existing, total: existing.total + 1 };
@@ -336,6 +388,20 @@ export function incrementEvent(
   }
   if (ROUND_INDEX_BREAKOUT_EVENTS.has(eventName) && isRoundIndexValue(params.roundIndex)) {
     updated.byRoundIndex = incrementKeyMap(existing.byRoundIndex, String(params.roundIndex));
+  }
+  // Country breakouts - see COUNTRY_BREAKOUT_EVENTS. `country` is already normalized by
+  // the caller; normalizing again here keeps a direct call (tests, future callers) from
+  // opening a key the ingest path could never produce.
+  if (COUNTRY_BREAKOUT_EVENTS.has(eventName)) {
+    updated.byCountry = incrementKeyMap(existing.byCountry, normalizeCountry(country));
+  }
+  if (COUNTRY_REASON_BREAKOUT_EVENTS.has(eventName) && isAdFailureReason(params.reason)) {
+    updated.byCountryReason = incrementCappedKeyMap(
+      existing.byCountryReason,
+      `${normalizeCountry(country)}|${params.reason}`,
+      MAX_COUNTRY_REASON_KEYS,
+      COUNTRY_REASON_OVERFLOW,
+    );
   }
   if (FUNNEL_EVENTS.has(eventName)) {
     const gameType = params.gameType as string;
@@ -384,6 +450,8 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byInstallAge: mergeKeyMaps(ae.byInstallAge, be.byInstallAge),
       byRoundCount: mergeKeyMaps(ae.byRoundCount, be.byRoundCount),
       byRoundIndex: mergeKeyMaps(ae.byRoundIndex, be.byRoundIndex),
+      byCountry: mergeKeyMaps(ae.byCountry, be.byCountry),
+      byCountryReason: mergeKeyMaps(ae.byCountryReason, be.byCountryReason),
       bySource: mergeKeyMaps(ae.bySource, be.bySource),
       byCampaign: mergeKeyMaps(ae.byCampaign, be.byCampaign),
       byUtmContent: mergeKeyMaps(ae.byUtmContent, be.byUtmContent),
@@ -436,7 +504,7 @@ export class AnalyticsDO {
   }
 
   /** Validates the whole event first; only touches storage (and only then) if it's fully valid - no partial save. */
-  private async handleEvent(body: unknown): Promise<Response> {
+  private async handleEvent(body: unknown, country: string): Promise<Response> {
     const b = body as Record<string, unknown> | null;
     const eventName = b?.eventName;
     if (!isAnalyticsEventName(eventName)) return json({ error: "invalid event" }, 400);
@@ -474,8 +542,8 @@ export class AnalyticsDO {
       this.state.storage.get<UsageBucket>(usageKey),
     ]);
 
-    const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params, platform, appVersion, appBuild, attribution);
-    const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params, platform, appVersion, appBuild, attribution);
+    const updatedAlltime = incrementEvent(alltime ?? {}, eventName, params, platform, appVersion, appBuild, attribution, country);
+    const updatedDay = incrementEvent(dayCounters ?? {}, eventName, params, platform, appVersion, appBuild, attribution, country);
     const currentUsage = usage ?? emptyUsageBucket();
     const updatedUsage = recordUsageIds(currentUsage, audience, platform, installationId, sessionId, attribution);
 
@@ -702,7 +770,7 @@ export class AnalyticsDO {
       } catch {
         return json({ error: "invalid json" }, 400);
       }
-      return this.handleEvent(body);
+      return this.handleEvent(body, normalizeCountry(request.headers.get(COUNTRY_HEADER)));
     }
 
     if (url.pathname === "/report" && request.method === "GET") {

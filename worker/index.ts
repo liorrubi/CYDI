@@ -1,4 +1,4 @@
-import { AnalyticsDO } from "./analyticsDO";
+import { AnalyticsDO, COUNTRY_HEADER, normalizeCountry } from "./analyticsDO";
 import { DailyChallengeDO } from "./dailyChallengeDO";
 import { RoomDO } from "./roomDO";
 import { parseShareRecord, renderShareImage, shareTitleAndDescription } from "./shareImage";
@@ -482,9 +482,17 @@ function forwardToAnalyticsDO(request: Request, env: Env, path: string): Promise
   const stub = env.ANALYTICS_DO.get(id);
   const url = new URL(request.url);
   const target = new URL(path + url.search, "https://analytics.internal");
+  // Coarse country, resolved HERE and nowhere else: `request.cf` exists only on the
+  // inbound edge request and is not carried into a Durable Object, so the normalized
+  // two-letter code rides in on an internal header instead. The client never sends it
+  // and cannot spoof it - the header is overwritten on every request, and the DO
+  // re-normalizes whatever arrives. Only the country code crosses; no IP, city,
+  // region, coordinates or ASN is read, forwarded or stored anywhere.
+  const headers = new Headers(request.headers);
+  headers.set(COUNTRY_HEADER, normalizeCountry((request as { cf?: { country?: unknown } }).cf?.country));
   return stub.fetch(target.toString(), {
     method: request.method,
-    headers: request.headers,
+    headers,
     body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
   });
 }

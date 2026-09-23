@@ -139,6 +139,16 @@ export const PRIVACY_POLICY_HTML = `
   Clearing the app's or browser's local data starts a new random number.
 </p>
 <p class="status-text">
+  A small number of analytics events about rewarded ads — whether an ad was available, and if not, the
+  general reason — also record a two-letter country code, so we can see whether a problem affects one
+  country rather than everyone. The code is worked out by our hosting provider (Cloudflare) from the
+  network connection the request arrived on; your device is never asked where it is, and CYDI requests no
+  location permission. It is country level only: no city, no region, no coordinates, no GPS, and no
+  network operator. We do not store your IP address for this. The code is kept only as a running total per
+  country, never against you, an event, an installation or a session. If you use a VPN or proxy, the
+  country recorded is the one your connection appears to come from, which may not be where you are.
+</p>
+<p class="status-text">
   On the website, an analytics event also carries a few short labels describing how that visit reached us —
   for example “youtube”, “shorts” or the name of a campaign — taken from the campaign tags in the link you
   followed and, failing that, from the domain of the site that linked to us. We record only these short
@@ -206,7 +216,8 @@ export const PRIVACY_POLICY_HTML = `
 <p class="status-text">
   As with any website or online service, our hosting provider (Cloudflare) processes basic connection
   data such as your IP address at the network level in order to deliver requests. CYDI itself does not
-  read, log, or store your IP address.
+  read, log, or store your IP address. The one thing CYDI keeps from that connection is the coarse country
+  code described under Analytics above, and only as an aggregate count.
 </p>
 
 <h2>2. How We Use Information</h2>

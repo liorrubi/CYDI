@@ -235,8 +235,28 @@ android {
         // DEPLOYMENT ORDER, again: the Worker validates event names AND the installAge
         // bucket strings, and drops the whole event when it does not know one. The Worker
         // must be deployed before this build reaches users.
-        versionCode 43
-        versionName "0.50.0"
+        //
+        // 44 is 0.51.0, and it is a COST release: it changes how the client talks to the
+        // backend, not what the game does. On 23 Sep 2026 CYDI exhausted two account-wide
+        // Cloudflare Free-plan Durable Object limits in a day - 106.69k requests and
+        // 120.99k rows written against 100k caps - and the site went to 429. Server-side
+        // work (33ae4a1) cut rows written by ~89% but could not touch DO REQUESTS, because
+        // both sources of those are in the client:
+        //   - analytics posted one HTTP request per event (~50k/day). It now queues and
+        //     posts batches of up to 10 to /api/analytics/events.
+        //   - Play Together sent a timestamped clock ping every 10s purely to keep its
+        //     offset fresh, and every one woke RoomDO (~60% of its requests). Clock sync
+        //     is now a short burst at connect plus a resync after a stale resume, and
+        //     staying connected is proved by a fixed frame the Cloudflare runtime answers
+        //     without waking the object at all.
+        //
+        // DEPLOYMENT ORDER, and it is stricter than usual this time: /api/analytics/events
+        // does not exist on the deployed Worker yet. A build that reaches users before the
+        // Worker ships would post every batch into a 404 and lose ALL its analytics - not
+        // degrade, lose. Deploy the Worker first, confirm the batch endpoint answers 200,
+        // and only then distribute this.
+        versionCode 44
+        versionName "0.51.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

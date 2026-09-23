@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.49.2 - 2026-09-23
+
+**The rewarded ad is warmed at drawing start instead of at the offer.** Until now
+DoubleCoinsOffer asked for the ad from its own mount effect - once the offer was
+already on screen - and a rewarded video needs seconds the player does not spend
+there. The request now goes out at the preview -> drawing transition, so the load
+has the whole drawing phase to finish and the offer's own preload becomes a no-op
+when the ad is already waiting.
+
+Measured on the device: the load took 2.97 seconds. Comfortably inside the 8-second
+timeout, and far longer than anyone stares at a "Watch Ad" button.
+
+Practice rounds are excluded. One can never reach the offer - `resolveShapeRound`
+returns `persist: null`, so no coins are earned and the offer never renders - and
+warming for it would be a request nothing could ever show. No other eligibility is
+predicted: a failed round and a replay at equal star tier also end without an offer,
+but both are outcomes of the attempt rather than properties of it.
+
+Nothing else about ads changes. Reward amounts, the offer UI, the ad units, UMP
+consent, the remote kill switch, the load timeout and the cached-ad behaviour are
+all exactly as they were, and every gate still lives inside `preloadRewardedAd`.
+There are no banners or interstitials.
+
+Android also starts classifying debug builds as internal analytics on its own, from
+the APK's `android:debuggable` rather than a localStorage flag that a reinstall used
+to wipe along with the installation id.
+
 ## 0.49.1 - 2026-09-23
 
 **/s/lightning, the Lightning Short's campaign alias.** The Short is public, so the

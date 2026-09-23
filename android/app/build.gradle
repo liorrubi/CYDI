@@ -205,8 +205,21 @@ android {
         // Worker validates against AD_FAILURE_REASONS and DROPS the whole event
         // if it does not know. The Worker must be deployed before this build
         // reaches users, or the very failures it exists to measure vanish.
-        versionCode 41
-        versionName "0.48.4"
+        //
+        // 42 is 0.49.2: the rewarded ad is warmed at the preview -> drawing
+        // transition instead of at the offer's own mount, and practice rounds are
+        // excluded because one can never reach the offer. Measured at 2.97s to
+        // load on the Mi 8 - inside the 8s timeout, but far longer than a player
+        // waits at the "Watch Ad" button, which is the whole point.
+        //
+        // The versionName skips 0.48.4 -> 0.49.2 rather than stepping: 0.49.0 and
+        // 0.49.1 were website-only releases, so Android never shipped them. It
+        // mirrors APP_VERSION as always, and this release is deliberately NOT
+        // reusing 0.49.1 - vc41 and vc42 differ, so two artifacts under one
+        // appVersion would make the preload's effect unmeasurable in the very
+        // analytics it exists to move.
+        versionCode 42
+        versionName "0.49.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

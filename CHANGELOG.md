@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.49.1 - 2026-09-23
+
+**/s/lightning, the Lightning Short's campaign alias.** The Short is public, so the
+alias now exists and points at the page that shipped in 0.49.0:
+`/draw-a-lightning-bolt-from-memory`, carrying `utm_source=youtube`,
+`utm_medium=shorts`, `utm_campaign=cydi_shorts` and the Short's own video id as
+`utm_content`.
+
+The id is `UWZ8uIOM3XU`, taken from the published video's own link - three capital
+runs around a lone lowercase u, with an O sitting next to a digit, so the test pins
+its exact case alongside the redirect, the landing path and the attribution.
+
+This Short is the second in the experimental mid-action format, published to test
+whether the star's reach came from the format or from the subject. Keeping its
+traffic on its own alias is what makes that comparison readable.
+
+The six earlier aliases are untouched, `/s/` stays out of the sitemap and disallowed
+in robots.txt, and an unknown slug still lands on a clean homepage with no tags.
+
 ## 0.49.0 - 2026-09-23
 
 **A challenge page for the lightning bolt.** `/draw-a-lightning-bolt-from-memory`

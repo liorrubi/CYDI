@@ -99,6 +99,15 @@ export const CAMPAIGN_SLUGS: Record<string, CampaignLink> = {
     content: "vcbiASLg-Gk",
     path: "/draw-a-perfect-star",
   },
+  // The lightning bolt is the second Short in the experimental format, published to
+  // test whether the star's reach was the format rather than the subject.
+  lightning: {
+    source: "youtube",
+    medium: "shorts",
+    campaign: "cydi_shorts",
+    content: "UWZ8uIOM3XU",
+    path: "/draw-a-lightning-bolt-from-memory",
+  },
 };
 
 /**

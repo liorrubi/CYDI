@@ -23,6 +23,8 @@ const EXPECTED_SNAIL =
   "https://playcydi.com/draw-a-snail-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=w8zzhQOdSas";
 const EXPECTED_STAR =
   "https://playcydi.com/draw-a-perfect-star?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=vcbiASLg-Gk";
+const EXPECTED_LIGHTNING =
+  "https://playcydi.com/draw-a-lightning-bolt-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=UWZ8uIOM3XU";
 
 test("/s/cat redirects to the fully tagged cat challenge", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
@@ -235,6 +237,27 @@ test("the star creative id keeps its case and its hyphen", () => {
   // or a screenshot read would both destroy.
   assert.equal(CAMPAIGN_SLUGS.star.content, "vcbiASLg-Gk");
   assert.ok(EXPECTED_STAR.includes("utm_content=vcbiASLg-Gk"));
+});
+
+test("/s/lightning lands on the lightning challenge page, tagged", () => {
+  assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/lightning")), EXPECTED_LIGHTNING);
+  assert.equal(new URL(EXPECTED_LIGHTNING).pathname, "/draw-a-lightning-bolt-from-memory");
+});
+
+test("/s/lightning resolves to exactly the Lightning Short's attribution", () => {
+  const target = new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/lightning")));
+  const attribution = resolveAttribution({ search: target.search, referrer: "", origin: ORIGIN });
+  assert.equal(attribution.source, "youtube");
+  assert.equal(attribution.medium, "shorts");
+  assert.equal(attribution.campaign, "cydi_shorts");
+  assert.equal(attribution.content, "UWZ8uIOM3XU");
+});
+
+test("the lightning creative id keeps its case", () => {
+  // UWZ8uIOM3XU - three capital runs around a lone lowercase u, and an O next to a
+  // digit. Exactly the string a lowercasing helper or a screenshot read gets wrong.
+  assert.equal(CAMPAIGN_SLUGS.lightning.content, "UWZ8uIOM3XU");
+  assert.ok(EXPECTED_LIGHTNING.includes("utm_content=UWZ8uIOM3XU"));
 });
 
 test("campaign aliases are kept out of the index", () => {

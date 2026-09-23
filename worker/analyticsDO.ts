@@ -15,6 +15,7 @@ import {
   type AnalyticsPlatform,
 } from "../src/services/analyticsSchema";
 import { isAdFailureReason } from "../src/services/ads/adTypes";
+import { ROUND_COUNT_OPTIONS } from "../src/multiplayer/protocol";
 import {
   ATTRIBUTION_DIMENSIONS,
   ATTRIBUTION_OTHER,
@@ -88,6 +89,29 @@ const REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad_failed"
 // so this map cannot grow past five keys. Only first_open carries it -
 // install_attributed deliberately has no params at all.
 const INSTALL_AGE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["first_open"]);
+// Pass & Play length and progress. `roundCount` is the length the players CHOSE
+// (ROUND_COUNT_OPTIONS - three values), `roundIndex` how far the game got. Both are
+// closed, re-validated server-side by validateEventParams before this runs, so the
+// two maps cannot grow past 3 and 15 keys. Only events that already carry the field
+// are listed: pp_round_completed has a roundIndex but NO roundCount, so it appears in
+// one set and not the other.
+//
+// Why both: pp_abandoned fires only from the explicit quit confirmation, so it is a
+// floor on drop-out, never the whole of it. pp_round_completed.byRoundIndex is what
+// shows how many games actually reach round 2, 3, 4... including the players who
+// simply close the app and emit nothing.
+const ROUND_COUNT_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["pp_game_started", "pp_game_finished", "pp_abandoned"]);
+const ROUND_INDEX_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["pp_round_completed", "pp_abandoned"]);
+/** Highest index any game can reach, derived from the longest option so a new length cannot silently overflow the map. */
+const MAX_ROUND_INDEX = Math.max(...ROUND_COUNT_OPTIONS) - 1;
+
+function isRoundCountValue(value: unknown): value is number {
+  return typeof value === "number" && (ROUND_COUNT_OPTIONS as readonly number[]).includes(value);
+}
+
+function isRoundIndexValue(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_ROUND_INDEX;
+}
 // Which events carry a where-did-this-visit-come-from breakdown. Deliberately a short
 // list rather than every event (the byPlatform treatment): attribution values are
 // caller-controlled, so each event added here multiplies stored keys by the number of
@@ -153,6 +177,12 @@ type EventCounters = {
   // install metadata is unchanged. Weight in the tail buckets hints that duplicates
   // are happening; it identifies none of them. See INSTALL_REFERRER_NOTES.md.
   byInstallAge?: Record<string, number>;
+  // ROUND_COUNT_BREAKOUT_EVENTS / ROUND_INDEX_BREAKOUT_EVENTS only - the Pass & Play
+  // game length the players chose, and how far a game got. Bounded to the three ids of
+  // ROUND_COUNT_OPTIONS and to 0..MAX_ROUND_INDEX. Absent on every other event, and on
+  // day buckets recorded before these fields existed.
+  byRoundCount?: Record<string, number>;
+  byRoundIndex?: Record<string, number>;
   // ATTRIBUTION_BREAKOUT_EVENTS only - where the visit that produced this event came
   // from. `bySource` is the campaign twin of byPlatform; byCampaign/byUtmContent split
   // it further by utm_campaign / utm_content. All three are capped at
@@ -298,6 +328,15 @@ export function incrementEvent(
   if (INSTALL_AGE_BREAKOUT_EVENTS.has(eventName) && isInstallAgeParam(params.installAge)) {
     updated.byInstallAge = incrementKeyMap(existing.byInstallAge, params.installAge);
   }
+  // Pass & Play breakouts - see the two sets above. Guarded for the same reason the
+  // rewarded one is: this function is exported, so a bad value must leave the map
+  // untouched rather than open an unbounded key.
+  if (ROUND_COUNT_BREAKOUT_EVENTS.has(eventName) && isRoundCountValue(params.roundCount)) {
+    updated.byRoundCount = incrementKeyMap(existing.byRoundCount, String(params.roundCount));
+  }
+  if (ROUND_INDEX_BREAKOUT_EVENTS.has(eventName) && isRoundIndexValue(params.roundIndex)) {
+    updated.byRoundIndex = incrementKeyMap(existing.byRoundIndex, String(params.roundIndex));
+  }
   if (FUNNEL_EVENTS.has(eventName)) {
     const gameType = params.gameType as string;
     const category = params.category as string;
@@ -343,6 +382,8 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       bySurface: mergeKeyMaps(ae.bySurface, be.bySurface),
       byReason: mergeKeyMaps(ae.byReason, be.byReason),
       byInstallAge: mergeKeyMaps(ae.byInstallAge, be.byInstallAge),
+      byRoundCount: mergeKeyMaps(ae.byRoundCount, be.byRoundCount),
+      byRoundIndex: mergeKeyMaps(ae.byRoundIndex, be.byRoundIndex),
       bySource: mergeKeyMaps(ae.bySource, be.bySource),
       byCampaign: mergeKeyMaps(ae.byCampaign, be.byCampaign),
       byUtmContent: mergeKeyMaps(ae.byUtmContent, be.byUtmContent),

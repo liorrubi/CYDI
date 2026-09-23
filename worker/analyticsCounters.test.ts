@@ -327,6 +327,121 @@ test("an install event with no attribution records no source row rather than a g
   assert.deepEqual(counters.first_open?.byInstallAge, { unknown: 1 });
 });
 
+// --- Pass & Play: game length and progress ------------------------------------
+//
+// Baseline telemetry for the 10-round default, collected BEFORE the default is
+// changed. Same guarantees as the breakouts above - additive, bounded, confined to
+// the events that already carry the field - plus the asymmetry that matters here:
+// pp_round_completed has a roundIndex but no roundCount, so it gets one map and not
+// the other. pp_abandoned fires only from the explicit quit confirmation, so its
+// byRoundIndex is a floor on drop-out; pp_round_completed.byRoundIndex is the map that
+// shows how far games actually get.
+
+test("byRoundCount is kept for the three events that carry roundCount", () => {
+  const started = incrementEvent({}, "pp_game_started", { playerCount: 2, roundCount: 10, difficulty: "mixed" }, "android", "0.50.0", "abc1234");
+  const finished = incrementEvent({}, "pp_game_finished", { playerCount: 2, roundCount: 5 }, "android", "0.50.0", "abc1234");
+  const quit = incrementEvent({}, "pp_abandoned", { roundIndex: 3, playerCount: 2, roundCount: 15 }, "android", "0.50.0", "abc1234");
+  assert.deepEqual(started.pp_game_started?.byRoundCount, { "10": 1 });
+  assert.deepEqual(finished.pp_game_finished?.byRoundCount, { "5": 1 });
+  assert.deepEqual(quit.pp_abandoned?.byRoundCount, { "15": 1 });
+});
+
+test("byRoundIndex is kept for the two events that carry roundIndex", () => {
+  const round = incrementEvent({}, "pp_round_completed", { roundIndex: 0, playerCount: 2, submitted: true }, "android", "0.50.0", "abc1234");
+  const quit = incrementEvent({}, "pp_abandoned", { roundIndex: 3, playerCount: 2, roundCount: 10 }, "android", "0.50.0", "abc1234");
+  assert.deepEqual(round.pp_round_completed?.byRoundIndex, { "0": 1 });
+  assert.deepEqual(quit.pp_abandoned?.byRoundIndex, { "3": 1 });
+});
+
+test("pp_round_completed gets NO byRoundCount - the event does not carry one", () => {
+  // The asymmetry is deliberate: inventing a length here would mean guessing it.
+  const round = incrementEvent({}, "pp_round_completed", { roundIndex: 2, playerCount: 2, submitted: false }, "android", "0.50.0", "abc1234");
+  assert.equal(round.pp_round_completed?.byRoundCount, undefined);
+  assert.deepEqual(round.pp_round_completed?.byRoundIndex, { "2": 1 });
+});
+
+test("the round maps exist ONLY on the pass-play events that declare them", () => {
+  const rematch = incrementEvent({}, "pp_rematch", { playerCount: 2 }, "android", "0.50.0", "abc1234");
+  assert.equal(rematch.pp_rematch?.byRoundCount, undefined);
+  assert.equal(rematch.pp_rematch?.byRoundIndex, undefined);
+
+  // Play Together carries the same-shaped params and must not gain the maps - this
+  // change is Pass & Play only.
+  const mp = incrementEvent({}, "mp_game_started", { playerCount: 2, roundCount: 10, difficulty: "mixed" }, "web", "0.50.0", "abc1234");
+  assert.equal(mp.mp_game_started?.byRoundCount, undefined);
+  const mpRound = incrementEvent({}, "mp_round_completed", { roundIndex: 1, playerCount: 2, submitted: true }, "web", "0.50.0", "abc1234");
+  assert.equal(mpRound.mp_round_completed?.byRoundIndex, undefined);
+
+  // And an unrelated event with a stray field opens nothing.
+  const opened = incrementEvent({}, "app_open", { roundCount: 10, roundIndex: 1 }, "web", "0.50.0", "abc1234");
+  assert.equal(opened.app_open?.byRoundCount, undefined);
+  assert.equal(opened.app_open?.byRoundIndex, undefined);
+});
+
+test("round values outside the closed domains are never persisted", () => {
+  for (const roundCount of [7, 0, -5, 20, "10", null, undefined, {}]) {
+    const c = incrementEvent({}, "pp_game_started", { playerCount: 2, roundCount, difficulty: "mixed" }, "android", "0.50.0", "abc1234");
+    assert.equal(c.pp_game_started?.byRoundCount, undefined, `roundCount ${String(roundCount)} stores nothing`);
+    assert.equal(c.pp_game_started?.total, 1, "the event is still counted");
+  }
+  for (const roundIndex of [-1, 15, 99, 1.5, "3", null, undefined]) {
+    const c = incrementEvent({}, "pp_round_completed", { roundIndex, playerCount: 2, submitted: true }, "android", "0.50.0", "abc1234");
+    assert.equal(c.pp_round_completed?.byRoundIndex, undefined, `roundIndex ${String(roundIndex)} stores nothing`);
+    assert.equal(c.pp_round_completed?.total, 1, "the event is still counted");
+  }
+});
+
+test("every length and index accumulates side by side without touching totals", () => {
+  let c = {};
+  for (const roundCount of [10, 10, 5, 15, 10]) {
+    c = incrementEvent(c, "pp_game_started", { playerCount: 2, roundCount, difficulty: "mixed" }, "android", "0.50.0", "abc1234");
+  }
+  for (let i = 0; i < 4; i += 1) {
+    c = incrementEvent(c, "pp_round_completed", { roundIndex: i, playerCount: 2, submitted: true }, "android", "0.50.0", "abc1234");
+  }
+  c = incrementEvent(c, "pp_round_completed", { roundIndex: 0, playerCount: 2, submitted: true }, "android", "0.50.0", "abc1234");
+  const started = (c as Record<string, { total: number; byRoundCount?: Record<string, number>; byPlatform?: Record<string, number> }>).pp_game_started;
+  const rounds = (c as Record<string, { total: number; byRoundIndex?: Record<string, number> }>).pp_round_completed;
+  assert.deepEqual(started.byRoundCount, { "10": 3, "5": 1, "15": 1 });
+  assert.equal(started.total, 5);
+  assert.deepEqual(started.byPlatform, { android: 5 });
+  // The survival curve: 2 games reached round 1, one each reached rounds 2 and 3.
+  assert.deepEqual(rounds.byRoundIndex, { "0": 2, "1": 1, "2": 1, "3": 1 });
+  assert.equal(rounds.total, 5);
+});
+
+test("the round maps survive the merge a range report is built from", () => {
+  const day1 = incrementEvent({}, "pp_abandoned", { roundIndex: 1, playerCount: 2, roundCount: 10 }, "android", "0.50.0", "abc1234");
+  const day2 = incrementEvent({}, "pp_abandoned", { roundIndex: 1, playerCount: 2, roundCount: 5 }, "android", "0.50.0", "abc1234");
+  const day3 = incrementEvent({}, "pp_abandoned", { roundIndex: 4, playerCount: 2, roundCount: 10 }, "android", "0.50.0", "abc1234");
+  const merged = mergeCounters(mergeCounters(day1, day2), day3);
+  assert.deepEqual(merged.pp_abandoned?.byRoundCount, { "10": 2, "5": 1 });
+  assert.deepEqual(merged.pp_abandoned?.byRoundIndex, { "1": 2, "4": 1 });
+  assert.equal(merged.pp_abandoned?.total, 3);
+
+  // Buckets written before these fields existed must stay without them.
+  const legacyA = { pp_abandoned: { total: 9 } };
+  const legacyB = { pp_abandoned: { total: 4 } };
+  const legacyMerged = mergeCounters(legacyA, legacyB);
+  assert.equal(legacyMerged.pp_abandoned?.byRoundCount, undefined);
+  assert.equal(legacyMerged.pp_abandoned?.byRoundIndex, undefined);
+  assert.equal(legacyMerged.pp_abandoned?.total, 13);
+
+  const mixed = mergeCounters(legacyA, day3);
+  assert.deepEqual(mixed.pp_abandoned?.byRoundCount, { "10": 1 });
+  assert.equal(mixed.pp_abandoned?.total, 10);
+});
+
+test("adding the pass-play breakouts leaves every unrelated counter byte-identical", () => {
+  const before = incrementEvent({}, "game_started", { gameType: "shapeChallenge", category: "geometric", contentKey: "circle" }, "web", "0.50.0", "abc1234");
+  const after = incrementEvent(before, "pp_game_started", { playerCount: 2, roundCount: 10, difficulty: "mixed" }, "android", "0.50.0", "abc1234");
+  assert.deepEqual(after.game_started, before.game_started);
+  // And the pass-play event keeps the dimensions every event gets.
+  assert.deepEqual(after.pp_game_started?.byPlatform, { android: 1 });
+  assert.deepEqual(after.pp_game_started?.byAppVersion, { "0.50.0": 1 });
+  assert.equal(after.pp_game_started?.byAppBuild, undefined);
+});
+
 test("byInstallAge survives the merge a range report is built from", () => {
   // The twin of the byReason merge test above, and the reason it exists: byInstallAge
   // was added to EventCounters and to incrementEvent but NOT to mergeCounters' explicit

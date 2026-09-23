@@ -894,15 +894,21 @@ function ShapePlay({
       // spend there. Drawing takes far longer than a load, so by the time the offer
       // appears the ad is usually ready and the offer's own preload becomes a no-op.
       //
-      // Deliberately fire-and-forget, and deliberately NOT gated here: every gate that
-      // matters already lives inside preloadRewardedAd -> rewardedBlockReason(), which
-      // checks the format flag, the remote kill switch, UMP consent (canRequestAds), a
-      // registered adapter and a configured ad unit, in that order. Calling it earlier
-      // changes WHEN that guarded entry point runs, never WHETHER it may request. On
-      // web there is no adapter, so this returns silently and nothing is requested.
-      // Its `state !== "idle"` guard is what keeps this and the offer's preload from
-      // ever becoming two requests.
-      void preloadRewardedAd("shape_challenge_double_reward");
+      // Practice is the one round that can never reach the offer, so warming for it
+      // would be a request nothing could ever show: resolveShapeRound returns
+      // `persist: null` for a practice round, applyShapeRoundOutcome therefore returns
+      // 0 coins, and the offer only renders when coins were earned. That is structural,
+      // not a list of guards - see the header of app/shapeRoundOutcome.ts.
+      //
+      // Every OTHER gate is deliberately left where it already lives, inside
+      // preloadRewardedAd -> rewardedBlockReason(), which checks the format flag, the
+      // remote kill switch, UMP consent (canRequestAds), a registered adapter and a
+      // configured ad unit, in that order. Calling it earlier changes WHEN that guarded
+      // entry point runs, never WHETHER it may request. On web there is no adapter, so
+      // this returns silently and nothing is requested. Its `state !== "idle"` guard is
+      // what keeps this and the offer's preload from ever becoming two requests.
+      // Fire-and-forget: a rejected preload can never reach the round.
+      if (!practice) void preloadRewardedAd("shape_challenge_double_reward");
       setPhase("drawing");
     }, previewDurationMs);
     return () => window.clearTimeout(timeoutId);

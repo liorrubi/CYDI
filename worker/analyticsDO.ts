@@ -2,6 +2,7 @@ import {
   ANALYTICS_EVENT_NAMES,
   datesInRange,
   isAnalyticsEventName,
+  isInstallAgeParam,
   isValidDateKey,
   israelDateKey,
   monthlyRange,
@@ -82,6 +83,11 @@ const SURFACE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["play_store_cta_sho
 // cannot grow past ten keys. The offer-funnel twin `reward_ad_failed` is a DIFFERENT
 // event that carries only `placement` - it is deliberately not here.
 const REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad_failed", "rewarded_ad_unavailable"]);
+// The byInstallAge twin of the line above, and the same bounded-cardinality argument:
+// installAge is INSTALL_AGE_PARAMS, a closed five-value union re-validated server-side,
+// so this map cannot grow past five keys. Only first_open carries it -
+// install_attributed deliberately has no params at all.
+const INSTALL_AGE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["first_open"]);
 // Which events carry a where-did-this-visit-come-from breakdown. Deliberately a short
 // list rather than every event (the byPlatform treatment): attribution values are
 // caller-controlled, so each event added here multiplies stored keys by the number of
@@ -89,6 +95,12 @@ const REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad_failed"
 // (app_open) and the funnel those arrivals did or didn't complete.
 const ATTRIBUTION_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
   "app_open",
+  // Android install attribution: these two are the ONLY native events that send an
+  // attribution map, and it comes from the Play Install Referrer rather than a landing
+  // URL. first_open's bySource is the number the whole mechanism exists to produce -
+  // where genuinely new installs came from. See INSTALL_REFERRER_NOTES.md.
+  "install_attributed",
+  "first_open",
   "game_started",
   "game_completed",
   "result_shared",
@@ -132,6 +144,15 @@ type EventCounters = {
   // on every other event, and on day buckets recorded before this field existed -
   // such a day reports no reason rows at all rather than guessing them.
   byReason?: Record<string, number>;
+  // first_open ONLY - how long before the event the Play install began, in the five
+  // closed buckets of INSTALL_AGE_PARAMS, re-validated server-side by
+  // validateEventParams before this runs, so the map cannot grow past five keys.
+  //
+  // A DIAGNOSTIC dimension, never proof about an individual event: first_open cannot
+  // be exact, because clearing app data drops the local marker while Play-side
+  // install metadata is unchanged. Weight in the tail buckets hints that duplicates
+  // are happening; it identifies none of them. See INSTALL_REFERRER_NOTES.md.
+  byInstallAge?: Record<string, number>;
   // ATTRIBUTION_BREAKOUT_EVENTS only - where the visit that produced this event came
   // from. `bySource` is the campaign twin of byPlatform; byCampaign/byUtmContent split
   // it further by utm_campaign / utm_content. All three are capped at
@@ -273,6 +294,9 @@ export function incrementEvent(
   // must leave the map untouched rather than open a free-text key.
   if (REASON_BREAKOUT_EVENTS.has(eventName) && isAdFailureReason(params.reason)) {
     updated.byReason = incrementKeyMap(existing.byReason, params.reason);
+  }
+  if (INSTALL_AGE_BREAKOUT_EVENTS.has(eventName) && isInstallAgeParam(params.installAge)) {
+    updated.byInstallAge = incrementKeyMap(existing.byInstallAge, params.installAge);
   }
   if (FUNNEL_EVENTS.has(eventName)) {
     const gameType = params.gameType as string;

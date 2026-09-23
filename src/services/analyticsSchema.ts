@@ -93,8 +93,49 @@ export type TutorialTypeParam = (typeof TUTORIAL_TYPE_PARAMS)[number];
 export const PLAY_STORE_SURFACE_PARAMS = ["results", "seo_circle", "seo_star", "seo_heart"] as const;
 export type PlayStoreSurfaceParam = (typeof PLAY_STORE_SURFACE_PARAMS)[number];
 
+/**
+ * How long before `first_open` the Play install began - a DIAGNOSTIC dimension, never
+ * an input to whether the event fires. See INSTALL_REFERRER_NOTES.md.
+ *
+ * It exists because `first_open` cannot be exact: clearing app data removes the local
+ * marker while Play-side install metadata is unchanged, so the event can repeat while
+ * the original installVersion still matches the running version. A genuine new install
+ * lands in "h0_24" or "d1_7"; weight in the tail buckets is a hint that duplicates are
+ * happening, and nothing more - it is never proof about any individual event.
+ *
+ * "unknown" covers an absent install-begin timestamp (Bundle.getLong returns 0, so
+ * absent and epoch 0 are indistinguishable) and a negative age from a device clock
+ * that moved backwards - the same case getSessionId already guards for.
+ */
+export const INSTALL_AGE_PARAMS = ["h0_24", "d1_7", "d7_30", "d30_plus", "unknown"] as const;
+export type InstallAgeParam = (typeof INSTALL_AGE_PARAMS)[number];
+
+/** Closed-set coercion, so a malformed or hostile body can never open a free-text key in byInstallAge. */
+export function isInstallAgeParam(value: unknown): value is InstallAgeParam {
+  return typeof value === "string" && (INSTALL_AGE_PARAMS as readonly string[]).includes(value);
+}
+
 export type EventParamsMap = {
   app_open: Record<string, never>;
+  /**
+   * Android only: Play Install Referrer data was retrieved and carried a usable
+   * referrer string, whose campaign labels ride in the envelope's `attribution`.
+   * Legitimately fires for an EXISTING installation the first time it runs a build
+   * that has this code, so it is not an install count - see `first_open` for that,
+   * and INSTALL_REFERRER_NOTES.md for why the two are separate events.
+   */
+  install_attributed: Record<string, never>;
+  /**
+   * Android only: first launch OBSERVED for an installation whose original installed
+   * version (Play's `installVersion`) matches the running app version.
+   *
+   * Deliberately not called "the first ever launch" and not an exact install counter:
+   * clearing app data removes the local marker while Play's metadata is unchanged, so
+   * this can repeat while the original version still matches. Accepted trade-off,
+   * documented in INSTALL_REFERRER_NOTES.md along with the server-side dedupe key that
+   * would fix it if it ever has to be exact.
+   */
+  first_open: { installAge: InstallAgeParam };
   shape_completed: { category: CategoryId; starRating: number; passed: boolean; isNewBest: boolean };
   /**
    * The same round result, for an SEO practice round only (gameType "seoPractice"
@@ -238,6 +279,8 @@ export type AnalyticsEventName = keyof EventParamsMap;
 
 export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "app_open",
+  "install_attributed",
+  "first_open",
   "shape_completed",
   "shape_practice_completed",
   "purchase_completed",
@@ -372,6 +415,12 @@ type Validator<E extends AnalyticsEventName> = (params: unknown) => ValidationRe
 
 const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   app_open: (p) => validateNoParams(p),
+  install_attributed: (p) => validateNoParams(p),
+  first_open: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["installAge"])) return { valid: false };
+    if (!isInstallAgeParam(p.installAge)) return { valid: false };
+    return { valid: true, params: { installAge: p.installAge } };
+  },
   mp_room_created: (p) => {
     if (!isRecord(p) || !hasExactKeys(p, ["roundCount", "difficulty"])) return { valid: false };
     if (!isRoundCountParam(p.roundCount) || !isDifficultyParam(p.difficulty)) return { valid: false };

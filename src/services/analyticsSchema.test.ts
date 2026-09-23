@@ -10,6 +10,8 @@ import {
   normalizeAppBuild,
   ANALYTICS_EVENT_NAMES,
   PLAY_STORE_SURFACE_PARAMS,
+  INSTALL_AGE_PARAMS,
+  isInstallAgeParam,
 } from "./analyticsSchema.ts";
 import { sanitizeParams } from "./analytics.ts";
 
@@ -410,4 +412,41 @@ test("normalizeAppBuild refuses malformed and hostile values", () => {
   for (const bad of ["", "05DCCC1", "05dccc", "0".repeat(64), "ghijklm", "05dccc1 ", undefined, null, 7, {}] ) {
     assert.equal(normalizeAppBuild(bad as unknown), "unknown", `rejects ${JSON.stringify(bad)}`);
   }
+});
+
+// --- Android install attribution (INSTALL_REFERRER_NOTES.md) -------------------------
+//
+// The Worker validates with this same code and DROPS an event it cannot validate, so a
+// bucket string the server does not know costs the whole event - the AD_FAILURE_REASONS
+// trap again. These are the server's admission rules for the two install events.
+
+test("install_attributed carries no params at all", () => {
+  assert.equal(validateEventParams("install_attributed", {}).valid, true);
+  assert.equal(validateEventParams("install_attributed", { installAge: "h0_24" }).valid, false);
+  assert.equal(validateEventParams("install_attributed", { source: "youtube" }).valid, false);
+});
+
+test("first_open accepts exactly the five installAge buckets", () => {
+  for (const bucket of INSTALL_AGE_PARAMS) {
+    assert.equal(validateEventParams("first_open", { installAge: bucket }).valid, true, `accepts ${bucket}`);
+  }
+});
+
+test("first_open refuses an unknown, malformed or extra-keyed installAge", () => {
+  for (const bad of ["", "H0_24", "d1_8", "fresh", 0, null, undefined, {}]) {
+    assert.equal(validateEventParams("first_open", { installAge: bad }).valid, false, `rejects ${JSON.stringify(bad)}`);
+  }
+  assert.equal(validateEventParams("first_open", {}).valid, false);
+  assert.equal(validateEventParams("first_open", { installAge: "h0_24", extra: 1 }).valid, false);
+});
+
+test("isInstallAgeParam is the closed-set guard the counter map relies on", () => {
+  assert.equal(isInstallAgeParam("d30_plus"), true);
+  assert.equal(isInstallAgeParam("d30_plus "), false);
+  assert.equal(isInstallAgeParam("__proto__"), false);
+});
+
+test("both install events are registered event names", () => {
+  assert.ok(ANALYTICS_EVENT_NAMES.includes("install_attributed"));
+  assert.ok(ANALYTICS_EVENT_NAMES.includes("first_open"));
 });

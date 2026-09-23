@@ -81,6 +81,7 @@ import { isDailyChallengeSharePath } from "./services/dailyChallengeShare";
 import type { LandingPage } from "./seo/landingPages";
 import { LANDING_CTA_HASH, landingCtaMode } from "./seo/landingCta";
 import { initializeNativeAds } from "./services/ads/nativeAdsSetup";
+import { runInstallReferrerOnce } from "./services/installReferrer";
 import { maybePromptAppUpdate } from "./services/appUpdate";
 import { isRoomCode } from "./multiplayer/protocol";
 import { getShapeById } from "./content/contentRepository";
@@ -432,6 +433,14 @@ export default function App({ landing }: AppProps) {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     initializeNativeAds();
+  }, []);
+
+  // Android install attribution, asked of Google Play at most once per installation
+  // and a no-op on web, on a debug build, and on every launch after the first that
+  // gets an answer. Fire-and-forget by contract: it never throws and never blocks
+  // startup. See INSTALL_REFERRER_NOTES.md.
+  useEffect(() => {
+    void runInstallReferrerOnce();
   }, []);
 
   // Google Play flexible in-app update - asked once per cold start, Android app

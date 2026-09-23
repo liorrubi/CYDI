@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.50.0 - 2026-09-24
+
+**Android now knows where its installs come from.** The app asks Google Play once per
+installation which campaign led to the install, through Google's own Install Referrer
+library, and reports the same five short labels the website has always used for a
+visit - source, medium, campaign, content, term. Nothing Android-specific was invented:
+the Play referrer is a query string, so the existing normalizer parses it, clips it to
+its closed alphabet and collapses `com.google.android.youtube` onto `youtube` exactly
+as it already does for a link.
+
+Two events, and they answer different questions. `install_attributed` says referrer
+data was retrieved and was usable; it legitimately fires for an existing installation
+the first time it runs this build, so it is not an install count. `first_open` is the
+install count, as close as local state can get: it fires when Play reports that the
+version originally installed on the device is the version now running, and a marker
+says we have not counted it before.
+
+**`first_open` is not exact, and the code says so rather than implying otherwise.**
+Clearing app data removes the marker while Play's metadata is unchanged, so the event
+can repeat while the original version still matches. An earlier draft tried to bound
+that with a 24-hour freshness window and was wrong in the other direction - it silently
+dropped every install first opened the next day, which on Play is most of them. The
+age survives only as `installAge`, a five-bucket diagnostic that makes the inexactness
+visible instead of invisible. It never decides whether the event fires.
+
+A debug build never contacts the service at all. That is the only protection that
+holds: a sideloaded APK does not reliably report FEATURE_NOT_SUPPORTED, and a device
+that once carried a Play build can still be handed stale Play metadata for the package.
+For the same reason, Install Referrer is not used to decide whether an install came
+from Play - absence proves nothing there and presence proves nothing.
+
+No device identifiers are involved: no advertising ID, no App Set ID, no SSAID. The
+privacy policy gained a paragraph covering the app's install attribution, and the
+library merges one normal-protection permission,
+`com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE`.
+
+Also in this release, previously prepared as 0.49.2 but never distributed: the rewarded
+ad is warmed at the preview to drawing transition instead of at the offer's own mount,
+so the load has the whole drawing phase to finish. Measured at 2.97s on the test device
+- inside the 8s timeout, far outside what a player waits at the "Watch Ad" button.
+Practice rounds are excluded, because one can never reach the offer.
+
 ## 0.49.2 - 2026-09-23
 
 **The rewarded ad is warmed at drawing start instead of at the offer.** Until now

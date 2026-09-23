@@ -25,7 +25,7 @@
 
 /** Shown at the top of the policy. Update both when the policy text changes materially. */
 export const PRIVACY_EFFECTIVE_DATE = "14 July 2026";
-export const PRIVACY_LAST_UPDATED = "11 August 2026";
+export const PRIVACY_LAST_UPDATED = "24 September 2026";
 
 /**
  * The policy body: everything between the page title and the closing copyright
@@ -145,6 +145,16 @@ export const PRIVACY_POLICY_HTML = `
   labels: never the full address you arrived at, never the full address you came from, and nothing about
   the page you were reading. The labels are read once when the visit starts and are used only to count how
   many visits and sessions each source brought, and how many of those visitors went on to play.
+</p>
+<p class="status-text">
+  The Android app records the same kind of short labels once, for the installation itself. The
+  first time it runs, it asks Google Play which campaign led to the install and keeps only those
+  same few labels &mdash; for example &ldquo;youtube&rdquo; or the name of a campaign. Alongside them
+  it records whether this looks like the first launch of a newly installed app, and roughly how
+  long ago the install happened as a coarse range (under a day, under a week, and so on) rather
+  than a time. We never store the full referral address. Nothing here identifies your device or
+  your Google account: no advertising ID, no device ID and no account details are read or sent.
+  The app asks Google Play this once per installation and not again.
 </p>
 
 <h3>Advertising (Android app)</h3>

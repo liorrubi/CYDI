@@ -11,6 +11,7 @@
 import { Capacitor } from "@capacitor/core";
 
 import { APP_BUILD, APP_VERSION } from "../app/constants";
+import type { Attribution } from "./analyticsAttribution";
 import { getAttribution } from "./analyticsAttributionStore";
 import { getInstallationId, getSessionId, shouldReportAsInternal } from "./analyticsIdentity";
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
@@ -187,16 +188,46 @@ export function buildAnalyticsEnvelope(eventName: AnalyticsEventName, params: An
     isInternal: shouldReportAsInternal(),
     appVersion: APP_VERSION,
     appBuild: APP_BUILD,
-    // Web only, and omitted entirely (not sent as "direct") inside the Android app.
-    // The app is loaded from the APK at "/" with no URL and no referrer, so every
-    // native event would otherwise report source=direct and pile the app's whole
-    // audience into the same row as people who typed the website's address - making
-    // the one number this dimension exists to answer unreadable. With the field
-    // absent, native events are counted exactly as they are today and `bySource`
-    // stays a purely website measure. Attributing app INSTALLS is a different
-    // mechanism (the Play Install Referrer) and deliberately not in scope here.
-    ...(Capacitor.isNativePlatform() ? {} : { attribution: getAttribution() }),
+    ...attributionFor(eventName),
   };
+}
+
+/**
+ * The two Android events that may carry an attribution map, and the ONLY ones. Their
+ * labels come from the Play Install Referrer rather than a landing URL - a different
+ * mechanism answering a different question (which campaign produced an INSTALL, not
+ * which produced a visit). See INSTALL_REFERRER_NOTES.md.
+ */
+const INSTALL_ATTRIBUTION_EVENTS = new Set<AnalyticsEventName>(["install_attributed", "first_open"]);
+
+/**
+ * Set once per app run by installReferrer.ts, immediately before it emits its two
+ * events, and never read by anything else. Module-level rather than threaded through
+ * trackEvent because the provider interface is (eventName, params) and every other
+ * caller would have to learn about a field only these two events can use.
+ */
+let installAttribution: Attribution | null = null;
+
+/** Called only by installReferrer.ts, only on Android, only with labels Play supplied. */
+export function setInstallAttribution(attribution: Attribution | null): void {
+  installAttribution = attribution;
+}
+
+/**
+ * Web sends the landing attribution on every event. Android sends one only for the two
+ * install events above.
+ *
+ * Everything else native stays absent rather than being sent as "direct": the app is
+ * loaded from the APK at "/" with no URL and no referrer, so every native event would
+ * otherwise pile the app's whole audience into the same row as people who typed the
+ * website's address - making the one number this dimension exists to answer unreadable.
+ * With the field absent, those events are counted exactly as they are today and
+ * `bySource` stays a purely website measure for everything but the install pair.
+ */
+function attributionFor(eventName: AnalyticsEventName): { attribution?: Attribution } {
+  if (!Capacitor.isNativePlatform()) return { attribution: getAttribution() };
+  if (!INSTALL_ATTRIBUTION_EVENTS.has(eventName) || installAttribution === null) return {};
+  return { attribution: installAttribution };
 }
 
 // Ships the event to the game's own Cloudflare Worker (POST /api/analytics/event),

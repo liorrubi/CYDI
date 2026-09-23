@@ -290,3 +290,39 @@ test("reason maps survive the merge a range report is built from", () => {
   assert.deepEqual(mixed.rewarded_ad_failed?.byReason, { sdk_error: 1 });
   assert.equal(mixed.rewarded_ad_failed?.total, 5);
 });
+
+// --- Android install attribution (INSTALL_REFERRER_NOTES.md) -------------------------
+
+test("byInstallAge exists ONLY on first_open, and is bounded by the closed bucket set", () => {
+  const opened = incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234");
+  assert.deepEqual(opened.first_open?.byInstallAge, { h0_24: 1 });
+
+  // install_attributed carries no params at all, so it can never grow one.
+  const attributed = incrementEvent({}, "install_attributed", {}, "android", "0.50.0", "abc1234");
+  assert.equal(attributed.install_attributed?.byInstallAge, undefined);
+  assert.equal(attributed.install_attributed?.total, 1);
+
+  // A value outside INSTALL_AGE_PARAMS leaves the map untouched rather than opening a
+  // free-text key - incrementEvent is exported and called directly, so the guard has to
+  // live here and not only in the request handler.
+  const hostile = incrementEvent({}, "first_open", { installAge: "../../etc" }, "android", "0.50.0", "abc1234");
+  assert.equal(hostile.first_open?.byInstallAge, undefined);
+  assert.equal(hostile.first_open?.total, 1, "the event still counts; only the breakout is refused");
+});
+
+test("both install events keep an attribution breakout, and first_open's is the install source", () => {
+  const attribution = { source: "youtube", medium: "shorts", campaign: "cydi_shorts", content: "UWZ8uIOM3XU", term: "unknown" };
+  let counters = incrementEvent({}, "install_attributed", {}, "android", "0.50.0", "abc1234", attribution);
+  counters = incrementEvent(counters, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234", attribution);
+
+  assert.deepEqual(counters.install_attributed?.bySource, { youtube: 1 });
+  assert.deepEqual(counters.first_open?.bySource, { youtube: 1 });
+  assert.deepEqual(counters.first_open?.byCampaign, { cydi_shorts: 1 });
+  assert.deepEqual(counters.first_open?.byUtmContent, { UWZ8uIOM3XU: 1 });
+});
+
+test("an install event with no attribution records no source row rather than a guessed one", () => {
+  const counters = incrementEvent({}, "first_open", { installAge: "unknown" }, "android", "0.50.0", "abc1234");
+  assert.equal(counters.first_open?.bySource, undefined);
+  assert.deepEqual(counters.first_open?.byInstallAge, { unknown: 1 });
+});

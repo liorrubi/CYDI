@@ -121,6 +121,52 @@ export function setInternalDevice(internal: boolean): void {
 }
 
 /**
+ * True on a debug/QA Android build, read from the flag Capacitor itself injects
+ * into the page before any of our JS runs:
+ *
+ *   JSExport.getGlobalJS()  ->  window.Capacitor = { DEBUG: <isDebug>, ... }
+ *   CapConfig.java          ->  isDebug = ApplicationInfo.FLAG_DEBUGGABLE is set
+ *
+ * FLAG_DEBUGGABLE comes from the manifest's android:debuggable, which AGP sets for
+ * the debug build type and never for release - so this is a property of the APK
+ * itself, not of local storage. That is the whole point: unlike the flag above, it
+ * survives a reinstall, an app-data clear, a new installationId and a new session,
+ * which is exactly what our own QA runs kept losing (22-23 Sep 2026).
+ *
+ * A Play build can never match. Google Play refuses to publish an artifact with
+ * android:debuggable="true" at all, and a locally built RELEASE apk reports false
+ * here too - it stays external unless someone marks it by hand. The signal only
+ * ever errs towards "real player", never towards silently hiding one.
+ *
+ * Strict === true: a non-boolean value is not trusted. Web has no injected
+ * Capacitor global at all, so this is false there and nothing about the website's
+ * numbers changes.
+ */
+export function isQaBuild(): boolean {
+  try {
+    if (typeof window === "undefined") return false;
+    const capacitor = (window as unknown as { Capacitor?: { DEBUG?: unknown } }).Capacitor;
+    return capacitor?.DEBUG === true;
+  } catch {
+    // No window, or a host that refuses the property - treat as a real build.
+    return false;
+  }
+}
+
+/**
+ * What the envelope actually sends as `isInternal`: the build says so, OR this
+ * browser/device was marked by hand. Deliberately an OR and deliberately NOT
+ * folded into isInternalDevice() - that one still reports only the stored flag,
+ * so the Settings toggle keeps showing and controlling what the person chose.
+ * The consequence is that a debug build cannot opt OUT of being internal, which
+ * is the safe direction: the failure we had was QA activity landing in the real
+ * player numbers, never the reverse.
+ */
+export function shouldReportAsInternal(): boolean {
+  return isQaBuild() || isInternalDevice();
+}
+
+/**
  * Web convenience: visiting `?internal=1` marks this browser, `?internal=0` unmarks it.
  * Native builds have no address bar, so there the flag is set from the Settings screen's
  * hidden toggle or the DevTools console hook below.

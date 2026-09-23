@@ -12,7 +12,7 @@ import { Capacitor } from "@capacitor/core";
 
 import { APP_BUILD, APP_VERSION } from "../app/constants";
 import { getAttribution } from "./analyticsAttributionStore";
-import { getInstallationId, getSessionId, isInternalDevice } from "./analyticsIdentity";
+import { getInstallationId, getSessionId, shouldReportAsInternal } from "./analyticsIdentity";
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
 import { apiFetch } from "./nativeApi";
 
@@ -152,7 +152,10 @@ const consoleDebugProvider: AnalyticsProvider = {
  * reason: they let the server count installations and sessions (instead of only
  * events) and keep our own QA devices out of the real-player numbers, without
  * touching a single per-event schema. All three are locally generated and
- * anonymous - see analyticsIdentity.ts.
+ * anonymous - see analyticsIdentity.ts. `isInternal` is shouldReportAsInternal(),
+ * not the stored flag alone: a debug Android build marks itself, because the
+ * stored flag shares its storage with the two ids above and so was lost on every
+ * reinstall - which is how a day of QA runs reached the real-player numbers.
  *
  * appVersion/appBuild follow the identical pattern, so activity can be analysed
  * per release: `APP_VERSION` is the product version (the same constant
@@ -181,7 +184,7 @@ export function buildAnalyticsEnvelope(eventName: AnalyticsEventName, params: An
     platform: Capacitor.getPlatform(),
     installationId: getInstallationId(),
     sessionId: getSessionId(),
-    isInternal: isInternalDevice(),
+    isInternal: shouldReportAsInternal(),
     appVersion: APP_VERSION,
     appBuild: APP_BUILD,
     // Web only, and omitted entirely (not sent as "direct") inside the Android app.

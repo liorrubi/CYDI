@@ -99,3 +99,67 @@ test("APP_BUILD is either a usable SHA or degrades to unknown, never a stray key
   const normalized = normalizeAppBuild(APP_BUILD);
   assert.ok(normalized === "unknown" || /^[0-9a-f]{7,12}$/.test(normalized), `got ${normalized}`);
 });
+
+// --- isInternal comes from the build, not only from storage -------------------
+//
+// A debug Android build marks its own events, because the stored flag lives in the
+// same localStorage as installationId/sessionId and was therefore lost on every
+// reinstall. Only that one field may move: these assert the rest of the envelope is
+// untouched, and that the website (no injected Capacitor global) is unaffected.
+
+/** Runs `body` with a stand-in for the browser global; this file's default state (no window) is restored afterwards. */
+function withWindow(value: unknown, body: () => void): void {
+  const g = globalThis as unknown as { window?: unknown };
+  const had = "window" in g;
+  const previous = g.window;
+  g.window = value;
+  try {
+    body();
+  } finally {
+    if (had) g.window = previous;
+    else delete g.window;
+  }
+}
+
+test("a debuggable build stamps its events internal", () => {
+  withWindow({ Capacitor: { DEBUG: true } }, () => {
+    assert.equal(buildAnalyticsEnvelope("app_open", {}).isInternal, true);
+    assert.equal(buildAnalyticsEnvelope("game_started", { gameType: "shapeChallenge" }).isInternal, true);
+  });
+});
+
+test("a release build, and the website, stay external", () => {
+  withWindow({ Capacitor: { DEBUG: false } }, () => {
+    assert.equal(buildAnalyticsEnvelope("app_open", {}).isInternal, false);
+  });
+  // No window at all, and a browser with no Capacitor: both are the web path and
+  // must read exactly as they did before this existed.
+  assert.equal(buildAnalyticsEnvelope("app_open", {}).isInternal, false);
+  withWindow({}, () => assert.equal(buildAnalyticsEnvelope("app_open", {}).isInternal, false));
+});
+
+test("a truthy lookalike does not mark a build internal", () => {
+  for (const value of ["true", 1, {}]) {
+    withWindow({ Capacitor: { DEBUG: value } }, () => {
+      assert.equal(buildAnalyticsEnvelope("app_open", {}).isInternal, false, `${JSON.stringify(value)}`);
+    });
+  }
+});
+
+test("isInternal is the ONLY field the build signal moves", () => {
+  let debuggable: Record<string, unknown> = {};
+  let release: Record<string, unknown> = {};
+  withWindow({ Capacitor: { DEBUG: true } }, () => {
+    debuggable = buildAnalyticsEnvelope("game_completed", { gameType: "shapeChallenge" }) as unknown as Record<string, unknown>;
+  });
+  withWindow({ Capacitor: { DEBUG: false } }, () => {
+    release = buildAnalyticsEnvelope("game_completed", { gameType: "shapeChallenge" }) as unknown as Record<string, unknown>;
+  });
+
+  assert.deepEqual(Object.keys(debuggable).sort(), Object.keys(release).sort(), "no field appears or disappears");
+  assert.notEqual(debuggable.isInternal, release.isInternal);
+  for (const key of Object.keys(release)) {
+    if (key === "isInternal" || key === "sessionId" || key === "installationId") continue;
+    assert.deepEqual(debuggable[key], release[key], `${key} is unchanged`);
+  }
+});

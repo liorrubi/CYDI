@@ -42,3 +42,31 @@ When asked to lock or unlock the shapes (e.g. "unlock all shapes so I can browse
 - The unlock rule lives in `src/services/shapeChallengeProgress.ts`
   (`isShapeUnlockedAt` / `getFrontierIndex`, id-based) - don't touch that when toggling
   the lock bypass; only the `unlocked` line itself needs to change.
+
+## Analytics: 22-23 Sep 2026 Android data is QA-contaminated
+
+**Exclude Android totals for 22 and 23 September 2026 from every trend comparison.**
+The last reliable Android baseline before the contamination is **21 Sep 2026**.
+
+What happened: the internal-device flag lives in `localStorage` alongside
+`installationId`/`sessionId` (`src/services/analyticsIdentity.ts`), so reinstalling the
+APK wiped all three at once. Version codes 31-40 were all built and installed on the test
+device on 22 Sep while preparing the 0.48.4 release, and each cycle produced a fresh
+installation id with the internal flag gone - so automated QA runs were recorded as real
+players. The give-away in the stored data is a near-uniform sweep of the whole geometric
+category plus ten *historical* daily challenges (`daily:13`, `daily:17`, `daily:25`...),
+which no real player can replay.
+
+The contaminated figures, for reference: 185 Android "installations" / 1,280 games on
+22 Sep, and 44 / 392 on 23 Sep, against 81 lifetime Play installs and ~47 monthly active
+devices.
+
+- **Web data for those two days is unaffected and stays usable** - the contamination is
+  Android-only.
+- The stored day buckets are **deliberately left as they are**. They hold running totals,
+  not per-event records, so the noise cannot be separated from the genuine traffic; and
+  `alltime` is a separate running counter, so deleting a day bucket would leave the day
+  sums disagreeing with the lifetime totals - a worse state than a documented anomaly.
+- Fixed going forward: a debuggable build now marks its own events internal via
+  `isQaBuild()`, which reads the APK's own `android:debuggable` rather than storage, so no
+  reinstall can lose it again.

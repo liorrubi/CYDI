@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.49.0 - 2026-09-23
+
+**A challenge page for the lightning bolt.** `/draw-a-lightning-bolt-from-memory`
+joins the practice pages, with the drawing-challenges hub card that makes it findable
+without the video. It is the first one for a Symbols shape - every earlier page was
+geometric or an animal.
+
+The page copy is about what a bolt actually costs a memory: it is not symmetrical,
+the step between the two arms sits off-centre, and people add zigzags that are not
+in the target because a bolt feels busier than it is.
+
+Same architecture as the others, no new drawing or scoring code: a real catalogue
+target, the normal study countdown, one attempt, the game's own score, and a round
+that persists nothing - no coins, no best score, no unlock - so it is playable while
+Symbols is still locked. `src/seo/landingPages.test.ts` pins the new path in the list
+of pages allowed to use the practice exception.
+
+The Short this page belongs to is published separately; its `/s/lightning` alias
+follows in its own release, so the alias never exists while its destination 404s.
+
 ## 0.48.4 - 2026-09-22
 
 **An empty auction was being reported as a broken SDK.** A rewarded load that AdMob

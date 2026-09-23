@@ -95,6 +95,12 @@ const PIG = { category: "animals" as CategoryId, shapeId: "ani-pig", practice: t
 // persists nothing.
 const SNAIL = { category: "animals" as CategoryId, shapeId: "ani-snail", practice: true as const };
 
+// The lightning bolt is where /s/lightning lands someone who just watched the
+// Lightning Short. Fifteenth in Symbols - a category that costs coins - so it needs the
+// same practice exception as the others: the round is real and scored, and it persists
+// nothing.
+const LIGHTNING = { category: "symbols" as CategoryId, shapeId: "sym-lightning", practice: true as const };
+
 const LANDING_PAGES: LandingPage[] = [
   { path: "/drawing-accuracy-test", shape: CIRCLE },
   { path: "/draw-a-perfect-circle", shape: CIRCLE },
@@ -106,6 +112,7 @@ const LANDING_PAGES: LandingPage[] = [
   { path: "/draw-an-owl-from-memory", shape: OWL },
   { path: "/draw-a-pig-from-memory", shape: PIG },
   { path: "/draw-a-snail-from-memory", shape: SNAIL },
+  { path: "/draw-a-lightning-bolt-from-memory", shape: LIGHTNING },
   { path: "/drawing-challenges", page: "challenges" },
   { path: "/draw-shapes-online" },
   { path: "/multiplayer-drawing-game", mode: "playTogether" },

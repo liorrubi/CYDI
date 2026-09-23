@@ -85,4 +85,10 @@ export const DRAWING_CHALLENGES: DrawingChallenge[] = [
     note: "A spiral with a real number of turns, and memory smooths it.",
     shapeId: "ani-snail",
   },
+  {
+    href: "/draw-a-lightning-bolt-from-memory",
+    name: "Draw a lightning bolt from memory",
+    note: "All straight edges, and it leans further than anyone remembers.",
+    shapeId: "sym-lightning",
+  },
 ];

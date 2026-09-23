@@ -519,6 +519,29 @@ const SNAIL_FROM_MEMORY: SeoPage = {
   faq: true,
 };
 
+const LIGHTNING_FROM_MEMORY: SeoPage = {
+  path: "/draw-a-lightning-bolt-from-memory",
+  title: "Draw a Lightning Bolt From Memory - Drawing Challenge | CYDI",
+  description:
+    "Study a lightning bolt for a few seconds, watch it disappear, then draw it back from memory and get an instant score out of 100. Free, no sign-up, plays in the browser.",
+  h1: "Draw a Lightning Bolt From Memory",
+  paragraphs: [
+    "The bolt is on screen for a couple of seconds, then it is gone and the canvas is empty. You draw it back from memory - one unbroken line, all straight edges, no curves anywhere - and your attempt is scored against the target and laid over it afterwards, so you can see exactly where the angles went.",
+    "A lightning bolt is the shape everyone thinks they know. What memory drops is that it is not symmetrical: the upper arm leans one way, the lower arm leans back the other, and the step between them sits off-centre rather than in the middle. The other common miss is the corner count - people add zigzags that are not there, because a bolt feels busier than it is.",
+    "This is a practice round: played and scored for real, and it changes nothing in your game - no coins, no best score, no unlocks - so you can take it as often as you like, whether or not you have reached Symbols in the Shape Challenge.",
+  ],
+  links: [
+    { href: "/draw-a-perfect-star", label: "Draw a perfect star" },
+    { href: "/draw-a-snail-from-memory", label: "Draw a snail from memory" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
+    { href: "/how-to-play", label: "How the score is worked out" },
+    { href: "/", label: "CYDI home" },
+  ],
+  cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
+  androidCta: true,
+  faq: true,
+};
+
 /*
  * The practice directory. It is a landing path rather than a content page
  * because it belongs to the site's own visual language - SiteChallenges.tsx
@@ -558,7 +581,7 @@ const DRAWING_CHALLENGES_PAGE: SeoPage = {
   androidCta: true,
 };
 
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, OWL_FROM_MEMORY, PIG_FROM_MEMORY, SNAIL_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, OWL_FROM_MEMORY, PIG_FROM_MEMORY, SNAIL_FROM_MEMORY, LIGHTNING_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list

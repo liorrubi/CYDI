@@ -43,30 +43,81 @@ When asked to lock or unlock the shapes (e.g. "unlock all shapes so I can browse
   (`isShapeUnlockedAt` / `getFrontierIndex`, id-based) - don't touch that when toggling
   the lock bypass; only the `unlocked` line itself needs to change.
 
-## Analytics: 22-23 Sep 2026 Android data is QA-contaminated
+## Analytics: 22-23 Sep 2026 Android activity is anomalous, source unresolved
 
-**Exclude Android totals for 22 and 23 September 2026 from every trend comparison.**
-The last reliable Android baseline before the contamination is **21 Sep 2026**.
+**Do not label these two days as either genuine traffic or QA-generated.** The volume is
+far above anything before it and the stored aggregates cannot resolve where it came from.
+Treat the Android totals as unexplained, not as proven noise.
 
-What happened: the internal-device flag lives in `localStorage` alongside
-`installationId`/`sessionId` (`src/services/analyticsIdentity.ts`), so reinstalling the
-APK wiped all three at once. Version codes 31-40 were all built and installed on the test
-device on 22 Sep while preparing the 0.48.4 release, and each cycle produced a fresh
-installation id with the internal flag gone - so automated QA runs were recorded as real
-players. The give-away in the stored data is a near-uniform sweep of the whole geometric
-category plus ten *historical* daily challenges (`daily:13`, `daily:17`, `daily:25`...),
-which no real player can replay.
+### 23 Sep 2026
 
-The contaminated figures, for reference: 185 Android "installations" / 1,280 games on
-22 Sep, and 44 / 392 on 23 Sep, against 81 lifetime Play installs and ~47 monthly active
-devices.
+Android regular-game activity is **anomalously high and the source is unresolved**: 431
+external `game_started` on Android, against a prior baseline of 0-17 per day.
 
-- **Web data for those two days is unaffected and stays usable** - the contamination is
-  Android-only.
-- The stored day buckets are **deliberately left as they are**. They hold running totals,
-  not per-event records, so the noise cannot be separated from the genuine traffic; and
-  `alltime` is a separate running counter, so deleting a day bucket would leave the day
-  sums disagreeing with the lifetime totals - a worse state than a documented anomaly.
-- Fixed going forward: a debuggable build now marks its own events internal via
-  `isQaBuild()`, which reads the APK's own `android:debuggable` rather than storage, so no
-  reinstall can lose it again.
+A read-only investigation ruled out the two obvious explanations:
+
+- **Not the known QA device.** `dumpsys usagestats` puts CYDI in the foreground for under
+  8 minutes before the 08:52 cutover (08:44:15-08:52:31 plus three sub-second resumes).
+  A round cannot complete faster than roughly 4s (2s preview + 0.8-1.2s analysing +
+  drawing), so that window tops out near 120 rounds - it cannot produce 431. The device
+  also carries a *debug* build installed at 08:43:49 via `packageinstaller` (sideloaded,
+  not Play), and that build reports JS `APP_VERSION 0.49.1`, which accounts for exactly
+  **1** external regular game. No local *release* APK of 0.48.4 was built or installed.
+- **Not Google Play automation.** Play Console -> Pre-launch report shows the empty state
+  ("Upload artifacts to generate pre-launch reports"). No pre-launch/Robo run has ever
+  executed for this app, so there is no Play automation that could have produced traffic.
+
+Genuine user activity is plausible but **unproven**, and the stored dimensions cannot
+reconstruct an exact genuine-user count.
+
+**08:52 is not the end of proven contamination.** It is only the moment the new
+debug-build internal classification was empirically verified on the device.
+
+### 22 Sep 2026
+
+Android activity was **highly anomalous and the source is unresolved**: 1,280 external
+regular-game starts and 185 distinct Android installationIds, against 81 lifetime Play
+installs.
+
+A QA contribution remains **possible**: `usagestats` on the device only retains back to
+22 Sep 18:45, so device usage earlier that day cannot be reconstructed either way. The
+recorded evening windows total 29 minutes, which is far too little on its own.
+
+Do not classify the whole day as proven QA contamination.
+
+### Two earlier arguments that turned out to be invalid
+
+Both were used to call these days contaminated; neither survives:
+
+- **Historical Daily Challenges are NOT proof of automation.** `DailyChallengeScreen.tsx`
+  has a replay mode (`Challenge from ${episode.dateKey}`) and the Durable Object keeps an
+  episode `history`, so real players can play past challenges. `daily:40` / `daily:42`
+  prove nothing.
+- **The geometry-heavy shape mix is NOT proof of a catalog scan.** Geometric is the
+  default category and `circle` its first shape, so a decaying distribution led by
+  `circle` is exactly what ordinary progression produces.
+
+The score distribution argues the same way: 2.61 average with a 57-60% pass rate across
+1,563 rounds on 22-23 Sep is a spread of many hands, not the repeatable output of a
+script.
+
+### Baseline
+
+**21 Sep 2026 is the last low-volume pre-spike day**, useful as a conservative comparison
+point. It is **not** evidence that 22-23 Sep are invalid.
+
+### What is settled
+
+- Web data for 22-23 Sep is unaffected and usable.
+- The debug-build fix in commit `8042949` is correct and **must not be reverted**: the
+  envelope sends `shouldReportAsInternal() = isQaBuild() || isInternalDevice()`, and
+  `isQaBuild()` reads `window.Capacitor.DEBUG` from the APK's own `android:debuggable`,
+  which no reinstall or data clear can lose. It closes a real hole regardless of what
+  caused these two days.
+- Keep `cydi.analyticsInternal.v1 = "1"` set on the QA device as well - it is the only
+  protection when testing a locally built *release* APK, where `Capacitor.DEBUG` is false.
+- A QA debug APK reports `APP_VERSION` from `src/app/constants.ts`, which drifts ahead of
+  the APK's Gradle `versionName` whenever build.gradle is deliberately not bumped.
+- The stored day buckets were deliberately left untouched: they hold running totals, not
+  per-event records, and `alltime` is a separate counter that deleting a day would not
+  correct.

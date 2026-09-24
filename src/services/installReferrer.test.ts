@@ -53,7 +53,7 @@ type BridgeResult = {
 };
 
 /** Installs a bridge that records its own call count, plus the standard non-QA Android environment. */
-function arrange(results: BridgeResult[] | (() => Promise<BridgeResult>), overrides: { isQa?: boolean; isNative?: boolean; now?: number } = {}) {
+function arrange(results: BridgeResult[] | (() => Promise<BridgeResult>), overrides: { isQa?: boolean; isNative?: boolean; now?: number; appVersion?: string } = {}) {
   _resetInstallReferrerForTests();
   captured = [];
   const calls = { count: 0 };
@@ -70,7 +70,7 @@ function arrange(results: BridgeResult[] | (() => Promise<BridgeResult>), overri
     isNative: () => overrides.isNative ?? true,
     isQa: () => overrides.isQa ?? false,
     now: () => overrides.now ?? Date.UTC(2026, 8, 24, 12, 0, 0),
-    appVersion: APP_VERSION,
+    appVersion: () => overrides.appVersion ?? APP_VERSION,
   });
   return calls;
 }
@@ -243,6 +243,29 @@ test("a readable installVersion with no referrer is a first_open and nothing els
   await runInstallReferrerOnce();
   assert.deepEqual(names(), ["first_open"]);
   assert.deepEqual(captured[0].params, { installAge: "unknown" });
+});
+
+test("first_open compares Play's installVersion with the NATIVE versionName, not the web APP_VERSION", async () => {
+  // The web bundle's constant can run ahead of (or behind) the APK. What Play reports
+  // is the installed package's versionName, so that is the only valid comparison.
+  const { APP_VERSION: WEB_APP_VERSION } = await import("../app/constants.ts");
+  // Same DUPLICATE_WINDOW_MS reason as "an upgrade is attributed..." above.
+  await new Promise((resolve) => setTimeout(resolve, 2100));
+  const native = "0.49.9";
+  assert.notEqual(native, WEB_APP_VERSION);
+  arrange([{ responseCode: INSTALL_REFERRER_RESPONSE.OK, referrer: null, installVersion: native, installBeginTimestampSeconds: 0 }], { appVersion: native });
+  await runInstallReferrerOnce();
+  assert.deepEqual(names(), ["first_open"]);
+});
+
+test("native versionName not known yet -> no first_open (conservative), attribution unaffected", async () => {
+  // Same DUPLICATE_WINDOW_MS reason as "an upgrade is attributed..." above.
+  await new Promise((resolve) => setTimeout(resolve, 2100));
+  arrange([{ responseCode: INSTALL_REFERRER_RESPONSE.OK, referrer: "utm_source=youtube", installVersion: "unknown", installBeginTimestampSeconds: 1 }], {
+    appVersion: "unknown",
+  });
+  await runInstallReferrerOnce();
+  assert.deepEqual(names(), ["install_attributed"]);
 });
 
 test("OK with nothing usable in it emits nothing at all", async () => {

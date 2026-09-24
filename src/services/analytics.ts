@@ -10,12 +10,13 @@
 
 import { Capacitor } from "@capacitor/core";
 
-import { APP_BUILD, APP_VERSION } from "../app/constants";
+import { APP_BUILD } from "../app/constants";
 import type { Attribution } from "./analyticsAttribution";
 import { getAttribution } from "./analyticsAttributionStore";
 import { getInstallationId, getSessionId, shouldReportAsInternal } from "./analyticsIdentity";
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
 import { enqueueAnalyticsEvent } from "./analyticsQueue";
+import { getAnalyticsAppVersion, getAnalyticsAppVersionCode } from "./nativeAppInfo";
 
 export type { AnalyticsEventName };
 export type AnalyticsParams = Record<string, string | number | boolean>;
@@ -159,10 +160,12 @@ const consoleDebugProvider: AnalyticsProvider = {
  * reinstall - which is how a day of QA runs reached the real-player numbers.
  *
  * appVersion/appBuild follow the identical pattern, so activity can be analysed
- * per release: `APP_VERSION` is the product version (the same constant
- * build.gradle's versionName mirrors), `APP_BUILD` the short git SHA that tells
- * two deploys of one version apart. Both are read from the constants rather than
- * duplicated here, so there is still exactly one source of truth.
+ * per release. `appVersion` is per SURFACE (see nativeAppInfo.ts): on the web it is
+ * `APP_VERSION`; in the Android app it is the installed package's own versionName,
+ * read from native package metadata - never the web bundle's constant, which runs
+ * ahead of the APK between Android releases. Android also sends `appVersionCode`
+ * (its versionCode) once known; web never sends it. `APP_BUILD` is the short git SHA
+ * that tells two deploys of one version apart.
  *
  * `attribution` follows the same pattern again: the five short normalized labels
  * describing where THIS VISIT came from (see analyticsAttribution.ts). It rides
@@ -186,10 +189,17 @@ export function buildAnalyticsEnvelope(eventName: AnalyticsEventName, params: An
     installationId: getInstallationId(),
     sessionId: getSessionId(),
     isInternal: shouldReportAsInternal(),
-    appVersion: APP_VERSION,
+    appVersion: getAnalyticsAppVersion(),
     appBuild: APP_BUILD,
+    ...appVersionCodeField(),
     ...attributionFor(eventName),
   };
+}
+
+/** Omitted entirely (not sent as "unknown") on web and before the native value is read. */
+function appVersionCodeField(): { appVersionCode?: string } {
+  const code = getAnalyticsAppVersionCode();
+  return code === undefined ? {} : { appVersionCode: code };
 }
 
 /**

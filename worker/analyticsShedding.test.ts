@@ -39,7 +39,7 @@ test.beforeEach(() => {
 // ------------------------------------------------------------- classification ----
 
 test("the preserve list holds only irreplaceable or revenue events, and no high-volume telemetry", () => {
-  for (const name of ["first_open", "install_attributed", "purchase_completed", "shop_purchase_with_coins", "mp_room_created", "mp_game_started"]) {
+  for (const name of ["first_open", "install_attributed", "app_open", "result_shared", "purchase_completed", "shop_purchase_with_coins", "mp_room_created", "mp_game_started"]) {
     assert.ok(ALWAYS_PRESERVE.includes(name), `${name} must be preserved`);
   }
   // The four biggest streams by volume. Any of these creeping onto the list would

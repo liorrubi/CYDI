@@ -1,5 +1,105 @@
 # Changelog
 
+## 0.52.2 - 2026-09-24
+
+Web release that ships together with the Worker half of Android 0.53.0 (below) - one
+deployment, since the Worker serves the site. Web-visible changes only:
+
+- **Play Together** sends its platform and app version with create, join lookups and the
+  room socket; a deliberate "busy" refusal from the server now shows its own message, and
+  Create is debounced with a 15 s -> 30 s -> 60 s -> 120 s backoff (no automatic retry).
+  The new minimum-version gate never applies to the website.
+- **Analytics** batches flush every 30 s instead of 15 s (still immediately when the tab
+  is hidden or closed); Shop purchases are sent as `shop_purchase_with_coins`.
+- **Privacy policy**: Android full-screen ads between games, and the app version Play
+  Together sends.
+- **Worker**: `/api/config/ads/interstitial` (fail-closed, nothing published), the
+  Play Together minimum-version gate (OFF, no config), the four `interstitial_*`
+  analytics events, Android `appVersionCode`, and `app_open` / `result_shared`
+  permanently exempt from load shedding.
+
+## Android 0.53.0 - unreleased (versionCode 48 release candidate; 46/47 were Stage-0 debug builds)
+
+**Rewarded bonus is never lost on the way out.** After a rewarded ad had genuinely
+granted the ×2/×3 bonus, only the offer's own Continue credited it; Next Shape, Try
+Again and Back to Map dropped it and recorded `reward_skipped` for an ad the player had
+watched. Every exit now settles an earned bonus exactly once, with the same bonus-round
+bookkeeping, and `reward_skipped` is left to offers that were genuinely not earned.
+Rewarded loading and showing are unchanged.
+
+**Play Together resilience.** Create, `/info` and the room socket send the platform and
+app version (never an ID). The Worker can refuse outdated Android builds with
+`multiplayer_update_required` (426, or close code 4426 on the socket) BEFORE any RoomDO
+is touched - a KV-controlled gate, OFF by default, keyed on Android versionCode so the
+website is never affected, and cached so room operations pay no KV read each. The app
+then stops reconnecting for good and shows an Update button. The cost guard's
+`multiplayer_capacity` refusal now gets its own message, and Create is debounced and
+backs off 15 s -> 30 s -> 60 s -> 120 s with no automatic retry.
+
+**Quota safety.** `app_open` and `result_shared` are permanently never shed (they were
+protected only by a KV override during the 24 Sep emergency); EMERGENCY shedding is
+otherwise unchanged. The client flushes analytics every 30 s instead of 15 s. Shop
+purchases are sent as `shop_purchase_with_coins` (the Worker already stores the legacy
+name under it).
+
+**Interstitial production unit wired** (production builds only; debug builds keep
+Google's test unit). Still dark until the separate remote config enables it.
+
+The privacy policy now says Play Together sends the app version and platform, and why.
+
+Android-only so far; the web keeps its own APP_VERSION and will number this change
+when it ships there.
+
+**Stage-0 fix (vc47).** On vc46 the 120 s safety timeout after the ad's Showed
+callback released gameplay while the ad was still up - the Mi 8's WebView never fires
+visibilitychange under an interstitial - so the next round started behind it. The
+timeout now only frees the ad state and leaves the player on the Result screen; their
+next tap continues. A late Dismissed is still reported and changes nothing else.
+
+**Interstitial A/B experiment, built and dark.** Android may show a full-screen ad
+between normal Shape Challenge games - only when the player continues with Next
+Shape or Try Again, never Back to Map, never in Practice, Pass & Play, Play
+Together, Daily, Mega, Artist Pack or Special. Everything is behind its own
+fail-closed config, `GET /api/config/ads/interstitial`, deliberately a separate
+route: released clients validate `/api/config/ads` strictly, so changing that
+object would have turned rewarded ads off on every installed build.
+
+- Remote controls: `enabled` (live - the interstitial-only emergency switch),
+  `rolloutPercent` (0-50), `gamesBetweenAds` (5/7/10/12/15/20),
+  `maxOpportunitiesPerSession` (1/2/3), and server-side country eligibility from
+  the Cloudflare-observed network country (the client only ever sees
+  `countryEligible`). Unknown/unsupported countries are never eligible.
+- Assignment: a stable hash of the persisted installationId. Treatment is buckets
+  [0, p), control the equal-sized mirror [50%, 50% + p), so 5 -> 20 -> 50 only ever
+  adds installations. No persisted id means unassigned.
+- Cadence: `eligibleGamesSinceLastOpportunity` is persisted and advanced only by a
+  completed eligible game, so no app open, config fetch or cold start can create an
+  opportunity. Every outcome (control, not_ready, shown, show_failed, suppressed)
+  consumes it, symmetrically in both arms.
+- Its own ad state (idle/loading/ready/showing), one preload from cadence-1, no
+  waiting at the checkpoint, `shown` only from the SDK's Showed callback,
+  `interstitial_dismissed` only from its Dismissed callback, and the next round
+  starts only after the ad releases gameplay. A rewarded ad shown in the same result
+  cycle suppresses the opportunity. Rewarded itself is unchanged.
+- Analytics: `interstitial_checkpoint`, `interstitial_continuation`,
+  `interstitial_load_failed`, `interstitial_dismissed`, with bounded arm/outcome,
+  cadence and failure-reason breakouts (from the numeric GMA error code, never the
+  SDK message).
+
+**Android analytics now reports the installed release.** `appVersion` on Android is
+the package's own versionName (Capacitor `App.getInfo()`), plus `appVersionCode`,
+read at bootstrap; before it is known Android reports `unknown`, never the web
+bundle's `APP_VERSION`. Web is unchanged. The same native versionName is now what
+`first_open` compares with Play's install version (it compared APP_VERSION, so any
+drift between the two silently stopped first_open), and what Settings shows on
+Android, with the versionCode.
+
+The privacy policy now discloses full-screen ads between games on Android.
+
+**Not deployed.** The Worker half (the config route and the new events/counters)
+must ship before this build reaches any user; until then a batch simply skips the
+new events and the missing route keeps the experiment off.
+
 ## 0.52.1 - 2026-09-24
 
 **/s/triangle, the Triangle Short's campaign alias.** The Short is public, so the

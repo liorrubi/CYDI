@@ -20,11 +20,11 @@
 
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
-import { APP_VERSION } from "../app/constants";
 import { setInstallAttribution, trackEvent } from "./analytics";
 import { resolveAttribution, type Attribution } from "./analyticsAttribution";
 import { isQaBuild } from "./analyticsIdentity";
 import type { InstallAgeParam } from "./analyticsSchema";
+import { NATIVE_VERSION_FALLBACK, getAnalyticsAppVersion } from "./nativeAppInfo";
 
 const STATE_KEY = "cydi.installReferrer.v1";
 
@@ -158,7 +158,15 @@ type Deps = {
   isNative: () => boolean;
   isQa: () => boolean;
   now: () => number;
-  appVersion: string;
+  /**
+   * The versionName of the INSTALLED package, compared against Play's install_version.
+   * Read lazily from nativeAppInfo.ts (App.getInfo()), never the web bundle's
+   * APP_VERSION: the two drift whenever web ships without an Android release, and a
+   * mismatch here silently stops first_open for every install. "unknown" (native info
+   * not read) never matches, which is the conservative direction shouldEmitFirstOpen
+   * already takes.
+   */
+  appVersion: () => string;
 };
 
 let deps: Deps = {
@@ -166,7 +174,7 @@ let deps: Deps = {
   isNative: () => Capacitor.getPlatform() === "android",
   isQa: isQaBuild,
   now: () => Date.now(),
-  appVersion: APP_VERSION,
+  appVersion: getAnalyticsAppVersion,
 };
 
 /** Test-only: swap the native bridge and the environment predicates. */
@@ -218,7 +226,9 @@ export async function runInstallReferrerOnce(): Promise<void> {
     // Two independent decisions reading two different fields of one response. Neither
     // may stand in for the other, and neither invents metadata Play did not send.
     const attribution = referrerAttribution(result.referrer);
-    const emitFirstOpen = shouldEmitFirstOpen(result.installVersion, deps.appVersion, attempted.firstOpenEmitted);
+    const appVersion = deps.appVersion();
+    const emitFirstOpen =
+      appVersion !== NATIVE_VERSION_FALLBACK && shouldEmitFirstOpen(result.installVersion, appVersion, attempted.firstOpenEmitted);
 
     if (attribution !== null || emitFirstOpen) {
       // Set before either event so both carry the same labels; cleared afterwards so no

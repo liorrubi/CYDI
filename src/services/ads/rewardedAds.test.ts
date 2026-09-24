@@ -90,12 +90,16 @@ afterEach(() => {
 
 // --- Feature flags ---------------------------------------------------------------
 
-test("shipped flags enable rewarded only - every other format stays off", () => {
+// Interstitial joined rewarded in 0.53.0 (the A/B experiment, gated by its own remote
+// config in interstitialConfig.ts); every other format is still off at build time.
+test("shipped flags enable rewarded and interstitial only - every other format stays off", () => {
   assert.equal(AD_FLAGS.master, true);
   assert.equal(AD_FLAGS.formats.rewarded, true);
+  assert.equal(AD_FLAGS.formats.interstitial, true);
   assert.equal(isAdFormatEnabled("rewarded"), true);
+  assert.equal(isAdFormatEnabled("interstitial"), true);
   for (const format of ALL_FORMATS) {
-    if (format === "rewarded") continue;
+    if (format === "rewarded" || format === "interstitial") continue;
     assert.equal(AD_FLAGS.formats[format], false);
     assert.equal(isAdFormatEnabled(format), false);
   }

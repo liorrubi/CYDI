@@ -157,7 +157,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
     unlockColor(id);
     setSelectedColor(id);
     setUnlocked(getUnlockedColors());
-    trackEvent("purchase_completed", { productType: "penColor", tier: id, price });
+    trackEvent("shop_purchase_with_coins", { productType: "penColor", tier: id, price });
   }
 
   function handleBuySkin(id: PenSkinId, price: number) {
@@ -170,7 +170,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
     setSelectedSkin(id);
     setUnlockedSkins(getUnlockedSkins());
     playSuccessSound();
-    trackEvent("purchase_completed", { productType: "penSkin", tier: id, price });
+    trackEvent("shop_purchase_with_coins", { productType: "penSkin", tier: id, price });
   }
 
   function handleBuyKey(tier: ChestTier) {
@@ -181,7 +181,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
     spendCoins(tier.price);
     startChestCooldown(tier.id);
     setPendingChestReveal({ tier, amount: rollChestReward(tier.rewardMin, tier.rewardMax) });
-    trackEvent("purchase_completed", { productType: "chestKey", tier: tier.id, price: tier.price });
+    trackEvent("shop_purchase_with_coins", { productType: "chestKey", tier: tier.id, price: tier.price });
   }
 
   function handleBuyMegaPack(product: MegaPackProduct) {
@@ -201,7 +201,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
     playSuccessSound();
     setRevealedMegaCard(card);
     setMegaPurchaseCount((n) => n + 1);
-    trackEvent("purchase_completed", { productType: "megaCard", tier: card.rarity, price: product.price });
+    trackEvent("shop_purchase_with_coins", { productType: "megaCard", tier: card.rarity, price: product.price });
   }
 
   return (

@@ -40,8 +40,15 @@ import {
   type ReleaseIndexEntry,
 } from "../src/content/catalogSchema";
 import { ADS_CONFIG_KV_KEY, isValidRemoteAdsConfig, parseRemoteAdsConfig } from "../src/services/ads/remoteAdsConfigSchema";
+import {
+  INTERSTITIAL_CONFIG_KV_KEY,
+  isValidInterstitialStoredConfig,
+  parseInterstitialStoredConfig,
+  toClientConfig,
+} from "../src/services/ads/interstitialConfigSchema";
 import { isRoomCode, MP_LIMITS, ROOM_CODE_ALPHABET } from "../src/multiplayer/protocol";
 import { campaignLinkForPath, campaignRedirectUrl, CAMPAIGN_PATH_PREFIX } from "./campaignLinks";
+import { versionGateResponse } from "./multiplayerVersionGate";
 import { ANDROID_PATH, androidRedirectUrl, canonicalUrl, renderSeoSection, robotsTxt, seoPageForPath, sitemapXml, type SeoPage } from "./seoPages";
 import { CONTENT_PATHS, contentPageForPath, renderContentDocument } from "./contentPages";
 
@@ -536,6 +543,54 @@ async function handleAdsConfigPut(request: Request, env: Env): Promise<Response>
   return jsonNoStore({ ok: true, enabled: parsed.enabled });
 }
 
+// ---------- Interstitial experiment config ----------
+// Its OWN route and KV key, never a new field on /api/config/ads: released clients
+// validate that object strictly and would fail closed - turning rewarded ads off -
+// the moment its shape changed. Same auth and namespace as the ads switch.
+//
+// The response is decided per request: `countryEligible` comes from the network
+// country Cloudflare observed for THIS request (request.cf.country), and the stored
+// blockedCountries list never leaves the server. That is also why the response is
+// `private` - a shared cache keyed only on the URL would hand one country's answer
+// to another.
+
+export async function handleInterstitialConfigGet(request: Request, env: Env): Promise<Response> {
+  const raw = await env.CONTENT_KV.get(INTERSTITIAL_CONFIG_KV_KEY);
+  if (raw === null) return json({ error: "no interstitial config published" }, 404);
+  const config = parseInterstitialStoredConfig(raw);
+  if (!config) return json({ error: "stored interstitial config failed validation" }, 500);
+  const country = (request as { cf?: { country?: unknown } }).cf?.country;
+  return new Response(JSON.stringify(toClientConfig(config, country)), {
+    headers: {
+      "content-type": "application/json",
+      // Short for the same reason as the ads switch: `enabled` is an emergency lever.
+      "cache-control": "private, max-age=60",
+    },
+  });
+}
+
+export async function handleInterstitialConfigPut(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    return jsonNoStore({ error: "invalid json" }, 400);
+  }
+  if (!isValidInterstitialStoredConfig(parsed)) {
+    return jsonNoStore(
+      {
+        error:
+          "body must be exactly { enabled: boolean, rolloutPercent: 0-50, gamesBetweenAds: 5|7|10|12|15|20, " +
+          "maxOpportunitiesPerSession: 1|2|3, blockedCountries: string[] }",
+      },
+      400,
+    );
+  }
+  await env.CONTENT_KV.put(INTERSTITIAL_CONFIG_KV_KEY, JSON.stringify(parsed));
+  return jsonNoStore({ ok: true, config: parsed });
+}
+
 // ---------- Analytics ingest circuit breaker ----------
 // The emergency lever described in analyticsBreaker.ts. Admin-only on BOTH verbs,
 // unlike the ads switch: no client reads this, so there is no reason to publish
@@ -849,6 +904,10 @@ export default {
       if (request.method === "GET") return handleAdsConfigGet(env);
       if (request.method === "PUT") return handleAdsConfigPut(request, env);
     }
+    if (url.pathname === "/api/config/ads/interstitial") {
+      if (request.method === "GET") return handleInterstitialConfigGet(request, env);
+      if (request.method === "PUT") return handleInterstitialConfigPut(request, env);
+    }
 
     if (url.pathname === "/api/daily/current" && request.method === "GET") return forwardToDailyDO(request, env, "/current");
     if (url.pathname === "/api/daily/submit" && request.method === "POST") return forwardToDailyDO(request, env, "/submit");
@@ -861,11 +920,17 @@ export default {
     // Play Together rooms. `/create` is NOT reachable from outside - a room is
     // only ever allocated through POST /api/room, which owns code generation
     // and collision retry.
-    if (url.pathname === "/api/room" && request.method === "POST") return handleRoomCreate(request, env);
+    // The minimum-version gate runs FIRST on all three room routes - before the cost
+    // guard and before any RoomDO is addressed - so a refused client costs a Worker
+    // request and nothing more. OFF unless KV says otherwise (multiplayerVersionGate.ts).
+    if (url.pathname === "/api/room" && request.method === "POST") {
+      return (await versionGateResponse(request, env.CONTENT_KV, "http")) ?? handleRoomCreate(request, env);
+    }
 
     const roomMatch = url.pathname.match(/^\/api\/room\/([A-Z0-9]{6})\/(ws|info)$/);
     if (roomMatch && isRoomCode(roomMatch[1])) {
-      return forwardToRoomDO(request, env, roomMatch[1], `/${roomMatch[2]}`);
+      const gated = await versionGateResponse(request, env.CONTENT_KV, roomMatch[2] === "ws" ? "ws" : "http");
+      return gated ?? forwardToRoomDO(request, env, roomMatch[1], `/${roomMatch[2]}`);
     }
 
     if (url.pathname === "/api/config/multiplayer-guard") {

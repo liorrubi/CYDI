@@ -114,3 +114,23 @@ export async function maybePromptAppUpdate(onNotice?: (notice: AppUpdateNotice) 
     // design: an update prompt must never produce a visible failure.
   }
 }
+
+/**
+ * The Update button for a build the server has retired (Play Together's
+ * multiplayer_update_required). Opens this app's Play listing - the one place an
+ * update is guaranteed to be offered, whatever track or install source this build
+ * came from. On the web there is nothing to install: a reload fetches the latest
+ * bundle. Never throws.
+ */
+export async function openStoreForUpdate(): Promise<void> {
+  try {
+    if (!isAndroidApp()) {
+      window.location.reload();
+      return;
+    }
+    const { AppUpdate } = await import("@capawesome/capacitor-app-update");
+    await AppUpdate.openAppStore();
+  } catch {
+    // Nothing more to do; the message stays on screen.
+  }
+}

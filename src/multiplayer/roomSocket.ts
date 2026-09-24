@@ -30,6 +30,8 @@ import { getApiWebSocketOrigin } from "../services/nativeApi";
 import { getPlayerId } from "../services/playerProfileStore";
 import type { ClientFrame, ServerFrame } from "./protocol";
 import type { ConnectionStatus, RoomTransport } from "./roomTransport";
+import { multiplayerVersionQuery } from "./clientVersionParams";
+import { MP_UPDATE_REQUIRED_CLOSE_CODE } from "./versionGate";
 
 /** Reconnect backoff: quick first retries for a blip, settling to a slow poll so a long outage does not hammer the edge. */
 const BACKOFF_MS = [400, 800, 1600, 3200, 6400, 10_000, 15_000];
@@ -89,7 +91,9 @@ export function roomSocketUrl(roomCode: string): string {
   // (so dev, preview and tunnelled builds stay on themselves), and the API
   // origin on native (where the page origin is a virtual https://localhost
   // that points nowhere).
-  return `${getApiWebSocketOrigin()}/api/room/${roomCode}/ws`;
+  // The version query lets the Worker's minimum-version gate refuse an outdated build
+  // before any RoomDO is touched (see versionGate.ts).
+  return `${getApiWebSocketOrigin()}/api/room/${roomCode}/ws?${multiplayerVersionQuery()}`;
 }
 
 export type RoomSocketOptions = {
@@ -196,10 +200,17 @@ export class RoomSocket implements RoomTransport {
       for (const listener of this.listeners) listener(frame);
     });
 
-    socket.addEventListener("close", () => {
+    socket.addEventListener("close", (event) => {
       if (this.ws !== socket) return;
       this.ws = null;
       if (this.disposed) return;
+      // Terminal: the server refused this build. Reconnecting can never succeed, and a
+      // retry loop from every outdated install is exactly the load the gate exists to
+      // stop - so stop for good and let the UI offer the update instead.
+      if ((event as CloseEvent | undefined)?.code === MP_UPDATE_REQUIRED_CLOSE_CODE) {
+        this.stopForUpdate();
+        return;
+      }
       this.scheduleReconnect();
     });
 
@@ -343,6 +354,20 @@ export class RoomSocket implements RoomTransport {
     return () => {
       this.statusListeners.delete(listener);
     };
+  }
+
+  /** The server refused this build (MP_UPDATE_REQUIRED_CLOSE_CODE): stop everything, never reconnect, keep listeners so the UI can say why. */
+  private stopForUpdate(): void {
+    this.disposed = true;
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+    }
+    if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
+    if (this.watchdogTimer !== null) window.clearInterval(this.watchdogTimer);
+    this.clearProbe();
+    this.reconnectTimer = null;
+    this.watchdogTimer = null;
+    this.setStatus("update_required");
   }
 
   close(): void {

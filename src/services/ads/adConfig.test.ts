@@ -3,7 +3,7 @@
 //   regardless of anything internal-test-mode touches (requirement: production
 //   ADS_ENABLED must never flip true as a side effect of this feature);
 // - internal-test-ads mode forces Google's official test app/ad-unit IDs and
-//   turns on exactly the "rewarded" format, bypassing AD_FLAGS entirely, without
+//   turns on exactly the "rewarded" and "interstitial" formats, bypassing AD_FLAGS entirely, without
 //   ever mutating AD_FLAGS itself;
 // - internal-test-ads mode is only ever true via the exact literal string "true".
 
@@ -32,22 +32,26 @@ afterEach(() => {
 // build. What keeps ads off is that switch (fail-closed, nothing published), not these
 // flags - see the remote-gate tests in rewardedAds.test.ts. Every OTHER format staying
 // off is still a build-time invariant, and that is what this test locks down.
-test("rewarded is the only format the build can serve; all others stay off", () => {
+// Interstitial joined rewarded in 0.53.0 for the A/B experiment: capable at build time,
+// dark until its own fail-closed remote config (interstitialConfig.ts) says otherwise.
+const SERVABLE: AdFormat[] = ["rewarded", "interstitial"];
+
+test("rewarded and interstitial are the only formats the build can serve; all others stay off", () => {
   _setAdsInternalTestModeForTests(false);
   assert.equal(AD_FLAGS.master, true);
-  assert.equal(isAdFormatEnabled("rewarded"), true);
+  for (const format of SERVABLE) assert.equal(isAdFormatEnabled(format), true, `${format} must be servable`);
   for (const format of ALL_FORMATS) {
-    if (format === "rewarded") continue;
+    if (SERVABLE.includes(format)) continue;
     assert.equal(isAdFormatEnabled(format), false, `${format} must stay off`);
   }
 });
 
-test("internal-test-ads mode forces rewarded on, every other format stays off, and AD_FLAGS is never mutated", () => {
+test("internal-test-ads mode forces rewarded and interstitial on, every other format stays off, and AD_FLAGS is never mutated", () => {
   const masterBefore = AD_FLAGS.master;
   _setAdsInternalTestModeForTests(true);
-  assert.equal(isAdFormatEnabled("rewarded"), true);
+  for (const format of SERVABLE) assert.equal(isAdFormatEnabled(format), true, `${format} must be on in internal-test mode`);
   for (const format of ALL_FORMATS) {
-    if (format === "rewarded") continue;
+    if (SERVABLE.includes(format)) continue;
     assert.equal(isAdFormatEnabled(format), false, `${format} must stay off in internal-test mode`);
   }
   // The shipped flags object itself must be byte-for-byte unchanged.

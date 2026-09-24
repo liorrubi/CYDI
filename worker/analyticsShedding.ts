@@ -66,6 +66,14 @@ export const ALWAYS_PRESERVE: readonly string[] = [
   // Acquisition - irreplaceable, once per install.
   "first_open",
   "install_attributed",
+  // Denominators and virality. Carried in the KV `preserveExtra` during the 24 Sep 2026
+  // emergency and made permanent in code here, so no future EMERGENCY can silently
+  // drop them: app_open is the one event every session count and per-release adoption
+  // figure divides by, and result_shared is the only measure of sharing. Both are
+  // low volume (one per launch / one per share). A KV preserveExtra that still names
+  // them is now simply redundant.
+  "app_open",
+  "result_shared",
   // Revenue.
   "purchase_completed",
   "shop_purchase_with_coins",

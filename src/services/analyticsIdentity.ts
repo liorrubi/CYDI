@@ -84,6 +84,19 @@ export function getInstallationId(): string {
 }
 
 /**
+ * The installation id ONLY if it is actually persisted, else null - never the
+ * in-memory fallback above. For uses that must be stable across launches (the
+ * interstitial experiment's arm assignment): an id that is regenerated on every
+ * launch would move the same person between arms, so "no stable id" has to be
+ * distinguishable from "an id".
+ */
+export function getPersistedInstallationId(): string | null {
+  getInstallationId();
+  const stored = readLocal(INSTALLATION_KEY);
+  return isAnalyticsId(stored) ? stored : null;
+}
+
+/**
  * The current session's id, refreshing its activity stamp. A new id is started when
  * there is no session yet, when the last activity was more than SESSION_IDLE_TIMEOUT_MS
  * ago, or when the stored stamp is in the future (device clock moved backwards).

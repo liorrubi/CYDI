@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import UpdateRequiredNotice from "./UpdateRequiredNotice";
 import Button from "../Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../DrawingCanvas";
 import { solidTargetInPreview } from "../../app/targetRendering";
@@ -328,6 +329,9 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
     handleDone(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainingMs, phase, submitted, submitting]);
+
+  // Terminal: the server retired this build. The socket has already stopped for good.
+  if (status === "update_required") return <UpdateRequiredNotice onExit={onExit} />;
 
   if (!snapshot) {
     return (

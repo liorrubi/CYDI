@@ -59,7 +59,13 @@ if (path === '/privacy') {
             ? import('./site/SiteGameSkin.tsx')
             : null
 
+    // Android: read the installed package's versionName/versionCode for analytics
+    // (see services/nativeAppInfo.ts) alongside the app chunk, so the first events -
+    // app_open included - carry the real native release. Bounded, never fatal, and a
+    // no-op on web.
+    const nativeInfo = import('./services/nativeAppInfo.ts').then(({ initNativeAppInfo }) => initNativeAppInfo())
     const { default: App } = await import('./App.tsx')
+    await nativeInfo.catch(() => undefined)
     // Awaited only to keep the first paint from landing on the placeholder; a
     // failure here is not fatal, React.lazy retries and shows the fallback.
     await siteChunk?.catch(() => undefined)

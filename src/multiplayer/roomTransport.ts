@@ -21,7 +21,8 @@ import type { ClientFrame, ServerFrame } from "./protocol";
  * likely to go quiet than to close cleanly, and the player needs to be told
  * their game is still there rather than staring at a frozen screen.
  */
-export type ConnectionStatus = "connecting" | "open" | "reconnecting" | "closed";
+/** "update_required" is terminal: the server refused this app version and no reconnect will be attempted. */
+export type ConnectionStatus = "connecting" | "open" | "reconnecting" | "closed" | "update_required";
 
 export type RoomTransport = {
   send(frame: ClientFrame): void;

@@ -13,7 +13,9 @@ const { buildAnalyticsEnvelope } = await import("./analytics.ts");
 const { APP_BUILD, APP_VERSION } = await import("../app/constants.ts");
 const { normalizeAppBuild, normalizeAppVersion } = await import("./analyticsSchema.ts");
 
-test("the envelope carries appVersion from APP_VERSION - the single source of truth", () => {
+// Web only (these tests run with no native platform). Android reports its installed
+// package's versionName instead - see nativeAppInfo.test.ts.
+test("on the web the envelope carries appVersion from APP_VERSION", () => {
   const envelope = buildAnalyticsEnvelope("app_open", {});
   assert.equal(envelope.appVersion, APP_VERSION);
   assert.notEqual(envelope.appVersion, undefined);
@@ -29,11 +31,11 @@ test("platform is whatever Capacitor reports, so Android and Web self-identify",
   assert.equal(envelope.platform, Capacitor.getPlatform());
 });
 
-test("the version fields do NOT depend on the surface - web and Android are stamped the same way", () => {
-  // Web and Android ship independently, so their VALUES can differ between two
-  // live builds; what must not differ is where the value comes from. Both
-  // surfaces read the same constants, so one build's envelope is self-consistent
-  // regardless of which surface it is running on.
+test("within one surface every event is stamped with the same version fields", () => {
+  // Web and Android ship independently, so their VALUES differ between two live
+  // builds, and since 0.53.0 so does the source (APP_VERSION on web, the native
+  // versionName on Android). What must not differ is one run's events among
+  // themselves.
   const web = buildAnalyticsEnvelope("app_open", {});
   const game = buildAnalyticsEnvelope("game_started", { gameType: "shapeChallenge" });
   assert.equal(web.appVersion, game.appVersion);

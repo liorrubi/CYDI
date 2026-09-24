@@ -21,6 +21,16 @@
 import { CATEGORIES, type CategoryId } from "../engine/shapeLibrary";
 import { isRewardedAdPlacement, type RewardedAdPlacement } from "./ads/adPlacements";
 import { isAdFailureReason, type AdFailureReason } from "./ads/adTypes";
+import {
+  isInterstitialArm,
+  isInterstitialCadence,
+  isInterstitialFailureReason,
+  isInterstitialOutcome,
+  type InterstitialArm,
+  type InterstitialCadence,
+  type InterstitialFailureReason,
+  type InterstitialOutcome,
+} from "./ads/interstitialConfigSchema";
 
 export type GameType =
   | "shapeChallenge"
@@ -234,6 +244,17 @@ export type EventParamsMap = {
   rewarded_ad_dismissed: { placement: RewardedAdPlacement };
   rewarded_ad_unavailable: { placement: RewardedAdPlacement; reason: AdFailureReason };
   rewarded_ad_failed: { placement: RewardedAdPlacement; reason: AdFailureReason };
+  // Interstitial A/B experiment (emitted only by src/services/ads/interstitialController.ts).
+  // Android-only, Shape Challenge only. Every value is a closed set from
+  // ads/interstitialConfigSchema.ts; no opportunity id, no SDK message.
+  /** One per consumed opportunity, in either arm. `reason` accompanies show_failed and nothing else. */
+  interstitial_checkpoint: InterstitialCheckpointParams;
+  /** The next eligible Shape Challenge game_started in the same session after a checkpoint. */
+  interstitial_continuation: { arm: InterstitialArm; outcome: InterstitialOutcome; gamesBetweenAds: InterstitialCadence };
+  /** A background interstitial load that produced no ad, with the bounded reason (from the GMA numeric code). */
+  interstitial_load_failed: { reason: InterstitialFailureReason };
+  /** The SDK's own Dismissed callback - never inferred from the page becoming visible. */
+  interstitial_dismissed: Record<string, never>;
   // Reward-offer UX funnel (emitted only by src/components/DoubleCoinsOffer.tsx).
   // A DIFFERENT, coarser layer than the rewarded_ad_* SDK-lifecycle events above:
   // these track what the PLAYER did/saw in the offer banner, not what the SDK did.
@@ -290,6 +311,15 @@ export type EventParamsMap = {
   play_store_click: { surface: PlayStoreSurfaceParam };
 };
 
+/**
+ * Control records only `control` (or `suppressed`); treatment never records `control`.
+ * show_failed is the one outcome that carries a reason.
+ */
+export type InterstitialCheckpointParams =
+  | { arm: "control"; outcome: "control" | "suppressed"; gamesBetweenAds: InterstitialCadence }
+  | { arm: "treatment"; outcome: "not_ready" | "shown" | "suppressed"; gamesBetweenAds: InterstitialCadence }
+  | { arm: "treatment"; outcome: "show_failed"; gamesBetweenAds: InterstitialCadence; reason: InterstitialFailureReason };
+
 export type AnalyticsEventName = keyof EventParamsMap;
 
 export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
@@ -313,6 +343,10 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "rewarded_ad_dismissed",
   "rewarded_ad_unavailable",
   "rewarded_ad_failed",
+  "interstitial_checkpoint",
+  "interstitial_continuation",
+  "interstitial_load_failed",
+  "interstitial_dismissed",
   "reward_offer_shown",
   "reward_ad_started",
   "reward_ad_completed",
@@ -559,6 +593,20 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   rewarded_ad_dismissed: (p) => validateAdEvent(p),
   rewarded_ad_unavailable: (p) => validateAdFailureEvent(p),
   rewarded_ad_failed: (p) => validateAdFailureEvent(p),
+  interstitial_checkpoint: (p) => validateInterstitialCheckpoint(p),
+  interstitial_continuation: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["arm", "outcome", "gamesBetweenAds"])) return { valid: false };
+    const { arm, outcome, gamesBetweenAds } = p;
+    if (!isInterstitialArm(arm) || !isInterstitialOutcome(outcome) || !isInterstitialCadence(gamesBetweenAds)) return { valid: false };
+    if (!isArmOutcomePair(arm, outcome)) return { valid: false };
+    return { valid: true, params: { arm, outcome, gamesBetweenAds } };
+  },
+  interstitial_load_failed: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["reason"])) return { valid: false };
+    if (!isInterstitialFailureReason(p.reason)) return { valid: false };
+    return { valid: true, params: { reason: p.reason } };
+  },
+  interstitial_dismissed: (p) => validateNoParams(p),
   reward_offer_shown: (p) => validateAdEvent(p),
   reward_ad_started: (p) => validateAdEvent(p),
   reward_ad_completed: (p) => validateAdEvent(p),
@@ -653,6 +701,26 @@ function validateAdFailureEvent<E extends "rewarded_ad_unavailable" | "rewarded_
   if (!isRecord(p) || !hasExactKeys(p, ["placement", "reason"])) return { valid: false };
   if (!isRewardedAdPlacement(p.placement) || !isAdFailureReason(p.reason)) return { valid: false };
   return { valid: true, params: { placement: p.placement, reason: p.reason } as EventParamsMap[E] };
+}
+
+/** Which outcomes each arm can produce - an impossible pair is a bug, and is rejected rather than counted. */
+function isArmOutcomePair(arm: InterstitialArm, outcome: InterstitialOutcome): boolean {
+  if (outcome === "suppressed") return true;
+  return arm === "control" ? outcome === "control" : outcome !== "control";
+}
+
+function validateInterstitialCheckpoint(p: unknown): ValidationResult<"interstitial_checkpoint"> {
+  if (!isRecord(p)) return { valid: false };
+  const { arm, outcome, gamesBetweenAds } = p;
+  if (!isInterstitialArm(arm) || !isInterstitialOutcome(outcome) || !isInterstitialCadence(gamesBetweenAds)) return { valid: false };
+  if (!isArmOutcomePair(arm, outcome)) return { valid: false };
+  if (outcome === "show_failed") {
+    if (!hasExactKeys(p, ["arm", "outcome", "gamesBetweenAds", "reason"])) return { valid: false };
+    if (!isInterstitialFailureReason(p.reason)) return { valid: false };
+    return { valid: true, params: { arm: "treatment", outcome, gamesBetweenAds, reason: p.reason } };
+  }
+  if (!hasExactKeys(p, ["arm", "outcome", "gamesBetweenAds"])) return { valid: false };
+  return { valid: true, params: { arm, outcome, gamesBetweenAds } as InterstitialCheckpointParams };
 }
 
 /** shape_completed and its SEO-practice twin: one contract, so the two can never drift apart. */
@@ -752,6 +820,23 @@ const APP_BUILD_PATTERN = /^[0-9a-f]{7,12}$/;
 /** Strict-format coercion: short hex SHA only. Timestamp fallbacks, missing values and hostile input all become "unknown". */
 export function normalizeAppBuild(value: unknown): string {
   return typeof value === "string" && APP_BUILD_PATTERN.test(value) ? value : "unknown";
+}
+
+/**
+ * The native Android versionCode (Capacitor App.getInfo().build), sent ONLY by the
+ * Android app and only once the native package info has been read. A monotonic
+ * integer, which is what tells two APKs of the same versionName apart (0.51.0 was
+ * both vc44 and vc45). Kept, like appBuild, only on `app_open`.
+ *
+ * Format-closed for the same arbitrary-key reason as appVersion: 1-9 digits, no
+ * leading zero. Missing (web, older clients, native info not read yet) and
+ * malformed values are "unknown".
+ */
+const APP_VERSION_CODE_PATTERN = /^[1-9]\d{0,8}$/;
+
+export function normalizeAppVersionCode(value: unknown): string {
+  const text = typeof value === "number" && Number.isInteger(value) ? String(value) : value;
+  return typeof text === "string" && APP_VERSION_CODE_PATTERN.test(text) ? text : "unknown";
 }
 
 // --- Asia/Jerusalem date-range helpers, shared by ingestion (day bucket key) and the

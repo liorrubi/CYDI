@@ -12,6 +12,7 @@ import { isRewardedAdAvailable, preloadRewardedAd, showRewardedAd, type Rewarded
 import { trackEvent } from "../services/analytics";
 import { markDoubleRewardTutorialShown, shouldShowDoubleRewardTutorial } from "../services/tutorialStore";
 import { consumesDoubleAttempt, resolveAdOutcome } from "./doubleOfferAdFlow";
+import { createOfferSettlement } from "../app/doubleOfferSettlement";
 import {
   isBonusRewardRound,
   resolveBonusRewardRound,
@@ -39,6 +40,14 @@ type DoubleCoinsOfferProps = {
   onDoubleAttempted?: () => void;
   /** True while the screen is running a higher-priority coach hint (the first-round "Tap Next"). Hides the one-time ×2 explainer and reminder WITHOUT burning their flags - they simply return on a later, quieter offer. The offer itself stays fully usable. */
   deferExplainer?: boolean;
+  /**
+   * Called the moment the double is EARNED (the SDK's confirmed reward, or the dev-only
+   * quiz answered correctly), with a function that settles it exactly as Continue does.
+   * A screen that can be left without pressing Continue (Next Shape, Try Again, Back to
+   * Map) calls it on the way out, so an earned bonus is never forfeited. Settling is
+   * once-only: Continue and the exit path can never both credit.
+   */
+  onRewardEarned?: (finalize: () => void) => void;
 };
 
 type Phase = "offer" | "quiz" | "feedback";
@@ -88,7 +97,7 @@ function isMathFallbackEnabled(): boolean {
  * once the cap is hit, the double option disappears and only the base reward remains
  * collectible, with the current count shown to the player.
  */
-export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted, deferExplainer = false }: DoubleCoinsOfferProps) {
+export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted, deferExplainer = false, onRewardEarned }: DoubleCoinsOfferProps) {
   const [phase, setPhase] = useState<Phase>("offer");
   const [question] = useState(() => ({ a: randomFactor(), b: randomFactor() }));
   const [answer, setAnswer] = useState("");
@@ -101,6 +110,17 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   // Frozen at mount from a PURE read, so a re-render can never flip the offer's
   // identity halfway through (and StrictMode's double invocation is harmless).
   const [isBonusRound] = useState(() => isBonusRewardRound(placement));
+  // One settlement per offer, shared by Continue and any exit path (onRewardEarned).
+  // onResolved is read through a ref so a settlement triggered from the screen's exit
+  // handler still reaches the screen's latest callback.
+  const onResolvedRef = useRef(onResolved);
+  onResolvedRef.current = onResolved;
+  const [settlement] = useState(() =>
+    createOfferSettlement(isBonusRound, {
+      resolveBonusRewardRound,
+      onResolved: (finalAmount, anchorEl) => onResolvedRef.current(finalAmount, anchorEl),
+    }),
+  );
   /** What this offer advertises: 3 on a bonus round, otherwise the usual 2. */
   const multiplier = rewardMultiplier(isBonusRound);
   /** What actually gets PAID. The 3× is reserved for a confirmed rewarded-ad
@@ -223,6 +243,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       // The player did the thing the nudge was for - the skip streak starts over.
       recordRewardGranted();
       trackEvent(isBonusRound ? "reward_bonus_ad_completed" : "reward_ad_completed", { placement });
+      const finalAmount = amount * multiplier;
+      onRewardEarned?.(() => settlement.settle({ granted: true, finalAmount }, anchorRef.current));
     } else {
       trackEvent(isBonusRound ? "reward_bonus_ad_failed" : "reward_ad_failed", { placement });
       // No substitute route is offered - just a quiet notice back on the offer screen.
@@ -242,6 +264,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       onDoubleAttempted?.();
       playSuccessSound();
       playCoinsSound();
+      const finalAmount = amount * STANDARD_REWARD_MULTIPLIER;
+      onRewardEarned?.(() => settlement.settle({ granted: false, finalAmount }, anchorRef.current));
     } else {
       playDangerSound();
     }
@@ -249,8 +273,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
 
   function handleContinue() {
     const granted = wasCorrect && grantSource === "ad";
-    resolveBonusRewardRound({ wasBonusRound: isBonusRound, granted, forfeitedRealOffer: false });
-    onResolved(wasCorrect ? amount * paidMultiplier : amount, anchorRef.current);
+    settlement.settle({ granted, finalAmount: wasCorrect ? amount * paidMultiplier : amount }, anchorRef.current);
   }
 
   return (

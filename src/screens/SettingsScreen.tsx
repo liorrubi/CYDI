@@ -4,7 +4,8 @@ import { Capacitor } from "@capacitor/core";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import SoundToggleButton from "../components/SoundToggleButton";
-import { APP_BUILD, APP_BUILD_TIME, APP_VERSION, DIFFICULTY_LEVELS, passScoreForDifficulty } from "../app/constants";
+import { APP_BUILD, APP_BUILD_TIME, DIFFICULTY_LEVELS, passScoreForDifficulty } from "../app/constants";
+import { getDisplayAppVersion } from "../services/nativeAppInfo";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { playChipSound } from "../engine/soundEngine";
 import { getDifficulty, setDifficulty } from "../services/difficultySettings";
@@ -427,7 +428,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
         <br />
         Can You Draw It?
         <br />
-        Version {APP_VERSION} / Build {APP_BUILD}
+        Version {getDisplayAppVersion()} / Build {APP_BUILD}
         <br />
         Last updated: {formatBuildTime(APP_BUILD_TIME)}
         {internalDevice && (

@@ -150,7 +150,11 @@ test("the socket URL is absolute and derived from the API origin", () => {
   // Never relative: on native, the page origin is the WebView's virtual
   // https://localhost and a relative URL would point nowhere real.
   assert.match(url, /^wss?:\/\//);
-  assert.ok(url.endsWith("/api/room/TEST77/ws"), url);
+  const parsed = new URL(url);
+  assert.equal(parsed.pathname, "/api/room/TEST77/ws", url);
+  // The version identity the Worker's minimum-version gate reads BEFORE any RoomDO.
+  assert.equal(parsed.searchParams.get("pf"), "web");
+  assert.ok(parsed.searchParams.get("av"), "appVersion is sent");
   assert.ok(!url.includes("localhost/api"), "must not resolve against the WebView origin");
 });
 
@@ -352,4 +356,29 @@ test("closing reports the closed status", () => {
   completeHandshake(h);
   h.socket.close();
   assert.equal(h.statuses[h.statuses.length - 1], "closed");
+});
+
+// ----------------------------------------------------------- update required ----
+
+test("close code 4426 (multiplayer_update_required) stops reconnecting for good", () => {
+  const h = connectSocket();
+  completeHandshake(h);
+  const before = FakeSocket.instances.length;
+  h.ws().emit("close", { code: 4426 });
+  tick(10 * 60_000);
+  assert.equal(FakeSocket.instances.length, before, "no reconnect attempt, however long we wait");
+  assert.equal(h.statuses.at(-1), "update_required");
+  setVisibility("hidden");
+  setVisibility("visible");
+  tick(60_000);
+  assert.equal(FakeSocket.instances.length, before, "coming back to the app does not reconnect either");
+});
+
+test("any other close code still reconnects with backoff", () => {
+  const h = connectSocket();
+  completeHandshake(h);
+  const before = FakeSocket.instances.length;
+  h.ws().emit("close", { code: 1006 });
+  tick(20_000);
+  assert.ok(FakeSocket.instances.length > before);
 });

@@ -27,6 +27,16 @@ import { getPlayerName, setPlayerName } from "../services/playerProfileStore";
 import { trackEvent } from "../services/analytics";
 import { toHome, toPlayTogether, toSettings, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
+import UpdateRequiredNotice from "../components/multiplayer/UpdateRequiredNotice";
+import { CAPACITY_MESSAGE } from "../multiplayer/roomApi";
+import {
+  checkCreateAllowed,
+  isMultiplayerUpdateRequired,
+  recordCreateAttempt,
+  recordCreateResult,
+  recordUpdateRequired,
+} from "../multiplayer/createThrottle";
+import { MP_UPDATE_REQUIRED_CODE } from "../multiplayer/versionGate";
 
 type PlayTogetherScreenProps = {
   onNavigate: (screen: Screen) => void;
@@ -71,6 +81,8 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
   const [joinCode, setJoinCode] = useState(initialJoinCode ?? "");
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** The server retired this build for Play Together (sticky for the app run - see createThrottle.ts). */
+  const [updateRequired, setUpdateRequired] = useState(() => isMultiplayerUpdateRequired());
   /** Kept so Exit can release the right seat token after the session object is gone. */
   const [activeRoomCode, setActiveRoomCode] = useState<string | null>(null);
   /** True while there is a game in progress worth protecting from an accidental exit. */
@@ -160,11 +172,28 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
       setFormError("Enter a nickname so your friends know who you are.");
       return;
     }
+    // Debounce + capacity backoff + retired build (createThrottle.ts). Nothing here
+    // ever retries on its own: the player taps again once it allows.
+    const gate = checkCreateAllowed(Date.now());
+    if (!gate.ok) {
+      if (gate.reason === "update_required") setUpdateRequired(true);
+      else if (gate.reason === "backoff") {
+        setFormError(`${CAPACITY_MESSAGE} You can try again in ${Math.ceil(gate.waitMs / 1000)} s.`);
+      }
+      return;
+    }
+    recordCreateAttempt(Date.now());
     setFormError(null);
     setBusy(true);
     const result = await createRoom();
     setBusy(false);
+    recordCreateResult(Date.now(), result.ok ? { ok: true } : { ok: false, code: result.code });
     if (!result.ok) {
+      if (result.code === MP_UPDATE_REQUIRED_CODE) {
+        setUpdateRequired(true);
+        return;
+      }
+      // A capacity refusal carries its own message (CAPACITY_MESSAGE); backoff now applies.
       setFormError(result.error);
       return;
     }
@@ -203,6 +232,11 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
     const lookup = await lookupRoom(code);
     setBusy(false);
     if (!lookup.ok) {
+      if (lookup.code === MP_UPDATE_REQUIRED_CODE) {
+        recordUpdateRequired();
+        setUpdateRequired(true);
+        return;
+      }
       setFormError(lookup.error);
       return;
     }
@@ -289,6 +323,22 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: Play
         {!onWeb && <SocialPointsBadge />}
         <PlayTogetherRoom transport={session} onExit={exitRoom} onActiveChange={handleActiveChange} />
         {pendingLeave && <LeaveConfirmation onStay={cancelLeave} onLeave={confirmLeave} />}
+      </div>
+    );
+  }
+
+  if (updateRequired) {
+    return (
+      <div className="screen">
+        <AppHeader
+          title="Play Together"
+          showSocialRank={onWeb}
+          onBack={goHome}
+          onNavigateToHome={goHome}
+          onNavigateToSettings={() => onNavigate(toSettings())}
+          onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
+        />
+        <UpdateRequiredNotice onExit={goHome} />
       </div>
     );
   }

@@ -55,9 +55,12 @@ android {
         applicationId "com.playcydi.cydi"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // versionName mirrors APP_VERSION in src/app/constants.ts (the in-app
-        // "Version X" string on the Settings screen) - kept in sync by hand so the
-        // Play Store listing/device Settings always match what the app itself claims.
+        // versionName USED to mirror APP_VERSION in src/app/constants.ts by hand. Since
+        // 0.53.0 it no longer has to: on Android, analytics (appVersion/appVersionCode),
+        // the install-referrer first_open check and the Settings "Version X" line all
+        // read THIS package's versionName/versionCode at runtime (App.getInfo(), see
+        // src/services/nativeAppInfo.ts). APP_VERSION is now the web release number only
+        // and follows the web's own cadence.
         //
         // versionCode must strictly increase on every APK/AAB actually distributed to a
         // device or the Play Store (side-load, internal testing, or production) - Android
@@ -270,8 +273,41 @@ android {
         // updating for a same-or-lower code - which would have left the fixed build
         // untested and the old broken one running, the exact trap this comment block has
         // recorded twice before.
-        versionCode 45
-        versionName "0.51.0"
+        //
+        // 46 is 0.53.0: the interstitial A/B experiment (Shape Challenge only, behind its
+        // own fail-closed /api/config/ads/interstitial, which is NOT deployed yet) and the
+        // fix that makes Android analytics report this package's OWN versionName/
+        // versionCode instead of the web bundle's APP_VERSION. 0.53.0 rather than 0.52.x:
+        // web already shipped 0.52.0 and 0.52.1 as different code, and analytics now
+        // reports the native versionName, so reusing either would merge two different
+        // builds into one version row. APP_VERSION stays on the web's own numbering (see
+        // the note above). 46 was the first Stage-0 DEBUG apk (Google test units) on the
+        // MIUI device.
+        //
+        // 47 is 0.53.0 again - the Stage-0 fix. On vc46 the 120 s post-Showed safety
+        // timeout released gameplay while the ad was still on screen (that WebView never
+        // fires visibilitychange under an interstitial), so the next round started behind
+        // it. The timeout now frees the ad state and stays on the Result screen. Also:
+        // first_open compares Play's installVersion with the native versionName, and
+        // Settings shows the native version. A fresh code because 46 is installed on the
+        // MIUI device, which silently refuses a same-code update.
+        //
+        // DEPLOYMENT ORDER, once more: the deployed Worker does not know the four
+        // interstitial_* events (a batch simply skips them) nor the config route (404 ->
+        // the experiment stays off). Deploy the Worker before this reaches users, or the
+        // experiment is invisible and inert.
+        //
+        // 48 is the 0.53.0 RELEASE CANDIDATE (signed with the upload key, production ad
+        // units: rewarded + the new interstitial ca-app-pub-3787018288764544/1587797809).
+        // On top of 47 it adds: an earned rewarded bonus can no longer be forfeited by
+        // leaving the result screen; Play Together sends its version on create//info//ws,
+        // honours the Worker's minimum-version gate (multiplayer_update_required: stop
+        // reconnecting, Update button) and the capacity refusal (dedicated message, Create
+        // debounce + 15-120 s backoff, no automatic retry); client analytics flush 15 s ->
+        // 30 s; Shop events renamed to shop_purchase_with_coins. The interstitial stays OFF
+        // until /api/config/ads/interstitial is published. DEPLOY THE WORKER FIRST.
+        versionCode 48
+        versionName "0.53.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

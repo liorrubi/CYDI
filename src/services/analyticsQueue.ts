@@ -23,8 +23,14 @@ import { apiFetch } from "./nativeApi";
 
 /** Flush at ten events, matching the server's own budget granularity. */
 export const MAX_BATCH_EVENTS = 10;
-/** ...or after this long, so a slow trickle still reports within a sensible window. */
-export const FLUSH_INTERVAL_MS = 15_000;
+/**
+ * ...or after this long, so a slow trickle still reports within a sensible window.
+ * 30 s since 0.53.0 (was 15 s): every flush is one AnalyticsDO request, the binding
+ * Free-plan quota, and a slower trickle now fills more of each batch before it goes.
+ * Nothing is lost by waiting longer - the page going hidden (app backgrounded) or
+ * being closed still flushes immediately, below.
+ */
+export const FLUSH_INTERVAL_MS = 30_000;
 /**
  * The queue is bounded at MAX_BATCH_EVENTS by construction, with no separate cap.
  *

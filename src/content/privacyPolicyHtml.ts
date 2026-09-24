@@ -130,6 +130,13 @@ export const PRIVACY_POLICY_HTML = `
   code, any nickname, your seat in the room, or anything you drew.
 </p>
 <p class="status-text">
+  When you create or join a Play Together room, the app also tells our server which app version it is
+  (for example “0.53.0”) and whether it is the Android app or the website. This is used only to
+  check that your version can still play online, and to ask you to update if it cannot. It is not
+  stored with the room, and it does not include the random installation or session numbers described
+  below.
+</p>
+<p class="status-text">
   So that we can tell “one person played ten rounds” from “ten people played one round each,” an analytics
   event also carries two randomly generated numbers: one that stays the same for this installation of the
   game, and one that identifies the current play session. They are created on your device, are not derived
@@ -139,8 +146,8 @@ export const PRIVACY_POLICY_HTML = `
   Clearing the app's or browser's local data starts a new random number.
 </p>
 <p class="status-text">
-  A small number of analytics events — ad diagnostics such as whether a rewarded ad was available and, if
-  not, the general reason; a couple of Play Together events; and the events recorded when the app is first
+  A small number of analytics events — ad diagnostics such as whether a rewarded ad, or a full-screen ad
+  between games, was available and, if not, the general reason; a couple of Play Together events; and the events recorded when the app is first
   opened after installation — also record a two-letter network-country code, inferred from the connection
   as seen by our hosting provider (Cloudflare). This helps us understand the geographic distribution of
   first opens and diagnose whether technical or advertising issues are concentrated in particular
@@ -174,6 +181,12 @@ export const PRIVACY_POLICY_HTML = `
   Ads SDK. After you earn coins, the app may offer you the chance to double them by watching a rewarded
   video ad. Watching is entirely your choice: you can always decline and simply continue with the coins you
   have already earned, which are yours either way.
+</p>
+<p class="status-text">
+  The Android app may also show a full-screen advertisement between games, at a natural transition such as
+  moving on to the next shape or starting another attempt - never in the middle of a round. These ads are
+  not tied to any reward, and closing one simply returns you to the game. They are served by the same
+  Google Mobile Ads SDK, only after the same consent check, and involve the same data described below.
 </p>
 <p class="status-text">
   A reward that depends on an ad is granted only when an ad is actually served and completed in the way
@@ -226,7 +239,7 @@ export const PRIVACY_POLICY_HTML = `
   <li>To run the game and save your progress and settings on your device.</li>
   <li>To operate the Daily Challenge leaderboard and the challenge-sharing features you choose to use.</li>
   <li>To understand aggregate usage and improve the game.</li>
-  <li>When enabled, to show optional rewarded ads through Google AdMob with your consent.</li>
+  <li>When enabled, to show optional rewarded ads, and full-screen ads between games in the Android app, through Google AdMob with your consent.</li>
 </ul>
 
 <h2>3. Advertising &amp; Consent Choices</h2>

@@ -27,7 +27,9 @@ export type AdFeatureFlags = {
  * gate: it defaults to off and currently has no published config at all, so every
  * build stays dark until someone publishes `{ enabled: true }`. That is the whole
  * point of this combination - launching (and re-killing) rewarded ads needs no new
- * build. Every other format is still off here and needs a build to change.
+ * build. Interstitial is on too, for the 0.53.0 A/B experiment, behind its own
+ * fail-closed remote config (interstitialConfig.ts). Every other format is still off
+ * here and needs a build to change.
  *
  * While a format is off - or master is off, or the remote switch is off - the ad
  * service never initializes an SDK or issues a single ad request for it, and every
@@ -38,7 +40,10 @@ export const AD_FLAGS: AdFeatureFlags = {
   formats: {
     rewarded: true,
     rewardedInterstitial: false,
-    interstitial: false,
+    // On at build time so the experiment CAN run, but nothing is requested unless
+    // /api/config/ads/interstitial answers enabled: true (fail-closed, and not
+    // deployed at all as of 0.53.0) on top of consent and the global switch above.
+    interstitial: true,
     banner: false,
     appOpen: false,
   },
@@ -50,12 +55,13 @@ let activeFlags: AdFeatureFlags = AD_FLAGS;
 /**
  * A format serves ads only when BOTH the master switch and its own flag are on -
  * UNLESS this is an internal-test-ads build, which bypasses AD_FLAGS entirely and
- * only ever turns "rewarded" on (the one format this integration exercises). This
+ * only ever turns "rewarded" and "interstitial" on (the two formats this integration
+ * exercises - interstitial is still gated by its own remote config on top). This
  * never touches AD_FLAGS itself, so a production build's per-format flags decide
  * production behavior regardless of this branch.
  */
 export function isAdFormatEnabled(format: AdFormat, flags: AdFeatureFlags = activeFlags): boolean {
-  if (isInternalTestAdsMode()) return format === "rewarded";
+  if (isInternalTestAdsMode()) return format === "rewarded" || format === "interstitial";
   return flags.master && flags.formats[format];
 }
 

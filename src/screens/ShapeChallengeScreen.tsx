@@ -76,6 +76,13 @@ import {
 import { PLAY_STORE_URL } from "../services/nativeShare";
 import { recordOfferSkipped } from "../app/rewardOfferNudge";
 import { isRewardedAdAvailable, preloadRewardedAd } from "../services/ads";
+import { offerExitAction } from "../app/doubleOfferSettlement";
+import {
+  beginInterstitialResultCycle,
+  recordInterstitialGameCompleted,
+  recordInterstitialGameStarted,
+  runInterstitialCheckpoint,
+} from "../services/ads/interstitialController";
 import { trackEvent } from "../services/analytics";
 import {
   clearProgress,
@@ -841,6 +848,8 @@ function ShapePlay({
   // round-count thresholds and the "already discovered" checks stay current.
   const [createDiscovery, setCreateDiscovery] = useState<ReturnType<typeof createDiscoveryVariant>>(null);
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
+  /** Set by DoubleCoinsOffer once the double is EARNED: settles it like Continue does. Cleared with the offer. */
+  const earnedOfferFinalizeRef = useRef<(() => void) | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
@@ -888,6 +897,9 @@ function ShapePlay({
     if (phase !== "preview") return;
     const timeoutId = window.setTimeout(() => {
       trackEvent("game_started", { gameType: roundGameType(practice), category, contentKey: shape.id });
+      // Interstitial continuation: the first eligible game_started after a checkpoint.
+      // Only "shapeChallenge" counts - a practice round's seoPractice is ignored inside.
+      recordInterstitialGameStarted(roundGameType(practice));
       // Start warming a rewarded ad the moment drawing begins. DoubleCoinsOffer also
       // preloads, but it does so from its own mount effect - i.e. once the offer is
       // ALREADY on screen - and a rewarded video needs seconds the player does not
@@ -1031,35 +1043,77 @@ function ShapePlay({
       addCoins(finalAmount - doubleOfferAmount);
     }
     triggerCoinFlight(anchorEl ?? document.querySelector(".score-total"));
+    earnedOfferFinalizeRef.current = null;
     setDoubleOfferAmount(null);
   }
 
   /**
-   * Continuing while the ×2 offer is still open forfeits it: the base coins were
-   * already credited when the round scored, so nothing is lost, but the doubling
-   * opportunity ends here and the offer must not survive the transition.
+   * Leaving the result screen while the ×2 offer is still open. Two cases:
+   *
+   * - The double was already EARNED (the SDK's reward callback fired, see
+   *   onRewardEarned): it is settled exactly as the offer's Continue would - same
+   *   bonus bookkeeping, same credit, once only - and NOT recorded as a skip. Before
+   *   this, leaving this way silently dropped a bonus the player had watched an ad for.
+   * - Not earned: the offer is forfeited. The base coins were already credited when
+   *   the round scored, so nothing is lost, but the doubling opportunity ends here.
    *
    * Recorded through the SAME reward_skipped event the offer's own Skip button
    * uses - not a parallel "abandoned" event - and only while the offer is actually
    * open, so a player who already pressed Skip can never be counted twice.
    */
   function forfeitDoubleOffer() {
-    if (doubleOfferAmount === null) return;
+    const action = offerExitAction(doubleOfferAmount !== null, earnedOfferFinalizeRef.current);
+    if (action === "none") return;
+    if (action === "finalize") {
+      // Already earned (the SDK's reward callback fired): leaving settles it, exactly
+      // once, like Continue - it is not a skip and records no reward_skipped.
+      const finalize = earnedOfferFinalizeRef.current!;
+      earnedOfferFinalizeRef.current = null;
+      finalize();
+      return;
+    }
     // Same rule the offer's own Skip button uses: the streak only counts a double the
     // player could really have watched an ad for (see recordOfferSkipped).
     recordOfferSkipped(isRewardedAdAvailable());
     trackEvent("reward_skipped", { placement: "shape_challenge_double_reward" });
+    earnedOfferFinalizeRef.current = null;
     setDoubleOfferAmount(null);
   }
 
+  /**
+   * Next Shape / Try Again go through the interstitial checkpoint; Back to Map never
+   * does. With nothing to show (no opportunity, control, suppressed, not ready) the
+   * checkpoint returns null and `go` runs in the same tick. Only while an ad is
+   * actually being presented does it return a promise, and the next timed round -
+   * preview, countdown, drawing - starts only after that ad has released gameplay.
+   * If it was released by the long safety timeout (resolves false), the ad may still
+   * be on screen: stay on this Result screen and let the next tap continue.
+   */
+  const continuingRef = useRef(false);
+  function continueThroughInterstitialCheckpoint(go: () => void) {
+    if (continuingRef.current) return;
+    const pending = runInterstitialCheckpoint();
+    if (pending === null) {
+      go();
+      return;
+    }
+    continuingRef.current = true;
+    void pending.then((proceed) => {
+      continuingRef.current = false;
+      if (proceed) go();
+    });
+  }
+
   function handleNextShapeFromResult() {
+    if (continuingRef.current) return;
     forfeitDoubleOffer();
-    onNextShape(nextIndex);
+    continueThroughInterstitialCheckpoint(() => onNextShape(nextIndex));
   }
 
   function handleTryAgainFromResult() {
+    if (continuingRef.current) return;
     forfeitDoubleOffer();
-    handleTryAgain();
+    continueThroughInterstitialCheckpoint(handleTryAgain);
   }
 
   function handleBackToMapFromResult() {
@@ -1090,6 +1144,7 @@ function ShapePlay({
         practice,
       });
       const offerAmount = applyShapeRoundOutcome(outcome, onProgressChange);
+      earnedOfferFinalizeRef.current = null;
       if (offerAmount > 0) setDoubleOfferAmount(offerAmount);
 
       // Practice rounds are reported, never suppressed - but under their own game
@@ -1103,6 +1158,10 @@ function ShapePlay({
         isNewBest: outcome.isNewBest,
       });
       trackEvent("game_completed", { gameType: roundGameType(practice), category, contentKey: shape.id });
+      // A new result cycle (resets the rewarded-collision marker), then the completion
+      // itself - the only thing that advances the interstitial cadence.
+      beginInterstitialResultCycle();
+      recordInterstitialGameCompleted(roundGameType(practice));
 
       setResult(scoreResult);
       setIsNewBest(outcome.isNewBest);
@@ -1118,6 +1177,7 @@ function ShapePlay({
     setResult(null);
     setIsNewBest(false);
     setFeedbackMessage(null);
+    earnedOfferFinalizeRef.current = null;
     setDoubleOfferAmount(null);
     // The callout was already marked as seen when it rendered, so this resolves to
     // false after the first showing - a retry does not repeat it.
@@ -1150,6 +1210,9 @@ function ShapePlay({
           onResolved={handleDoubleOfferResolved}
           placement="shape_challenge_double_reward"
           deferExplainer={showResultTutorial}
+          onRewardEarned={(finalize) => {
+            earnedOfferFinalizeRef.current = finalize;
+          }}
         />
       ) : null;
 
@@ -1262,6 +1325,9 @@ function ShapePlay({
             onResolved={handleDoubleOfferResolved}
             placement="shape_challenge_double_reward"
             deferExplainer={showResultTutorial}
+            onRewardEarned={(finalize) => {
+              earnedOfferFinalizeRef.current = finalize;
+            }}
           />
         )}
         {/* The continue actions sit ABOVE the comparison canvas and are no longer

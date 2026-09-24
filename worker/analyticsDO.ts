@@ -9,6 +9,7 @@ import {
   monthlyRange,
   normalizeAnalyticsPlatform,
   normalizeAppBuild,
+  normalizeAppVersionCode,
   normalizeAppVersion,
   validateEventParams,
   weeklyRange,
@@ -16,6 +17,12 @@ import {
   type AnalyticsPlatform,
 } from "../src/services/analyticsSchema";
 import { isAdFailureReason } from "../src/services/ads/adTypes";
+import {
+  isInterstitialArm,
+  isInterstitialCadence,
+  isInterstitialFailureReason,
+  isInterstitialOutcome,
+} from "../src/services/ads/interstitialConfigSchema";
 import { ROUND_COUNT_OPTIONS } from "../src/multiplayer/protocol";
 import {
   ATTRIBUTION_DIMENSIONS,
@@ -99,6 +106,17 @@ const REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad_failed"
 // so this map cannot grow past five keys. Only first_open carries it -
 // install_attributed deliberately has no params at all.
 const INSTALL_AGE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["first_open"]);
+// Interstitial A/B experiment (0.53.0). Every key below comes from a closed set in
+// ads/interstitialConfigSchema.ts, re-validated by validateEventParams before this
+// runs, so none of these maps can grow past its domain:
+//   byArmOutcome    "treatment|shown" - arm x outcome, at most 2 x 5 = 10 keys. Crossed
+//                   because "suppressed" occurs in both arms and must stay attributable.
+//   byCadence       "7" - the gamesBetweenAds the opportunity ran under, at most 6 keys.
+//   byInterstitialReason  the bounded failure reason, at most 5 keys.
+// Deliberately NOT crossed with country, version or each other beyond arm|outcome.
+const ARM_OUTCOME_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["interstitial_checkpoint", "interstitial_continuation"]);
+const CADENCE_BREAKOUT_EVENTS = ARM_OUTCOME_BREAKOUT_EVENTS;
+const INTERSTITIAL_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["interstitial_load_failed", "interstitial_checkpoint"]);
 // Pass & Play length and progress. `roundCount` is the length the players CHOSE
 // (ROUND_COUNT_OPTIONS - three values), `roundIndex` how far the game got. Both are
 // closed, re-validated server-side by validateEventParams before this runs, so the
@@ -166,6 +184,9 @@ const COUNTRY_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
   // Forward-only: events already counted have no country and cannot gain one.
   "first_open",
   "install_attributed",
+  // Interstitial opportunities per NETWORK country - the check that server-side
+  // country gating behaves (an ineligible country should produce none at all).
+  "interstitial_checkpoint",
 ]);
 // Country alone says WHERE, reason alone says WHAT - only the pair says whether Iran
 // specifically times out while Germany errors. Both halves are closed sets, so the
@@ -346,6 +367,15 @@ type EventCounters = {
   // install metadata is unchanged. Weight in the tail buckets hints that duplicates
   // are happening; it identifies none of them. See INSTALL_REFERRER_NOTES.md.
   byInstallAge?: Record<string, number>;
+  // ARM_OUTCOME / CADENCE / INTERSTITIAL_REASON breakout events only - see those sets.
+  // Absent on every other event, and on day buckets recorded before 0.53.0.
+  byArmOutcome?: Record<string, number>;
+  byCadence?: Record<string, number>;
+  byInterstitialReason?: Record<string, number>;
+  // app_open ONLY, like byAppBuild - the native Android versionCode, which tells two
+  // APKs of one versionName apart. Web never sends one; a native client that has not
+  // read it yet, and every client older than 0.53.0, counts as "unknown".
+  byAppVersionCode?: Record<string, number>;
   // ROUND_COUNT_BREAKOUT_EVENTS / ROUND_INDEX_BREAKOUT_EVENTS only - the Pass & Play
   // game length the players chose, and how far a game got. Bounded to the three ids of
   // ROUND_COUNT_OPTIONS and to 0..MAX_ROUND_INDEX. Absent on every other event, and on
@@ -505,6 +535,7 @@ export function incrementEvent(
   appBuild: string = "unknown",
   attribution?: Attribution,
   country: string = UNKNOWN_COUNTRY,
+  appVersionCode: string = "unknown",
 ): AllCounters {
   // Resolved HERE rather than at the call site, so the canonical name is the only one
   // that can ever be written - no future caller can reintroduce the legacy key. Every
@@ -526,6 +557,12 @@ export function incrementEvent(
   // Build breakout is app_open only - see the byAppBuild note on EventCounters.
   if (BUILD_BREAKOUT_EVENTS.has(eventName)) {
     updated.byAppBuild = incrementKeyMap(existing.byAppBuild, appBuild);
+    // Re-normalized here for the same reason normalizeCountry is below: this function
+    // is exported, and a direct caller must not open a key ingest could never produce.
+    // Android only: the website has no versionCode, and a web row would only ever read "unknown".
+    if (platform === "android") {
+      updated.byAppVersionCode = incrementKeyMap(existing.byAppVersionCode, normalizeAppVersionCode(appVersionCode));
+    }
   }
   // Install-funnel surface breakout - see SURFACE_BREAKOUT_EVENTS.
   if (SURFACE_BREAKOUT_EVENTS.has(eventName)) {
@@ -541,6 +578,17 @@ export function incrementEvent(
   }
   if (INSTALL_AGE_BREAKOUT_EVENTS.has(eventName) && isInstallAgeParam(params.installAge)) {
     updated.byInstallAge = incrementKeyMap(existing.byInstallAge, params.installAge);
+  }
+  // Interstitial experiment - guarded like the others, so a direct call with a bad
+  // value leaves the map untouched rather than opening a free-text key.
+  if (ARM_OUTCOME_BREAKOUT_EVENTS.has(eventName) && isInterstitialArm(params.arm) && isInterstitialOutcome(params.outcome)) {
+    updated.byArmOutcome = incrementKeyMap(existing.byArmOutcome, `${params.arm}|${params.outcome}`);
+  }
+  if (CADENCE_BREAKOUT_EVENTS.has(eventName) && isInterstitialCadence(params.gamesBetweenAds)) {
+    updated.byCadence = incrementKeyMap(existing.byCadence, String(params.gamesBetweenAds));
+  }
+  if (INTERSTITIAL_REASON_BREAKOUT_EVENTS.has(eventName) && isInterstitialFailureReason(params.reason)) {
+    updated.byInterstitialReason = incrementKeyMap(existing.byInterstitialReason, params.reason);
   }
   // Pass & Play breakouts - see the two sets above. Guarded for the same reason the
   // rewarded one is: this function is exported, so a bad value must leave the map
@@ -718,6 +766,10 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       bySurface: mergeKeyMaps(ae.bySurface, be.bySurface),
       byReason: mergeKeyMaps(ae.byReason, be.byReason),
       byInstallAge: mergeKeyMaps(ae.byInstallAge, be.byInstallAge),
+      byArmOutcome: mergeKeyMaps(ae.byArmOutcome, be.byArmOutcome),
+      byCadence: mergeKeyMaps(ae.byCadence, be.byCadence),
+      byInterstitialReason: mergeKeyMaps(ae.byInterstitialReason, be.byInterstitialReason),
+      byAppVersionCode: mergeKeyMaps(ae.byAppVersionCode, be.byAppVersionCode),
       byRoundCount: mergeKeyMaps(ae.byRoundCount, be.byRoundCount),
       byRoundIndex: mergeKeyMaps(ae.byRoundIndex, be.byRoundIndex),
       byCountry: mergeKeyMaps(ae.byCountry, be.byCountry),
@@ -935,6 +987,9 @@ export class AnalyticsDO {
     // so a QA build and a production build of the same release stay comparable.
     const appVersion = normalizeAppVersion(b?.appVersion);
     const appBuild = normalizeAppBuild(b?.appBuild);
+    // Same contract again: optional (Android 0.53.0+ only), format-guarded, never a
+    // reason to drop an event. Stored on app_open alone.
+    const appVersionCode = normalizeAppVersionCode(b?.appVersionCode);
     // Same contract once more - optional, coerced to a closed alphabet, never a
     // reason to drop an event. `undefined` (not a normalized "unknown" attribution)
     // when the client sent nothing at all, so the counter breakouts below can tell
@@ -969,8 +1024,8 @@ export class AnalyticsDO {
     // incrementEvent resolves the stored name itself (see CANONICAL_EVENT_ALIASES), so
     // the wire name is passed straight through: params were validated against the name
     // the client actually sent, and an aliased pair shares one validator.
-    let nextAlltime = incrementEvent(alltime, eventName, params, platform, appVersion, appBuild, attribution, country);
-    let nextDay = incrementEvent(dayCounters, eventName, params, platform, appVersion, appBuild, attribution, country);
+    let nextAlltime = incrementEvent(alltime, eventName, params, platform, appVersion, appBuild, attribution, country, appVersionCode);
+    let nextDay = incrementEvent(dayCounters, eventName, params, platform, appVersion, appBuild, attribution, country, appVersionCode);
     // Once per DO REQUEST, not per event - the caller passes countRequest for the first
     // entry it manages to ingest, so a ten-event batch still counts one. Folded into the
     // two counter objects that this ingest is already about to mark dirty, so it adds no

@@ -309,6 +309,7 @@ function makeEnv(shed?: Record<string, unknown>, disabled = false) {
       CONTENT_ADMIN_TOKEN: "content",
       ANALYTICS_ADMIN_TOKEN: "analytics",
       GUARD_ADMIN_TOKEN: "guard",
+      ANALYTICS_GUARD_ADMIN_TOKEN: "analytics-guard",
     } as unknown as Parameters<typeof worker.fetch>[1],
     kv,
     analytics,
@@ -429,4 +430,112 @@ test("no client-visible failure, whatever the mode", async () => {
     const res = await worker.fetch(batchReq("IR", [...SHEDDABLE(3), PRESERVED()]), env);
     assert.ok(res.status === 200 || res.status === 204, `status ${res.status} must read as success to the client`);
   }
+});
+
+// ------------------------------------------------- the control plane (dedicated token) ----
+//
+// Activation has to be possible through a route that VALIDATES, or the only way to
+// turn the protection on during an incident is a raw KV write that would happily
+// store a live ELEVATED with no shed rate.
+
+const BREAKER_PATH = "https://playcydi.com/api/config/analytics-breaker";
+const analyticsGuardAuth = { authorization: "Bearer analytics-guard" };
+const safeBody = JSON.stringify({ disabled: false, shed: { monitorOnly: true, globalMode: "NORMAL", countries: {} } });
+
+test("the analytics guard routes require their own credential", async () => {
+  const { env } = makeEnv();
+  for (const [method, headers] of [
+    ["GET", undefined],
+    ["PUT", undefined],
+    ["GET", { authorization: "Bearer wrong" }],
+    ["PUT", { authorization: "Bearer wrong" }],
+    // The token that USED to open these routes must no longer do so.
+    ["GET", { authorization: "Bearer content" }],
+    ["PUT", { authorization: "Bearer content" }],
+    // Nor the multiplayer guard's, nor the analytics REPORT token.
+    ["GET", { authorization: "Bearer guard" }],
+    ["GET", { authorization: "Bearer analytics" }],
+  ] as const) {
+    const res = await worker.fetch(
+      new Request(BREAKER_PATH, { method, headers: headers as Record<string, string> | undefined, body: method === "PUT" ? safeBody : undefined }),
+      env,
+    );
+    assert.equal(res.status, 401, `${method} with ${JSON.stringify(headers)} must be refused`);
+    assert.deepEqual(await res.json(), { error: "unauthorized" });
+  }
+});
+
+test("the analytics guard credential opens GET and PUT, and nothing else", async () => {
+  const { env } = makeEnv();
+  const get = await worker.fetch(new Request(BREAKER_PATH, { headers: analyticsGuardAuth }), env);
+  assert.equal(get.status, 200);
+  const put = await worker.fetch(new Request(BREAKER_PATH, { method: "PUT", headers: analyticsGuardAuth, body: safeBody }), env);
+  assert.equal(put.status, 200);
+
+  // Least privilege both ways.
+  for (const path of ["/api/content/releases", "/api/config/multiplayer-guard", "/api/config/multiplayer-guard/status"]) {
+    const res = await worker.fetch(new Request(`https://playcydi.com${path}`, { headers: analyticsGuardAuth }), env);
+    assert.equal(res.status, 401, `${path} must not accept ANALYTICS_GUARD_ADMIN_TOKEN`);
+  }
+});
+
+test("an unset analytics guard secret locks the routes rather than opening them", async () => {
+  const { env } = makeEnv();
+  (env as unknown as { ANALYTICS_GUARD_ADMIN_TOKEN?: string }).ANALYTICS_GUARD_ADMIN_TOKEN = undefined;
+  for (const headers of [undefined, analyticsGuardAuth, { authorization: "Bearer " }]) {
+    const res = await worker.fetch(new Request(BREAKER_PATH, { headers: headers as Record<string, string> | undefined }), env);
+    assert.equal(res.status, 401);
+  }
+});
+
+test("the route round-trips a policy and reports whether shedding is live", async () => {
+  const { env, kv } = makeEnv();
+  const body = JSON.stringify({ disabled: false, shed: emergency() });
+  const put = await worker.fetch(new Request(BREAKER_PATH, { method: "PUT", headers: analyticsGuardAuth, body }), env);
+  assert.deepEqual(await put.json(), { ok: true, disabled: false, monitorOnly: false, sheddingActive: true });
+  assert.ok(kv.store.get(ANALYTICS_BREAKER_KV_KEY)?.includes("EMERGENCY"));
+
+  const get = (await (await worker.fetch(new Request(BREAKER_PATH, { headers: analyticsGuardAuth }), env)).json()) as {
+    disabled: boolean;
+    sheddingActive: boolean;
+    shed: { countries: Record<string, { mode: string }> };
+  };
+  assert.equal(get.disabled, false);
+  assert.equal(get.sheddingActive, true);
+  assert.equal(get.shed.countries.IR.mode, "EMERGENCY");
+});
+
+test("the route names the rule a bad activation broke, and stores nothing", async () => {
+  const { env, kv } = makeEnv();
+  await worker.fetch(new Request(BREAKER_PATH, { method: "PUT", headers: analyticsGuardAuth, body: safeBody }), env);
+  const before = kv.store.get(ANALYTICS_BREAKER_KV_KEY);
+
+  const cases: [Record<string, unknown>, RegExp][] = [
+    [{ monitorOnly: false, globalMode: "NORMAL", countries: { IR: { mode: "ELEVATED" } }, expiresAt: FUTURE }, /keepPercent/],
+    [{ monitorOnly: false, globalMode: "NORMAL", countries: { IR: { mode: "EMERGENCY" } } }, /expiresAt/],
+  ];
+  for (const [shed, expected] of cases) {
+    const res = await worker.fetch(
+      new Request(BREAKER_PATH, { method: "PUT", headers: analyticsGuardAuth, body: JSON.stringify({ disabled: false, shed }) }),
+      env,
+    );
+    assert.equal(res.status, 400);
+    assert.match(((await res.json()) as { error: string }).error, expected);
+  }
+  const bad = await worker.fetch(new Request(BREAKER_PATH, { method: "PUT", headers: analyticsGuardAuth, body: "{oops" }), env);
+  assert.equal(bad.status, 400);
+  assert.equal(kv.store.get(ANALYTICS_BREAKER_KV_KEY), before, "a rejected PUT must not replace the stored policy");
+});
+
+test("turning shedding on and off is config alone, no deploy", async () => {
+  const { env, analytics } = makeEnv();
+  await worker.fetch(new Request(BREAKER_PATH, { method: "PUT", headers: analyticsGuardAuth, body: JSON.stringify({ disabled: false, shed: emergency() }) }), env);
+  _resetAnalyticsBreakerCacheForTests();
+  assert.equal((await worker.fetch(batchReq("IR", SHEDDABLE(4)), env)).status, 204);
+  assert.equal(analytics.fetches, 0);
+
+  await worker.fetch(new Request(BREAKER_PATH, { method: "PUT", headers: analyticsGuardAuth, body: safeBody }), env);
+  _resetAnalyticsBreakerCacheForTests();
+  assert.equal((await worker.fetch(batchReq("IR", SHEDDABLE(4)), env)).status, 200);
+  assert.equal(analytics.fetches, 1, "ingest is restored with no deploy");
 });

@@ -5,7 +5,7 @@ import {
   parseAnalyticsControl,
   readAnalyticsControl,
 } from "./analyticsBreaker";
-import { decideShedding, effectiveShedPolicy, shedLogLine } from "./analyticsShedding";
+import { decideShedding, effectiveShedPolicy, shedEnforcementError, shedLogLine } from "./analyticsShedding";
 import {
   evaluateRoomCreation,
   guardConfigAgeMs,
@@ -69,6 +69,14 @@ export interface Env {
    * and it should be rotatable on its own after an incident without breaking publishing.
    */
   GUARD_ADMIN_TOKEN: string;
+  /**
+   * Admin bearer for the analytics breaker and its country shedding policy, and
+   * nothing else. Separate from GUARD_ADMIN_TOKEN as well as from CONTENT_ADMIN_TOKEN:
+   * the two guards protect different Durable Objects and are meant to be operable -
+   * and revocable - independently, so holding the lever that can silence telemetry
+   * must not also hand over the one that can take Play Together offline.
+   */
+  ANALYTICS_GUARD_ADMIN_TOKEN: string;
 }
 
 // Excludes 0/O and 1/I to avoid ids that are ambiguous when read aloud or copied by hand.
@@ -322,6 +330,20 @@ function isGuardAdminAuthorized(request: Request, env: Env): boolean {
   return isBearer(request, env.GUARD_ADMIN_TOKEN);
 }
 
+/**
+ * Analytics breaker + shedding gate - uses ANALYTICS_GUARD_ADMIN_TOKEN and ONLY that.
+ *
+ * Deliberately does not also accept CONTENT_ADMIN_TOKEN, even though that token used
+ * to open these two routes. Nothing external depends on the old pairing - the breaker
+ * has never been flipped in production - so there is no compatibility to preserve,
+ * and every extra credential that opens an emergency control is one more way to
+ * silence telemetry by accident. Least privilege runs both ways: this token is
+ * equally useless against the content, analytics-report and multiplayer routes.
+ */
+function isAnalyticsGuardAdminAuthorized(request: Request, env: Env): boolean {
+  return isBearer(request, env.ANALYTICS_GUARD_ADMIN_TOKEN);
+}
+
 /** Admin responses must never sit in any shared/edge cache. */
 function jsonNoStore(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -520,7 +542,7 @@ async function handleAdsConfigPut(request: Request, env: Env): Promise<Response>
 // whether telemetry is currently being shed.
 
 async function handleAnalyticsBreakerGet(request: Request, env: Env): Promise<Response> {
-  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (!isAnalyticsGuardAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
   const raw = await env.CONTENT_KV.get(ANALYTICS_BREAKER_KV_KEY);
   // Reports the EFFECTIVE value, not the stored text: an unparseable value means
   // ingest is running, and that is what the operator needs to see. `shed` is reported
@@ -531,7 +553,7 @@ async function handleAnalyticsBreakerGet(request: Request, env: Env): Promise<Re
 }
 
 async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Response> {
-  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (!isAnalyticsGuardAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
   let parsed: unknown;
   try {
     parsed = await request.json();
@@ -539,10 +561,21 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
     return jsonNoStore({ error: "invalid json" }, 400);
   }
   if (!isValidAnalyticsBreakerConfig(parsed)) {
-    return jsonNoStore({ error: "body must be exactly { disabled: boolean }" }, 400);
+    // A malformed config must never replace a working one - the previous state stands.
+    // Where the shed block is the thing that failed, say WHICH rule it broke: "invalid"
+    // is not a useful answer to someone activating a protection during an incident.
+    const shed = (parsed as { shed?: unknown } | null)?.shed;
+    const specific = typeof shed === "object" && shed !== null ? shedEnforcementError(shed as never) : null;
+    return jsonNoStore({ error: specific ?? "body must be { disabled: boolean } with an optional valid shed policy" }, 400);
   }
   await env.CONTENT_KV.put(ANALYTICS_BREAKER_KV_KEY, JSON.stringify(parsed));
-  return jsonNoStore({ ok: true, disabled: parsed.disabled });
+  const shed = parsed.shed;
+  return jsonNoStore({
+    ok: true,
+    disabled: parsed.disabled,
+    monitorOnly: shed?.monitorOnly ?? true,
+    sheddingActive: shed !== undefined && shed.monitorOnly === false,
+  });
 }
 
 // ---------- Multiplayer cost guard ----------

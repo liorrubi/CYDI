@@ -904,3 +904,133 @@ test("the merged counter survives a range merge across the rename", () => {
   assert.equal(folded.shop_purchase_with_coins?.total, 5, "one continuous series across the rename");
   assert.equal(folded.purchase_completed, undefined);
 });
+
+
+// --- game_started: country x game type ---------------------------------------------
+//
+// Shape Challenge is ~97% of all starts and acquisition is heavily IR-weighted, but
+// byGameType said only WHAT was played and the country maps lived on other events, so
+// "how much Classic play is in a market we cannot monetize" had no answer. These pin
+// the crossed map, the closed-domain guards, and - just as important - that nothing
+// ELSE gained a dimension: no byCountry on game_started, no country x version x type,
+// and no country on game_completed.
+
+const STARTED = { gameType: "shapeChallenge", category: "geometric", contentKey: "circle" } as const;
+
+test("game_started crosses country with game type", () => {
+  const c = incrementEvent({}, "game_started", { ...STARTED }, "android", "0.51.0", "abc1234", undefined, "IR");
+  assert.deepEqual(c.game_started?.byCountryGameType, { "IR|shapeChallenge": 1 });
+});
+
+test("countries stay separate, and so do game types", () => {
+  let c = {};
+  const rows = [
+    ["IR", "shapeChallenge"], ["IR", "shapeChallenge"], ["IR", "shapeChallenge"],
+    ["DE", "shapeChallenge"], ["US", "shapeChallenge"],
+    ["IR", "dailyChallenge"], ["DE", "artistPack"],
+  ] as const;
+  for (const [country, gameType] of rows) {
+    c = incrementEvent(c, "game_started", { gameType, category: "geometric", contentKey: "circle" }, "android", "0.51.0", "abc1234", undefined, country);
+  }
+  const e = (c as Record<string, { byCountryGameType?: Record<string, number>; byGameType?: Record<string, number>; total: number }>).game_started;
+  assert.deepEqual(e.byCountryGameType, {
+    "IR|shapeChallenge": 3,
+    "DE|shapeChallenge": 1,
+    "US|shapeChallenge": 1,
+    "IR|dailyChallenge": 1,
+    "DE|artistPack": 1,
+  });
+  assert.equal(e.total, 7);
+  // The business read this exists for: IR share of Classic.
+  const irClassic = e.byCountryGameType!["IR|shapeChallenge"];
+  const classicTotal = Object.entries(e.byCountryGameType!).filter(([k]) => k.endsWith("|shapeChallenge")).reduce((a, [, v]) => a + v, 0);
+  assert.equal(irClassic, 3);
+  assert.equal(classicTotal, 5);
+});
+
+test("an unknown country follows the existing ZZ behaviour, not a missing key", () => {
+  for (const raw of [undefined, null, "", "XX", "T1", "usa", 7, {}]) {
+    const c = incrementEvent({}, "game_started", { ...STARTED }, "android", "0.51.0", "abc1234", undefined, raw as string);
+    assert.deepEqual(c.game_started?.byCountryGameType, { "ZZ|shapeChallenge": 1 }, JSON.stringify(raw) + " is ZZ");
+  }
+  // Lowercase is a real code in the wrong case, exactly as byCountry treats it.
+  const lower = incrementEvent({}, "game_started", { ...STARTED }, "android", "0.51.0", "abc1234", undefined, "ir");
+  assert.deepEqual(lower.game_started?.byCountryGameType, { "IR|shapeChallenge": 1 });
+});
+
+test("a gameType outside the closed set opens no crossed key, and the event still counts", () => {
+  const bad = incrementEvent({}, "game_started", { gameType: "kaboom", category: "geometric", contentKey: "circle" }, "android", "0.51.0", "abc1234", undefined, "IR");
+  assert.equal(bad.game_started?.byCountryGameType, undefined);
+  assert.equal(bad.game_started?.total, 1, "the start is still counted");
+});
+
+test("the cap bounds the map and overflow is OTHER, never ZZ", () => {
+  let c = {};
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let made = 0;
+  outer: for (const a of letters) {
+    for (const b of letters) {
+      if (made >= 220) break outer;
+      c = incrementEvent(c, "game_started", { ...STARTED }, "android", "0.51.0", "abc1234", undefined, a + b);
+      made += 1;
+    }
+  }
+  const map = (c as Record<string, { byCountryGameType?: Record<string, number> }>).game_started.byCountryGameType!;
+  assert.equal(Object.keys(map).length, 201, "200 real keys plus OTHER");
+  assert.ok(map.OTHER >= 1);
+  assert.equal(map.ZZ, undefined, "overflow is not the unknown-country key");
+});
+
+test("existing game_started dimensions are completely unchanged", () => {
+  const withCountry = incrementEvent({}, "game_started", { ...STARTED }, "android", "0.51.0", "abc1234", undefined, "IR").game_started!;
+  const without = incrementEvent({}, "game_started", { ...STARTED }, "android", "0.51.0", "abc1234").game_started!;
+  assert.deepEqual(withCountry.byGameType, { shapeChallenge: 1 }, "byGameType untouched");
+  assert.deepEqual(withCountry.byGameType, without.byGameType);
+  assert.deepEqual(withCountry.byCategory, { geometric: 1 });
+  assert.deepEqual(withCountry.byContentKey, { circle: 1 });
+  assert.deepEqual(withCountry.byAppVersion, { "0.51.0": 1 });
+  assert.deepEqual(withCountry.byPlatform, { android: 1 });
+  assert.equal(withCountry.total, without.total);
+  // No country argument at all still records the start, under ZZ.
+  assert.deepEqual(without.byCountryGameType, { "ZZ|shapeChallenge": 1 });
+});
+
+test("no higher-order cross and no bare byCountry are created on game_started", () => {
+  const e = incrementEvent({}, "game_started", { ...STARTED }, "android", "0.51.0", "abc1234", undefined, "IR").game_started!;
+  assert.equal(e.byCountry, undefined, "game_started is deliberately NOT in COUNTRY_BREAKOUT_EVENTS");
+  assert.equal(e.byCountryAppVersion, undefined, "no country x version");
+  assert.equal(e.byCountryAppVersionReason, undefined);
+  assert.equal(e.byCountryReason, undefined);
+});
+
+test("the crossed map is confined to game_started", () => {
+  const others = ["game_completed", "result_shared", "shape_completed", "app_open", "mp_game_started"] as const;
+  for (const name of others) {
+    const c = incrementEvent({}, name, { ...STARTED, starRating: 3, passed: true, playerCount: 2, roundCount: 10 }, "android", "0.51.0", "abc1234", undefined, "IR");
+    assert.equal(c[name]?.byCountryGameType, undefined, name + " gets no byCountryGameType");
+  }
+  // game_completed keeps its own byGameType - only the CROSS is game_started's.
+  const completed = incrementEvent({}, "game_completed", { ...STARTED }, "android", "0.51.0", "abc1234", undefined, "IR");
+  assert.deepEqual(completed.game_completed?.byGameType, { shapeChallenge: 1 });
+});
+
+test("the crossed map survives the merge a range report is built from", () => {
+  const day1 = incrementEvent({}, "game_started", { ...STARTED }, "android", "0.51.0", "abc1234", undefined, "IR");
+  const day2 = incrementEvent({}, "game_started", { ...STARTED }, "android", "0.51.0", "abc1234", undefined, "IR");
+  const day3 = incrementEvent({}, "game_started", { gameType: "dailyChallenge", category: "geometric", contentKey: "daily:45" }, "android", "0.51.0", "abc1234", undefined, "DE");
+  const merged = mergeCounters(mergeCounters(day1, day2), day3);
+  assert.deepEqual(merged.game_started?.byCountryGameType, { "IR|shapeChallenge": 2, "DE|dailyChallenge": 1 });
+  assert.equal(merged.game_started?.total, 3);
+
+  // Forward-only: a bucket written before this field existed never gains one.
+  const legacy = { game_started: { total: 9, byGameType: { shapeChallenge: 9 } } };
+  const legacyMerged = mergeCounters(legacy, { game_started: { total: 1 } });
+  assert.equal(legacyMerged.game_started?.byCountryGameType, undefined);
+  assert.equal(legacyMerged.game_started?.total, 10);
+  assert.deepEqual(legacyMerged.game_started?.byGameType, { shapeChallenge: 9 }, "historical byGameType untouched");
+
+  // A legacy day merged with a new one keeps only the new day's crossed rows.
+  const mixed = mergeCounters(legacy, day3);
+  assert.deepEqual(mixed.game_started?.byCountryGameType, { "DE|dailyChallenge": 1 });
+  assert.equal(mixed.game_started?.total, 10);
+});

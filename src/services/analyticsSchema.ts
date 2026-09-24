@@ -423,7 +423,8 @@ function isCategoryOrCustom(value: unknown): value is CategoryOrCustom {
   return value === "custom" || (typeof value === "string" && (CATEGORY_IDS as string[]).includes(value));
 }
 
-function isGameType(value: unknown): value is GameType {
+/** Exported for worker/analyticsDO.ts's country x game-type breakout, which must not open a counter key for a gameType this schema would have rejected. */
+export function isGameType(value: unknown): value is GameType {
   return typeof value === "string" && (GAME_TYPES as string[]).includes(value);
 }
 

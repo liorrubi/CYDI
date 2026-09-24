@@ -2,6 +2,7 @@ import {
   ANALYTICS_EVENT_NAMES,
   datesInRange,
   isAnalyticsEventName,
+  isGameType,
   isInstallAgeParam,
   isValidDateKey,
   israelDateKey,
@@ -191,6 +192,32 @@ const COUNTRY_VERSION_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
   "reward_bonus_offer_shown",
 ]);
 const COUNTRY_VERSION_REASON_BREAKOUT_EVENTS = COUNTRY_REASON_BREAKOUT_EVENTS;
+// Country crossed with game type, on game_started ONLY.
+//
+// The question it exists to answer: Shape Challenge ("Classic") is ~97% of all game
+// starts, acquisition is heavily IR-weighted, and rewarded delivery in IR is
+// effectively non-functional - so how much of the gameplay we would monetize is in a
+// market where AdMob monetization is not realistically available? byGameType says
+// WHAT is played and the country maps say WHERE people are, but neither crosses, and
+// game_started had no country dimension at all.
+//
+// Deliberately NOT added to COUNTRY_BREAKOUT_EVENTS: the crossed map already answers
+// "how many starts from IR" by summing that country's game types, so a separate
+// byCountry on the same event would be a second map carrying no extra information.
+//
+// game_started only, not the whole of FUNNEL_EVENTS. game_completed and result_shared
+// would answer a different question (completion/share rate by country), nobody has
+// asked it, and each extra event multiplies stored keys by the live country count.
+//
+// Both halves are closed domains - GAME_TYPE_PARAMS and the ISO code set plus
+// UNKNOWN_COUNTRY - so unlike byCountryAppVersion the cap below is a safety net
+// rather than the real bound.
+const COUNTRY_GAME_TYPE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["game_started"]);
+// ~6 game types x the countries CYDI actually sees. The theoretical ceiling is the
+// full ISO set x game types, hence a cap; the practical size is a few dozen keys.
+// Overflow shares the dedicated OTHER key, which is never ZZ - ZZ means the country
+// was unknown, OTHER means the map filled up.
+const MAX_COUNTRY_GAME_TYPE_KEYS = 200;
 // appVersion is FORMAT-guarded, not value-guarded (normalizeAppVersion accepts any
 // d.d.d), so unlike country and reason it has no closed domain - which is exactly why
 // both crossed maps are capped rather than trusted. The cap, not the input, is the
@@ -339,6 +366,13 @@ type EventCounters = {
   // recorded before these fields existed.
   byCountryAppVersion?: Record<string, number>;
   byCountryAppVersionReason?: Record<string, number>;
+  // COUNTRY_GAME_TYPE_BREAKOUT_EVENTS (game_started) only - the same country crossed
+  // with the event's own gameType: "IR|shapeChallenge", "DE|dailyChallenge". Both
+  // halves are closed sets, so the key cannot be arbitrary; capped anyway at
+  // MAX_COUNTRY_GAME_TYPE_KEYS with the shared OTHER overflow. Absent on every other
+  // event, and on day buckets recorded before this field existed - such a day reports
+  // no country x game-type rows at all rather than guessing them.
+  byCountryGameType?: Record<string, number>;
   // ATTRIBUTION_BREAKOUT_EVENTS only - where the visit that produced this event came
   // from. `bySource` is the campaign twin of byPlatform; byCampaign/byUtmContent split
   // it further by utm_campaign / utm_content. All three are capped at
@@ -535,6 +569,17 @@ export function incrementEvent(
       COUNTRY_REASON_OVERFLOW,
     );
   }
+  // Country x game type. Guarded on isGameType so a direct call (tests, a future
+  // caller) cannot open a key for a gameType validateEventParams would have rejected -
+  // the same discipline isAdFailureReason enforces on the reason crosses above.
+  if (COUNTRY_GAME_TYPE_BREAKOUT_EVENTS.has(eventName) && isGameType(params.gameType)) {
+    updated.byCountryGameType = incrementCappedKeyMap(
+      existing.byCountryGameType,
+      `${normalizeCountry(country)}|${params.gameType}`,
+      MAX_COUNTRY_GAME_TYPE_KEYS,
+      COUNTRY_REASON_OVERFLOW,
+    );
+  }
   if (FUNNEL_EVENTS.has(eventName)) {
     const gameType = params.gameType as string;
     const category = params.category as string;
@@ -630,6 +675,7 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byCountryReason: mergeKeyMaps(ae.byCountryReason, be.byCountryReason),
       byCountryAppVersion: mergeKeyMaps(ae.byCountryAppVersion, be.byCountryAppVersion),
       byCountryAppVersionReason: mergeKeyMaps(ae.byCountryAppVersionReason, be.byCountryAppVersionReason),
+      byCountryGameType: mergeKeyMaps(ae.byCountryGameType, be.byCountryGameType),
       bySource: mergeKeyMaps(ae.bySource, be.bySource),
       byCampaign: mergeKeyMaps(ae.byCampaign, be.byCampaign),
       byUtmContent: mergeKeyMaps(ae.byUtmContent, be.byUtmContent),

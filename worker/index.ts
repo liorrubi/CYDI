@@ -5,6 +5,20 @@ import {
   isValidAnalyticsBreakerConfig,
   parseAnalyticsBreaker,
 } from "./analyticsBreaker";
+import {
+  evaluateRoomCreation,
+  guardConfigAgeMs,
+  guardLogLine,
+  effectiveMode,
+  isValidGuardConfig,
+  MAX_HISTORY_ENTRIES,
+  MULTIPLAYER_GUARD_KV_KEY,
+  parseGuardConfig,
+  readGuardConfig,
+  GUARD_FAIL_OPEN,
+  type GuardTransition,
+  type MultiplayerGuardConfig,
+} from "./multiplayerGuard";
 import { DailyChallengeDO } from "./dailyChallengeDO";
 import { RoomDO } from "./roomDO";
 import { parseShareRecord, renderShareImage, shareTitleAndDescription } from "./shareImage";
@@ -494,6 +508,86 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
   return jsonNoStore({ ok: true, disabled: parsed.disabled });
 }
 
+// ---------- Multiplayer cost guard ----------
+// Admin-only on every verb. Unlike the ads switch there is no public GET: a public
+// endpoint naming the countries under policy would tell circumventers exactly what to
+// avoid, and tells an honest user nothing useful.
+
+async function handleGuardConfigGet(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  const raw = await env.CONTENT_KV.get(MULTIPLAYER_GUARD_KV_KEY);
+  const parsed = parseGuardConfig(raw);
+  // Reports the EFFECTIVE config, and says plainly when the stored value failed
+  // validation - an operator needs to know their policy is not being applied.
+  return jsonNoStore({ config: parsed ?? GUARD_FAIL_OPEN, storedValid: parsed !== null, stored: raw === null ? null : "present" });
+}
+
+async function handleGuardConfigPut(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    return jsonNoStore({ error: "invalid json" }, 400);
+  }
+  if (!isValidGuardConfig(parsed)) {
+    // A malformed config must never replace a valid one - the previous policy stands.
+    return jsonNoStore({ error: "invalid multiplayer guard config" }, 400);
+  }
+
+  const previous = parseGuardConfig(await env.CONTENT_KV.get(MULTIPLAYER_GUARD_KV_KEY));
+  const now = new Date().toISOString();
+  const transition: GuardTransition = {
+    at: now,
+    scope: parsed.override?.scope ?? "GLOBAL",
+    from: previous?.globalMode ?? "NORMAL",
+    to: parsed.override?.mode ?? parsed.globalMode,
+    monitorOnly: parsed.monitorOnly,
+    reason: parsed.reason,
+    expiresAt: parsed.expiresAt ?? parsed.override?.expiresAt,
+  };
+  // History is appended ONLY here, on an explicit operator change. Nothing in the
+  // request path ever writes - in particular, a request noticing that expiresAt has
+  // passed does not produce a write.
+  const history = [transition, ...(previous?.history ?? [])].slice(0, MAX_HISTORY_ENTRIES);
+  const next: MultiplayerGuardConfig = { ...parsed, activatedAt: now, history };
+
+  await env.CONTENT_KV.put(MULTIPLAYER_GUARD_KV_KEY, JSON.stringify(next));
+  return jsonNoStore({ ok: true, activatedAt: now, monitorOnly: next.monitorOnly, globalMode: next.globalMode });
+}
+
+async function handleGuardStatus(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  const config = parseGuardConfig(await env.CONTENT_KV.get(MULTIPLAYER_GUARD_KV_KEY)) ?? GUARD_FAIL_OPEN;
+  const now = Date.now();
+  const countries: Record<string, unknown> = {};
+  for (const [code, policy] of Object.entries(config.countries)) {
+    const eff = effectiveMode(config, code, now);
+    countries[code] = { configured: policy, effectiveMode: eff.mode, source: eff.source, createAllowPercent: eff.createAllowPercent };
+  }
+  const overrideExpired = config.override ? Date.parse(config.override.expiresAt) <= now : null;
+  const configExpired = config.expiresAt !== undefined ? Date.parse(config.expiresAt) <= now : false;
+  return jsonNoStore({
+    monitorOnly: config.monitorOnly,
+    enforcing: false,
+    globalMode: config.globalMode,
+    effectiveGlobalMode: configExpired ? "NORMAL" : config.globalMode,
+    countries,
+    override: config.override ?? null,
+    overrideExpired,
+    expiresAt: config.expiresAt ?? null,
+    expired: configExpired,
+    reason: config.reason ?? null,
+    activatedAt: config.activatedAt ?? null,
+    history: config.history ?? [],
+    configAgeMs: guardConfigAgeMs(now),
+    // Expiry is lazy by design: there is no scheduler in Phase 1, so an expired
+    // policy simply stops resolving to anything restrictive. No event fires at
+    // 00:00 UTC and no history entry is written for it.
+    expirySemantics: "lazy-timestamp-comparison; no scheduler in phase 1",
+  });
+}
+
 /**
  * Ingest, unless the breaker says otherwise. The check happens HERE rather than
  * inside the Durable Object on purpose: the whole point is to not reach the DO at
@@ -568,7 +662,25 @@ function randomRoomCode(): string {
  * into someone else's game. 6 characters over a 32-symbol alphabet is ~30 bits;
  * collisions are rare enough that five attempts is generous.
  */
-async function handleRoomCreate(env: Env): Promise<Response> {
+async function handleRoomCreate(request: Request, env: Env): Promise<Response> {
+  // Cost guard, evaluated HERE - before the loop below, which is the first thing in
+  // the whole request that can touch a Durable Object. Note the loop can cost up to
+  // FIVE DO requests on code collision, so this is not a one-request decision point.
+  //
+  // PHASE 1 IS MONITOR-ONLY. The evaluation is recorded and then deliberately not
+  // acted on: `allowed` is always true, and nothing below branches on `decision`.
+  // Enforcement is a separate, explicit change.
+  try {
+    const guard = await readGuardConfig(env.CONTENT_KV);
+    const evaluation = evaluateRoomCreation(guard, (request as { cf?: { country?: unknown } }).cf?.country);
+    // One structured line per creation - a few thousand a day at current volume. Not
+    // an analytics event, not a KV write, not a DO write; the monitor must not become
+    // the quota problem it exists to watch.
+    console.log(guardLogLine(evaluation));
+  } catch {
+    // The guard is advisory and must never be able to stop a room being created.
+  }
+
   for (let attempt = 0; attempt < 5; attempt++) {
     const roomCode = randomRoomCode();
     const created = await forwardToRoomDO(
@@ -619,11 +731,19 @@ export default {
     // Play Together rooms. `/create` is NOT reachable from outside - a room is
     // only ever allocated through POST /api/room, which owns code generation
     // and collision retry.
-    if (url.pathname === "/api/room" && request.method === "POST") return handleRoomCreate(env);
+    if (url.pathname === "/api/room" && request.method === "POST") return handleRoomCreate(request, env);
 
     const roomMatch = url.pathname.match(/^\/api\/room\/([A-Z0-9]{6})\/(ws|info)$/);
     if (roomMatch && isRoomCode(roomMatch[1])) {
       return forwardToRoomDO(request, env, roomMatch[1], `/${roomMatch[2]}`);
+    }
+
+    if (url.pathname === "/api/config/multiplayer-guard") {
+      if (request.method === "GET") return handleGuardConfigGet(request, env);
+      if (request.method === "PUT") return handleGuardConfigPut(request, env);
+    }
+    if (url.pathname === "/api/config/multiplayer-guard/status" && request.method === "GET") {
+      return handleGuardStatus(request, env);
     }
 
     if (url.pathname === "/api/config/analytics-breaker") {

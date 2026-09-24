@@ -126,6 +126,24 @@ const COUNTRY_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
   "rewarded_ad_loaded",
   "reward_offer_shown",
   "reward_bonus_offer_shown",
+  // Multiplayer cost measurement (multiplayerGuard.ts). RoomDO has no country
+  // dimension of its own and cannot cheaply gain one, so the share of multiplayer
+  // load per country was being INFERRED from the rewarded-ad events above - a proxy
+  // that measures ad impressions, not rooms. These two make it a measurement:
+  //
+  //   mp_room_created  - emitted by the HOST only, right after POST /api/room
+  //                      succeeds, so its byCountry is literally "where rooms are
+  //                      created from". This is the number creation-side admission
+  //                      control would act on.
+  //   mp_game_started  - emitted by EVERY player in the room, so its byCountry is a
+  //                      participant mix, NOT creator country. Useful for "where
+  //                      multiplayer is played", and must not be read as the former.
+  //
+  // Free: the country is already resolved server-side for every event by
+  // forwardToAnalyticsDO, and both events already exist. No new event, no extra DO
+  // request, no KV write, no per-room state.
+  "mp_room_created",
+  "mp_game_started",
 ]);
 // Country alone says WHERE, reason alone says WHAT - only the pair says whether Iran
 // specifically times out while Germany errors. Both halves are closed sets, so the
@@ -138,7 +156,17 @@ const COUNTRY_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad
 // says both. Same four events as byCountry - the two rewarded ones plus the two
 // offer-shown denominators, because a version with more players in a country will
 // always produce more failures there.
-const COUNTRY_VERSION_BREAKOUT_EVENTS = COUNTRY_BREAKOUT_EVENTS;
+// Deliberately its OWN set rather than an alias of the one above. It used to be an
+// alias, which meant adding any event to byCountry silently gave it the crossed
+// country x version map too. The two multiplayer events want byCountry only; the
+// crossed map exists to answer an Android-release question about rewarded ads and
+// has no bearing on room creation.
+const COUNTRY_VERSION_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
+  "rewarded_ad_unavailable",
+  "rewarded_ad_loaded",
+  "reward_offer_shown",
+  "reward_bonus_offer_shown",
+]);
 const COUNTRY_VERSION_REASON_BREAKOUT_EVENTS = COUNTRY_REASON_BREAKOUT_EVENTS;
 // appVersion is FORMAT-guarded, not value-guarded (normalizeAppVersion accepts any
 // d.d.d), so unlike country and reason it has no closed domain - which is exactly why

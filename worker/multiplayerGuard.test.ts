@@ -17,6 +17,8 @@ const {
   readGuardConfig,
   guardConfigAgeMs,
   guardLogLine,
+  enforcementConfigError,
+  isEnforcementActive,
   GUARD_FAIL_OPEN,
   _resetGuardCacheForTests,
 } = await import("./multiplayerGuard.ts");
@@ -273,8 +275,123 @@ test("config age is reported for the status endpoint", async () => {
 test("the log line is structured and carries nothing identifying", () => {
   const config = base({ countries: { IR: { mode: "EMERGENCY" } } });
   const line = JSON.parse(guardLogLine(evaluateRoomCreation(config, "IR", NOW)));
-  assert.deepEqual(Object.keys(line).sort(), ["country", "decision", "mode", "monitorOnly", "pct", "src", "t"]);
+  assert.deepEqual(Object.keys(line).sort(), ["country", "decision", "enforced", "mode", "monitorOnly", "pct", "src", "t"]);
   assert.equal(line.t, "mp_guard");
   assert.equal(line.country, "IR");
   assert.equal(line.decision, "would_reject");
+});
+
+// ------------------------------------------------- enforcement (phase 2A) ----
+//
+// monitorOnly is the whole switch. These pin both halves: that it being true keeps
+// phase 1 behaviour exactly, and that turning it false refuses only EMERGENCY and
+// only for configured countries.
+
+test("monitorOnly true never denies, whatever the decision says", () => {
+  const config = base({ countries: { IR: { mode: "EMERGENCY" }, DE: { mode: "ELEVATED", createAllowPercent: 0 } } });
+  for (const country of ["IR", "DE", "US"]) {
+    const e = evaluateRoomCreation(config, country, NOW);
+    assert.equal(e.allowed, true, `${country} must be allowed while monitoring`);
+    assert.equal(e.enforced, false);
+  }
+});
+
+test("live EMERGENCY denies the configured country and nobody else", () => {
+  const config = base({ monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: FUTURE });
+  const ir = evaluateRoomCreation(config, "IR", NOW);
+  assert.equal(ir.decision, "would_reject");
+  assert.equal(ir.allowed, false, "this is the one case that actually refuses");
+  assert.equal(ir.enforced, true);
+  assert.equal(evaluateRoomCreation(config, "DE", NOW).allowed, true, "an unconfigured country is untouched");
+  assert.equal(evaluateRoomCreation(config, undefined, NOW).allowed, true, "ZZ stays unrestricted even under enforcement");
+});
+
+test("live NORMAL allows", () => {
+  const config = base({ monitorOnly: false, countries: { IR: { mode: "NORMAL" } } });
+  assert.equal(evaluateRoomCreation(config, "IR", NOW).allowed, true);
+});
+
+test("an expired live EMERGENCY stops denying, with no write and no cleanup", () => {
+  const config = base({ monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: PAST });
+  const snapshot = JSON.stringify(config);
+  const e = evaluateRoomCreation(config, "IR", NOW);
+  assert.equal(e.allowed, true, "expiry alone must lift enforcement");
+  assert.equal(e.enforced, false);
+  assert.equal(JSON.stringify(config), snapshot, "evaluation must never mutate the config");
+});
+
+test("enforcement lifts exactly at the quota-reset boundary", () => {
+  const midnight = Date.parse("2026-09-25T00:00:00Z");
+  const config = base({ monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: "2026-09-25T00:00:00Z" });
+  assert.equal(evaluateRoomCreation(config, "IR", midnight - 1000).allowed, false);
+  assert.equal(evaluateRoomCreation(config, "IR", midnight).allowed, true);
+});
+
+test("a live override can enforce and expire on its own clock", () => {
+  const live = base({ monitorOnly: false, countries: {}, override: { scope: "IR", mode: "EMERGENCY", expiresAt: FUTURE } });
+  assert.equal(evaluateRoomCreation(live, "IR", NOW).allowed, false);
+  const lapsed = base({ monitorOnly: false, countries: {}, override: { scope: "IR", mode: "EMERGENCY", expiresAt: PAST } });
+  assert.equal(evaluateRoomCreation(lapsed, "IR", NOW).allowed, true);
+});
+
+// -------------------------------------------- ELEVATED is not enforceable ----
+
+test("a live ELEVATED config is rejected by validation, with a reason", () => {
+  for (const cfg of [
+    base({ monitorOnly: false, countries: { IR: { mode: "ELEVATED", createAllowPercent: 50 } }, expiresAt: FUTURE }),
+    base({ monitorOnly: false, globalMode: "ELEVATED", expiresAt: FUTURE }),
+    base({ monitorOnly: false, countries: {}, override: { scope: "IR", mode: "ELEVATED", expiresAt: FUTURE } }),
+  ]) {
+    assert.equal(isValidGuardConfig(cfg), false, "percentage enforcement is not reliable and must not be accepted");
+    assert.match(String(enforcementConfigError(cfg)), /ELEVATED cannot be enforced/);
+  }
+});
+
+test("ELEVATED is still freely modellable while monitoring", () => {
+  const cfg = base({ monitorOnly: true, countries: { IR: { mode: "ELEVATED", createAllowPercent: 50 } } });
+  assert.equal(isValidGuardConfig(cfg), true);
+  assert.equal(enforcementConfigError(cfg), null);
+});
+
+test("even if a live ELEVATED reached evaluation it would fall open", () => {
+  // Defence in depth: validation rejects it, and would_throttle can never clear the
+  // allowed bar anyway.
+  const cfg = base({ monitorOnly: false, countries: { IR: { mode: "ELEVATED", createAllowPercent: 0 } }, expiresAt: FUTURE });
+  const e = evaluateRoomCreation(cfg, "IR", NOW);
+  assert.equal(e.decision, "would_throttle");
+  assert.equal(e.allowed, true, "a throttle decision must never deny");
+});
+
+// ------------------------------------------------------- time-bounded ----
+
+test("live EMERGENCY without an expiry is rejected", () => {
+  const cfg = base({ monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } } });
+  assert.equal(isValidGuardConfig(cfg), false);
+  assert.match(String(enforcementConfigError(cfg)), /requires expiresAt/);
+});
+
+test("an override's own expiry satisfies the time-bound rule", () => {
+  const cfg = base({ monitorOnly: false, countries: {}, override: { scope: "IR", mode: "EMERGENCY", expiresAt: FUTURE } });
+  assert.equal(isValidGuardConfig(cfg), true);
+});
+
+test("monitor-only EMERGENCY needs no expiry - nothing is being refused", () => {
+  assert.equal(isValidGuardConfig(base({ countries: { IR: { mode: "EMERGENCY" } } })), true);
+});
+
+// ------------------------------------------------- enforcement headline ----
+
+test("isEnforcementActive answers the operator's one question", () => {
+  assert.equal(isEnforcementActive(base({ countries: { IR: { mode: "EMERGENCY" } } }), NOW), false, "monitoring is not enforcing");
+  assert.equal(isEnforcementActive(base({ monitorOnly: false }), NOW), false, "live but NORMAL is not enforcing");
+  assert.equal(isEnforcementActive(base({ monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: FUTURE }), NOW), true);
+  assert.equal(isEnforcementActive(base({ monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: PAST }), NOW), false, "expired is not enforcing");
+  assert.equal(isEnforcementActive(base({ monitorOnly: false, override: { scope: "GLOBAL", mode: "EMERGENCY", expiresAt: FUTURE } }), NOW), true);
+});
+
+test("the log line records whether the decision was acted on", () => {
+  const live = base({ monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: FUTURE });
+  assert.equal(JSON.parse(guardLogLine(evaluateRoomCreation(live, "IR", NOW))).enforced, true);
+  const monitoring = base({ countries: { IR: { mode: "EMERGENCY" } } });
+  assert.equal(JSON.parse(guardLogLine(evaluateRoomCreation(monitoring, "IR", NOW))).enforced, false);
 });

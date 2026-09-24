@@ -15,7 +15,11 @@ import {
   MULTIPLAYER_GUARD_KV_KEY,
   parseGuardConfig,
   readGuardConfig,
+  enforcementConfigError,
+  guardRejectionBody,
+  isEnforcementActive,
   GUARD_FAIL_OPEN,
+  GUARD_REJECTION_STATUS,
   type GuardTransition,
   type MultiplayerGuardConfig,
 } from "./multiplayerGuard";
@@ -532,7 +536,11 @@ async function handleGuardConfigPut(request: Request, env: Env): Promise<Respons
   }
   if (!isValidGuardConfig(parsed)) {
     // A malformed config must never replace a valid one - the previous policy stands.
-    return jsonNoStore({ error: "invalid multiplayer guard config" }, 400);
+    // When the shape is fine but an enforcement rule was broken, say which one: an
+    // operator reaching for this at 2am should not have to guess.
+    const shapeOk = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
+    const detail = shapeOk ? enforcementConfigError(parsed as MultiplayerGuardConfig) : null;
+    return jsonNoStore({ error: detail ?? "invalid multiplayer guard config" }, 400);
   }
 
   const previous = parseGuardConfig(await env.CONTENT_KV.get(MULTIPLAYER_GUARD_KV_KEY));
@@ -567,9 +575,16 @@ async function handleGuardStatus(request: Request, env: Env): Promise<Response> 
   }
   const overrideExpired = config.override ? Date.parse(config.override.expiresAt) <= now : null;
   const configExpired = config.expiresAt !== undefined ? Date.parse(config.expiresAt) <= now : false;
+  const enforcementActive = isEnforcementActive(config, now);
+  const blocked = enforcementActive
+    ? Object.entries(config.countries).filter(([, p]) => p.mode === "EMERGENCY").map(([code]) => code)
+    : [];
   return jsonNoStore({
+    // The headline question - "is CYDI refusing any new room creation right now?"
+    enforcementActive,
+    blockedCountries: blocked,
     monitorOnly: config.monitorOnly,
-    enforcing: false,
+    enforcing: enforcementActive,
     globalMode: config.globalMode,
     effectiveGlobalMode: configExpired ? "NORMAL" : config.globalMode,
     countries,
@@ -670,6 +685,7 @@ async function handleRoomCreate(request: Request, env: Env): Promise<Response> {
   // PHASE 1 IS MONITOR-ONLY. The evaluation is recorded and then deliberately not
   // acted on: `allowed` is always true, and nothing below branches on `decision`.
   // Enforcement is a separate, explicit change.
+  let refuse = false;
   try {
     const guard = await readGuardConfig(env.CONTENT_KV);
     const evaluation = evaluateRoomCreation(guard, (request as { cf?: { country?: unknown } }).cf?.country);
@@ -677,8 +693,15 @@ async function handleRoomCreate(request: Request, env: Env): Promise<Response> {
     // an analytics event, not a KV write, not a DO write; the monitor must not become
     // the quota problem it exists to watch.
     console.log(guardLogLine(evaluation));
+    refuse = !evaluation.allowed;
   } catch {
-    // The guard is advisory and must never be able to stop a room being created.
+    // Any failure in the guard leaves `refuse` false. Guard infrastructure breaking
+    // must never be able to stop a room being created.
+  }
+  if (refuse) {
+    // Returned BEFORE the loop below, so the whole 1-5 RoomDO-request cost of
+    // allocating a room is saved rather than merely wasted.
+    return json(guardRejectionBody(), GUARD_REJECTION_STATUS);
   }
 
   for (let attempt = 0; attempt < 5; attempt++) {

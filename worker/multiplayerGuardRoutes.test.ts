@@ -60,8 +60,18 @@ function makeEnv(kv = new FakeKv(), room = new FakeRoomNamespace()) {
 }
 
 const admin = { authorization: `Bearer ${TOKEN}` };
-const createReq = (country = "IR") =>
-  new Request("https://playcydi.com/api/room", { method: "POST", cf: { country } } as RequestInit & { cf: unknown });
+/**
+ * Node's Request constructor silently drops the non-standard `cf` init that workerd
+ * supplies, so passing it through RequestInit looks right and does nothing - every
+ * such request arrives as country ZZ. Defining the property after construction is
+ * what actually exercises the country path.
+ */
+function withCountry(request: Request, country: string | undefined): Request {
+  if (country !== undefined) Object.defineProperty(request, "cf", { value: { country }, configurable: true });
+  return request;
+}
+const createReq = (country: string | undefined = "IR") =>
+  withCountry(new Request("https://playcydi.com/api/room", { method: "POST" }), country);
 
 const validConfig = (over: Record<string, unknown> = {}) =>
   JSON.stringify({ monitorOnly: true, globalMode: "NORMAL", countries: {}, ...over });
@@ -251,7 +261,7 @@ test("the /ws route is untouched by the guard", async () => {
   kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({ countries: { IR: { mode: "EMERGENCY" } } }));
   kv.reads = 0;
   const res = await worker.fetch(
-    new Request("https://playcydi.com/api/room/ABCDEF/ws", { cf: { country: "IR" } } as RequestInit & { cf: unknown }), env);
+    withCountry(new Request("https://playcydi.com/api/room/ABCDEF/ws"), "IR"), env);
   assert.equal(res.status, 200, "forwarded to RoomDO exactly as before");
   assert.equal(room.fetches, 1);
   assert.equal(kv.reads, 0, "the guard is not consulted on the socket path at all");
@@ -262,8 +272,149 @@ test("the /info route is untouched by the guard", async () => {
   kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({ countries: { IR: { mode: "EMERGENCY" } } }));
   kv.reads = 0;
   const res = await worker.fetch(
-    new Request("https://playcydi.com/api/room/ABCDEF/info", { cf: { country: "IR" } } as RequestInit & { cf: unknown }), env);
+    withCountry(new Request("https://playcydi.com/api/room/ABCDEF/info"), "IR"), env);
   assert.equal(res.status, 200);
   assert.equal(room.fetches, 1);
   assert.equal(kv.reads, 0);
+});
+
+// -------------------------------------------- live enforcement (phase 2A) ----
+
+const FUTURE = "2099-01-01T00:00:00Z";
+
+test("live EMERGENCY refuses the target country with 503 and a stable code", async () => {
+  const { env, kv, room } = makeEnv();
+  kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({
+    monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: FUTURE,
+  }));
+  const res = await worker.fetch(createReq("IR"), env);
+  assert.equal(res.status, 503);
+  const body = (await res.json()) as { code: string; retryable: boolean };
+  assert.equal(body.code, "multiplayer_capacity");
+  assert.equal(body.retryable, true);
+  // The whole point: the 1-5 RoomDO requests a creation would have cost are saved,
+  // not merely wasted.
+  assert.equal(room.fetches, 0, "a refused creation must cost zero RoomDO requests");
+  assert.equal(room.idFromNameCalls, 0, "and must not even address a Durable Object");
+});
+
+test("live EMERGENCY leaves every other country alone", async () => {
+  const { env, kv, room } = makeEnv();
+  kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({
+    monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: FUTURE,
+  }));
+  for (const country of ["DE", "US", "AZ"]) {
+    const res = await worker.fetch(createReq(country), env);
+    assert.equal(res.status, 201, `${country} must be unaffected`);
+  }
+  assert.equal(room.fetches, 3);
+});
+
+test("a request with no country is never refused, even under enforcement", async () => {
+  const { env, kv } = makeEnv();
+  kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({
+    monitorOnly: false, globalMode: "EMERGENCY", expiresAt: FUTURE,
+  }));
+  const res = await worker.fetch(new Request("https://playcydi.com/api/room", { method: "POST" }), env);
+  assert.equal(res.status, 201, "ZZ fails open even with a global emergency");
+});
+
+test("an expired enforcement config stops refusing, with no write", async () => {
+  const { env, kv } = makeEnv();
+  kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({
+    monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: "2020-01-01T00:00:00Z",
+  }));
+  kv.writes = 0;
+  assert.equal((await worker.fetch(createReq("IR"), env)).status, 201);
+  assert.equal(kv.writes, 0, "expiry must not trigger a KV write");
+});
+
+test("a KV outage cannot cause a refusal", async () => {
+  const { env } = makeEnv();
+  (env.CONTENT_KV as unknown as FakeKv).get = async () => {
+    throw new Error("kv down");
+  };
+  assert.equal((await worker.fetch(createReq("IR"), env)).status, 201, "guard failure must fail open");
+});
+
+test("enforcement can be switched on and off by config alone, with no deploy", async () => {
+  const { env } = makeEnv();
+
+  // Off by default (no config at all).
+  assert.equal((await worker.fetch(createReq("IR"), env)).status, 201);
+
+  // On, via an authenticated PUT.
+  const on = await worker.fetch(new Request("https://playcydi.com/api/config/multiplayer-guard", {
+    method: "PUT", headers: admin,
+    body: validConfig({ monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: FUTURE, reason: "controlled test" }),
+  }), env);
+  assert.equal(on.status, 200);
+  _resetGuardCacheForTests();
+  assert.equal((await worker.fetch(createReq("IR"), env)).status, 503, "activation by config only");
+
+  // Off again, same way.
+  const off = await worker.fetch(new Request("https://playcydi.com/api/config/multiplayer-guard", {
+    method: "PUT", headers: admin, body: validConfig({ reason: "test complete" }),
+  }), env);
+  assert.equal(off.status, 200);
+  _resetGuardCacheForTests();
+  assert.equal((await worker.fetch(createReq("IR"), env)).status, 201, "deactivation by config only");
+});
+
+test("a live ELEVATED config is refused by PUT with an explanatory message", async () => {
+  const { env, kv: store } = makeEnv();
+  const res = await worker.fetch(new Request("https://playcydi.com/api/config/multiplayer-guard", {
+    method: "PUT", headers: admin,
+    body: validConfig({ monitorOnly: false, countries: { IR: { mode: "ELEVATED", createAllowPercent: 50 } }, expiresAt: FUTURE }),
+  }), env);
+  assert.equal(res.status, 400);
+  assert.match((await res.json() as { error: string }).error, /ELEVATED cannot be enforced/);
+  assert.equal(store.store.has(MULTIPLAYER_GUARD_KV_KEY), false, "and nothing is stored");
+});
+
+test("live EMERGENCY without expiresAt is refused by PUT", async () => {
+  const { env } = makeEnv();
+  const res = await worker.fetch(new Request("https://playcydi.com/api/config/multiplayer-guard", {
+    method: "PUT", headers: admin, body: validConfig({ monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } } }),
+  }), env);
+  assert.equal(res.status, 400);
+  assert.match((await res.json() as { error: string }).error, /requires expiresAt/);
+});
+
+test("status answers 'is anything being refused right now' unambiguously", async () => {
+  const { env, kv } = makeEnv();
+  kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({
+    monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: FUTURE, reason: "spike",
+  }));
+  const s = (await (await worker.fetch(
+    new Request("https://playcydi.com/api/config/multiplayer-guard/status", { headers: admin }), env)).json()) as Record<string, unknown>;
+  assert.equal(s.enforcementActive, true);
+  assert.deepEqual(s.blockedCountries, ["IR"]);
+  assert.equal(s.monitorOnly, false);
+  assert.equal(s.reason, "spike");
+});
+
+test("status reports nothing blocked while monitoring an EMERGENCY policy", async () => {
+  const { env, kv } = makeEnv();
+  kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({ countries: { IR: { mode: "EMERGENCY" } } }));
+  const s = (await (await worker.fetch(
+    new Request("https://playcydi.com/api/config/multiplayer-guard/status", { headers: admin }), env)).json()) as Record<string, unknown>;
+  assert.equal(s.enforcementActive, false);
+  assert.deepEqual(s.blockedCountries, []);
+});
+
+test("/ws stays untouched even with enforcement live", async () => {
+  const { env, kv, room } = makeEnv();
+  kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({
+    monitorOnly: false, countries: { IR: { mode: "EMERGENCY" } }, expiresAt: FUTURE,
+  }));
+  kv.reads = 0;
+  const ws = await worker.fetch(
+    withCountry(new Request("https://playcydi.com/api/room/ABCDEF/ws"), "IR"), env);
+  const info = await worker.fetch(
+    withCountry(new Request("https://playcydi.com/api/room/ABCDEF/info"), "IR"), env);
+  assert.equal(ws.status, 200, "joins and reconnects are never refused");
+  assert.equal(info.status, 200);
+  assert.equal(room.fetches, 2);
+  assert.equal(kv.reads, 0, "the guard is not consulted on the socket path at all");
 });

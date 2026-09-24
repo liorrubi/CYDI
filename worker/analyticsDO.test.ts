@@ -20,7 +20,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { israelDateKey } from "../src/app/israelDate.ts";
 
-const { AnalyticsDO, incrementEvent } = await import("./analyticsDO.ts");
+const { AnalyticsDO, incrementEvent, incrementRequestCountry, ANALYTICS_REQUESTS_KEY } = await import("./analyticsDO.ts");
 
 // ------------------------------------------------------------------ doubles ----
 
@@ -187,6 +187,10 @@ test("buffered writes store exactly what per-event writes produced", async () =>
       "IL",
     );
   }
+
+  // Each send() above is its own DO request, so the request counter - which measures
+  // invocations, not events - is the one thing incrementEvent alone cannot produce.
+  for (let i = 0; i < SEQUENCE.length; i += 1) expected = incrementRequestCountry(expected, "IL");
 
   const dateKey = israelDateKey(clock);
   assert.deepEqual(storage.map.get(`day:${dateKey}`), expected);
@@ -567,9 +571,25 @@ test("a batch counts exactly what the same events counted one at a time", async 
   await batched.flush();
 
   const dateKey = israelDateKey(clock);
-  assert.deepEqual(batched.storage.map.get(`day:${dateKey}`), single.storage.map.get(`day:${dateKey}`));
-  assert.deepEqual(batched.storage.map.get("alltime"), single.storage.map.get("alltime"));
+  // EVERY event counter must be batch-invariant - that is the property this test
+  // exists for. The one deliberate exception is analytics_requests, which counts DO
+  // INVOCATIONS: N separate sends are N requests, the same events in one batch are
+  // one. It is compared separately below rather than excused.
+  const withoutRequests = (bucket: unknown) => {
+    const { [ANALYTICS_REQUESTS_KEY]: _requests, ...events } = bucket as Record<string, unknown>;
+    return events;
+  };
+  assert.deepEqual(
+    withoutRequests(batched.storage.map.get(`day:${dateKey}`)),
+    withoutRequests(single.storage.map.get(`day:${dateKey}`)),
+  );
+  assert.deepEqual(withoutRequests(batched.storage.map.get("alltime")), withoutRequests(single.storage.map.get("alltime")));
   assert.deepEqual(batched.storage.map.get(`usage:${dateKey}`), single.storage.map.get(`usage:${dateKey}`));
+
+  const requests = (bucket: unknown) => (bucket as Record<string, { total: number; byCountry?: Record<string, number> }>)[ANALYTICS_REQUESTS_KEY];
+  assert.equal(requests(single.storage.map.get(`day:${dateKey}`)).total, SEQUENCE.length, "one request per send");
+  assert.equal(requests(batched.storage.map.get(`day:${dateKey}`)).total, 1, "the whole batch is one request");
+  assert.deepEqual(requests(batched.storage.map.get(`day:${dateKey}`)).byCountry, { IL: 1 });
 });
 
 test("a batch of one is accepted", async () => {

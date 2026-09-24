@@ -7,8 +7,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { incrementEvent, mergeCounters, canonicalEventName, foldCanonicalAliases } = await import("./analyticsDO.ts");
-const { validateEventParams, ANALYTICS_EVENT_NAMES } = await import("../src/services/analyticsSchema.ts");
+const { incrementEvent, mergeCounters, canonicalEventName, foldCanonicalAliases, incrementRequestCountry, ANALYTICS_REQUESTS_KEY } = await import("./analyticsDO.ts");
+const { validateEventParams, ANALYTICS_EVENT_NAMES, isAnalyticsEventName } = await import("../src/services/analyticsSchema.ts");
 
 test("appVersion is recorded for every event", () => {
   let counters = incrementEvent({}, "game_started", { gameType: "shapeChallenge" }, "android", "0.40.0", "05dccc1");
@@ -1033,4 +1033,108 @@ test("the crossed map survives the merge a range report is built from", () => {
   const mixed = mergeCounters(legacy, day3);
   assert.deepEqual(mixed.game_started?.byCountryGameType, { "DE|dailyChallenge": 1 });
   assert.equal(mixed.game_started?.total, 10);
+});
+
+
+// --- AnalyticsDO requests by country ------------------------------------------------
+//
+// Quota is consumed per DO REQUEST, not per event, and A4 batches up to ten events
+// into one request - so this counter must be blind to batch size. It lives inside the
+// counter objects ingest already writes, under a reserved key that is deliberately NOT
+// an AnalyticsEventName, so no client can forge it.
+
+test("one request increments exactly one country, once", () => {
+  const c = incrementRequestCountry({}, "IR");
+  assert.deepEqual(c[ANALYTICS_REQUESTS_KEY], { total: 1, byCountry: { IR: 1 } });
+});
+
+test("the reserved key is NOT an event name, so a client cannot send it", () => {
+  assert.equal(ANALYTICS_EVENT_NAMES.includes(ANALYTICS_REQUESTS_KEY), false);
+  assert.equal(isAnalyticsEventName(ANALYTICS_REQUESTS_KEY), false);
+});
+
+test("repeated requests from one country accumulate; countries stay separate", () => {
+  let c = {};
+  for (const country of ["IR", "IR", "IR", "DE", "US", "IR", "DE"]) c = incrementRequestCountry(c, country);
+  const e = (c as Record<string, { total: number; byCountry?: Record<string, number> }>)[ANALYTICS_REQUESTS_KEY];
+  assert.equal(e.total, 7);
+  assert.deepEqual(e.byCountry, { IR: 4, DE: 2, US: 1 });
+});
+
+test("missing or invalid country follows the existing ZZ normalization", () => {
+  for (const raw of [undefined, null, "", "XX", "T1", "usa", 5, {}, "  "]) {
+    const c = incrementRequestCountry({}, raw as string);
+    assert.deepEqual(c[ANALYTICS_REQUESTS_KEY]?.byCountry, { ZZ: 1 }, JSON.stringify(raw) + " is ZZ");
+  }
+  const lower = incrementRequestCountry({}, "ir");
+  assert.deepEqual(lower[ANALYTICS_REQUESTS_KEY]?.byCountry, { IR: 1 });
+});
+
+test("a batch of 10 events counts ONE request - the whole point of the metric", () => {
+  // Mirrors handleEvents: the flag is offered until one entry is ingested, then never
+  // again for that batch.
+  let counters = {};
+  let requestCounted = false;
+  for (let i = 0; i < 10; i += 1) {
+    counters = incrementEvent(counters, "game_started", { gameType: "shapeChallenge", category: "geometric", contentKey: "circle" }, "android", "0.51.0", "abc1234", undefined, "IR");
+    if (!requestCounted) {
+      counters = incrementRequestCountry(counters, "IR");
+      requestCounted = true;
+    }
+  }
+  const all = counters as Record<string, { total: number; byCountry?: Record<string, number> }>;
+  assert.equal(all[ANALYTICS_REQUESTS_KEY].total, 1, "one request");
+  assert.deepEqual(all[ANALYTICS_REQUESTS_KEY].byCountry, { IR: 1 });
+  assert.equal(all.game_started.total, 10, "all ten events still counted");
+});
+
+test("three single-event requests count three, not one", () => {
+  let c = {};
+  for (const country of ["IR", "DE", "IR"]) {
+    c = incrementEvent(c, "app_open", {}, "android", "0.51.0", "abc1234", undefined, country);
+    c = incrementRequestCountry(c, country);
+  }
+  const all = c as Record<string, { total: number; byCountry?: Record<string, number> }>;
+  assert.equal(all[ANALYTICS_REQUESTS_KEY].total, 3);
+  assert.deepEqual(all[ANALYTICS_REQUESTS_KEY].byCountry, { IR: 2, DE: 1 });
+});
+
+test("existing event counters are completely unchanged by the request counter", () => {
+  const base = incrementEvent({}, "game_started", { gameType: "shapeChallenge", category: "geometric", contentKey: "circle" }, "android", "0.51.0", "abc1234", undefined, "IR");
+  const withRequest = incrementRequestCountry(base, "IR");
+  assert.deepEqual(withRequest.game_started, base.game_started, "the event object is untouched");
+  assert.deepEqual(withRequest.game_started?.byCountryGameType, { "IR|shapeChallenge": 1 });
+  assert.equal(withRequest.game_started?.total, 1);
+});
+
+test("no cross dimensions are created - byCountry and nothing else", () => {
+  const e = incrementRequestCountry({}, "IR")[ANALYTICS_REQUESTS_KEY]!;
+  assert.deepEqual(Object.keys(e).sort(), ["byCountry", "total"], "exactly two fields");
+  for (const field of ["byPlatform", "byAppVersion", "byAppBuild", "byCountryAppVersion", "byCountryGameType", "byGameType", "bySource"] as const) {
+    assert.equal(e[field], undefined, field + " must not exist on the request counter");
+  }
+});
+
+test("the request counter survives the merge a range report is built from", () => {
+  const day1 = incrementRequestCountry(incrementRequestCountry({}, "IR"), "DE");
+  const day2 = incrementRequestCountry(incrementRequestCountry({}, "IR"), "IR");
+  const merged = mergeCounters(day1, day2);
+  assert.equal(merged[ANALYTICS_REQUESTS_KEY]?.total, 4);
+  assert.deepEqual(merged[ANALYTICS_REQUESTS_KEY]?.byCountry, { IR: 3, DE: 1 });
+
+  // Forward-only: a bucket written before this existed never gains one, and merging it
+  // with a new day keeps only the new day's requests.
+  const legacy = { app_open: { total: 5 } };
+  assert.equal(mergeCounters(legacy, { app_open: { total: 1 } })[ANALYTICS_REQUESTS_KEY], undefined);
+  const mixed = mergeCounters(legacy, day1);
+  assert.equal(mixed[ANALYTICS_REQUESTS_KEY]?.total, 2);
+  assert.equal(mixed.app_open?.total, 5);
+});
+
+test("merging does not drop the request counter when only the LEFT side has it", () => {
+  // mergeCounters walks ANALYTICS_EVENT_NAMES, which excludes the reserved key, so the
+  // spread-from-`a` path is what preserves it here.
+  const merged = mergeCounters(incrementRequestCountry({}, "IR"), { app_open: { total: 1 } });
+  assert.equal(merged[ANALYTICS_REQUESTS_KEY]?.total, 1);
+  assert.deepEqual(merged[ANALYTICS_REQUESTS_KEY]?.byCountry, { IR: 1 });
 });

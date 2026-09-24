@@ -401,7 +401,21 @@ type EventCounters = {
   scoredCount?: number;
 };
 
-type AllCounters = Partial<Record<AnalyticsEventName, EventCounters>>;
+/**
+ * Reserved counter key for AnalyticsDO REQUESTS (not events), deliberately NOT an
+ * AnalyticsEventName.
+ *
+ * That is the security property: `isAnalyticsEventName` rejects it, so no client can
+ * POST `eventName: "analytics_requests"` and forge quota attribution. It only ever
+ * gets written by the ingest path below, from the country the Worker resolved.
+ */
+export const ANALYTICS_REQUESTS_KEY = "analytics_requests";
+
+// The request counter rides inside the SAME stored object as the event counters, so it
+// costs no extra storage key, no extra read and no extra write - see recordRequest().
+type AllCounters = Partial<Record<AnalyticsEventName, EventCounters>> & {
+  [ANALYTICS_REQUESTS_KEY]?: EventCounters;
+};
 
 /** Everything one report range needs, read in one pass: each audience's day counters plus the range's unioned installation/session ids. */
 type RangeBuckets = {
@@ -652,8 +666,43 @@ export function foldCanonicalAliases(counts: AllCounters): AllCounters {
   return result ?? counts;
 }
 
+/**
+ * Adds one AnalyticsDO REQUEST, from the network country the Worker resolved.
+ *
+ * Counts requests, never events: A4 batches up to MAX_BATCH_EVENTS into a single DO
+ * invocation, and it is the invocation that consumes quota, so a batch of ten counts
+ * exactly once. Only byCountry is kept - no version, event, game-type or platform
+ * cross; those questions already have their own metrics.
+ *
+ * Country is a closed domain after normalizeCountry (two uppercase letters, or ZZ),
+ * so the map needs no cap - the same reasoning byCountry already relies on.
+ */
+export function incrementRequestCountry(counters: AllCounters, country: string): AllCounters {
+  const existing = counters[ANALYTICS_REQUESTS_KEY] ?? { total: 0 };
+  return {
+    ...counters,
+    [ANALYTICS_REQUESTS_KEY]: {
+      ...existing,
+      total: existing.total + 1,
+      byCountry: incrementKeyMap(existing.byCountry, normalizeCountry(country)),
+    },
+  };
+}
+
 export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
   const merged: AllCounters = { ...a };
+  // Merged explicitly: the loop below walks ANALYTICS_EVENT_NAMES, and the request
+  // counter is deliberately not one of them, so it would otherwise be dropped from
+  // every multi-day range report.
+  if (b[ANALYTICS_REQUESTS_KEY]) {
+    const ar = merged[ANALYTICS_REQUESTS_KEY] ?? { total: 0 };
+    const br = b[ANALYTICS_REQUESTS_KEY];
+    merged[ANALYTICS_REQUESTS_KEY] = {
+      ...ar,
+      total: ar.total + br.total,
+      byCountry: mergeKeyMaps(ar.byCountry, br.byCountry),
+    };
+  }
   for (const eventName of ANALYTICS_EVENT_NAMES) {
     const be = b[eventName];
     if (!be) continue;
@@ -865,7 +914,7 @@ export class AnalyticsDO {
    * that means - 400 for a single event, a skipped entry for a batch - because a
    * batch must not lose nine good events to one bad one.
    */
-  private async ingestOne(body: unknown, country: string): Promise<boolean> {
+  private async ingestOne(body: unknown, country: string, countRequest = false): Promise<boolean> {
     const b = body as Record<string, unknown> | null;
     const eventName = b?.eventName;
     if (!isAnalyticsEventName(eventName)) return false;
@@ -920,8 +969,19 @@ export class AnalyticsDO {
     // incrementEvent resolves the stored name itself (see CANONICAL_EVENT_ALIASES), so
     // the wire name is passed straight through: params were validated against the name
     // the client actually sent, and an aliased pair shares one validator.
-    this.counterCache.set(alltimeKey, incrementEvent(alltime, eventName, params, platform, appVersion, appBuild, attribution, country));
-    this.counterCache.set(dayKey, incrementEvent(dayCounters, eventName, params, platform, appVersion, appBuild, attribution, country));
+    let nextAlltime = incrementEvent(alltime, eventName, params, platform, appVersion, appBuild, attribution, country);
+    let nextDay = incrementEvent(dayCounters, eventName, params, platform, appVersion, appBuild, attribution, country);
+    // Once per DO REQUEST, not per event - the caller passes countRequest for the first
+    // entry it manages to ingest, so a ten-event batch still counts one. Folded into the
+    // two counter objects that this ingest is already about to mark dirty, so it adds no
+    // storage key, no read and no write, and it deliberately leaves pendingEvents alone
+    // so flush frequency is exactly what it was.
+    if (countRequest) {
+      nextAlltime = incrementRequestCountry(nextAlltime, country);
+      nextDay = incrementRequestCountry(nextDay, country);
+    }
+    this.counterCache.set(alltimeKey, nextAlltime);
+    this.counterCache.set(dayKey, nextDay);
     this.dirty.add(alltimeKey);
     this.dirty.add(dayKey);
 
@@ -967,7 +1027,7 @@ export class AnalyticsDO {
     // Split so the two failure modes stay distinguishable for a single event, which
     // is the contract old clients already rely on.
     if (!isAnalyticsEventName(b?.eventName)) return json({ error: "invalid event" }, 400);
-    if (!(await this.ingestOne(body, country))) return json({ error: "invalid params" }, 400);
+    if (!(await this.ingestOne(body, country, true))) return json({ error: "invalid params" }, 400);
     await this.flushIfDue();
     return json({ ok: true });
   }
@@ -988,8 +1048,14 @@ export class AnalyticsDO {
     if (events.length > MAX_BATCH_EVENTS) return json({ error: "batch too large" }, 400);
 
     let accepted = 0;
+    // The whole batch is ONE DO request, so the request counter is offered to each
+    // entry until one is actually ingested, and then never again for this batch.
+    let requestCounted = false;
     for (const event of events) {
-      if (await this.ingestOne(event, country)) accepted++;
+      if (await this.ingestOne(event, country, !requestCounted)) {
+        accepted++;
+        requestCounted = true;
+      }
     }
     await this.flushIfDue();
     return json({ ok: true, accepted, rejected: events.length - accepted });

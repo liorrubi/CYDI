@@ -1,6 +1,9 @@
-# CYDI 0.51.0 / versionCode 44 — the Cloudflare cost release
+# CYDI 0.51.0 / versionCode 45 — the Cloudflare cost release
 
-Prepared 23 Sep 2026. **Not deployed, not published.** This file is the deployment
+Prepared 23 Sep 2026; Worker half deployed 24 Sep 2026 as version `465f11bd`. **Not published to Play.**
+
+versionCode 44 is burned - that APK shipped without its web assets and could not boot. See the
+`cap sync` note in the root CLAUDE.md before building another one. This file is the deployment
 order and the validation sequence; read it before shipping any part of this release.
 
 ## Why this release exists

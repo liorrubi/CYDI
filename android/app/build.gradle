@@ -255,7 +255,22 @@ android {
         // Worker ships would post every batch into a 404 and lose ALL its analytics - not
         // degrade, lose. Deploy the Worker first, confirm the batch endpoint answers 200,
         // and only then distribute this.
-        versionCode 44
+        //
+        // 45 is 0.51.0 as well, and 44 is BURNED. The vc44 debug APK was built while
+        // android/app/src/main/assets/public held only 6 files and no index.html: a
+        // Dropbox lock made `npx cap sync android` fail with EBUSY, and the documented
+        // remedy - retry once - reported "update android in 221ms" while leaving the web
+        // assets half-copied. The APK installed fine and then failed to boot with
+        // net::ERR_CONNECTION_REFUSED on https://localhost/, because there was nothing to
+        // serve. Retrying that sync is NOT sufficient on its own: delete
+        // assets/public first, then sync, then check index.html actually exists.
+        //
+        // It gets its own code rather than reusing 44 because 44 is already installed on
+        // the MIUI test device, and that installer silently offers "Open" instead of
+        // updating for a same-or-lower code - which would have left the fixed build
+        // untested and the old broken one running, the exact trap this comment block has
+        // recorded twice before.
+        versionCode 45
         versionName "0.51.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

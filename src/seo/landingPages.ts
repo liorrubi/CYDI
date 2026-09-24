@@ -101,6 +101,11 @@ const SNAIL = { category: "animals" as CategoryId, shapeId: "ani-snail", practic
 // nothing.
 const LIGHTNING = { category: "symbols" as CategoryId, shapeId: "sym-lightning", practice: true as const };
 
+// The triangle is where /s/triangle lands someone who just watched the Triangle Short.
+// Third in Geometric, so a brand-new visitor has not reached it and needs the same
+// practice exception as the others: the round is real and scored, and it persists nothing.
+const TRIANGLE = { category: "geometric" as CategoryId, shapeId: "polygon-3", practice: true as const };
+
 const LANDING_PAGES: LandingPage[] = [
   { path: "/drawing-accuracy-test", shape: CIRCLE },
   { path: "/draw-a-perfect-circle", shape: CIRCLE },
@@ -113,6 +118,7 @@ const LANDING_PAGES: LandingPage[] = [
   { path: "/draw-a-pig-from-memory", shape: PIG },
   { path: "/draw-a-snail-from-memory", shape: SNAIL },
   { path: "/draw-a-lightning-bolt-from-memory", shape: LIGHTNING },
+  { path: "/draw-a-triangle-from-memory", shape: TRIANGLE },
   { path: "/drawing-challenges", page: "challenges" },
   { path: "/draw-shapes-online" },
   { path: "/multiplayer-drawing-game", mode: "playTogether" },

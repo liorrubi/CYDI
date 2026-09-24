@@ -91,4 +91,10 @@ export const DRAWING_CHALLENGES: DrawingChallenge[] = [
     note: "All straight edges, and it leans further than anyone remembers.",
     shapeId: "sym-lightning",
   },
+  {
+    href: "/draw-a-triangle-from-memory",
+    name: "Draw a triangle from memory",
+    note: "Three straight lines, and freehand the base never comes out level.",
+    shapeId: "polygon-3",
+  },
 ];

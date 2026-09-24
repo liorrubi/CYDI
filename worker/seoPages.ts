@@ -542,6 +542,29 @@ const LIGHTNING_FROM_MEMORY: SeoPage = {
   faq: true,
 };
 
+const TRIANGLE_FROM_MEMORY: SeoPage = {
+  path: "/draw-a-triangle-from-memory",
+  title: "Draw a Triangle From Memory - Drawing Challenge | CYDI",
+  description:
+    "Study a triangle for a few seconds, watch it disappear, then draw it back from memory and get an instant score out of 100. Free, no sign-up, plays in the browser.",
+  h1: "Draw a Triangle From Memory",
+  paragraphs: [
+    "Three straight lines and three corners, on screen for a couple of seconds, then gone. You draw it back from memory onto an empty canvas, and your attempt is scored against the target and laid over it afterwards, so you can see exactly where it went.",
+    "It is the shape people are most confident about and least accurate at. Freehand, the base tilts - almost nobody draws it level - the apex drifts off the centre line, and the two sides come out at different lengths, so what felt like an even triangle reads as a lean. The edges bow slightly too: a hand drawing at speed curves where it means to go straight.",
+    "This is a practice round: played and scored for real, and it changes nothing in your game - no coins, no best score, no unlocks - so you can take it as often as you like, whether or not you have reached the triangle in the Shape Challenge.",
+  ],
+  links: [
+    { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
+    { href: "/draw-a-lightning-bolt-from-memory", label: "Draw a lightning bolt from memory" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
+    { href: "/how-to-play", label: "How the score is worked out" },
+    { href: "/", label: "CYDI home" },
+  ],
+  cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
+  androidCta: true,
+  faq: true,
+};
+
 /*
  * The practice directory. It is a landing path rather than a content page
  * because it belongs to the site's own visual language - SiteChallenges.tsx
@@ -581,7 +604,7 @@ const DRAWING_CHALLENGES_PAGE: SeoPage = {
   androidCta: true,
 };
 
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, OWL_FROM_MEMORY, PIG_FROM_MEMORY, SNAIL_FROM_MEMORY, LIGHTNING_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, OWL_FROM_MEMORY, PIG_FROM_MEMORY, SNAIL_FROM_MEMORY, LIGHTNING_FROM_MEMORY, TRIANGLE_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list

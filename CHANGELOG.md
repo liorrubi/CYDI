@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.52.0 - 2026-09-24
+
+**A challenge page for the triangle.** `/draw-a-triangle-from-memory` joins the
+practice pages, with its card on the drawing-challenges hub.
+
+The copy is about the gap this shape actually exposes: the triangle is the shape
+people are most confident about and least accurate at. Freehand the base tilts,
+the apex drifts off the centre line, the two sides come out unequal, and the edges
+bow where the hand meant to go straight.
+
+Same architecture as the others, no new drawing or scoring code: a real catalogue
+target, the normal study countdown, one attempt, the game's own score, and a round
+that persists nothing - no coins, no best score, no unlock. Third in Geometric, so
+a brand-new visitor has not reached it and needs the practice exception;
+`src/seo/landingPages.test.ts` pins the new path in the list allowed to use it.
+
+The Short this page belongs to is published separately; its `/s/triangle` alias
+follows in its own release, so the alias never exists while its destination 404s.
+
 ## 0.50.0 - 2026-09-24
 
 **Android now knows where its installs come from.** The app asks Google Play once per

@@ -330,3 +330,74 @@ Within minutes of deploy: `rewarded_ad_unavailable.byCountry {IR: 3}`,
 `byCountryReason {IR|timeout: 3}`, and `reward_bonus_offer_shown.byCountry {DE: 6}` with no
 German failures in the same window. Suggestive only - three events against 1,309 failures that
 day, and the counters only start at deploy. Give it hours before reading anything into the ratio.
+
+
+## Analytics: `purchase_completed` is COIN SPEND, not revenue (24 Sep 2026)
+
+**CYDI has no real-money in-app purchase of any kind.** No billing library is linked,
+and no Play one-time product or subscription exists. Every figure this event produces
+is virtual-economy activity.
+
+**Never put it in a revenue line, never call it IAP, never add it to AdMob earnings.**
+Ad revenue is the only revenue CYDI has, and it is reported separately.
+
+### What the event actually is
+
+A Shop unlock paid for with in-game coins. All four emitters are in
+`src/screens/ShopScreen.tsx` and share one shape:
+
+```ts
+if (coins < price || alreadyOwned) return;
+spendCoins(price);        // coins OUT - always
+grantTheItem();
+trackEvent("purchase_completed", { productType, tier, price });
+```
+
+`productType` is `penColor` | `penSkin` | `chestKey` | `megaCard`. **`price` is a coin
+cost.** It is validated and then discarded - no counter breakout stores it - so the
+amount cannot reach a report at all, let alone a revenue figure.
+
+`chestKey` is the one to read carefully: the player spends coins and the chest rolls
+coins back. It is still recorded only as a spend; the payout is not this event.
+
+### The rename, and why the wire name has not changed
+
+Canonical name: **`shop_purchase_with_coins`**. Legacy name: **`purchase_completed`**.
+
+The event name is a literal in the client bundle, which ships inside the APK, so
+changing what clients EMIT requires an Android release. That was deliberately **not**
+done for a naming fix - it is reserved for the next planned Android release (after
+0.51.0 / versionCode 45). Until then every client still sends the legacy name, and
+that is fine.
+
+What shipped instead is server-side only:
+
+- `CANONICAL_EVENT_ALIASES` in `worker/analyticsDO.ts` maps the legacy name to the
+  canonical one at **ingestion**, so the counter is written under the canonical name
+  whatever the client sent. One player action increments exactly one counter.
+- `foldCanonicalAliases()` runs inside `buildReport`, folding any legacy key still
+  present in a bucket into the canonical one on the way out.
+- Both names are valid input forever. `shop_purchase_with_coins` was added to
+  `ANALYTICS_EVENT_NAMES` **before** any client emits it, so the future Android
+  release cannot be rejected as an unknown event.
+
+### Why the read-time fold is needed as well as the ingestion alias
+
+A single day bucket can legitimately hold **both** keys: on the day the alias
+deployed, events counted before the deploy landed under `purchase_completed` and
+events after it under `shop_purchase_with_coins`. Every bucket written before that day
+holds only the legacy key.
+
+Summing them is correct, **not** double counting - each event only ever incremented
+one of the two. Historical buckets are never rewritten or backfilled; the fold happens
+on read.
+
+### Reporting
+
+Read **`shop_purchase_with_coins`** and nothing else. The Worker has already merged the
+legacy key into it, so that one name covers all of history. The admin dashboard labels
+it **"Shop purchases (coins)"**.
+
+Do not add a second event for naming purposes, do not count both names, and do not
+introduce extra AnalyticsDO/RoomDO/KV work for this - it is a semantic cleanup with no
+added telemetry.

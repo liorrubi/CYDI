@@ -199,7 +199,22 @@ export type EventParamsMap = {
   tutorial_completed: { tutorialType: TutorialTypeParam };
   tutorial_skipped: { tutorialType: TutorialTypeParam };
 
+  /**
+   * A Shop unlock paid for with in-game COINS. `price` is a coin cost, never money.
+   *
+   * CYDI has no real-money in-app purchase of any kind - no billing library is
+   * linked and no Play product exists - so this event is virtual-economy activity
+   * and must never be reported as revenue or added to AdMob earnings. Every emitter
+   * calls `spendCoins(price)` first, so the direction is always coins OUT.
+   *
+   * LEGACY NAME. `shop_purchase_with_coins` is the canonical name; this one is kept
+   * forever so builds that predate the rename keep validating. See
+   * `CANONICAL_EVENT_ALIASES` in worker/analyticsDO.ts - the two are folded into one
+   * counter at ingestion, so they are never counted twice.
+   */
   purchase_completed: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
+  /** Canonical name for the coin-funded Shop unlock above; identical params. Not yet emitted by any client - see the rename note in AGENT_NOTES.md. */
+  shop_purchase_with_coins: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
   artist_pack_link_clicked: { artistKey: string; packKey: string; hasAffiliate: boolean };
   game_started: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
@@ -284,6 +299,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "shape_completed",
   "shape_practice_completed",
   "purchase_completed",
+  "shop_purchase_with_coins",
   "mega_card_unlocked",
   "artist_pack_link_clicked",
   "game_started",
@@ -509,14 +525,10 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   tutorial_skipped: (p) => validateTutorialEvent(p),
   shape_completed: (p) => validateRoundResultEvent(p),
   shape_practice_completed: (p) => validateRoundResultEvent(p),
-  purchase_completed: (p) => {
-    if (!isRecord(p) || !hasExactKeys(p, ["productType", "tier", "price"])) return { valid: false };
-    const { productType, tier, price } = p;
-    if (typeof productType !== "string" || !(PRODUCT_TYPES as readonly string[]).includes(productType)) return { valid: false };
-    if (!isSafeString(tier)) return { valid: false };
-    if (!isFinitePrice(price)) return { valid: false };
-    return { valid: true, params: { productType: productType as EventParamsMap["purchase_completed"]["productType"], tier, price } };
-  },
+  // One validator, deliberately shared: the legacy and canonical names describe the
+  // SAME coin-funded Shop unlock, so their params must never be able to drift apart.
+  purchase_completed: (p) => validateCoinShopPurchase(p),
+  shop_purchase_with_coins: (p) => validateCoinShopPurchase(p),
   mega_card_unlocked: (p) => {
     if (!isRecord(p) || !hasExactKeys(p, ["rarity"])) return { valid: false };
     const { rarity } = p;
@@ -566,6 +578,22 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   play_store_cta_shown: (p) => validatePlayStoreEvent(p),
   play_store_click: (p) => validatePlayStoreEvent(p),
 };
+
+/**
+ * The coin-funded Shop unlock, under either of its two names.
+ *
+ * `price` is a COIN cost. It is validated here and then discarded - no counter
+ * breakout stores it - so the amount can never reach a report, let alone a revenue
+ * figure. See the doc comment on `purchase_completed` for why that matters.
+ */
+function validateCoinShopPurchase<E extends "purchase_completed" | "shop_purchase_with_coins">(p: unknown): ValidationResult<E> {
+  if (!isRecord(p) || !hasExactKeys(p, ["productType", "tier", "price"])) return { valid: false };
+  const { productType, tier, price } = p;
+  if (typeof productType !== "string" || !(PRODUCT_TYPES as readonly string[]).includes(productType)) return { valid: false };
+  if (!isSafeString(tier)) return { valid: false };
+  if (!isFinitePrice(price)) return { valid: false };
+  return { valid: true, params: { productType, tier, price } as EventParamsMap[E] };
+}
 
 /** The two tutorial outcomes share a payload: which explanation, and nothing else. */
 function validateTutorialEvent<E extends "tutorial_completed" | "tutorial_skipped">(p: unknown): ValidationResult<E> {

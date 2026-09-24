@@ -458,6 +458,10 @@ export function incrementEvent(
   attribution?: Attribution,
   country: string = UNKNOWN_COUNTRY,
 ): AllCounters {
+  // Resolved HERE rather than at the call site, so the canonical name is the only one
+  // that can ever be written - no future caller can reintroduce the legacy key. Every
+  // breakout below keys off the stored name, which is what a report reads back.
+  eventName = canonicalEventName(eventName);
   const existing = counters[eventName] ?? { total: 0 };
   const updated: EventCounters = { ...existing, total: existing.total + 1 };
   updated.byPlatform = incrementKeyMap(existing.byPlatform, platform);
@@ -557,6 +561,50 @@ export function incrementEvent(
 function mergeOptionalSum(a: number | undefined, b: number | undefined): number | undefined {
   if (a === undefined && b === undefined) return undefined;
   return (a ?? 0) + (b ?? 0);
+}
+
+/**
+ * Wire names that are stored under a DIFFERENT, canonical name.
+ *
+ * `purchase_completed` was always a coin-funded Shop unlock, never a real-money
+ * purchase (CYDI has no IAP at all), and the name misled every report it appeared
+ * in. Rather than add a second event - which would cost extra storage keys and risk
+ * double counting - the legacy name is resolved to the canonical one at INGESTION,
+ * so one player action increments exactly one counter no matter which name the
+ * client sent. The legacy name stays a valid input forever; clients that predate
+ * the rename need no update.
+ */
+const CANONICAL_EVENT_ALIASES: Partial<Record<AnalyticsEventName, AnalyticsEventName>> = {
+  purchase_completed: "shop_purchase_with_coins",
+};
+
+/** The name an event is STORED under. Identity for everything without an alias. */
+export function canonicalEventName(eventName: AnalyticsEventName): AnalyticsEventName {
+  return CANONICAL_EVENT_ALIASES[eventName] ?? eventName;
+}
+
+/**
+ * Read-time half of the alias: folds any legacy key still present in a bucket into
+ * its canonical name, so a report shows ONE continuous series.
+ *
+ * Both keys legitimately coexist in the bucket for the day the alias deployed -
+ * events counted before the deploy landed under the legacy name, events after it
+ * under the canonical one - and in every historical bucket written before it. That
+ * is a sum, not a double count: each event only ever incremented one of them.
+ * Historical buckets are never rewritten; the fold happens on the way out.
+ */
+export function foldCanonicalAliases(counts: AllCounters): AllCounters {
+  let result: AllCounters | null = null;
+  for (const [legacy, canonical] of Object.entries(CANONICAL_EVENT_ALIASES) as [AnalyticsEventName, AnalyticsEventName][]) {
+    const legacyCounters = counts[legacy];
+    if (legacyCounters === undefined) continue;
+    result ??= { ...counts };
+    // mergeCounters skips an undefined side, so this is also correct for a range
+    // that contains only legacy days or only canonical ones.
+    result[canonical] = mergeCounters({ [canonical]: legacyCounters }, { [canonical]: result[canonical] })[canonical];
+    delete result[legacy];
+  }
+  return result ?? counts;
 }
 
 export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
@@ -823,6 +871,9 @@ export class AnalyticsDO {
     // Identical counter shaping to before - incrementEvent is untouched, and every
     // dimension (platform, app version/build, attribution, country, the crossed
     // country maps, funnel and scored breakouts) is produced exactly as it was.
+    // incrementEvent resolves the stored name itself (see CANONICAL_EVENT_ALIASES), so
+    // the wire name is passed straight through: params were validated against the name
+    // the client actually sent, and an aliased pair shares one validator.
     this.counterCache.set(alltimeKey, incrementEvent(alltime, eventName, params, platform, appVersion, appBuild, attribution, country));
     this.counterCache.set(dayKey, incrementEvent(dayCounters, eventName, params, platform, appVersion, appBuild, attribution, country));
     this.dirty.add(alltimeKey);
@@ -957,9 +1008,12 @@ export class AnalyticsDO {
     startDate: string,
     endDate: string,
     audience: AudienceFilter,
-    counts: AllCounters,
+    rawCounts: AllCounters,
     usage: { selected: UsageSummary; external: UsageSummary; internal: UsageSummary } | null,
   ) {
+    // Single choke point for every period (daily/weekly/monthly/range/alltime), so no
+    // report can ever show the legacy and canonical names as two separate rows.
+    const counts = foldCanonicalAliases(rawCounts);
     const gameStarted = counts.game_started?.total ?? 0;
     const gameCompleted = counts.game_completed?.total ?? 0;
     const resultShared = counts.result_shared?.total ?? 0;

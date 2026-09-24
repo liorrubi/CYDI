@@ -305,7 +305,10 @@
           { label: "Shapes completed", value: fmtInt(total("shape_completed")) },
           { label: "Average score", value: report.averageScore == null ? "—" : report.averageScore.toFixed(2) + " / 5" },
           { label: "Pass rate", value: report.passRate == null ? "—" : fmtRate(report.passRate) },
-          { label: "Purchases", value: fmtInt(total("purchase_completed")) },
+          // Coin spend in the Shop, NOT money - CYDI has no real-money IAP. The Worker
+          // folds the legacy `purchase_completed` key into this canonical one, so reading
+          // the canonical name alone already covers every historical bucket.
+          { label: "Shop purchases (coins)", value: fmtInt(total("shop_purchase_with_coins")) },
           { label: "Mega cards unlocked", value: fmtInt(total("mega_card_unlocked")) },
           { label: "Artist link clicks", value: fmtInt(total("artist_pack_link_clicked")) },
         ];

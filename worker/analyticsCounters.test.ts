@@ -7,7 +7,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { incrementEvent, mergeCounters } = await import("./analyticsDO.ts");
+const { incrementEvent, mergeCounters, canonicalEventName, foldCanonicalAliases } = await import("./analyticsDO.ts");
+const { validateEventParams, ANALYTICS_EVENT_NAMES } = await import("../src/services/analyticsSchema.ts");
 
 test("appVersion is recorded for every event", () => {
   let counters = incrementEvent({}, "game_started", { gameType: "shapeChallenge" }, "android", "0.40.0", "05dccc1");
@@ -802,4 +803,104 @@ test("crossing changes nothing about the dimensions that already existed", () =>
   const quit = incrementEvent({}, "pp_abandoned", { roundIndex: 2, playerCount: 2, roundCount: 10 }, "android", "0.50.0", "abc1234", undefined, "IR");
   assert.deepEqual(quit.pp_abandoned?.byRoundCount, { "10": 1 }, "pass-play unchanged");
   assert.deepEqual(quit.pp_abandoned?.byRoundIndex, { "2": 1 });
+});
+
+
+// --- Coin-shop purchase: legacy name folded onto the canonical one ----------------
+//
+// `purchase_completed` was always a COIN spend in the Shop - CYDI has no real-money
+// IAP - so it is stored under `shop_purchase_with_coins`. The rename is server-side
+// only: no client emits the canonical name yet, and both names must stay valid
+// forever. These pin the two halves (ingestion alias + read-time fold) and the case
+// that makes the second half necessary: one bucket holding BOTH keys.
+
+const SHOP = { productType: "penColor", tier: "gold", price: 200 } as const;
+
+test("the legacy name is stored under the canonical one", () => {
+  const c = incrementEvent({}, "purchase_completed", { ...SHOP }, "android", "0.51.0", "abc1234");
+  assert.equal(c.purchase_completed, undefined, "legacy key is never written");
+  assert.equal(c.shop_purchase_with_coins?.total, 1);
+  assert.deepEqual(c.shop_purchase_with_coins?.byPlatform, { android: 1 });
+  assert.deepEqual(c.shop_purchase_with_coins?.byAppVersion, { "0.51.0": 1 });
+});
+
+test("canonicalEventName aliases only the shop purchase, nothing else", () => {
+  assert.equal(canonicalEventName("purchase_completed"), "shop_purchase_with_coins");
+  assert.equal(canonicalEventName("shop_purchase_with_coins"), "shop_purchase_with_coins");
+  for (const name of ["app_open", "game_started", "mega_card_unlocked", "first_open"] as const) {
+    assert.equal(canonicalEventName(name), name, name + " is not aliased");
+  }
+});
+
+test("both names land on ONE counter - never two, never doubled", () => {
+  let c = {};
+  c = incrementEvent(c, "purchase_completed", { ...SHOP }, "android", "0.51.0", "abc1234");
+  c = incrementEvent(c, "shop_purchase_with_coins", { ...SHOP }, "android", "0.52.0", "abc1234");
+  const e = (c as Record<string, { total: number; byAppVersion?: Record<string, number> }>).shop_purchase_with_coins;
+  assert.equal(e.total, 2, "two actions, two increments - not four");
+  assert.deepEqual(e.byAppVersion, { "0.51.0": 1, "0.52.0": 1 });
+  assert.equal((c as Record<string, unknown>).purchase_completed, undefined);
+});
+
+test("a bucket holding BOTH keys folds to their sum - the deploy-day case", () => {
+  // Exactly what the day the alias shipped looks like: events counted before the
+  // deploy under the legacy key, events after it under the canonical one.
+  const deployDay = {
+    purchase_completed: { total: 7, byPlatform: { android: 7 }, byAppVersion: { "0.51.0": 7 } },
+    shop_purchase_with_coins: { total: 4, byPlatform: { android: 3, web: 1 }, byAppVersion: { "0.51.0": 4 } },
+    app_open: { total: 99 },
+  };
+  const folded = foldCanonicalAliases(deployDay);
+  assert.equal(folded.shop_purchase_with_coins?.total, 11, "summed, not double counted");
+  assert.deepEqual(folded.shop_purchase_with_coins?.byPlatform, { android: 10, web: 1 });
+  assert.deepEqual(folded.shop_purchase_with_coins?.byAppVersion, { "0.51.0": 11 });
+  assert.equal(folded.purchase_completed, undefined, "legacy key is gone from the report");
+  assert.deepEqual(folded.app_open, { total: 99 }, "unrelated events untouched");
+});
+
+test("a purely historical bucket folds cleanly, and a purely canonical one is unchanged", () => {
+  const historical = { purchase_completed: { total: 5, byPlatform: { android: 5 } } };
+  const foldedOld = foldCanonicalAliases(historical);
+  assert.equal(foldedOld.shop_purchase_with_coins?.total, 5);
+  assert.equal(foldedOld.purchase_completed, undefined);
+
+  const future = { shop_purchase_with_coins: { total: 3 } };
+  assert.deepEqual(foldCanonicalAliases(future), { shop_purchase_with_coins: { total: 3 } });
+
+  // Nothing to fold: the same object comes back, so a report pays nothing for buckets
+  // that never carried the legacy name.
+  const none = { app_open: { total: 2 } };
+  assert.equal(foldCanonicalAliases(none), none);
+});
+
+test("folding is idempotent - a second pass changes nothing", () => {
+  const once = foldCanonicalAliases({ purchase_completed: { total: 6 }, shop_purchase_with_coins: { total: 1 } });
+  assert.deepEqual(foldCanonicalAliases(once), once);
+  assert.equal(once.shop_purchase_with_coins?.total, 7);
+});
+
+test("both names validate identically, so an aliased pair can never drift", () => {
+  for (const name of ["purchase_completed", "shop_purchase_with_coins"] as const) {
+    assert.equal(validateEventParams(name, { productType: "penColor", tier: "gold", price: 200 }).valid, true);
+    assert.equal(validateEventParams(name, { productType: "chestKey", tier: "bronze", price: 50 }).valid, true);
+    assert.equal(validateEventParams(name, { productType: "megaCard", tier: "legendary", price: 500 }).valid, true);
+    // A coin price is never negative, and the product set stays closed.
+    assert.equal(validateEventParams(name, { productType: "penColor", tier: "gold", price: -1 }).valid, false);
+    assert.equal(validateEventParams(name, { productType: "subscription", tier: "gold", price: 5 }).valid, false);
+    assert.equal(validateEventParams(name, { productType: "penColor", tier: "gold" }).valid, false);
+  }
+});
+
+test("the canonical name is a known event, so the next Android release is not rejected", () => {
+  assert.ok(ANALYTICS_EVENT_NAMES.includes("shop_purchase_with_coins"));
+  assert.ok(ANALYTICS_EVENT_NAMES.includes("purchase_completed"), "legacy stays valid forever");
+});
+
+test("the merged counter survives a range merge across the rename", () => {
+  const before = { purchase_completed: { total: 3, byPlatform: { android: 3 } } };
+  const after = { shop_purchase_with_coins: { total: 2, byPlatform: { android: 2 } } };
+  const merged = mergeCounters(before, after);
+  const folded = foldCanonicalAliases(merged);
+  assert.equal(folded.shop_purchase_with_coins?.total, 5, "one continuous series across the rename");
+  assert.equal(folded.purchase_completed, undefined);
 });

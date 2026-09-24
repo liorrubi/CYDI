@@ -60,6 +60,14 @@ export interface Env {
   ANALYTICS_ADMIN_TOKEN: string;
   /** Admin bearer for content-catalog publish/activate/list/delete. Deliberately SEPARATE from ANALYTICS_ADMIN_TOKEN so the two capabilities can be rotated and scoped independently. */
   CONTENT_ADMIN_TOKEN: string;
+  /**
+   * Admin bearer for the multiplayer cost guard, and nothing else. A third separate
+   * credential rather than a reuse of CONTENT_ADMIN_TOKEN because the guard is the one
+   * admin surface that can degrade a live feature for real users: whoever operates it
+   * during an incident should not thereby be able to publish content or read analytics,
+   * and it should be rotatable on its own after an incident without breaking publishing.
+   */
+  GUARD_ADMIN_TOKEN: string;
 }
 
 // Excludes 0/O and 1/I to avoid ids that are ambiguous when read aloud or copied by hand.
@@ -285,11 +293,32 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** Content-catalog admin gate - uses CONTENT_ADMIN_TOKEN, independent of the analytics token. */
-function isContentAdminAuthorized(request: Request, env: Env): boolean {
-  const token = env.CONTENT_ADMIN_TOKEN;
+/**
+ * One bearer convention for every admin surface; only the credential differs.
+ * An unset secret authorizes nobody - a missing binding must lock the door, not open it.
+ */
+function isBearer(request: Request, token: string | undefined): boolean {
   const authHeader = request.headers.get("authorization");
   return Boolean(token && authHeader && timingSafeEqual(authHeader, `Bearer ${token}`));
+}
+
+/** Content-catalog admin gate - uses CONTENT_ADMIN_TOKEN, independent of the analytics token. */
+function isContentAdminAuthorized(request: Request, env: Env): boolean {
+  return isBearer(request, env.CONTENT_ADMIN_TOKEN);
+}
+
+/**
+ * Multiplayer-guard admin gate - uses GUARD_ADMIN_TOKEN and ONLY that.
+ *
+ * Deliberately does not also accept CONTENT_ADMIN_TOKEN. There is nothing to stay
+ * compatible with: these routes went live on 24 Sep 2026 and no caller has ever
+ * successfully authenticated against them, so accepting the broader token would buy
+ * no compatibility and would hand every content publisher the ability to take Play
+ * Together offline. Least privilege runs both ways - the guard token is equally
+ * useless against the content and analytics endpoints.
+ */
+function isGuardAdminAuthorized(request: Request, env: Env): boolean {
+  return isBearer(request, env.GUARD_ADMIN_TOKEN);
 }
 
 /** Admin responses must never sit in any shared/edge cache. */
@@ -513,12 +542,18 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
 }
 
 // ---------- Multiplayer cost guard ----------
-// Admin-only on every verb. Unlike the ads switch there is no public GET: a public
-// endpoint naming the countries under policy would tell circumventers exactly what to
-// avoid, and tells an honest user nothing useful.
+// Admin-only on every verb, under GUARD_ADMIN_TOKEN alone. Unlike the ads switch there
+// is no public GET: a public endpoint naming the countries under policy would tell
+// circumventers exactly what to avoid, and tells an honest user nothing useful.
+//
+// THIS is the supported way to operate the guard. PUT validates before it stores, so a
+// config that could not pass isValidGuardConfig - a live ELEVATED policy, an EMERGENCY
+// with no expiresAt - cannot reach KV through here. Writing config:multiplayer-guard
+// with `wrangler kv key put --remote` bypasses that validation entirely and remains
+// only as the break-glass path for when the Worker itself cannot serve the route.
 
 async function handleGuardConfigGet(request: Request, env: Env): Promise<Response> {
-  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (!isGuardAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
   const raw = await env.CONTENT_KV.get(MULTIPLAYER_GUARD_KV_KEY);
   const parsed = parseGuardConfig(raw);
   // Reports the EFFECTIVE config, and says plainly when the stored value failed
@@ -527,7 +562,7 @@ async function handleGuardConfigGet(request: Request, env: Env): Promise<Respons
 }
 
 async function handleGuardConfigPut(request: Request, env: Env): Promise<Response> {
-  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (!isGuardAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
   let parsed: unknown;
   try {
     parsed = await request.json();
@@ -565,7 +600,7 @@ async function handleGuardConfigPut(request: Request, env: Env): Promise<Respons
 }
 
 async function handleGuardStatus(request: Request, env: Env): Promise<Response> {
-  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (!isGuardAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
   const config = parseGuardConfig(await env.CONTENT_KV.get(MULTIPLAYER_GUARD_KV_KEY)) ?? GUARD_FAIL_OPEN;
   const now = Date.now();
   const countries: Record<string, unknown> = {};

@@ -10,7 +10,10 @@ import assert from "node:assert/strict";
 const worker = (await import("./index.ts")).default;
 const { MULTIPLAYER_GUARD_KV_KEY, _resetGuardCacheForTests } = await import("./multiplayerGuard.ts");
 
-const TOKEN = "guard-test-token";
+// Two DIFFERENT tokens on purpose: with one shared value every isolation assertion
+// below would pass vacuously.
+const GUARD_TOKEN = "guard-admin-test-token";
+const CONTENT_TOKEN = "content-admin-test-token";
 
 class FakeKv {
   store = new Map<string, string>();
@@ -49,17 +52,34 @@ function makeEnv(kv = new FakeKv(), room = new FakeRoomNamespace()) {
     env: {
       CONTENT_KV: kv,
       ROOM_DO: room,
-      ANALYTICS_DO: { idFromName: () => ({}), get: () => ({ fetch: async () => new Response("{}") }) },
+      // The analytics report's auth check lives inside AnalyticsDO, not in index.ts
+      // (analyticsDO.ts compares the forwarded Authorization header against
+      // ANALYTICS_ADMIN_TOKEN). This stub models that contract so the isolation test
+      // below asserts something real: that the Worker forwards the CALLER's own
+      // credential and never substitutes or privileges the guard token.
+      ANALYTICS_DO: {
+        idFromName: () => ({}),
+        get: () => ({
+          // forwardToAnalyticsDO calls stub.fetch(url, init), not stub.fetch(Request).
+          fetch: async (_url: string, init?: { headers?: Headers }) =>
+            init?.headers?.get("authorization") === `Bearer ${CONTENT_TOKEN}`
+              ? new Response("{}")
+              : new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 }),
+        }),
+      },
       ASSETS: { fetch: async () => new Response("asset") },
-      CONTENT_ADMIN_TOKEN: TOKEN,
-      ANALYTICS_ADMIN_TOKEN: TOKEN,
+      CONTENT_ADMIN_TOKEN: CONTENT_TOKEN,
+      ANALYTICS_ADMIN_TOKEN: CONTENT_TOKEN,
+      GUARD_ADMIN_TOKEN: GUARD_TOKEN,
     } as unknown as Parameters<typeof worker.fetch>[1],
     kv,
     room,
   };
 }
 
-const admin = { authorization: `Bearer ${TOKEN}` };
+/** The guard's own credential - what every guard-route test authenticates with. */
+const admin = { authorization: `Bearer ${GUARD_TOKEN}` };
+const contentAdmin = { authorization: `Bearer ${CONTENT_TOKEN}` };
 /**
  * Node's Request constructor silently drops the non-standard `cf` init that workerd
  * supplies, so passing it through RequestInit looks right and does nothing - every
@@ -76,20 +96,93 @@ const createReq = (country: string | undefined = "IR") =>
 const validConfig = (over: Record<string, unknown> = {}) =>
   JSON.stringify({ monitorOnly: true, globalMode: "NORMAL", countries: {}, ...over });
 
+const GUARD_ROUTES = [
+  ["GET", "/api/config/multiplayer-guard"],
+  ["PUT", "/api/config/multiplayer-guard"],
+  ["GET", "/api/config/multiplayer-guard/status"],
+] as const;
+const guardReq = (method: string, path: string, headers?: Record<string, string>) =>
+  new Request(`https://playcydi.com${path}`, { method, headers, body: method === "PUT" ? validConfig() : undefined });
+
 test.beforeEach(() => _resetGuardCacheForTests());
 
 // ------------------------------------------------------------------- auth ----
 
 test("every guard endpoint is admin-only", async () => {
   const { env } = makeEnv();
-  for (const [method, path] of [
-    ["GET", "/api/config/multiplayer-guard"],
-    ["PUT", "/api/config/multiplayer-guard"],
-    ["GET", "/api/config/multiplayer-guard/status"],
-  ] as const) {
-    const res = await worker.fetch(new Request(`https://playcydi.com${path}`, { method, body: method === "PUT" ? "{}" : undefined }), env);
+  for (const [method, path] of GUARD_ROUTES) {
+    const res = await worker.fetch(guardReq(method, path), env);
     assert.equal(res.status, 401, `${method} ${path} must require the admin token`);
   }
+});
+
+test("a wrong guard token is rejected exactly like no token at all", async () => {
+  const { env } = makeEnv();
+  for (const [method, path] of GUARD_ROUTES) {
+    const res = await worker.fetch(guardReq(method, path, { authorization: "Bearer not-the-guard-token" }), env);
+    assert.equal(res.status, 401, `${method} ${path} must reject a wrong token`);
+    // A near-miss must not leak that it was close - same body as no credential.
+    assert.deepEqual(await res.json(), { error: "unauthorized" });
+  }
+});
+
+test("the guard credential opens every guard route", async () => {
+  const { env } = makeEnv();
+  for (const [method, path] of GUARD_ROUTES) {
+    const res = await worker.fetch(guardReq(method, path, admin), env);
+    assert.notEqual(res.status, 401, `${method} ${path} must accept GUARD_ADMIN_TOKEN`);
+  }
+});
+
+test("the content/analytics credential does NOT open the guard routes", async () => {
+  const { env } = makeEnv();
+  for (const [method, path] of GUARD_ROUTES) {
+    const res = await worker.fetch(guardReq(method, path, contentAdmin), env);
+    assert.equal(res.status, 401, `${method} ${path} must not accept CONTENT_ADMIN_TOKEN`);
+  }
+});
+
+test("the guard credential does NOT open unrelated admin endpoints", async () => {
+  const { env } = makeEnv();
+  // Least privilege has to run both ways, or the guard token is just a second master key.
+  for (const path of ["/api/content/releases", "/api/analytics/report"]) {
+    const res = await worker.fetch(new Request(`https://playcydi.com${path}`, { headers: admin }), env);
+    assert.equal(res.status, 401, `${path} must not accept GUARD_ADMIN_TOKEN`);
+  }
+  // Control: those endpoints DO open for their own credential, so the assertion above
+  // is about the token and not about the routes being broken.
+  const ok = await worker.fetch(new Request("https://playcydi.com/api/content/releases", { headers: contentAdmin }), env);
+  assert.notEqual(ok.status, 401);
+});
+
+test("an unset GUARD_ADMIN_TOKEN locks the door rather than opening it", async () => {
+  const { env } = makeEnv();
+  (env as unknown as { GUARD_ADMIN_TOKEN?: string }).GUARD_ADMIN_TOKEN = undefined;
+  for (const [method, path] of GUARD_ROUTES) {
+    for (const headers of [undefined, admin, { authorization: "Bearer " }]) {
+      const res = await worker.fetch(guardReq(method, path, headers), env);
+      assert.equal(res.status, 401, `${method} ${path} must stay shut with no secret bound`);
+    }
+  }
+});
+
+test("rotating the guard token takes effect immediately and old credentials die", async () => {
+  const { env } = makeEnv();
+  (env as unknown as { GUARD_ADMIN_TOKEN: string }).GUARD_ADMIN_TOKEN = "rotated-token";
+  const stale = await worker.fetch(guardReq("GET", "/api/config/multiplayer-guard", admin), env);
+  assert.equal(stale.status, 401);
+  const fresh = await worker.fetch(guardReq("GET", "/api/config/multiplayer-guard", { authorization: "Bearer rotated-token" }), env);
+  assert.equal(fresh.status, 200);
+});
+
+test("the guard's data plane does not consult GUARD_ADMIN_TOKEN at all", async () => {
+  // Room creation must not become dependent on an admin secret being bound.
+  const { env, kv, room } = makeEnv();
+  (env as unknown as { GUARD_ADMIN_TOKEN?: string }).GUARD_ADMIN_TOKEN = undefined;
+  kv.store.set(MULTIPLAYER_GUARD_KV_KEY, validConfig({ countries: { IR: { mode: "EMERGENCY" } } }));
+  const res = await worker.fetch(createReq("IR"), env);
+  assert.equal(res.status, 201, "monitor-only must still create the room with no admin secret present");
+  assert.equal(room.fetches, 1);
 });
 
 test("there is no public read of the country policy", async () => {

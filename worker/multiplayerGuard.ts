@@ -100,7 +100,7 @@ export type GuardOverride = {
 };
 
 export type MultiplayerGuardConfig = {
-  /** Phase 1 ships true and must stay true until enforcement is explicitly approved. */
+  /** The single enforcement switch. True = decide and record only; false = an EMERGENCY policy actually refuses. Production ships true. */
   monitorOnly: boolean;
   globalMode: GuardMode;
   /** Keyed by normalized ISO country code. Absent country = unrestricted. */

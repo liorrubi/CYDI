@@ -1,10 +1,11 @@
 import { AnalyticsDO, COUNTRY_HEADER, normalizeCountry } from "./analyticsDO";
 import {
   ANALYTICS_BREAKER_KV_KEY,
-  isAnalyticsIngestDisabled,
   isValidAnalyticsBreakerConfig,
-  parseAnalyticsBreaker,
+  parseAnalyticsControl,
+  readAnalyticsControl,
 } from "./analyticsBreaker";
+import { decideShedding, effectiveShedPolicy, shedLogLine } from "./analyticsShedding";
 import {
   evaluateRoomCreation,
   guardConfigAgeMs,
@@ -522,8 +523,11 @@ async function handleAnalyticsBreakerGet(request: Request, env: Env): Promise<Re
   if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
   const raw = await env.CONTENT_KV.get(ANALYTICS_BREAKER_KV_KEY);
   // Reports the EFFECTIVE value, not the stored text: an unparseable value means
-  // ingest is running, and that is what the operator needs to see.
-  return jsonNoStore({ disabled: parseAnalyticsBreaker(raw), stored: raw });
+  // ingest is running, and that is what the operator needs to see. `shed` is reported
+  // the same way, so a policy that failed validation shows as SHED_OFF here rather
+  // than looking active because it is present in `stored`.
+  const control = parseAnalyticsControl(raw);
+  return jsonNoStore({ disabled: control.disabled, shed: control.shed, sheddingActive: !control.shed.monitorOnly, stored: raw });
 }
 
 async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Response> {
@@ -639,15 +643,47 @@ async function handleGuardStatus(request: Request, env: Env): Promise<Response> 
 }
 
 /**
- * Ingest, unless the breaker says otherwise. The check happens HERE rather than
- * inside the Durable Object on purpose: the whole point is to not reach the DO at
- * all, since a DO request is itself the scarce resource. 204 (not 200) so the
- * client's fire-and-forget POST succeeds and no retry is provoked - a shed event
- * is deliberately lost, not deferred.
+ * Ingest, unless the breaker or the shed policy says otherwise. Both checks happen
+ * HERE rather than inside the Durable Object on purpose: the whole point is to not
+ * reach the DO at all, since a DO request is itself the scarce resource. 204 (not
+ * 200) so the client's fire-and-forget POST succeeds and no retry is provoked - a
+ * shed event is deliberately lost, not deferred.
+ *
+ * Both levers come from ONE cached KV read (analyticsBreaker.ts), so adding graded
+ * shedding added no read to this path. The breaker wins outright; only if it is off
+ * is a country policy consulted.
+ *
+ * THE NORMAL PATH IS UNTOUCHED. Under NORMAL - the production state - this function
+ * does exactly what it did before: it never reads the body, so the request streams
+ * to the DO byte for byte. The body is only materialized once a policy actually
+ * applies to this request's country, which is the difference between a feature that
+ * ships inert and one that merely claims to.
  */
 export async function handleAnalyticsEvent(request: Request, env: Env, path: "/event" | "/events" = "/event"): Promise<Response> {
-  if (await isAnalyticsIngestDisabled(env.CONTENT_KV)) return new Response(null, { status: 204 });
-  return forwardToAnalyticsDO(request, env, path);
+  const control = await readAnalyticsControl(env.CONTENT_KV);
+  if (control.disabled) return new Response(null, { status: 204 });
+
+  const country = (request as { cf?: { country?: unknown } }).cf?.country;
+  const policy = effectiveShedPolicy(control.shed, country);
+  if (policy.mode === "NORMAL") return forwardToAnalyticsDO(request, env, path);
+
+  let bodyText: string;
+  try {
+    bodyText = await request.text();
+  } catch {
+    // Body unreadable - there is nothing left to forward, and inventing an empty one
+    // would corrupt the count. Accept and drop, exactly as a failed send already does.
+    return new Response(null, { status: 204 });
+  }
+  const decision = decideShedding(policy, path, bodyText, control.shed);
+  const enforced = !policy.monitorOnly && decision.action !== "forward";
+  console.log(shedLogLine(policy, decision, enforced));
+
+  // Monitor-only: the decision above is the measurement, and the ORIGINAL body goes
+  // to the DO regardless. Nothing is dropped, nothing is filtered, no counter moves.
+  if (policy.monitorOnly) return forwardToAnalyticsDO(request, env, path, bodyText);
+  if (decision.action === "drop") return new Response(null, { status: 204 });
+  return forwardToAnalyticsDO(request, env, path, decision.body ?? bodyText);
 }
 
 // Every /api/daily/* request is forwarded to the single global DailyChallengeDO
@@ -667,7 +703,7 @@ function forwardToDailyDO(request: Request, env: Env, path: string): Promise<Res
 // Every /api/analytics/* request is forwarded to the single global AnalyticsDO
 // instance, which processes requests one at a time (see analyticsDO.ts) so counter
 // increments can never race or lose an update.
-function forwardToAnalyticsDO(request: Request, env: Env, path: string): Promise<Response> {
+function forwardToAnalyticsDO(request: Request, env: Env, path: string, body?: string): Promise<Response> {
   const id = env.ANALYTICS_DO.idFromName("analytics");
   const stub = env.ANALYTICS_DO.get(id);
   const url = new URL(request.url);
@@ -680,10 +716,13 @@ function forwardToAnalyticsDO(request: Request, env: Env, path: string): Promise
   // region, coordinates or ASN is read, forwarded or stored anywhere.
   const headers = new Headers(request.headers);
   headers.set(COUNTRY_HEADER, normalizeCountry((request as { cf?: { country?: unknown } }).cf?.country));
+  // `body` is supplied only when the caller has already consumed the stream (see the
+  // shed path above); everything else streams through untouched as it always has.
+  if (body !== undefined) headers.delete("content-length");
   return stub.fetch(target.toString(), {
     method: request.method,
     headers,
-    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : (body ?? request.body),
   });
 }
 

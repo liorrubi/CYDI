@@ -20,31 +20,78 @@
 // config" boundary as the ads switch and the content catalog. No new namespace,
 // no new secret, no new dependency.
 
+import { isValidAnalyticsShedConfig, SHED_OFF, type AnalyticsShedConfig } from "./analyticsShedding";
+
 export const ANALYTICS_BREAKER_KV_KEY = "config:analytics-breaker";
 
-export type AnalyticsBreakerConfig = { disabled: boolean };
+/**
+ * One key, one cached read, two levers.
+ *
+ * `disabled` is the original all-or-nothing breaker. `shed` is the graded,
+ * country-aware policy in analyticsShedding.ts, and it lives HERE rather than under a
+ * key of its own for two reasons: a second key would be a second KV read on the same
+ * hot path, and - more importantly - two independent analytics emergency controls
+ * could disagree about which one is in force. One object cannot contradict itself.
+ *
+ * Precedence is one-way and absolute: `disabled` wins. When it is true, ingest stops
+ * and the shed policy is never consulted. Shedding can narrow what reaches the DO; it
+ * can never re-open what the breaker shut.
+ */
+export type AnalyticsBreakerConfig = { disabled: boolean; shed?: AnalyticsShedConfig };
 
-/** Strict, all-or-nothing: exactly one key, `disabled`, and it must be a boolean. Anything else is not a valid instruction to stop collecting. */
+/** Everything one cached read yields. */
+export type AnalyticsControl = { disabled: boolean; shed: AnalyticsShedConfig };
+
+/** Collect everything, shed nothing - what a missing, malformed or unreadable config means. */
+export const ANALYTICS_CONTROL_OPEN: AnalyticsControl = { disabled: false, shed: SHED_OFF };
+
+/**
+ * Strict: `disabled` must be a boolean, the only other permitted key is `shed`, and a
+ * `shed` block that is present must itself be valid. Used by the admin PUT, so an
+ * operator who mistypes a policy is told, rather than silently storing something the
+ * read path will ignore.
+ */
 export function isValidAnalyticsBreakerConfig(value: unknown): value is AnalyticsBreakerConfig {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.keys(value).length === 1 &&
-    typeof (value as Record<string, unknown>).disabled === "boolean"
-  );
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const c = value as Record<string, unknown>;
+  if (typeof c.disabled !== "boolean") return false;
+  for (const key of Object.keys(c)) if (key !== "disabled" && key !== "shed") return false;
+  if (c.shed !== undefined && !isValidAnalyticsShedConfig(c.shed)) return false;
+  return true;
 }
 
-/** Parses a stored KV value. Returns false (= keep collecting) for null, malformed JSON, or any shape that isn't exactly { disabled: boolean }. Never throws. */
-export function parseAnalyticsBreaker(raw: string | null): boolean {
-  if (raw === null) return false;
+/**
+ * Parses a stored KV value into both levers, defensively and INDEPENDENTLY.
+ *
+ * Deliberately laxer than the validator above: a hand-edited KV value with a broken
+ * `shed` block must still let the breaker work, because the breaker is the control
+ * someone reaches for when the account is on fire. A bad shed block degrades to "shed
+ * nothing"; it never takes the emergency stop down with it. Never throws.
+ */
+export function parseAnalyticsControl(raw: string | null): AnalyticsControl {
+  if (raw === null) return ANALYTICS_CONTROL_OPEN;
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return false;
+    return ANALYTICS_CONTROL_OPEN;
   }
-  return isValidAnalyticsBreakerConfig(parsed) ? parsed.disabled : false;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return ANALYTICS_CONTROL_OPEN;
+  const c = parsed as Record<string, unknown>;
+  // `disabled` keeps its original all-or-nothing strictness: a value carrying any key
+  // beyond these two, or a non-boolean `disabled`, is not a recognisable instruction
+  // to stop collecting, so it does not stop collecting. `shed` is the only key that
+  // was added to that set, and it is judged separately below.
+  const recognisable = typeof c.disabled === "boolean" && Object.keys(c).every((k) => k === "disabled" || k === "shed");
+  return {
+    disabled: recognisable && c.disabled === true,
+    shed: isValidAnalyticsShedConfig(c.shed) ? c.shed : SHED_OFF,
+  };
+}
+
+/** Back-compat shim for callers and tests that only care about the original boolean. */
+export function parseAnalyticsBreaker(raw: string | null): boolean {
+  return parseAnalyticsControl(raw).disabled;
 }
 
 // A KV read per analytics event would trade one exhausted quota for another -
@@ -57,7 +104,7 @@ export function parseAnalyticsBreaker(raw: string | null): boolean {
 const BREAKER_CACHE_MS = 30_000;
 const BREAKER_KV_CACHE_TTL_SECONDS = 60;
 
-let cache: { disabled: boolean; expiresAt: number } | null = null;
+let cache: { control: AnalyticsControl; expiresAt: number } | null = null;
 
 type BreakerKv = { get(key: string, options?: { cacheTtl?: number }): Promise<string | null> };
 
@@ -68,18 +115,24 @@ type BreakerKv = { get(key: string, options?: { cacheTtl?: number }): Promise<st
  * falls back to collecting rather than freezing whatever the last answer happened
  * to be forever.
  */
-export async function isAnalyticsIngestDisabled(kv: BreakerKv, now: number = Date.now()): Promise<boolean> {
-  if (cache !== null && now < cache.expiresAt) return cache.disabled;
+export async function readAnalyticsControl(kv: BreakerKv, now: number = Date.now()): Promise<AnalyticsControl> {
+  if (cache !== null && now < cache.expiresAt) return cache.control;
   try {
     const raw = await kv.get(ANALYTICS_BREAKER_KV_KEY, { cacheTtl: BREAKER_KV_CACHE_TTL_SECONDS });
-    const disabled = parseAnalyticsBreaker(raw);
-    cache = { disabled, expiresAt: now + BREAKER_CACHE_MS };
-    return disabled;
+    const control = parseAnalyticsControl(raw);
+    cache = { control, expiresAt: now + BREAKER_CACHE_MS };
+    return control;
   } catch {
-    // Binding missing, KV unavailable, read threw - collect, and do not cache the
-    // failure, so the next event retries instead of inheriting an outage.
-    return false;
+    // Binding missing, KV unavailable, read threw - collect everything, shed nothing,
+    // and do not cache the failure, so the next event retries instead of inheriting
+    // an outage.
+    return ANALYTICS_CONTROL_OPEN;
   }
+}
+
+/** The original boolean question, answered from the same single cached read. */
+export async function isAnalyticsIngestDisabled(kv: BreakerKv, now: number = Date.now()): Promise<boolean> {
+  return (await readAnalyticsControl(kv, now)).disabled;
 }
 
 /** Test-only: drop the module-scoped cache between cases. */

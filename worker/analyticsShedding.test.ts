@@ -52,6 +52,81 @@ test("the preserve list holds only irreplaceable or revenue events, and no high-
   assert.ok(!ALWAYS_PRESERVE.includes("rewarded_ad_unavailable"));
 });
 
+test("onboarding and interstitial OUTCOMES are preserved; the experiment's own volume is not", () => {
+  // Once-per-install, so a sample cannot be reconstructed later: the players it missed
+  // never reach that step again.
+  for (const name of ["tutorial_completed", "tutorial_skipped"]) {
+    assert.ok(ALWAYS_PRESERVE.includes(name), `${name} must be preserved`);
+  }
+  // Funnel outcomes, same reasoning and same trivial volume as the rewarded_ad_* set
+  // that is already here.
+  for (const name of ["interstitial_load_failed", "interstitial_dismissed"]) {
+    assert.ok(ALWAYS_PRESERVE.includes(name), `${name} must be preserved`);
+  }
+  // NOT permanent: interstitial_checkpoint fires per Classic checkpoint and would be
+  // among the largest events in the schema. It belongs in preserveExtra while the A/B
+  // runs and comes back out afterwards, so the unsheddable floor does not permanently
+  // absorb a temporary measurement.
+  for (const name of ["interstitial_checkpoint", "interstitial_continuation"]) {
+    assert.ok(!ALWAYS_PRESERVE.includes(name), `${name} must stay sheddable by default`);
+  }
+});
+
+test("preserveExtra carries the interstitial experiment through a sampled day", () => {
+  // The rollout precondition: set BEFORE the config is published, or the opening hours
+  // of the experiment are sampled and the arms are no longer comparable.
+  const config = cfg({
+    monitorOnly: false,
+    globalMode: "ELEVATED",
+    countries: { IR: { mode: "ELEVATED", keepPercent: 10 } },
+    preserveExtra: ["interstitial_checkpoint", "interstitial_continuation"],
+  });
+  const body = JSON.stringify({
+    events: [
+      { eventName: "interstitial_checkpoint", params: {} },
+      { eventName: "interstitial_continuation", params: {} },
+      { eventName: "game_completed", params: {} },
+    ],
+  });
+  // ALWAYS_SHED: every sampled event dies, so anything surviving survived on the
+  // preserve list alone.
+  const decision = decideShedding(effectiveShedPolicy(config, "IR"), "/events", body, config, ALWAYS_SHED);
+  assert.equal(decision.action, "forward_filtered");
+  assert.equal(decision.preserved, 2, "both experiment events survive a 10% day");
+  assert.equal(decision.dropped, 1, "and the gameplay event does not");
+  const survivors = JSON.parse(decision.body!).events.map((e: { eventName: string }) => e.eventName);
+  assert.deepEqual(survivors, ["interstitial_checkpoint", "interstitial_continuation"]);
+
+  // Without it, the same batch is dropped outright - the A/B would have measured nothing.
+  const bare = cfg({ monitorOnly: false, globalMode: "ELEVATED", countries: { IR: { mode: "ELEVATED", keepPercent: 10 } } });
+  assert.equal(decideShedding(effectiveShedPolicy(bare, "IR"), "/events", body, bare, ALWAYS_SHED).action, "drop");
+});
+
+test("ELEVATED with an explicit keepPercent is live-enforceable - the NORMAL-optimized profile", () => {
+  // Unlike the multiplayer guard, percentage admission IS enforceable here: the client
+  // never retries a dropped batch, so there is no re-roll to defeat the sample.
+  const profile = cfg({
+    monitorOnly: false,
+    globalMode: "ELEVATED",
+    globalKeepPercent: 25,
+    countries: { IR: { mode: "ELEVATED", keepPercent: 10 } },
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+  });
+  assert.equal(shedEnforcementError(profile as never), null, "must pass validation as a LIVE config");
+  // Without the global rate there is no defensible default, so the profile must be
+  // REFUSED rather than silently running at 100% and saving nothing. This is the bug
+  // the field was added to fix: before it, a global ELEVATED could never go live.
+  const { globalKeepPercent: _omitted, ...noRate } = profile as unknown as Record<string, unknown>;
+  assert.match(String(shedEnforcementError(noRate as never)), /explicit keepPercent/);
+  assert.equal(isValidAnalyticsShedConfig({ ...(profile as object), globalKeepPercent: 101 }), false, "out-of-range global rate is refused");
+  assert.equal(effectiveShedPolicy(profile, "IR").keepPercent, 10, "IR override");
+  assert.equal(effectiveShedPolicy(profile, "DE").keepPercent, 25, "global default for everyone else");
+  assert.equal(effectiveShedPolicy(profile, "DE").mode, "ELEVATED");
+  // ZZ is never swept into another country's policy, and an ELEVATED global still
+  // applies to it as a global - not as IR's 10%.
+  assert.notEqual(effectiveShedPolicy(profile, "XX").keepPercent, 10);
+});
+
 // -------------------------------------------------------------- config model ----
 
 test("an absent, malformed or wrongly-shaped config means collect everything", () => {

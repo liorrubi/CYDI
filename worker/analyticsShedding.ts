@@ -74,6 +74,11 @@ export const ALWAYS_PRESERVE: readonly string[] = [
   // them is now simply redundant.
   "app_open",
   "result_shared",
+  // Onboarding, once per install and therefore unresamplable in exactly the way
+  // first_open is: a sampled tutorial funnel cannot be reconstructed later, because
+  // the players it missed never reach that step again. Together under 400/day.
+  "tutorial_completed",
+  "tutorial_skipped",
   // Revenue.
   "purchase_completed",
   "shop_purchase_with_coins",
@@ -92,6 +97,15 @@ export const ALWAYS_PRESERVE: readonly string[] = [
   "reward_bonus_ad_completed",
   "reward_bonus_ad_failed",
   "reward_fallback_used",
+  // Interstitial funnel OUTCOMES, on the same reasoning as the rewarded ones above and
+  // at the same trivial volume. Deliberately NOT the experiment's own two events:
+  // interstitial_checkpoint fires per Classic checkpoint and would be among the largest
+  // events in the schema, so preserving it permanently would raise the unsheddable floor
+  // for a measurement that is only needed while the A/B runs. Those two belong in the KV
+  // `preserveExtra` for the experiment window and come back out afterwards - which is
+  // what preserveExtra exists for, and needs no deploy in either direction.
+  "interstitial_load_failed",
+  "interstitial_dismissed",
   // Inputs to the OTHER guard's decision. See the note above.
   "mp_room_created",
   "mp_game_started",
@@ -107,6 +121,19 @@ export type AnalyticsShedConfig = {
   /** The single enforcement switch. True = decide and record only. Production ships true. */
   monitorOnly: boolean;
   globalMode: GuardMode;
+  /**
+   * The keepPercent a country with no policy of its own inherits from globalMode.
+   *
+   * Exists because there is otherwise NOWHERE to put a rate for a global ELEVATED, and
+   * shedEnforcementError refuses live ELEVATED without one - so before this field a
+   * global sampling policy could be written, could pass as monitor-only, and could
+   * never actually be enforced. Enumerating countries instead was the alternative and
+   * is worse: a market nobody listed sheds nothing, which is exactly the failure that
+   * lets an unexpected country exhaust the quota.
+   *
+   * Ignored when globalMode is NORMAL, and always overridden by a country policy.
+   */
+  globalKeepPercent?: number;
   /** Keyed by normalized ISO country code. A country absent from here is unaffected. */
   countries: Record<string, AnalyticsCountryPolicy>;
   /** Event names added to ALWAYS_PRESERVE, so a classification call can be reversed without a deploy. */
@@ -156,7 +183,7 @@ export function shedEnforcementError(config: AnalyticsShedConfig): string | null
     typeof config.countries === "object" && config.countries !== null && !Array.isArray(config.countries)
       ? (Object.values(config.countries) as AnalyticsCountryPolicy[])
       : [];
-  const entries: { mode: unknown; keepPercent?: unknown }[] = [{ mode: config.globalMode }, ...policies];
+  const entries: { mode: unknown; keepPercent?: unknown }[] = [{ mode: config.globalMode, keepPercent: config.globalKeepPercent }, ...policies];
 
   // ELEVATED means "shed some", and there is no defensible default for "some". The
   // operator states the number or does not get to run ELEVATED live - this is the one
@@ -186,6 +213,7 @@ export function isValidAnalyticsShedConfig(value: unknown): value is AnalyticsSh
     if (code !== normalizeCountry(code)) return false;
     if (!isCountryPolicy(policy)) return false;
   }
+  if (c.globalKeepPercent !== undefined && !isKeepPercent(c.globalKeepPercent)) return false;
   if (c.preserveExtra !== undefined && (!Array.isArray(c.preserveExtra) || c.preserveExtra.some((n) => typeof n !== "string"))) return false;
   if (c.expiresAt !== undefined && !isIsoTimestamp(c.expiresAt)) return false;
   if (c.reason !== undefined && typeof c.reason !== "string") return false;
@@ -225,7 +253,8 @@ export function effectiveShedPolicy(config: AnalyticsShedConfig, rawCountry: unk
   const mode = specific?.mode ?? config.globalMode;
   if (mode === "NORMAL") return base;
 
-  const configured = specific?.keepPercent;
+  // A country policy's rate wins; otherwise the global rate, if the operator set one.
+  const configured = specific ? specific.keepPercent : config.globalKeepPercent;
   const keepPercent = isKeepPercent(configured)
     ? configured
     : mode === "EMERGENCY"

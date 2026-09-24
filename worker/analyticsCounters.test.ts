@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { incrementEvent, mergeCounters, canonicalEventName, foldCanonicalAliases, incrementRequestCountry, ANALYTICS_REQUESTS_KEY } = await import("./analyticsDO.ts");
+const { incrementEvent, mergeCounters, canonicalEventName, foldCanonicalAliases, incrementRequestCountry, ANALYTICS_REQUESTS_KEY, normalizeKeepPercent, FULL_KEEP_PERCENT } = await import("./analyticsDO.ts");
 const { validateEventParams, ANALYTICS_EVENT_NAMES, isAnalyticsEventName } = await import("../src/services/analyticsSchema.ts");
 
 test("appVersion is recorded for every event", () => {
@@ -1045,7 +1045,10 @@ test("the crossed map survives the merge a range report is built from", () => {
 
 test("one request increments exactly one country, once", () => {
   const c = incrementRequestCountry({}, "IR");
-  assert.deepEqual(c[ANALYTICS_REQUESTS_KEY], { total: 1, byCountry: { IR: 1 } });
+  assert.deepEqual(c[ANALYTICS_REQUESTS_KEY], { total: 1, byCountry: { IR: 1 }, byCountryKeepPercent: { "IR|100": 1 } });
+  // An omitted keep rate means NOT SAMPLED, so it must read as 100 and never as 0 -
+  // the difference between "this counter is complete" and "multiply it by infinity".
+  assert.deepEqual(incrementRequestCountry({}, "IR", 10)[ANALYTICS_REQUESTS_KEY]?.byCountryKeepPercent, { "IR|10": 1 });
 });
 
 test("the reserved key is NOT an event name, so a client cannot send it", () => {
@@ -1107,9 +1110,12 @@ test("existing event counters are completely unchanged by the request counter", 
   assert.equal(withRequest.game_started?.total, 1);
 });
 
-test("no cross dimensions are created - byCountry and nothing else", () => {
+test("no cross dimensions are created - country, keep rate, and nothing else", () => {
   const e = incrementRequestCountry({}, "IR")[ANALYTICS_REQUESTS_KEY]!;
-  assert.deepEqual(Object.keys(e).sort(), ["byCountry", "total"], "exactly two fields");
+  assert.deepEqual(Object.keys(e).sort(), ["byCountry", "byCountryKeepPercent", "total"], "exactly three fields");
+  // The keep rate is crossed with COUNTRY and nothing else on purpose: sampling policy
+  // is per-country, so that is the only cross that can be read back correctly. Every
+  // other dimension stays the event counters' job.
   for (const field of ["byPlatform", "byAppVersion", "byAppBuild", "byCountryAppVersion", "byCountryGameType", "byGameType", "bySource"] as const) {
     assert.equal(e[field], undefined, field + " must not exist on the request counter");
   }
@@ -1137,4 +1143,135 @@ test("merging does not drop the request counter when only the LEFT side has it",
   const merged = mergeCounters(incrementRequestCountry({}, "IR"), { app_open: { total: 1 } });
   assert.equal(merged[ANALYTICS_REQUESTS_KEY]?.total, 1);
   assert.deepEqual(merged[ANALYTICS_REQUESTS_KEY]?.byCountry, { IR: 1 });
+});
+
+
+// --- sampling metadata: country x keepPercent -----------------------------------------
+//
+// Every non-preserved counter in a sampled day is a sample of UNKNOWN rate on its own.
+// These pin the one record of what that rate was, and - more important than any single
+// assertion here - that the fallback direction is "assume complete", never "assume
+// sampled". Scaling a complete counter up by 10x invents traffic; failing to scale a
+// sampled one down only understates.
+
+test("normalizeKeepPercent: 0 is a real rate, junk is not", () => {
+  for (const [input, expected] of [[0, 0], [10, 10], [25, 25], [100, 100], ["0", 0], ["25", 25], [" 10 ", 10]] as const) {
+    assert.equal(normalizeKeepPercent(input), expected, JSON.stringify(input));
+  }
+  // Everything unusable falls back to FULL, because understating beats fabricating.
+  for (const junk of [undefined, null, "", "abc", -1, 101, 12.5, "12.5", NaN, Infinity, {}, [], "1e1"]) {
+    assert.equal(normalizeKeepPercent(junk), FULL_KEEP_PERCENT, JSON.stringify(String(junk)));
+  }
+  assert.equal(FULL_KEEP_PERCENT, 100);
+});
+
+test("a country shedding everything but the preserved set records rate 0, not 'missing'", () => {
+  // The exact case that made today's IR data unreadable: keepPercent 0 still lets
+  // preserved events through, so requests DO arrive and must be labelled 0.
+  const c = incrementRequestCountry({}, "IR", 0);
+  assert.deepEqual(c[ANALYTICS_REQUESTS_KEY]?.byCountryKeepPercent, { "IR|0": 1 });
+});
+
+test("two countries on different rates stay separable - the reason this is crossed", () => {
+  let c = {};
+  for (const [country, keep] of [["IR", 10], ["IR", 10], ["DE", 25], ["IR", 10], ["US", 25], ["DE", 25]] as const) {
+    c = incrementRequestCountry(c, country, keep);
+  }
+  const e = (c as Record<string, { total: number; byCountry?: Record<string, number>; byCountryKeepPercent?: Record<string, number> }>)[ANALYTICS_REQUESTS_KEY];
+  assert.equal(e.total, 6);
+  assert.deepEqual(e.byCountry, { IR: 3, DE: 2, US: 1 });
+  assert.deepEqual(e.byCountryKeepPercent, { "IR|10": 3, "DE|25": 2, "US|25": 1 });
+  // A single blended multiplier would be wrong for BOTH markets - that is the bug
+  // this dimension exists to prevent.
+  assert.equal(e.byCountryKeepPercent!["IR|10"] * 10, 30);
+  assert.equal(e.byCountryKeepPercent!["DE|25"] * 4, 8);
+});
+
+test("one country moved between rates mid-day keeps both, and they sum to the requests", () => {
+  let c = incrementRequestCountry({}, "IR", 100);
+  c = incrementRequestCountry(c, "IR", 100);
+  c = incrementRequestCountry(c, "IR", 10);
+  const e = (c as Record<string, { total: number; byCountryKeepPercent?: Record<string, number> }>)[ANALYTICS_REQUESTS_KEY];
+  assert.deepEqual(e.byCountryKeepPercent, { "IR|100": 2, "IR|10": 1 });
+  assert.equal(Object.values(e.byCountryKeepPercent!).reduce((a, b) => a + b, 0), e.total, "every request is labelled exactly once");
+});
+
+test("an unknown country still gets a rate, under ZZ", () => {
+  assert.deepEqual(incrementRequestCountry({}, "XX", 25)[ANALYTICS_REQUESTS_KEY]?.byCountryKeepPercent, { "ZZ|25": 1 });
+  assert.deepEqual(incrementRequestCountry({}, "ir", 25)[ANALYTICS_REQUESTS_KEY]?.byCountryKeepPercent, { "IR|25": 1 });
+});
+
+test("a forged keep rate cannot inflate a country - junk reads as complete", () => {
+  // The DO re-normalizes whatever arrives on the header, so the worst a client can do
+  // is have its own requests counted as unsampled. It can never claim 1% and have a
+  // report multiply it by a hundred.
+  for (const forged of [-1, 101, 0.5, "10; DROP", NaN]) {
+    assert.deepEqual(
+      incrementRequestCountry({}, "IR", forged as number)[ANALYTICS_REQUESTS_KEY]?.byCountryKeepPercent,
+      { "IR|100": 1 },
+      String(forged),
+    );
+  }
+});
+
+test("the cap bounds the crossed map and overflow is OTHER, never ZZ", () => {
+  let c = {};
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let made = 0;
+  outer: for (const a of letters) {
+    for (const b of letters) {
+      if (made >= 220) break outer;
+      c = incrementRequestCountry(c, a + b, 25);
+      made += 1;
+    }
+  }
+  const map = (c as Record<string, { byCountryKeepPercent?: Record<string, number> }>)[ANALYTICS_REQUESTS_KEY].byCountryKeepPercent!;
+  assert.equal(Object.keys(map).length, 201, "200 real keys plus OTHER");
+  assert.ok(map.OTHER >= 1);
+  assert.equal(map.ZZ, undefined, "overflow is not the unknown-country key");
+});
+
+test("a batch of ten is ONE sampled request, not ten", () => {
+  // The rate labels the REQUEST, because the request is both the quota unit and the
+  // unit the shed decision acted on.
+  let counters = {};
+  let requestCounted = false;
+  for (let i = 0; i < 10; i += 1) {
+    counters = incrementEvent(counters, "game_started", { gameType: "shapeChallenge", category: "geometric", contentKey: "circle" }, "android", "0.53.0", "abc1234", undefined, "IR");
+    if (!requestCounted) {
+      counters = incrementRequestCountry(counters, "IR", 10);
+      requestCounted = true;
+    }
+  }
+  const all = counters as Record<string, { total: number; byCountryKeepPercent?: Record<string, number> }>;
+  assert.deepEqual(all[ANALYTICS_REQUESTS_KEY].byCountryKeepPercent, { "IR|10": 1 });
+  assert.equal(all.game_started.total, 10);
+});
+
+test("the crossed rate survives the merge a range report is built from", () => {
+  const unsampled = incrementRequestCountry(incrementRequestCountry({}, "IR", 100), "DE", 100);
+  const sampled = incrementRequestCountry(incrementRequestCountry({}, "IR", 10), "DE", 25);
+  const merged = mergeCounters(unsampled, sampled);
+  assert.equal(merged[ANALYTICS_REQUESTS_KEY]?.total, 4);
+  assert.deepEqual(merged[ANALYTICS_REQUESTS_KEY]?.byCountryKeepPercent, { "IR|100": 1, "DE|100": 1, "IR|10": 1, "DE|25": 1 });
+  // A range spanning a complete day and a sampled one must NOT blend into one rate -
+  // the reader has to be able to see that the two days are not comparable.
+  assert.equal(Object.keys(merged[ANALYTICS_REQUESTS_KEY]!.byCountryKeepPercent!).length, 4);
+
+  // Forward-only: a bucket written before this field existed never gains one.
+  const legacy = { [ANALYTICS_REQUESTS_KEY]: { total: 5, byCountry: { IR: 5 } } };
+  const mixed = mergeCounters(legacy, sampled);
+  assert.equal(mixed[ANALYTICS_REQUESTS_KEY]?.total, 7);
+  assert.deepEqual(mixed[ANALYTICS_REQUESTS_KEY]?.byCountryKeepPercent, { "IR|10": 1, "DE|25": 1 }, "only the labelled requests appear");
+  assert.equal(mergeCounters(legacy, { app_open: { total: 1 } })[ANALYTICS_REQUESTS_KEY]?.byCountryKeepPercent, undefined);
+});
+
+test("no real EVENT counter ever gains the rate map", () => {
+  const c = incrementRequestCountry(
+    incrementEvent({}, "game_started", { gameType: "shapeChallenge", category: "geometric", contentKey: "circle" }, "android", "0.53.0", "abc1234", undefined, "IR"),
+    "IR",
+    10,
+  );
+  assert.equal(c.game_started?.byCountryKeepPercent, undefined);
+  assert.equal(mergeCounters(c, c).game_started?.byCountryKeepPercent, undefined, "and the merge does not invent one");
 });

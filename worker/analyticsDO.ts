@@ -249,6 +249,19 @@ const MAX_COUNTRY_VERSION_KEYS = 150;
 const MAX_COUNTRY_VERSION_REASON_KEYS = 200;
 /** The internal header index.ts puts the normalized code in. Not a client contract - anything a client sends under it is re-normalized and, being unvalidatable, lands in UNKNOWN_COUNTRY like any other junk. */
 export const COUNTRY_HEADER = "x-cydi-country";
+/**
+ * The internal header index.ts puts the ENFORCED analytics keep rate in, 0-100.
+ *
+ * Absent means nothing sampled this request - either the shed policy was NORMAL or it
+ * was monitorOnly, both of which forward the original body untouched - so an absent
+ * header normalizes to 100, not to 0. Like COUNTRY_HEADER this is not a client
+ * contract: index.ts overwrites it on every request and the DO re-normalizes whatever
+ * arrives, so a client cannot claim its events were sampled and inflate itself 10x in
+ * a report.
+ */
+export const SHED_KEEP_HEADER = "x-cydi-shed-keep";
+/** No sampling: every event that was sent reached the DO. */
+export const FULL_KEEP_PERCENT = 100;
 /** Country could not be determined: absent, Cloudflare's XX/T1, or malformed. */
 export const UNKNOWN_COUNTRY = "ZZ";
 /** Cardinality overflow for byCountryReason - deliberately NOT UNKNOWN_COUNTRY, so "we do not know the country" and "too many distinct keys" stay separate facts. */
@@ -257,6 +270,36 @@ const COUNTRY_REASON_OVERFLOW = "OTHER";
 // fraction of a Durable Object value. Real traffic uses a few dozen, so the cap only
 // ever bites under a forged flood.
 const MAX_COUNTRY_REASON_KEYS = 150;
+// Country x keepPercent. Unlike the crossed maps above BOTH sides are closed domains
+// (normalizeCountry, and 0-100 integers from normalizeKeepPercent), so the theoretical
+// ceiling is bounded at 249 x 101 rather than unbounded - but a policy realistically
+// uses one or two distinct rates, making the live size a few dozen keys. Capped anyway,
+// because "bounded at 25,149" is not the same as "small".
+const MAX_COUNTRY_KEEP_PERCENT_KEYS = 200;
+
+/**
+ * Whole-percent keep rate in [0,100]; anything else becomes FULL_KEEP_PERCENT.
+ *
+ * Falling back to 100 rather than 0 is the safe direction on purpose: a report that
+ * believes nothing was sampled understates, while one that believes a 100% day was a
+ * 10% sample would multiply real counters by ten and invent traffic that never
+ * happened. Understating is recoverable; fabricating is not.
+ *
+ * 0 is a legitimate value (a country shedding everything but the preserved set) and
+ * must survive, which is why this cannot be written as `|| FULL_KEEP_PERCENT`.
+ */
+export function normalizeKeepPercent(value: unknown): number {
+  // Digits only, deliberately: Number("") is 0, so a header that is present but empty
+  // would otherwise read as "this country shed everything" and a complete day would be
+  // scaled up from nothing. The same strictness rejects "1e1", "0x10" and " -0",
+  // none of which this code ever writes and all of which Number() would accept.
+  let raw: number;
+  if (typeof value === "number") raw = value;
+  else if (typeof value === "string" && /^\s*\d{1,3}\s*$/.test(value)) raw = Number(value.trim());
+  else return FULL_KEEP_PERCENT;
+  if (!Number.isInteger(raw) || raw < 0 || raw > 100) return FULL_KEEP_PERCENT;
+  return raw;
+}
 
 /** Two-letter ISO-style code, uppercased; everything else (missing, XX, T1, malformed) becomes UNKNOWN_COUNTRY. */
 export function normalizeCountry(value: unknown): string {
@@ -403,6 +446,8 @@ type EventCounters = {
   // event, and on day buckets recorded before this field existed - such a day reports
   // no country x game-type rows at all rather than guessing them.
   byCountryGameType?: Record<string, number>;
+  /** ANALYTICS_REQUESTS_KEY only - "<country>|<keepPercent>". See incrementRequestCountry. */
+  byCountryKeepPercent?: Record<string, number>;
   // ATTRIBUTION_BREAKOUT_EVENTS only - where the visit that produced this event came
   // from. `bySource` is the campaign twin of byPlatform; byCampaign/byUtmContent split
   // it further by utm_campaign / utm_content. All three are capped at
@@ -725,14 +770,35 @@ export function foldCanonicalAliases(counts: AllCounters): AllCounters {
  * Country is a closed domain after normalizeCountry (two uppercase letters, or ZZ),
  * so the map needs no cap - the same reasoning byCountry already relies on.
  */
-export function incrementRequestCountry(counters: AllCounters, country: string): AllCounters {
+export function incrementRequestCountry(
+  counters: AllCounters,
+  country: string,
+  keepPercent: number = FULL_KEEP_PERCENT,
+): AllCounters {
   const existing = counters[ANALYTICS_REQUESTS_KEY] ?? { total: 0 };
+  const code = normalizeCountry(country);
   return {
     ...counters,
     [ANALYTICS_REQUESTS_KEY]: {
       ...existing,
       total: existing.total + 1,
-      byCountry: incrementKeyMap(existing.byCountry, normalizeCountry(country)),
+      byCountry: incrementKeyMap(existing.byCountry, code),
+      // The scaling key. Every OTHER counter in a sampled day is a sample of unknown
+      // rate on its own; this is the only record of what that rate was, and it is
+      // crossed with country because the rate is per-country policy - a uniform
+      // multiplier would be wrong the moment IR and DE run different keepPercents.
+      //
+      // It counts REQUESTS at that rate, not events, for the same reason the parent
+      // counter does: the request is the quota unit, and it is also the unit sampling
+      // acted on. Reading it: a day whose map is {"IR|10": 900, "DE|25": 300} means
+      // IR-attributed counters are a 10% sample and DE-attributed ones a 25% sample.
+      // A day with a single "XX|100" key was not sampled at all.
+      byCountryKeepPercent: incrementCappedKeyMap(
+        existing.byCountryKeepPercent,
+        `${code}|${normalizeKeepPercent(keepPercent)}`,
+        MAX_COUNTRY_KEEP_PERCENT_KEYS,
+        COUNTRY_REASON_OVERFLOW,
+      ),
     },
   };
 }
@@ -749,6 +815,10 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       ...ar,
       total: ar.total + br.total,
       byCountry: mergeKeyMaps(ar.byCountry, br.byCountry),
+      // Summing across days is what makes a multi-day range interpretable at all: a
+      // range spanning a 100% day and a 10% day produces {"IR|100": n, "IR|10": m}
+      // rather than one blended rate that describes neither day.
+      byCountryKeepPercent: mergeKeyMaps(ar.byCountryKeepPercent, br.byCountryKeepPercent),
     };
   }
   for (const eventName of ANALYTICS_EVENT_NAMES) {
@@ -777,6 +847,12 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byCountryAppVersion: mergeKeyMaps(ae.byCountryAppVersion, be.byCountryAppVersion),
       byCountryAppVersionReason: mergeKeyMaps(ae.byCountryAppVersionReason, be.byCountryAppVersionReason),
       byCountryGameType: mergeKeyMaps(ae.byCountryGameType, be.byCountryGameType),
+      // Only ANALYTICS_REQUESTS_KEY ever carries this, and that key is merged in its
+      // own branch above because it is not an AnalyticsEventName. Merged here too for
+      // the same reason every other selective map is - mergeKeyMaps(undefined,
+      // undefined) stays undefined, so no event gains a phantom key, and nothing is
+      // silently dropped if the field ever spreads.
+      byCountryKeepPercent: mergeKeyMaps(ae.byCountryKeepPercent, be.byCountryKeepPercent),
       bySource: mergeKeyMaps(ae.bySource, be.bySource),
       byCampaign: mergeKeyMaps(ae.byCampaign, be.byCampaign),
       byUtmContent: mergeKeyMaps(ae.byUtmContent, be.byUtmContent),
@@ -966,7 +1042,12 @@ export class AnalyticsDO {
    * that means - 400 for a single event, a skipped entry for a batch - because a
    * batch must not lose nine good events to one bad one.
    */
-  private async ingestOne(body: unknown, country: string, countRequest = false): Promise<boolean> {
+  private async ingestOne(
+    body: unknown,
+    country: string,
+    countRequest = false,
+    keepPercent: number = FULL_KEEP_PERCENT,
+  ): Promise<boolean> {
     const b = body as Record<string, unknown> | null;
     const eventName = b?.eventName;
     if (!isAnalyticsEventName(eventName)) return false;
@@ -1032,8 +1113,8 @@ export class AnalyticsDO {
     // storage key, no read and no write, and it deliberately leaves pendingEvents alone
     // so flush frequency is exactly what it was.
     if (countRequest) {
-      nextAlltime = incrementRequestCountry(nextAlltime, country);
-      nextDay = incrementRequestCountry(nextDay, country);
+      nextAlltime = incrementRequestCountry(nextAlltime, country, keepPercent);
+      nextDay = incrementRequestCountry(nextDay, country, keepPercent);
     }
     this.counterCache.set(alltimeKey, nextAlltime);
     this.counterCache.set(dayKey, nextDay);
@@ -1077,12 +1158,12 @@ export class AnalyticsDO {
   }
 
   /** Single-event ingest, unchanged on the wire. Old clients keep using this forever. */
-  private async handleEvent(body: unknown, country: string): Promise<Response> {
+  private async handleEvent(body: unknown, country: string, keepPercent: number): Promise<Response> {
     const b = body as Record<string, unknown> | null;
     // Split so the two failure modes stay distinguishable for a single event, which
     // is the contract old clients already rely on.
     if (!isAnalyticsEventName(b?.eventName)) return json({ error: "invalid event" }, 400);
-    if (!(await this.ingestOne(body, country, true))) return json({ error: "invalid params" }, 400);
+    if (!(await this.ingestOne(body, country, true, keepPercent))) return json({ error: "invalid params" }, 400);
     await this.flushIfDue();
     return json({ ok: true });
   }
@@ -1095,7 +1176,7 @@ export class AnalyticsDO {
    * never cost the other nine. The whole-body shape is still all-or-nothing - a body
    * that is not { events: [...] } is a client bug, not a data point.
    */
-  private async handleEvents(body: unknown, country: string): Promise<Response> {
+  private async handleEvents(body: unknown, country: string, keepPercent: number): Promise<Response> {
     const b = body as Record<string, unknown> | null;
     const events = b?.events;
     if (!Array.isArray(events)) return json({ error: "body must be { events: [...] }" }, 400);
@@ -1107,7 +1188,7 @@ export class AnalyticsDO {
     // entry until one is actually ingested, and then never again for this batch.
     let requestCounted = false;
     for (const event of events) {
-      if (await this.ingestOne(event, country, !requestCounted)) {
+      if (await this.ingestOne(event, country, !requestCounted, keepPercent)) {
         accepted++;
         requestCounted = true;
       }
@@ -1343,7 +1424,10 @@ export class AnalyticsDO {
       // Country is resolved once per REQUEST, not per event - every envelope in a
       // batch came from the same client on the same connection, so they share it.
       const country = normalizeCountry(request.headers.get(COUNTRY_HEADER));
-      return batch ? this.handleEvents(body, country) : this.handleEvent(body, country);
+      // Same reasoning as country: the shed decision was taken once, for the whole
+      // request, so every envelope inside it was sampled at the same rate.
+      const keepPercent = normalizeKeepPercent(request.headers.get(SHED_KEEP_HEADER));
+      return batch ? this.handleEvents(body, country, keepPercent) : this.handleEvent(body, country, keepPercent);
     }
 
     if (url.pathname === "/report" && request.method === "GET") {

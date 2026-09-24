@@ -1,4 +1,4 @@
-import { AnalyticsDO, COUNTRY_HEADER, normalizeCountry } from "./analyticsDO";
+import { AnalyticsDO, COUNTRY_HEADER, FULL_KEEP_PERCENT, normalizeCountry, SHED_KEEP_HEADER } from "./analyticsDO";
 import {
   ANALYTICS_BREAKER_KV_KEY,
   isValidAnalyticsBreakerConfig,
@@ -769,9 +769,14 @@ export async function handleAnalyticsEvent(request: Request, env: Env, path: "/e
 
   // Monitor-only: the decision above is the measurement, and the ORIGINAL body goes
   // to the DO regardless. Nothing is dropped, nothing is filtered, no counter moves.
-  if (policy.monitorOnly) return forwardToAnalyticsDO(request, env, path, bodyText);
+  // The keep rate reported to the DO is therefore FULL, not policy.keepPercent - a
+  // monitor-only day must never be recorded as a sampled one, or a reader would
+  // scale up counters that were already complete.
+  if (policy.monitorOnly) return forwardToAnalyticsDO(request, env, path, bodyText, FULL_KEEP_PERCENT);
   if (decision.action === "drop") return new Response(null, { status: 204 });
-  return forwardToAnalyticsDO(request, env, path, decision.body ?? bodyText);
+  // Enforced: whatever reached the DO is a policy.keepPercent sample of what was sent,
+  // and this is the only place that fact is ever recorded.
+  return forwardToAnalyticsDO(request, env, path, decision.body ?? bodyText, policy.keepPercent);
 }
 
 // Every /api/daily/* request is forwarded to the single global DailyChallengeDO
@@ -791,7 +796,13 @@ function forwardToDailyDO(request: Request, env: Env, path: string): Promise<Res
 // Every /api/analytics/* request is forwarded to the single global AnalyticsDO
 // instance, which processes requests one at a time (see analyticsDO.ts) so counter
 // increments can never race or lose an update.
-function forwardToAnalyticsDO(request: Request, env: Env, path: string, body?: string): Promise<Response> {
+function forwardToAnalyticsDO(
+  request: Request,
+  env: Env,
+  path: string,
+  body?: string,
+  keepPercent: number = FULL_KEEP_PERCENT,
+): Promise<Response> {
   const id = env.ANALYTICS_DO.idFromName("analytics");
   const stub = env.ANALYTICS_DO.get(id);
   const url = new URL(request.url);
@@ -804,6 +815,10 @@ function forwardToAnalyticsDO(request: Request, env: Env, path: string, body?: s
   // region, coordinates or ASN is read, forwarded or stored anywhere.
   const headers = new Headers(request.headers);
   headers.set(COUNTRY_HEADER, normalizeCountry((request as { cf?: { country?: unknown } }).cf?.country));
+  // Set unconditionally, exactly like the country header, so a client-supplied value
+  // can never survive: an absent-and-therefore-100 default is only ever reached when
+  // the DO is called from somewhere that is not this function.
+  headers.set(SHED_KEEP_HEADER, String(keepPercent));
   // `body` is supplied only when the caller has already consumed the stream (see the
   // shed path above); everything else streams through untouched as it always has.
   if (body !== undefined) headers.delete("content-length");

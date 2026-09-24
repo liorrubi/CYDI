@@ -25,6 +25,8 @@ const EXPECTED_STAR =
   "https://playcydi.com/draw-a-perfect-star?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=vcbiASLg-Gk";
 const EXPECTED_LIGHTNING =
   "https://playcydi.com/draw-a-lightning-bolt-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=UWZ8uIOM3XU";
+const EXPECTED_TRIANGLE =
+  "https://playcydi.com/draw-a-triangle-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=ZbkTMF7LTTE";
 
 test("/s/cat redirects to the fully tagged cat challenge", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
@@ -258,6 +260,27 @@ test("the lightning creative id keeps its case", () => {
   // digit. Exactly the string a lowercasing helper or a screenshot read gets wrong.
   assert.equal(CAMPAIGN_SLUGS.lightning.content, "UWZ8uIOM3XU");
   assert.ok(EXPECTED_LIGHTNING.includes("utm_content=UWZ8uIOM3XU"));
+});
+
+test("/s/triangle lands on the triangle challenge page, tagged", () => {
+  assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/triangle")), EXPECTED_TRIANGLE);
+  assert.equal(new URL(EXPECTED_TRIANGLE).pathname, "/draw-a-triangle-from-memory");
+});
+
+test("/s/triangle resolves to exactly the Triangle Short's attribution", () => {
+  const target = new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/triangle")));
+  const attribution = resolveAttribution({ search: target.search, referrer: "", origin: ORIGIN });
+  assert.equal(attribution.source, "youtube");
+  assert.equal(attribution.medium, "shorts");
+  assert.equal(attribution.campaign, "cydi_shorts");
+  assert.equal(attribution.content, "ZbkTMF7LTTE");
+});
+
+test("the triangle creative id keeps its case", () => {
+  // ZbkTMF7LTTE - a run of four capitals with a digit inside it, then three more.
+  // Lowercasing any of them points the row at a video that does not exist.
+  assert.equal(CAMPAIGN_SLUGS.triangle.content, "ZbkTMF7LTTE");
+  assert.ok(EXPECTED_TRIANGLE.includes("utm_content=ZbkTMF7LTTE"));
 });
 
 test("campaign aliases are kept out of the index", () => {

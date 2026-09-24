@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.52.1 - 2026-09-24
+
+**/s/triangle, the Triangle Short's campaign alias.** The Short is public, so the
+alias exists and points at the page shipped in 0.52.0,
+`/draw-a-triangle-from-memory`, carrying `utm_source=youtube`, `utm_medium=shorts`,
+`utm_campaign=cydi_shorts` and the Short's own video id as `utm_content`.
+
+The id is `ZbkTMF7LTTE`, taken from the published video's own link - four capitals
+with a digit buried in them, then three more, so the test pins its exact case next
+to the redirect, the landing path and the attribution it resolves to.
+
+Third Short in the experimental mid-action format, after the star and the lightning
+bolt. Its drawing came from the capture tool's target tracer rather than from a
+person, which is why neither the Short nor its copy claims a human scored it.
+
+The seven earlier aliases are untouched, `/s/` stays out of the sitemap and
+disallowed in robots.txt, and an unknown slug still lands on a clean homepage with
+no tags.
+
 ## 0.52.0 - 2026-09-24
 
 **A challenge page for the triangle.** `/draw-a-triangle-from-memory` joins the

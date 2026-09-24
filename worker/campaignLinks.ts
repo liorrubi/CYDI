@@ -108,6 +108,16 @@ export const CAMPAIGN_SLUGS: Record<string, CampaignLink> = {
     content: "UWZ8uIOM3XU",
     path: "/draw-a-lightning-bolt-from-memory",
   },
+  // Third Short in the experimental format. Its drawing was produced by the capture
+  // tool's target tracer rather than by a person, so nothing in the Short or its copy
+  // claims a human scored it - the alias just carries the attribution.
+  triangle: {
+    source: "youtube",
+    medium: "shorts",
+    campaign: "cydi_shorts",
+    content: "ZbkTMF7LTTE",
+    path: "/draw-a-triangle-from-memory",
+  },
 };
 
 /**

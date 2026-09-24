@@ -502,6 +502,61 @@ async function sendBatch(analytics: InstanceType<typeof AnalyticsDO>, events: un
   );
 }
 
+// ------------------------------------------------ acquisition country (ingest) ----
+//
+// The value must come from the request the Worker saw, never from the client. These
+// go through the real ingest path rather than incrementEvent so that stays true.
+
+test("acquisition country is taken from the request, not from anything the client sends", async () => {
+  const do1 = await makeDO();
+  // The envelope claims DE in every way a client could try; the header says IR.
+  await do1.send(
+    {
+      eventName: "first_open",
+      params: { installAge: "h0_24" },
+      platform: "android",
+      appVersion: "0.50.0",
+      appBuild: "fd79337",
+      installationId: "eeeeeeeeeeee",
+      sessionId: "ffffffffffff",
+      ...({ country: "DE", params2: { country: "DE" } } as Record<string, unknown>),
+    } as Envelope,
+    "IR",
+  );
+  await do1.flush();
+  const counts = (await do1.report()).counts as Record<string, { total: number; byCountry?: Record<string, number> }>;
+  assert.deepEqual(counts.first_open?.byCountry, { IR: 1 }, "the header wins");
+  assert.equal(counts.first_open?.total, 1);
+});
+
+test("a batched acquisition event is counted under the country of the batch that carried it", async () => {
+  // A4 queues events client-side, so an event generated on one network can be sent on
+  // another. This pins the documented reading rather than pretending it cannot happen.
+  const batched = await makeDO();
+  await sendBatch(
+    batched.analytics,
+    [
+      { eventName: "first_open", params: { installAge: "h0_24" }, platform: "android", appVersion: "0.50.0", appBuild: "fd79337", installationId: "eeeeeeeeeeee", sessionId: "ffffffffffff" },
+      { eventName: "install_attributed", params: {}, platform: "android", appVersion: "0.50.0", appBuild: "fd79337", installationId: "eeeeeeeeeeee", sessionId: "ffffffffffff", attribution: { source: "youtube", medium: "social", campaign: "unknown", content: "unknown", term: "unknown" } },
+    ],
+    "AZ",
+  );
+  await batched.flush();
+  const counts = (await batched.report()).counts as Record<string, { total: number; byCountry?: Record<string, number>; bySource?: Record<string, number> }>;
+  assert.deepEqual(counts.first_open?.byCountry, { AZ: 1 });
+  assert.deepEqual(counts.install_attributed?.byCountry, { AZ: 1 });
+  assert.deepEqual(counts.install_attributed?.bySource, { youtube: 1 }, "attribution still works alongside it");
+});
+
+test("an unknown country still counts the acquisition event", async () => {
+  const unknown = await makeDO();
+  await unknown.send({ eventName: "first_open", params: { installAge: "h0_24" }, platform: "android", appVersion: "0.50.0", appBuild: "fd79337", installationId: "eeeeeeeeeeee", sessionId: "ffffffffffff" }, "XX");
+  await unknown.flush();
+  const counts = (await unknown.report()).counts as Record<string, { total: number; byCountry?: Record<string, number> }>;
+  assert.deepEqual(counts.first_open?.byCountry, { ZZ: 1 });
+  assert.equal(counts.first_open?.total, 1, "the global total must not depend on knowing the country");
+});
+
 test("a batch counts exactly what the same events counted one at a time", async () => {
   const single = await makeDO();
   for (const envelope of SEQUENCE) await single.send(envelope);

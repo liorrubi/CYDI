@@ -111,16 +111,16 @@ const INSTALL_AGE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["first_open"]);
 // simply close the app and emit nothing.
 const ROUND_COUNT_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["pp_game_started", "pp_game_finished", "pp_abandoned"]);
 const ROUND_INDEX_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["pp_round_completed", "pp_abandoned"]);
-// Coarse country for the rewarded-ad diagnostics, derived SERVER-SIDE from the
-// request (see COUNTRY_HEADER below) and never sent by the client. Only the
-// two-letter code is kept: no IP, no city, no region, no coordinates, no ASN, and
-// nothing else from the Cloudflare request metadata. The code is the country of the
-// NETWORK REQUEST as Cloudflare sees it - a VPN reports its exit country, not where
-// the person is.
+// Coarse country, derived SERVER-SIDE from the request (see COUNTRY_HEADER below) and
+// never sent by the client. Only the two-letter code is kept: no IP, no city, no
+// region, no coordinates, no ASN, and nothing else from the Cloudflare request
+// metadata. The code is the country of the NETWORK REQUEST as Cloudflare sees it - a
+// VPN reports its exit country, not where the person is.
 //
-// Confined to four events on purpose. The two rewarded ones are the signal; the two
-// offer-shown ones are the DENOMINATOR, without which a country that simply has more
-// players always looks like it fails more.
+// An explicit list, never "all events". Each entry below has to justify itself, in
+// three groups: rewarded-ad diagnostics, multiplayer cost, and acquisition. The two
+// rewarded ones are the signal; the two offer-shown ones are the DENOMINATOR, without
+// which a country that simply has more players always looks like it fails more.
 const COUNTRY_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
   "rewarded_ad_unavailable",
   "rewarded_ad_loaded",
@@ -144,6 +144,27 @@ const COUNTRY_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
   // request, no KV write, no per-room state.
   "mp_room_created",
   "mp_game_started",
+  // Acquisition measurement. Where new installs are coming from decides whether ad
+  // monetization is realistically available for them at all, and nothing here could
+  // answer that: byCountry existed only on ad and multiplayer events, which measure
+  // people who already play, not people who just arrived.
+  //
+  //   first_open         - fires once per installation on first launch, so its
+  //                        byCountry is the acquisition-side distribution.
+  //   install_attributed - fires when an install referrer resolves, so its byCountry
+  //                        is the same distribution restricted to attributable
+  //                        installs, and is the denominator-free subset of the above.
+  //
+  // Read both as NETWORK country at the moment the request carrying the event arrived
+  // - not physical location, not Play account or store country, not nationality, and
+  // not necessarily the country at install time. A VPN or proxy changes it. And with
+  // A4 client batching (services/analyticsQueue.ts) an event can be queued and sent
+  // later, so the country is whatever Cloudflare saw on the BATCH request that carried
+  // it, which need not be the network the event was generated on.
+  //
+  // Forward-only: events already counted have no country and cannot gain one.
+  "first_open",
+  "install_attributed",
 ]);
 // Country alone says WHERE, reason alone says WHAT - only the pair says whether Iran
 // specifically times out while Germany errors. Both halves are closed sets, so the
@@ -153,14 +174,16 @@ const COUNTRY_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["rewarded_ad
 // maps and therefore cannot answer the question that decides whether an Android
 // release is needed: are the Iranian failures coming from 0.48.4, from 0.50.0, or
 // from both equally? byCountry says where, byAppVersion says which build, neither
-// says both. Same four events as byCountry - the two rewarded ones plus the two
+// says both. The four rewarded events only - the two rewarded ones plus the two
 // offer-shown denominators, because a version with more players in a country will
 // always produce more failures there.
 // Deliberately its OWN set rather than an alias of the one above. It used to be an
 // alias, which meant adding any event to byCountry silently gave it the crossed
 // country x version map too. The two multiplayer events want byCountry only; the
 // crossed map exists to answer an Android-release question about rewarded ads and
-// has no bearing on room creation.
+// has no bearing on room creation or on where installs come from. The acquisition
+// pair wants byCountry only for the same reason: crossing it with app version would
+// multiply keys to answer a question nobody asked.
 const COUNTRY_VERSION_BREAKOUT_EVENTS = new Set<AnalyticsEventName>([
   "rewarded_ad_unavailable",
   "rewarded_ad_loaded",

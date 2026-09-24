@@ -139,12 +139,13 @@ export const PRIVACY_POLICY_HTML = `
   Clearing the app's or browser's local data starts a new random number.
 </p>
 <p class="status-text">
-  A small number of analytics events about rewarded ads — whether an ad was available, and if not, the
-  general reason — also record a two-letter country code, so we can see whether a problem affects one
-  country rather than everyone. The code is worked out by our hosting provider (Cloudflare) from the
-  network connection the request arrived on; your device is never asked where it is, and CYDI requests no
-  location permission. It is country level only: no city, no region, no coordinates, no GPS, and no
-  network operator. We do not store your IP address for this. The code is kept only as a running total per
+  A small number of analytics events — ad diagnostics such as whether a rewarded ad was available and, if
+  not, the general reason; a couple of Play Together events; and the events recorded when the app is first
+  opened after installation — also record a two-letter network-country code, inferred from the connection
+  as seen by our hosting provider (Cloudflare). This helps us understand the geographic distribution of
+  first opens and diagnose whether technical or advertising issues are concentrated in particular
+  countries. Your device is never asked where it is, and CYDI requests no location permission. It is
+  country level only: no city, no region, no coordinates, no GPS, and no network operator. We do not store your IP address for this. The code is kept only as a running total per
   country, never against you, an event, an installation or a session. If you use a VPN or proxy, the
   country recorded is the one your connection appears to come from, which may not be where you are.
 </p>

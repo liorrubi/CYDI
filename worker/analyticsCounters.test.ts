@@ -591,9 +591,11 @@ test("adding country leaves byReason, byInstallAge and the pass-play maps untouc
   // No country argument at all still records the event, under ZZ.
   assert.deepEqual(without.byCountry, { ZZ: 1 });
 
+  // first_open gained byCountry for acquisition measurement; byInstallAge, which it
+  // already had, must be untouched by that.
   const firstOpen = incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234", undefined, "IR");
   assert.deepEqual(firstOpen.first_open?.byInstallAge, { h0_24: 1 }, "byInstallAge is unchanged");
-  assert.equal(firstOpen.first_open?.byCountry, undefined);
+  assert.deepEqual(firstOpen.first_open?.byCountry, { IR: 1 });
 
   const quit = incrementEvent({}, "pp_abandoned", { roundIndex: 2, playerCount: 2, roundCount: 10 }, "android", "0.50.0", "abc1234", undefined, "IR");
   assert.deepEqual(quit.pp_abandoned?.byRoundCount, { "10": 1 });
@@ -626,6 +628,90 @@ test("country and app version are crossed on the four rewarded events", () => {
     assert.deepEqual(offer[name]?.byCountryAppVersion, { "DE|0.50.0": 1 }, name + " is a denominator");
     assert.equal(offer[name]?.byCountryAppVersionReason, undefined);
   }
+});
+
+// --- Acquisition country ------------------------------------------------------
+//
+// Where new installs arrive from decides whether ad monetization is available for
+// them at all. byCountry on these two events is the only thing that can answer it -
+// the ad and multiplayer breakouts measure people who already play.
+//
+// The reading is narrow and these tests are written to keep it narrow: NETWORK
+// country of the request that carried the event, nothing more.
+
+test("first_open and install_attributed record byCountry", () => {
+  const ir = incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.deepEqual(ir.first_open?.byCountry, { IR: 1 });
+  assert.equal(ir.first_open?.total, 1);
+
+  const attributed = incrementEvent({}, "install_attributed", {}, "android", "0.50.0", "abc1234", { source: "youtube" }, "DE");
+  assert.deepEqual(attributed.install_attributed?.byCountry, { DE: 1 });
+  assert.equal(attributed.install_attributed?.total, 1);
+  // The attribution dimensions it already had are untouched by the new map.
+  assert.deepEqual(attributed.install_attributed?.bySource, { youtube: 1 });
+});
+
+test("acquisition countries accumulate and survive mergeCounters", () => {
+  const days = [
+    incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234", undefined, "IR"),
+    incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234", undefined, "IR"),
+    incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234", undefined, "AZ"),
+    incrementEvent({}, "install_attributed", {}, "android", "0.50.0", "abc1234", undefined, "PL"),
+  ];
+  const merged = days.reduce((a, b) => mergeCounters(a, b));
+  assert.deepEqual(merged.first_open?.byCountry, { IR: 2, AZ: 1 });
+  assert.equal(merged.first_open?.total, 3, "the global total is the sum of the country map");
+  assert.deepEqual(merged.install_attributed?.byCountry, { PL: 1 });
+
+  // Forward-only: a bucket counted before this shipped has no country and must not
+  // invent one by being merged with a bucket that does.
+  const legacy = { first_open: { total: 40 } };
+  const mixed = mergeCounters(legacy, merged);
+  assert.deepEqual(mixed.first_open?.byCountry, { IR: 2, AZ: 1 }, "history is not backfilled");
+  assert.equal(mixed.first_open?.total, 43, "but it still counts toward the total");
+  assert.equal(mergeCounters(legacy, { first_open: { total: 2 } }).first_open?.byCountry, undefined);
+});
+
+test("a missing or malformed acquisition country falls back to ZZ, not to nothing", () => {
+  for (const [country, expected] of [
+    [undefined, "ZZ"],
+    ["XX", "ZZ"],
+    ["T1", "ZZ"],
+    ["", "ZZ"],
+    ["nonsense", "ZZ"],
+    ["il", "IL"],
+  ] as const) {
+    const c = incrementEvent({}, "first_open", { installAge: "h0_24" }, "android", "0.50.0", "abc1234", undefined, country);
+    assert.deepEqual(c.first_open?.byCountry, { [expected]: 1 }, `${String(country)} -> ${expected}`);
+    assert.equal(c.first_open?.total, 1, "an unknown country still counts the event");
+  }
+});
+
+test("the acquisition pair gets byCountry and NOT the crossed country x version map", () => {
+  // These two sets were once aliases, so adding an event to one silently added it to
+  // the other. This is the regression test for that, not a style assertion.
+  for (const name of ["first_open", "install_attributed"] as const) {
+    const c = incrementEvent({}, name, name === "first_open" ? { installAge: "h0_24" } : {}, "android", "0.50.0", "abc1234", undefined, "IR");
+    assert.deepEqual(c[name]?.byCountry, { IR: 1 }, `${name} has byCountry`);
+    assert.equal(c[name]?.byCountryAppVersion, undefined, `${name} must NOT gain byCountryAppVersion`);
+    assert.equal(c[name]?.byCountryReason, undefined);
+    assert.equal(c[name]?.byCountryAppVersionReason, undefined);
+  }
+});
+
+test("the existing breakouts are unaffected by the acquisition pair joining", () => {
+  // Rewarded still crosses; an event in neither set still gains no country map.
+  const rewarded = incrementEvent({}, "rewarded_ad_unavailable", { ...PLACEMENT, reason: "timeout" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.deepEqual(rewarded.rewarded_ad_unavailable?.byCountry, { IR: 1 });
+  assert.deepEqual(rewarded.rewarded_ad_unavailable?.byCountryAppVersion, { "IR|0.50.0": 1 });
+  assert.deepEqual(rewarded.rewarded_ad_unavailable?.byCountryAppVersionReason, { "IR|0.50.0|timeout": 1 });
+
+  const room = incrementEvent({}, "mp_room_created", {}, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.deepEqual(room.mp_room_created?.byCountry, { IR: 1 });
+  assert.equal(room.mp_room_created?.byCountryAppVersion, undefined);
+
+  const started = incrementEvent({}, "game_started", { gameType: "shapeChallenge" }, "android", "0.50.0", "abc1234", undefined, "IR");
+  assert.equal(started.game_started?.byCountry, undefined, "an event outside the set stays outside it");
 });
 
 test("ZZ, unknown and OTHER mean three different things", () => {

@@ -18,7 +18,60 @@
     // first, minus the purely static directories, which keep being served
     // directly exactly as before (including /.well-known/assetlinks.json, which
     // Android App Link verification depends on).
-    "run_worker_first": ["/*", "!/assets/*", "!/images/*", "!/admin/*", "!/.well-known/*", "!/favicon.svg", "!/app-ads.txt"]
+    //
+    // The page paths below are PRERENDERED into dist/ by scripts/prerenderPages.ts
+    // (run from `npm run build`), so the asset server can answer them without the
+    // Worker. That is not a quota measure - together they are ~0.4% of Worker
+    // invocations - it is an availability one: on 24 Sep 2026 the Workers runtime hit
+    // its daily limit and every Worker-invoking path returned 429 for four and a half
+    // hours while these excluded paths kept serving 200. A cold visit to "/" was dead,
+    // and Classic needs nothing but the shell to play.
+    //
+    // Each entry must have a matching prerendered file or the path falls to the SPA
+    // shell with the wrong <head>. prerenderPaths() and this list are checked against
+    // each other in worker/prerender.test.ts, so adding an SEO page without adding it
+    // here (or vice versa) fails the build rather than silently losing a canonical.
+    //
+    // The Worker's own handlers for these paths stay in place and stay correct. They
+    // simply stop receiving traffic, which means a mistake here degrades to today's
+    // behaviour instead of a 404.
+    "run_worker_first": [
+      "/*",
+      "!/assets/*",
+      "!/images/*",
+      "!/admin/*",
+      "!/.well-known/*",
+      "!/favicon.svg",
+      "!/app-ads.txt",
+      // Prerendered SEO landing pages (worker/seoPages.ts).
+      "!/",
+      "!/drawing-accuracy-test",
+      "!/draw-a-perfect-circle",
+      "!/draw-a-perfect-star",
+      "!/draw-a-perfect-heart",
+      "!/draw-a-dog-from-memory",
+      "!/draw-shapes-online",
+      "!/multiplayer-drawing-game",
+      "!/2-player-drawing-game-one-phone",
+      "!/draw-a-cat-from-memory",
+      "!/draw-a-bear-from-memory",
+      "!/draw-an-owl-from-memory",
+      "!/draw-a-pig-from-memory",
+      "!/draw-a-snail-from-memory",
+      "!/draw-a-lightning-bolt-from-memory",
+      "!/draw-a-triangle-from-memory",
+      "!/drawing-challenges",
+      // Prerendered content documents (worker/contentPages.ts).
+      "!/how-to-play",
+      "!/about",
+      "!/contact",
+      "!/terms",
+      "!/privacy",
+      "!/accessibility",
+      // Generated text, derived from CONTENT_PATHS.
+      "!/robots.txt",
+      "!/sitemap.xml"
+    ]
   },
   "kv_namespaces": [
     {

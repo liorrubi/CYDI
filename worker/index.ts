@@ -1,4 +1,5 @@
 import { AnalyticsDO, COUNTRY_HEADER, FULL_KEEP_PERCENT, normalizeCountry, SHED_KEEP_HEADER } from "./analyticsDO";
+import { CONTENT_PAGE_CACHE_CONTROL, CONTENT_PAGE_CONTENT_TYPE, ROBOTS_CONTENT_TYPE, SITEMAP_CONTENT_TYPE, TEXT_RESPONSE_CACHE_CONTROL } from "./cachePolicy";
 import {
   ANALYTICS_BREAKER_KV_KEY,
   isValidAnalyticsBreakerConfig,
@@ -293,7 +294,7 @@ function escapeAttribute(value: string): string {
 
 function textResponse(body: string, contentType: string): Response {
   return new Response(body, {
-    headers: { "content-type": contentType, "cache-control": "public, max-age=3600" },
+    headers: { "content-type": contentType, "cache-control": TEXT_RESPONSE_CACHE_CONTROL },
   });
 }
 
@@ -1023,9 +1024,9 @@ export default {
       return Response.redirect(androidRedirectUrl(url.search), 301);
     }
 
-    if (url.pathname === "/robots.txt" && request.method === "GET") return textResponse(robotsTxt(), "text/plain; charset=utf-8");
+    if (url.pathname === "/robots.txt" && request.method === "GET") return textResponse(robotsTxt(), ROBOTS_CONTENT_TYPE);
     if (url.pathname === "/sitemap.xml" && request.method === "GET")
-      return textResponse(sitemapXml(CONTENT_PATHS), "application/xml; charset=utf-8");
+      return textResponse(sitemapXml(CONTENT_PATHS), SITEMAP_CONTENT_TYPE);
 
     // Content pages (/how-to-play, /about, /contact, /terms, /privacy) are whole
     // documents rather than the app shell, so they are answered here and never
@@ -1037,10 +1038,10 @@ export default {
       if (contentPage) {
         return new Response(renderContentDocument(contentPage), {
           headers: {
-            "content-type": "text/html; charset=utf-8",
+            "content-type": CONTENT_PAGE_CONTENT_TYPE,
             // Short, because the pages are generated: the scoring example and the
             // shape counts are computed from the live code at render time.
-            "cache-control": "public, max-age=600",
+            "cache-control": CONTENT_PAGE_CACHE_CONTROL,
           },
         });
       }

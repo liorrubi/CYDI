@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run prerender",
+    "prerender": "node --import ./scripts/register-ts.mjs scripts/prerenderPages.ts",
     "lint": "oxlint",
     "test": "node --import ./scripts/register-ts.mjs --test \"src/**/*.test.ts\" \"worker/**/*.test.ts\"",
     "export-catalog": "node --import ./scripts/register-ts.mjs scripts/exportContentCatalog.ts",

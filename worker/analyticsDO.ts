@@ -67,7 +67,7 @@ import {
 // limit exists to stop a client posting bulk data, not to police the envelope's own
 // growth, and an event that overflowed it would be REJECTED - so the headroom moves
 // with the envelope rather than silently costing us the largest events.
-const MAX_BODY_BYTES = 1536;
+export const MAX_BODY_BYTES = 1536;
 /**
  * Batch ingest limits (A4). The client flushes at 10, but the server accepts more so
  * a client that queued through a long offline stretch can drain in one request rather
@@ -75,8 +75,8 @@ const MAX_BODY_BYTES = 1536;
  * avoid. Past the cap the batch is rejected outright rather than truncated, because
  * silently dropping the tail would under-count without anyone noticing.
  */
-const MAX_BATCH_EVENTS = 50;
-const MAX_BATCH_BODY_BYTES = MAX_BODY_BYTES * MAX_BATCH_EVENTS;
+export const MAX_BATCH_EVENTS = 50;
+export const MAX_BATCH_BODY_BYTES = MAX_BODY_BYTES * MAX_BATCH_EVENTS;
 const FUNNEL_EVENTS = new Set<AnalyticsEventName>(["game_started", "game_completed", "result_shared"]);
 // The only event that gets a per-BUILD breakdown. One launch counter is enough to
 // see which builds are in the field; putting unbounded-cardinality SHAs on every

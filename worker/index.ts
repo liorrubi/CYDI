@@ -7,6 +7,7 @@ import {
   readAnalyticsControl,
 } from "./analyticsBreaker";
 import { decideShedding, effectiveShedPolicy, shedEnforcementError, shedLogLine } from "./analyticsShedding";
+import { writeAnalyticsShadow } from "./analyticsShadow";
 import {
   evaluateRoomCreation,
   guardConfigAgeMs,
@@ -95,6 +96,11 @@ export interface Env {
    */
   OPS_GUARD_ADMIN_TOKEN?: string;
   OPS_ANALYTICS_GUARD_ADMIN_TOKEN?: string;
+  /**
+   * Phase 1 Analytics Engine shadow write (analyticsShadow.ts). Optional on purpose:
+   * absent means no shadow copy, never a failed ingest.
+   */
+  ANALYTICS_AE?: AnalyticsEngineDataset;
 }
 
 // Excludes 0/O and 1/I to avoid ids that are ambiguous when read aloud or copied by hand.
@@ -787,14 +793,39 @@ async function handleGuardStatus(request: Request, env: Env): Promise<Response> 
  * to the DO byte for byte. The body is only materialized once a policy actually
  * applies to this request's country, which is the difference between a feature that
  * ships inert and one that merely claims to.
+ *
+ * ANALYTICS ENGINE SHADOW (Phase 1, analyticsShadow.ts). A copy of every envelope the
+ * DO would accept goes to AE BEFORE the shed decision, so AE sees the unsampled stream
+ * while the DO keeps receiving exactly today's sample. It is side-effect-only and
+ * fail-open: the DO path below neither waits on nor branches on it. The breaker still
+ * wins outright - `disabled` means collection is off, shadow included. Under NORMAL
+ * the stream still goes to the DO untouched; the shadow reads a clone after the
+ * response, via ctx.waitUntil, and is skipped when no ctx is supplied.
  */
-export async function handleAnalyticsEvent(request: Request, env: Env, path: "/event" | "/events" = "/event"): Promise<Response> {
+export async function handleAnalyticsEvent(
+  request: Request,
+  env: Env,
+  path: "/event" | "/events" = "/event",
+  ctx?: Pick<ExecutionContext, "waitUntil">,
+): Promise<Response> {
   const control = await readAnalyticsControl(env.CONTENT_KV);
   if (control.disabled) return new Response(null, { status: 204 });
 
   const country = (request as { cf?: { country?: unknown } }).cf?.country;
   const policy = effectiveShedPolicy(control.shed, country);
-  if (policy.mode === "NORMAL") return forwardToAnalyticsDO(request, env, path);
+  if (policy.mode === "NORMAL") {
+    if (env.ANALYTICS_AE && ctx) {
+      const dataset = env.ANALYTICS_AE;
+      ctx.waitUntil(
+        request
+          .clone()
+          .text()
+          .then((text) => void writeAnalyticsShadow(dataset, path, text, country))
+          .catch(() => undefined),
+      );
+    }
+    return forwardToAnalyticsDO(request, env, path);
+  }
 
   let bodyText: string;
   try {
@@ -804,6 +835,7 @@ export async function handleAnalyticsEvent(request: Request, env: Env, path: "/e
     // would corrupt the count. Accept and drop, exactly as a failed send already does.
     return new Response(null, { status: 204 });
   }
+  writeAnalyticsShadow(env.ANALYTICS_AE, path, bodyText, country);
   const decision = decideShedding(policy, path, bodyText, control.shed);
   const enforced = !policy.monitorOnly && decision.action !== "forward";
   console.log(shedLogLine(policy, decision, enforced));
@@ -937,7 +969,7 @@ async function handleRoomCreate(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/share" && request.method === "POST") return handleCreate(request, env);
@@ -1004,8 +1036,8 @@ export default {
 
     // Kept forever: every already-installed APK posts one event per request here, and
     // there are months of them in the field. The batch route below is additive.
-    if (url.pathname === "/api/analytics/event" && request.method === "POST") return handleAnalyticsEvent(request, env, "/event");
-    if (url.pathname === "/api/analytics/events" && request.method === "POST") return handleAnalyticsEvent(request, env, "/events");
+    if (url.pathname === "/api/analytics/event" && request.method === "POST") return handleAnalyticsEvent(request, env, "/event", ctx);
+    if (url.pathname === "/api/analytics/events" && request.method === "POST") return handleAnalyticsEvent(request, env, "/events", ctx);
     if (url.pathname === "/api/analytics/report" && request.method === "GET") return forwardToAnalyticsDO(request, env, "/report");
 
     // Short campaign aliases (/s/cat). The tags come from the server-side map, never

@@ -113,6 +113,18 @@
       }
     ]
   },
+  // Phase 1 Analytics Engine SHADOW write (worker/analyticsShadow.ts): a best-effort
+  // copy of accepted analytics envelopes, taken before sampling. Nothing reads it yet;
+  // AnalyticsDO stays the system of record. writeDataPoint() is not a subrequest and
+  // not a DO request (measured 25 Sep 2026), so this adds no load on the Free caps.
+  // Removing this block turns the shadow off with no other change - the binding is
+  // optional in Env.
+  "analytics_engine_datasets": [
+    {
+      "binding": "ANALYTICS_AE",
+      "dataset": "cydi_analytics_shadow_v1"
+    }
+  ],
   "migrations": [
     {
       "tag": "v1",

@@ -84,6 +84,16 @@ export interface Env {
    * must not also hand over the one that can take Play Together offline.
    */
   ANALYTICS_GUARD_ADMIN_TOKEN: string;
+  /**
+   * The Emergency Ops Panel's own credentials (the `cydi-ops` Worker, ops/). Held ONLY
+   * by that Worker, never by a CLI session, so revoking the panel never locks the
+   * operator out of the CLI path and vice versa. Each is a SECOND key to exactly one
+   * guard's config route pair and is narrower than the operator token beside it: no
+   * status route, and the analytics one cannot move the `disabled` breaker. Optional on
+   * purpose - unset means the panel is locked out, never that anything opens.
+   */
+  OPS_GUARD_ADMIN_TOKEN?: string;
+  OPS_ANALYTICS_GUARD_ADMIN_TOKEN?: string;
 }
 
 // Excludes 0/O and 1/I to avoid ids that are ambiguous when read aloud or copied by hand.
@@ -351,6 +361,25 @@ function isAnalyticsGuardAdminAuthorized(request: Request, env: Env): boolean {
   return isBearer(request, env.ANALYTICS_GUARD_ADMIN_TOKEN);
 }
 
+/**
+ * Which credential opened a guard config route: the operator's own token, the Ops
+ * Panel's narrower one, or neither. The operator token is checked first, so the
+ * operator's privileges never depend on whether the panel's secret is set.
+ */
+type GuardCaller = "operator" | "ops-panel" | null;
+
+function guardConfigCaller(request: Request, env: Env): GuardCaller {
+  if (isGuardAdminAuthorized(request, env)) return "operator";
+  if (isBearer(request, env.OPS_GUARD_ADMIN_TOKEN)) return "ops-panel";
+  return null;
+}
+
+function analyticsGuardConfigCaller(request: Request, env: Env): GuardCaller {
+  if (isAnalyticsGuardAdminAuthorized(request, env)) return "operator";
+  if (isBearer(request, env.OPS_ANALYTICS_GUARD_ADMIN_TOKEN)) return "ops-panel";
+  return null;
+}
+
 /** Admin responses must never sit in any shared/edge cache. */
 function jsonNoStore(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -597,7 +626,7 @@ export async function handleInterstitialConfigPut(request: Request, env: Env): P
 // whether telemetry is currently being shed.
 
 async function handleAnalyticsBreakerGet(request: Request, env: Env): Promise<Response> {
-  if (!isAnalyticsGuardAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (analyticsGuardConfigCaller(request, env) === null) return jsonNoStore({ error: "unauthorized" }, 401);
   const raw = await env.CONTENT_KV.get(ANALYTICS_BREAKER_KV_KEY);
   // Reports the EFFECTIVE value, not the stored text: an unparseable value means
   // ingest is running, and that is what the operator needs to see. `shed` is reported
@@ -608,7 +637,8 @@ async function handleAnalyticsBreakerGet(request: Request, env: Env): Promise<Re
 }
 
 async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Response> {
-  if (!isAnalyticsGuardAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  const caller = analyticsGuardConfigCaller(request, env);
+  if (caller === null) return jsonNoStore({ error: "unauthorized" }, 401);
   let parsed: unknown;
   try {
     parsed = await request.json();
@@ -623,6 +653,15 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
     const specific = typeof shed === "object" && shed !== null ? shedEnforcementError(shed as never) : null;
     return jsonNoStore({ error: specific ?? "body must be { disabled: boolean } with an optional valid shed policy" }, 400);
   }
+  // The Ops Panel may re-shape shedding but never flip the all-or-nothing breaker: it
+  // must carry `disabled` through exactly as currently in force. Enforced here, not
+  // just in the panel, so a leaked panel credential still cannot silence telemetry.
+  if (caller === "ops-panel") {
+    const current = parseAnalyticsControl(await env.CONTENT_KV.get(ANALYTICS_BREAKER_KV_KEY));
+    if (parsed.disabled !== current.disabled) {
+      return jsonNoStore({ error: "the ops panel credential cannot change the analytics breaker (disabled)" }, 403);
+    }
+  }
   await env.CONTENT_KV.put(ANALYTICS_BREAKER_KV_KEY, JSON.stringify(parsed));
   const shed = parsed.shed;
   return jsonNoStore({
@@ -634,7 +673,8 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
 }
 
 // ---------- Multiplayer cost guard ----------
-// Admin-only on every verb, under GUARD_ADMIN_TOKEN alone. Unlike the ads switch there
+// Admin-only on every verb, under GUARD_ADMIN_TOKEN - plus, for the config GET/PUT
+// pair only, the Ops Panel's own OPS_GUARD_ADMIN_TOKEN (see Env). Unlike the ads switch there
 // is no public GET: a public endpoint naming the countries under policy would tell
 // circumventers exactly what to avoid, and tells an honest user nothing useful.
 //
@@ -645,7 +685,7 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
 // only as the break-glass path for when the Worker itself cannot serve the route.
 
 async function handleGuardConfigGet(request: Request, env: Env): Promise<Response> {
-  if (!isGuardAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (guardConfigCaller(request, env) === null) return jsonNoStore({ error: "unauthorized" }, 401);
   const raw = await env.CONTENT_KV.get(MULTIPLAYER_GUARD_KV_KEY);
   const parsed = parseGuardConfig(raw);
   // Reports the EFFECTIVE config, and says plainly when the stored value failed
@@ -654,7 +694,7 @@ async function handleGuardConfigGet(request: Request, env: Env): Promise<Respons
 }
 
 async function handleGuardConfigPut(request: Request, env: Env): Promise<Response> {
-  if (!isGuardAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  if (guardConfigCaller(request, env) === null) return jsonNoStore({ error: "unauthorized" }, 401);
   let parsed: unknown;
   try {
     parsed = await request.json();

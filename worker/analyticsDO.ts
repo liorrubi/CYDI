@@ -1176,7 +1176,7 @@ export class AnalyticsDO {
    * never cost the other nine. The whole-body shape is still all-or-nothing - a body
    * that is not { events: [...] } is a client bug, not a data point.
    */
-  private async handleEvents(body: unknown, country: string, keepPercent: number): Promise<Response> {
+  private async handleEvents(body: unknown, country: string, keepPercent: number, durable = false): Promise<Response> {
     const b = body as Record<string, unknown> | null;
     const events = b?.events;
     if (!Array.isArray(events)) return json({ error: "body must be { events: [...] }" }, 400);
@@ -1193,8 +1193,13 @@ export class AnalyticsDO {
         requestCounted = true;
       }
     }
-    await this.flushIfDue();
-    return json({ ok: true, accepted, rejected: events.length - accepted });
+    // Phase 2 exact ledger (`/ledger`, analyticsExactLedger.ts): persist BEFORE answering,
+    // whatever the buffer budget says. Output gating guarantees the put lands before the
+    // response, so nothing this request counted is left in memory for a hibernation to
+    // discard. Anything an earlier `/events` request left buffered is persisted with it.
+    if (durable) await this.flush();
+    else await this.flushIfDue();
+    return json({ ok: true, accepted, rejected: events.length - accepted, ...(durable ? { durable: true } : {}) });
   }
 
   /**
@@ -1410,8 +1415,11 @@ export class AnalyticsDO {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
-    if ((url.pathname === "/event" || url.pathname === "/events") && request.method === "POST") {
-      const batch = url.pathname === "/events";
+    // `/ledger` is the Phase 2 durable exact-ledger route: `/events` body and validation,
+    // but persisted before the response (see handleEvents). Only the Worker calls it.
+    if ((url.pathname === "/event" || url.pathname === "/events" || url.pathname === "/ledger") && request.method === "POST") {
+      const batch = url.pathname !== "/event";
+      const durable = url.pathname === "/ledger";
       const bodyText = await request.text();
       const limit = batch ? MAX_BATCH_BODY_BYTES : MAX_BODY_BYTES;
       if (!bodyText || bodyText.length > limit) return json({ error: "invalid payload" }, 400);
@@ -1427,7 +1435,7 @@ export class AnalyticsDO {
       // Same reasoning as country: the shed decision was taken once, for the whole
       // request, so every envelope inside it was sampled at the same rate.
       const keepPercent = normalizeKeepPercent(request.headers.get(SHED_KEEP_HEADER));
-      return batch ? this.handleEvents(body, country, keepPercent) : this.handleEvent(body, country, keepPercent);
+      return batch ? this.handleEvents(body, country, keepPercent, durable) : this.handleEvent(body, country, keepPercent);
     }
 
     if (url.pathname === "/report" && request.method === "GET") {

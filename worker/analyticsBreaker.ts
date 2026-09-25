@@ -21,6 +21,7 @@
 // no new secret, no new dependency.
 
 import { isValidAnalyticsShedConfig, SHED_OFF, type AnalyticsShedConfig } from "./analyticsShedding";
+import { EXACT_LEDGER_OFF, isValidExactLedgerConfig, type ExactLedgerConfig } from "./analyticsExactLedger";
 
 export const ANALYTICS_BREAKER_KV_KEY = "config:analytics-breaker";
 
@@ -37,26 +38,30 @@ export const ANALYTICS_BREAKER_KV_KEY = "config:analytics-breaker";
  * and the shed policy is never consulted. Shedding can narrow what reaches the DO; it
  * can never re-open what the breaker shut.
  */
-export type AnalyticsBreakerConfig = { disabled: boolean; shed?: AnalyticsShedConfig };
+export type AnalyticsBreakerConfig = { disabled: boolean; shed?: AnalyticsShedConfig; exactLedger?: ExactLedgerConfig };
 
 /** Everything one cached read yields. */
-export type AnalyticsControl = { disabled: boolean; shed: AnalyticsShedConfig };
+export type AnalyticsControl = { disabled: boolean; shed: AnalyticsShedConfig; exactLedger: ExactLedgerConfig };
 
-/** Collect everything, shed nothing - what a missing, malformed or unreadable config means. */
-export const ANALYTICS_CONTROL_OPEN: AnalyticsControl = { disabled: false, shed: SHED_OFF };
+/** Collect everything, shed nothing, Phase 2 off - what a missing, malformed or unreadable config means. */
+export const ANALYTICS_CONTROL_OPEN: AnalyticsControl = { disabled: false, shed: SHED_OFF, exactLedger: EXACT_LEDGER_OFF };
+
+/** The keys a stored value may carry. `exactLedger` is the Phase 2 gate (analyticsExactLedger.ts). */
+const BREAKER_KEYS = new Set(["disabled", "shed", "exactLedger"]);
 
 /**
- * Strict: `disabled` must be a boolean, the only other permitted key is `shed`, and a
- * `shed` block that is present must itself be valid. Used by the admin PUT, so an
- * operator who mistypes a policy is told, rather than silently storing something the
- * read path will ignore.
+ * Strict: `disabled` must be a boolean, the only other permitted keys are `shed` and
+ * `exactLedger`, and any block that is present must itself be valid. Used by the admin
+ * PUT, so an operator who mistypes a policy is told, rather than silently storing
+ * something the read path will ignore.
  */
 export function isValidAnalyticsBreakerConfig(value: unknown): value is AnalyticsBreakerConfig {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const c = value as Record<string, unknown>;
   if (typeof c.disabled !== "boolean") return false;
-  for (const key of Object.keys(c)) if (key !== "disabled" && key !== "shed") return false;
+  for (const key of Object.keys(c)) if (!BREAKER_KEYS.has(key)) return false;
   if (c.shed !== undefined && !isValidAnalyticsShedConfig(c.shed)) return false;
+  if (c.exactLedger !== undefined && !isValidExactLedgerConfig(c.exactLedger)) return false;
   return true;
 }
 
@@ -80,12 +85,14 @@ export function parseAnalyticsControl(raw: string | null): AnalyticsControl {
   const c = parsed as Record<string, unknown>;
   // `disabled` keeps its original all-or-nothing strictness: a value carrying any key
   // beyond these two, or a non-boolean `disabled`, is not a recognisable instruction
-  // to stop collecting, so it does not stop collecting. `shed` is the only key that
-  // was added to that set, and it is judged separately below.
-  const recognisable = typeof c.disabled === "boolean" && Object.keys(c).every((k) => k === "disabled" || k === "shed");
+  // to stop collecting, so it does not stop collecting. `shed` and `exactLedger` are the
+  // only keys added to that set, and each is judged separately below - a broken Phase 2
+  // block degrades to "Phase 2 off", never to "breaker off".
+  const recognisable = typeof c.disabled === "boolean" && Object.keys(c).every((k) => BREAKER_KEYS.has(k));
   return {
     disabled: recognisable && c.disabled === true,
     shed: isValidAnalyticsShedConfig(c.shed) ? c.shed : SHED_OFF,
+    exactLedger: isValidExactLedgerConfig(c.exactLedger) ? c.exactLedger : EXACT_LEDGER_OFF,
   };
 }
 

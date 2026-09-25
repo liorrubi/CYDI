@@ -8,6 +8,9 @@ import {
 } from "./analyticsBreaker";
 import { decideShedding, effectiveShedPolicy, shedEnforcementError, shedLogLine } from "./analyticsShedding";
 import { writeAnalyticsShadow } from "./analyticsShadow";
+import { splitForLedger } from "./analyticsExactLedger";
+import type { AnalyticsControl } from "./analyticsBreaker";
+import type { ShedPolicy } from "./analyticsShedding";
 import {
   evaluateRoomCreation,
   guardConfigAgeMs,
@@ -801,6 +804,10 @@ async function handleGuardStatus(request: Request, env: Env): Promise<Response> 
  * wins outright - `disabled` means collection is off, shadow included. Under NORMAL
  * the stream still goes to the DO untouched; the shadow reads a clone after the
  * response, via ctx.waitUntil, and is skipped when no ctx is supplied.
+ *
+ * PHASE 2 (analyticsExactLedger.ts) takes over only when `exactLedger.enabled` is
+ * explicitly true in the same cached config. Off - the default and today's production
+ * state - leaves everything below exactly as it was.
  */
 export async function handleAnalyticsEvent(
   request: Request,
@@ -813,6 +820,7 @@ export async function handleAnalyticsEvent(
 
   const country = (request as { cf?: { country?: unknown } }).cf?.country;
   const policy = effectiveShedPolicy(control.shed, country);
+  if (control.exactLedger.enabled) return handleExactLedgerIngest(request, env, path, control, policy, country);
   if (policy.mode === "NORMAL") {
     if (env.ANALYTICS_AE && ctx) {
       const dataset = env.ANALYTICS_AE;
@@ -850,6 +858,55 @@ export async function handleAnalyticsEvent(
   // Enforced: whatever reached the DO is a policy.keepPercent sample of what was sent,
   // and this is the only place that fact is ever recorded.
   return forwardToAnalyticsDO(request, env, path, decision.body ?? bodyText, policy.keepPercent);
+}
+
+/**
+ * Phase 2 ingest: Analytics Engine for everything, AnalyticsDO `/ledger` (durable, flushed
+ * before it answers) for exact events only.
+ *
+ *  - AE gets every accepted envelope, unsampled - the same Phase 1 write, fail-open.
+ *  - Exact envelopes (EXACT_LEDGER_EVENTS) go to the DO in ONE `/ledger` request and are
+ *    never sampled; each envelope is forwarded exactly once, so nothing can double count.
+ *  - Telemetry is AE-only unless `telemetryToDo` is set, in which case the shed policy's
+ *    sample of it rides in that same `/ledger` request (no extra DO request).
+ *  - No exact event and no telemetry for the DO means no DO request at all: 204.
+ *  - A body the DO would reject as a whole falls back to today's path, which answers it
+ *    exactly as before.
+ */
+async function handleExactLedgerIngest(
+  request: Request,
+  env: Env,
+  path: "/event" | "/events",
+  control: AnalyticsControl,
+  policy: ShedPolicy,
+  country: unknown,
+): Promise<Response> {
+  let bodyText: string;
+  try {
+    bodyText = await request.text();
+  } catch {
+    return new Response(null, { status: 204 });
+  }
+  writeAnalyticsShadow(env.ANALYTICS_AE, path, bodyText, country);
+
+  const split = splitForLedger(path, bodyText);
+  if (split === null) return forwardToAnalyticsDO(request, env, path, bodyText, FULL_KEEP_PERCENT);
+
+  const toDo: unknown[] = [...split.exact];
+  let keepPercent = FULL_KEEP_PERCENT;
+  if (control.exactLedger.telemetryToDo === true && split.telemetry.length > 0) {
+    if (policy.mode === "NORMAL" || policy.monitorOnly) {
+      toDo.push(...split.telemetry);
+    } else {
+      const decision = decideShedding(policy, "/events", JSON.stringify({ events: split.telemetry }), control.shed);
+      console.log(shedLogLine(policy, decision, decision.action !== "forward"));
+      if (decision.action === "forward") toDo.push(...split.telemetry);
+      else if (decision.action === "forward_filtered" && decision.body) toDo.push(...(JSON.parse(decision.body) as { events: unknown[] }).events);
+      keepPercent = policy.keepPercent;
+    }
+  }
+  if (toDo.length === 0) return new Response(null, { status: 204 });
+  return forwardToAnalyticsDO(request, env, "/ledger", JSON.stringify({ events: toDo }), keepPercent);
 }
 
 // Every /api/daily/* request is forwarded to the single global DailyChallengeDO

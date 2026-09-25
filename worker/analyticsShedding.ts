@@ -146,8 +146,14 @@ export type AnalyticsShedConfig = {
 /** What an absent, malformed or expired config resolves to: collect everything, exactly as today. */
 export const SHED_OFF: AnalyticsShedConfig = { monitorOnly: true, globalMode: "NORMAL", countries: {} };
 
-/** EMERGENCY keeps nothing sheddable unless told otherwise; that is what makes it the emergency. */
-const EMERGENCY_DEFAULT_KEEP_PERCENT = 0;
+/**
+ * EMERGENCY keeps nothing sheddable - always, in whatever scope it applies. It does not
+ * read any configured rate (a country's keepPercent or the global globalKeepPercent), so
+ * a sampling rate stored for ELEVATED survives an EMERGENCY untouched and applies again
+ * the moment the mode goes back to ELEVATED. ALWAYS_PRESERVE / preserveExtra events are
+ * still kept, as under every mode.
+ */
+const EMERGENCY_KEEP_PERCENT = 0;
 
 function isGuardMode(value: unknown): value is GuardMode {
   return typeof value === "string" && (GUARD_MODES as readonly string[]).includes(value);
@@ -252,18 +258,18 @@ export function effectiveShedPolicy(config: AnalyticsShedConfig, rawCountry: unk
   const specific = config.countries?.[country];
   const mode = specific?.mode ?? config.globalMode;
   if (mode === "NORMAL") return base;
+  const source = specific ? "country" : "global";
+  if (mode === "EMERGENCY") return { ...base, mode, source, keepPercent: EMERGENCY_KEEP_PERCENT };
 
-  // A country policy's rate wins; otherwise the global rate, if the operator set one.
+  // ELEVATED: a country policy's rate wins; otherwise the global rate, if the operator set one.
   const configured = specific ? specific.keepPercent : config.globalKeepPercent;
   const keepPercent = isKeepPercent(configured)
     ? configured
-    : mode === "EMERGENCY"
-      ? EMERGENCY_DEFAULT_KEEP_PERCENT
-      : // An ELEVATED policy with no keepPercent cannot be live (validation refuses
-        // it), so this can only be a monitor-only model. Keep everything rather than
-        // invent a shed rate nobody chose.
-        100;
-  return { ...base, mode, source: specific ? "country" : "global", keepPercent };
+    : // An ELEVATED policy with no keepPercent cannot be live (validation refuses
+      // it), so this can only be a monitor-only model. Keep everything rather than
+      // invent a shed rate nobody chose.
+      100;
+  return { ...base, mode, source, keepPercent };
 }
 
 export type ShedAction = "forward" | "forward_filtered" | "drop";

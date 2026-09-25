@@ -220,9 +220,10 @@ test("an expired policy lapses to NORMAL, lazily and with no write", () => {
   assert.equal(effectiveShedPolicy(cfg({ globalMode: "EMERGENCY", expiresAt: FUTURE }), "IR").mode, "EMERGENCY");
 });
 
-test("EMERGENCY keeps nothing by default; ELEVATED invents no rate", () => {
+test("EMERGENCY keeps nothing, whatever rate is configured; ELEVATED invents no rate", () => {
   assert.equal(effectiveShedPolicy(cfg({ countries: { IR: { mode: "EMERGENCY" } } }), "IR").keepPercent, 0);
-  assert.equal(effectiveShedPolicy(cfg({ countries: { IR: { mode: "EMERGENCY", keepPercent: 10 } } }), "IR").keepPercent, 10);
+  // EMERGENCY means 0% in its scope; a configured rate is not consulted (and not erased).
+  assert.equal(effectiveShedPolicy(cfg({ countries: { IR: { mode: "EMERGENCY", keepPercent: 10 } } }), "IR").keepPercent, 0);
   // Only reachable monitor-only, since validation refuses a live ELEVATED with no rate.
   assert.equal(effectiveShedPolicy(cfg({ countries: { IR: { mode: "ELEVATED" } } }), "IR").keepPercent, 100);
 });

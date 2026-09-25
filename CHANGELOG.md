@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.53.1 - 2026-09-25
+
+**/s/gear, the Gear Short's campaign alias.** The Short is public, so the alias
+exists and points at the page shipped in 0.53.0, `/draw-a-gear-from-memory`,
+carrying `utm_source=youtube`, `utm_medium=shorts`, `utm_campaign=cydi_shorts` and
+the Short's own video id as `utm_content`.
+
+The id is `bQG9L8gnRUQ`, taken from the published video's own link - capitals and
+lowercase alternating around two digits, so the test pins its exact case next to the
+redirect, the landing path and the attribution it resolves to.
+
+Fourth Short in the experimental mid-action format, after the star, the lightning
+bolt and the triangle. Its drawing came from the capture tool's target tracer rather
+than a person, which is why the title asks whether the shape looks easy instead of
+claiming anyone scored 88.
+
+The eight earlier aliases are untouched, `/s/` stays out of the sitemap and
+disallowed in robots.txt, and an unknown slug still lands on a clean homepage with
+no tags.
+
 ## 0.53.0 - 2026-09-25
 
 **A challenge page for the gear.** `/draw-a-gear-from-memory` joins the practice

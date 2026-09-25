@@ -118,6 +118,16 @@ export const CAMPAIGN_SLUGS: Record<string, CampaignLink> = {
     content: "ZbkTMF7LTTE",
     path: "/draw-a-triangle-from-memory",
   },
+  // Fourth Short in the experimental format. Same tracer-drawn round as the triangle,
+  // so the Short's title asks whether the shape looks easy rather than claiming a
+  // person scored 88.
+  gear: {
+    source: "youtube",
+    medium: "shorts",
+    campaign: "cydi_shorts",
+    content: "bQG9L8gnRUQ",
+    path: "/draw-a-gear-from-memory",
+  },
 };
 
 /**

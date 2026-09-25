@@ -27,6 +27,8 @@ const EXPECTED_LIGHTNING =
   "https://playcydi.com/draw-a-lightning-bolt-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=UWZ8uIOM3XU";
 const EXPECTED_TRIANGLE =
   "https://playcydi.com/draw-a-triangle-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=ZbkTMF7LTTE";
+const EXPECTED_GEAR =
+  "https://playcydi.com/draw-a-gear-from-memory?utm_source=youtube&utm_medium=shorts&utm_campaign=cydi_shorts&utm_content=bQG9L8gnRUQ";
 
 test("/s/cat redirects to the fully tagged cat challenge", () => {
   assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/cat")), EXPECTED);
@@ -281,6 +283,27 @@ test("the triangle creative id keeps its case", () => {
   // Lowercasing any of them points the row at a video that does not exist.
   assert.equal(CAMPAIGN_SLUGS.triangle.content, "ZbkTMF7LTTE");
   assert.ok(EXPECTED_TRIANGLE.includes("utm_content=ZbkTMF7LTTE"));
+});
+
+test("/s/gear lands on the gear challenge page, tagged", () => {
+  assert.equal(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/gear")), EXPECTED_GEAR);
+  assert.equal(new URL(EXPECTED_GEAR).pathname, "/draw-a-gear-from-memory");
+});
+
+test("/s/gear resolves to exactly the Gear Short's attribution", () => {
+  const target = new URL(campaignRedirectUrl(ORIGIN, campaignLinkForPath("/s/gear")));
+  const attribution = resolveAttribution({ search: target.search, referrer: "", origin: ORIGIN });
+  assert.equal(attribution.source, "youtube");
+  assert.equal(attribution.medium, "shorts");
+  assert.equal(attribution.campaign, "cydi_shorts");
+  assert.equal(attribution.content, "bQG9L8gnRUQ");
+});
+
+test("the gear creative id keeps its case", () => {
+  // bQG9L8gnRUQ - capitals and lowercase alternating around two digits. Lowercasing
+  // it anywhere points the row at a video that does not exist.
+  assert.equal(CAMPAIGN_SLUGS.gear.content, "bQG9L8gnRUQ");
+  assert.ok(EXPECTED_GEAR.includes("utm_content=bQG9L8gnRUQ"));
 });
 
 test("campaign aliases are kept out of the index", () => {

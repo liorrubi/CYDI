@@ -106,6 +106,11 @@ const LIGHTNING = { category: "symbols" as CategoryId, shapeId: "sym-lightning",
 // practice exception as the others: the round is real and scored, and it persists nothing.
 const TRIANGLE = { category: "geometric" as CategoryId, shapeId: "polygon-3", practice: true as const };
 
+// The gear is where /s/gear lands someone who just watched the Gear Short. Deep in
+// Geometric, so a brand-new visitor has not reached it and needs the same practice
+// exception as the others: the round is real and scored, and it persists nothing.
+const GEAR = { category: "geometric" as CategoryId, shapeId: "gear-8", practice: true as const };
+
 const LANDING_PAGES: LandingPage[] = [
   { path: "/drawing-accuracy-test", shape: CIRCLE },
   { path: "/draw-a-perfect-circle", shape: CIRCLE },
@@ -119,6 +124,7 @@ const LANDING_PAGES: LandingPage[] = [
   { path: "/draw-a-snail-from-memory", shape: SNAIL },
   { path: "/draw-a-lightning-bolt-from-memory", shape: LIGHTNING },
   { path: "/draw-a-triangle-from-memory", shape: TRIANGLE },
+  { path: "/draw-a-gear-from-memory", shape: GEAR },
   { path: "/drawing-challenges", page: "challenges" },
   { path: "/draw-shapes-online" },
   { path: "/multiplayer-drawing-game", mode: "playTogether" },

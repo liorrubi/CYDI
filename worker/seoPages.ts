@@ -565,6 +565,29 @@ const TRIANGLE_FROM_MEMORY: SeoPage = {
   faq: true,
 };
 
+const GEAR_FROM_MEMORY: SeoPage = {
+  path: "/draw-a-gear-from-memory",
+  title: "Draw a Gear From Memory - Drawing Challenge | CYDI",
+  description:
+    "Study a gear for a few seconds, watch it disappear, then draw it back from memory and get an instant score out of 100. Free, no sign-up, plays in the browser.",
+  h1: "Draw a Gear From Memory",
+  paragraphs: [
+    "A cog with eight teeth, on screen for a couple of seconds, then gone. You draw it back from memory onto an empty canvas, and your attempt is scored against the target and laid over it afterwards, so you can see which teeth landed and which ones you invented.",
+    "The trap is that nobody remembers a number. You remember “a gear”, and then you draw however many teeth feel right - which is almost never eight. Even with the count correct, the spacing goes: teeth bunch on one side and the gaps stretch on the other, because the eye keeps the shape and drops the rhythm. The teeth also have flat tops and square shoulders, and a hand drawing at speed rounds them off.",
+    "This is a practice round: played and scored for real, and it changes nothing in your game - no coins, no best score, no unlocks - so you can take it as often as you like, whether or not you have reached the gear in the Shape Challenge.",
+  ],
+  links: [
+    { href: "/draw-a-triangle-from-memory", label: "Draw a triangle from memory" },
+    { href: "/draw-a-perfect-circle", label: "Draw a perfect circle" },
+    { href: "/drawing-challenges", label: "All drawing challenges" },
+    { href: "/how-to-play", label: "How the score is worked out" },
+    { href: "/", label: "CYDI home" },
+  ],
+  cta: { href: "/draw-shapes-online", label: "Browse Every Shape Challenge" },
+  androidCta: true,
+  faq: true,
+};
+
 /*
  * The practice directory. It is a landing path rather than a content page
  * because it belongs to the site's own visual language - SiteChallenges.tsx
@@ -604,7 +627,7 @@ const DRAWING_CHALLENGES_PAGE: SeoPage = {
   androidCta: true,
 };
 
-export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, OWL_FROM_MEMORY, PIG_FROM_MEMORY, SNAIL_FROM_MEMORY, LIGHTNING_FROM_MEMORY, TRIANGLE_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
+export const SEO_PAGES: SeoPage[] = [HOME, ACCURACY_TEST, PERFECT_CIRCLE, PERFECT_STAR, PERFECT_HEART, DOG_FROM_MEMORY, CAT_FROM_MEMORY, BEAR_FROM_MEMORY, OWL_FROM_MEMORY, PIG_FROM_MEMORY, SNAIL_FROM_MEMORY, LIGHTNING_FROM_MEMORY, TRIANGLE_FROM_MEMORY, GEAR_FROM_MEMORY, DRAWING_CHALLENGES_PAGE, DRAW_SHAPES, MULTIPLAYER, TWO_PLAYER];
 
 /**
  * Landing paths only - the homepage is excluded. This is the list

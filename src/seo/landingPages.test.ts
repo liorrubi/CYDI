@@ -83,6 +83,7 @@ test("only a page dedicated to one out-of-reach shape asks for a practice round"
     "/draw-a-bear-from-memory",
     "/draw-a-cat-from-memory",
     "/draw-a-dog-from-memory",
+    "/draw-a-gear-from-memory",
     "/draw-a-lightning-bolt-from-memory",
     "/draw-a-perfect-heart",
     "/draw-a-perfect-star",

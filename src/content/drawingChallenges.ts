@@ -97,4 +97,10 @@ export const DRAWING_CHALLENGES: DrawingChallenge[] = [
     note: "Three straight lines, and freehand the base never comes out level.",
     shapeId: "polygon-3",
   },
+  {
+    href: "/draw-a-gear-from-memory",
+    name: "Draw a gear from memory",
+    note: "Eight teeth, evenly spaced - and nobody remembers the number.",
+    shapeId: "gear-8",
+  },
 ];

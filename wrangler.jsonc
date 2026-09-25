@@ -60,6 +60,7 @@
       "!/draw-a-snail-from-memory",
       "!/draw-a-lightning-bolt-from-memory",
       "!/draw-a-triangle-from-memory",
+      "!/draw-a-gear-from-memory",
       "!/drawing-challenges",
       // Prerendered content documents (worker/contentPages.ts).
       "!/how-to-play",

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.53.0 - 2026-09-25
+
+**A challenge page for the gear.** `/draw-a-gear-from-memory` joins the practice
+pages, with its card on the drawing-challenges hub. It opens `gear-8` - the
+eight-toothed cog the Short actually shows.
+
+The copy is about the specific thing a gear costs a memory: nobody remembers a
+number. You remember "a gear" and then draw however many teeth feel right, which is
+almost never eight. Even with the count right the spacing drifts, and the flat tops
+round off under a fast hand.
+
+Same architecture as the others, no new drawing or scoring code: a real catalogue
+target, the normal study countdown, one attempt, the game's own score, and a round
+that persists nothing - no coins, no best score, no unlock. Deep in Geometric, so a
+new visitor has not reached it and needs the practice exception;
+`src/seo/landingPages.test.ts` pins the new path in the list allowed to use one.
+
+The Short this page belongs to is published separately; its `/s/gear` alias follows
+in its own release, so the alias never exists while its destination 404s.
+
 ## 0.52.2 - 2026-09-24
 
 Web release that ships together with the Worker half of Android 0.53.0 (below) - one

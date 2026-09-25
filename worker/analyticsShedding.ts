@@ -283,6 +283,8 @@ export type ShedDecision = {
   dropped: number;
   /** Replacement request body, present only for forward_filtered. */
   body?: string;
+  /** The kept envelopes behind `body`, so a caller that re-packs them (Phase 2) never re-parses. */
+  survivors?: unknown[];
 };
 
 const FORWARD_UNCHANGED: ShedDecision = { action: "forward", wouldDrop: false, preserved: 0, keptSampled: 0, dropped: 0 };
@@ -322,6 +324,22 @@ export function decideShedding(
   } catch {
     return FORWARD_UNCHANGED;
   }
+  return decideSheddingParsed(policy, path, parsed, config, random);
+}
+
+/**
+ * decideShedding for a body the caller has already JSON.parsed once (analyticsIngest.ts),
+ * so the ingest path parses each body a single time. Identical decisions: anything that is
+ * not a JSON object - including the caller's "unparseable" sentinel - forwards unchanged.
+ */
+export function decideSheddingParsed(
+  policy: ShedPolicy,
+  path: "/event" | "/events",
+  parsed: unknown,
+  config: AnalyticsShedConfig,
+  random: () => number = Math.random,
+): ShedDecision {
+  if (policy.mode === "NORMAL") return FORWARD_UNCHANGED;
   if (typeof parsed !== "object" || parsed === null) return FORWARD_UNCHANGED;
 
   const preserve = preserveSet(config);
@@ -374,6 +392,7 @@ export function decideShedding(
     keptSampled,
     dropped,
     body: JSON.stringify({ ...(parsed as object), events: survivors }),
+    survivors,
   };
 }
 

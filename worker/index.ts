@@ -6,9 +6,11 @@ import {
   parseAnalyticsControl,
   readAnalyticsControl,
 } from "./analyticsBreaker";
-import { decideShedding, effectiveShedPolicy, shedEnforcementError, shedLogLine } from "./analyticsShedding";
-import { writeAnalyticsShadow } from "./analyticsShadow";
-import { splitForLedger } from "./analyticsExactLedger";
+import { decideSheddingParsed, effectiveShedPolicy, shedEnforcementError, shedLogLine } from "./analyticsShedding";
+import { writeAnalyticsShadow, writeAnalyticsShadowParsed } from "./analyticsShadow";
+import { splitParsed } from "./analyticsExactLedger";
+import { isValidExactLedgerConfig, type ExactLedgerConfig } from "./analyticsExactLedgerConfig";
+import { parseIngest, type ParsedIngest } from "./analyticsIngest";
 import type { AnalyticsControl } from "./analyticsBreaker";
 import type { ShedPolicy } from "./analyticsShedding";
 import {
@@ -667,9 +669,17 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
   // must carry `disabled` through exactly as currently in force. Enforced here, not
   // just in the panel, so a leaked panel credential still cannot silence telemetry.
   if (caller === "ops-panel") {
-    const current = parseAnalyticsControl(await env.CONTENT_KV.get(ANALYTICS_BREAKER_KV_KEY));
+    const currentRaw = await env.CONTENT_KV.get(ANALYTICS_BREAKER_KV_KEY);
+    const current = parseAnalyticsControl(currentRaw);
     if (parsed.disabled !== current.disabled) {
       return jsonNoStore({ error: "the ops panel credential cannot change the analytics breaker (disabled)" }, 403);
+    }
+    // Phase 2 gate (exactLedger): a panel write that does not mention it keeps whatever is
+    // stored, so re-shaping shedding from the panel can never silently switch the exact
+    // ledger off (or on). Only a body that carries its own `exactLedger` changes it.
+    if (parsed.exactLedger === undefined) {
+      const storedLedger = storedExactLedger(currentRaw);
+      if (storedLedger !== undefined) parsed.exactLedger = storedLedger;
     }
   }
   await env.CONTENT_KV.put(ANALYTICS_BREAKER_KV_KEY, JSON.stringify(parsed));
@@ -680,6 +690,17 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
     monitorOnly: shed?.monitorOnly ?? true,
     sheddingActive: shed !== undefined && shed.monitorOnly === false,
   });
+}
+
+/** The `exactLedger` block exactly as stored, only when it is present and valid - never a default. */
+function storedExactLedger(raw: string | null): ExactLedgerConfig | undefined {
+  if (raw === null) return undefined;
+  try {
+    const value = (JSON.parse(raw) as { exactLedger?: unknown } | null)?.exactLedger;
+    return isValidExactLedgerConfig(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // ---------- Multiplayer cost guard ----------
@@ -843,10 +864,27 @@ export async function handleAnalyticsEvent(
     // would corrupt the count. Accept and drop, exactly as a failed send already does.
     return new Response(null, { status: 204 });
   }
-  writeAnalyticsShadow(env.ANALYTICS_AE, path, bodyText, country);
-  const decision = decideShedding(policy, path, bodyText, control.shed);
+  // ONE JSON.parse and one validation pass, shared by the AE shadow and the shed decision.
+  const parsed = parseIngest(path, bodyText);
+  writeAnalyticsShadowParsed(env.ANALYTICS_AE, parsed, country);
+  return ingestLegacy(request, env, path, control, policy, parsed);
+}
+
+/** Today's shed-and-forward path, from a body that has already been read and parsed once. */
+function ingestLegacy(
+  request: Request,
+  env: Env,
+  path: "/event" | "/events",
+  control: AnalyticsControl,
+  policy: ShedPolicy,
+  parsed: ParsedIngest,
+): Promise<Response> | Response {
+  const bodyText = parsed.bodyText;
+  const decision = decideSheddingParsed(policy, path, parsed.json, control.shed);
   const enforced = !policy.monitorOnly && decision.action !== "forward";
-  console.log(shedLogLine(policy, decision, enforced));
+  // Nothing is logged under NORMAL (see analyticsShedding.shedLogLine). Only Phase 2's
+  // fallback can reach here under NORMAL; flag-off NORMAL streams and never gets here.
+  if (policy.mode !== "NORMAL") console.log(shedLogLine(policy, decision, enforced));
 
   // Monitor-only: the decision above is the measurement, and the ORIGINAL body goes
   // to the DO regardless. Nothing is dropped, nothing is filtered, no counter moves.
@@ -870,8 +908,9 @@ export async function handleAnalyticsEvent(
  *  - Telemetry is AE-only unless `telemetryToDo` is set, in which case the shed policy's
  *    sample of it rides in that same `/ledger` request (no extra DO request).
  *  - No exact event and no telemetry for the DO means no DO request at all: 204.
- *  - A body the DO would reject as a whole falls back to today's path, which answers it
- *    exactly as before.
+ *  - A body the DO would reject as a whole, and a single-event request the DO would 400,
+ *    take today's path (ingestLegacy), so their HTTP answers are exactly production's.
+ *  - The body is parsed and validated ONCE (analyticsIngest.ts) for all of the above.
  */
 async function handleExactLedgerIngest(
   request: Request,
@@ -887,10 +926,11 @@ async function handleExactLedgerIngest(
   } catch {
     return new Response(null, { status: 204 });
   }
-  writeAnalyticsShadow(env.ANALYTICS_AE, path, bodyText, country);
+  const parsed = parseIngest(path, bodyText);
+  writeAnalyticsShadowParsed(env.ANALYTICS_AE, parsed, country);
 
-  const split = splitForLedger(path, bodyText);
-  if (split === null) return forwardToAnalyticsDO(request, env, path, bodyText, FULL_KEEP_PERCENT);
+  const split = splitParsed(parsed);
+  if (split === null) return ingestLegacy(request, env, path, control, policy, parsed);
 
   const toDo: unknown[] = [...split.exact];
   let keepPercent = FULL_KEEP_PERCENT;
@@ -898,10 +938,10 @@ async function handleExactLedgerIngest(
     if (policy.mode === "NORMAL" || policy.monitorOnly) {
       toDo.push(...split.telemetry);
     } else {
-      const decision = decideShedding(policy, "/events", JSON.stringify({ events: split.telemetry }), control.shed);
+      const decision = decideSheddingParsed(policy, "/events", { events: split.telemetry }, control.shed);
       console.log(shedLogLine(policy, decision, decision.action !== "forward"));
       if (decision.action === "forward") toDo.push(...split.telemetry);
-      else if (decision.action === "forward_filtered" && decision.body) toDo.push(...(JSON.parse(decision.body) as { events: unknown[] }).events);
+      else if (decision.action === "forward_filtered") toDo.push(...(decision.survivors ?? []));
       keepPercent = policy.keepPercent;
     }
   }

@@ -66,14 +66,9 @@
 // a double. Counts must use sum(_sample_interval), never count(): AE samples at write
 // time even at low volume (the probe stored 21 rows for a 200-point burst).
 
-import { canonicalEventName, MAX_BATCH_BODY_BYTES, MAX_BATCH_EVENTS, MAX_BODY_BYTES, normalizeCountry } from "./analyticsDO";
-import {
-  isAnalyticsEventName,
-  normalizeAnalyticsPlatform,
-  normalizeAppVersion,
-  normalizeAppVersionCode,
-  validateEventParams,
-} from "../src/services/analyticsSchema";
+import { canonicalEventName, normalizeCountry } from "./analyticsDO";
+import { normalizeAnalyticsPlatform, normalizeAppVersion, normalizeAppVersionCode } from "../src/services/analyticsSchema";
+import { checkedEnvelopes, parseIngest, type CheckedEnvelope, type ParsedIngest } from "./analyticsIngest";
 import { normalizeAttribution } from "../src/services/analyticsAttribution";
 import { normalizeAnalyticsAudience } from "../src/services/analyticsUsage";
 
@@ -133,13 +128,10 @@ function detailFor(params: Record<string, unknown>): string {
 }
 
 /** One accepted envelope -> one data point, or null exactly when AnalyticsDO's ingestOne would reject it. */
-function toDataPoint(envelope: unknown, route: string, country: string, batchSize: number, random: () => number): ShadowDataPoint | null {
-  const b = envelope as Record<string, unknown> | null;
-  const eventName = b?.eventName;
-  if (!isAnalyticsEventName(eventName)) return null;
-  const validated = validateEventParams(eventName, b?.params);
-  if (!validated.valid) return null;
-  const params = validated.params as unknown as Record<string, unknown>;
+function toDataPoint(checked: CheckedEnvelope, route: string, country: string, batchSize: number, random: () => number): ShadowDataPoint | null {
+  const { eventName, params } = checked;
+  if (eventName === null || params === null) return null;
+  const b = checked.envelope as Record<string, unknown>;
 
   const attribution = b?.attribution === undefined ? undefined : normalizeAttribution(b.attribution);
   const gameType = FUNNEL.has(eventName) ? str(params.gameType) : "";
@@ -194,26 +186,18 @@ function toDataPoint(envelope: unknown, route: string, country: string, batchSiz
  * inside an otherwise valid batch are skipped, as the DO skips them.
  */
 export function buildShadowDataPoints(path: ShadowPath, bodyText: string, rawCountry: unknown, random: () => number = Math.random): ShadowDataPoint[] {
-  const limit = path === "/events" ? MAX_BATCH_BODY_BYTES : MAX_BODY_BYTES;
-  if (!bodyText || bodyText.length > limit) return [];
-  let body: unknown;
-  try {
-    body = JSON.parse(bodyText);
-  } catch {
-    return [];
-  }
+  return buildShadowDataPointsFromParsed(parseIngest(path, bodyText), rawCountry, random);
+}
+
+/** The same, from a body the caller has already parsed once (analyticsIngest.ts) - no second JSON.parse. */
+export function buildShadowDataPointsFromParsed(parsed: ParsedIngest, rawCountry: unknown, random: () => number = Math.random): ShadowDataPoint[] {
+  if (parsed.envelopes === null) return [];
   const country = normalizeCountry(rawCountry);
-
-  if (path === "/event") {
-    const point = toDataPoint(body, "event", country, 1, random);
-    return point ? [point] : [];
-  }
-
-  const events = (body as { events?: unknown } | null)?.events;
-  if (!Array.isArray(events) || events.length === 0 || events.length > MAX_BATCH_EVENTS) return [];
+  const route = parsed.path === "/event" ? "event" : "events";
+  const batchSize = parsed.path === "/event" ? 1 : parsed.envelopes.length;
   const points: ShadowDataPoint[] = [];
-  for (const envelope of events) {
-    const point = toDataPoint(envelope, "events", country, events.length, random);
+  for (const checked of checkedEnvelopes(parsed)) {
+    const point = toDataPoint(checked, route, country, batchSize, random);
     if (point) points.push(point);
   }
   return points;
@@ -229,7 +213,17 @@ export type ShadowDataset = { writeDataPoint(point: ShadowDataPoint): void };
 export function writeAnalyticsShadow(dataset: ShadowDataset | undefined, path: ShadowPath, bodyText: string, rawCountry: unknown): number {
   if (!dataset) return 0;
   try {
-    const points = buildShadowDataPoints(path, bodyText, rawCountry);
+    return writeAnalyticsShadowParsed(dataset, parseIngest(path, bodyText), rawCountry);
+  } catch {
+    return 0;
+  }
+}
+
+/** Best-effort write from an already-parsed body. Same never-throws contract as above. */
+export function writeAnalyticsShadowParsed(dataset: ShadowDataset | undefined, parsed: ParsedIngest, rawCountry: unknown): number {
+  if (!dataset) return 0;
+  try {
+    const points = buildShadowDataPointsFromParsed(parsed, rawCountry);
     for (const point of points) dataset.writeDataPoint(point);
     return points.length;
   } catch {

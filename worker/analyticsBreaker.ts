@@ -21,7 +21,7 @@
 // no new secret, no new dependency.
 
 import { isValidAnalyticsShedConfig, SHED_OFF, type AnalyticsShedConfig } from "./analyticsShedding";
-import { EXACT_LEDGER_OFF, isValidExactLedgerConfig, type ExactLedgerConfig } from "./analyticsExactLedger";
+import { EXACT_LEDGER_OFF, isValidExactLedgerConfig, type ExactLedgerConfig } from "./analyticsExactLedgerConfig";
 
 export const ANALYTICS_BREAKER_KV_KEY = "config:analytics-breaker";
 

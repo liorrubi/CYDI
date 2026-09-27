@@ -83,6 +83,9 @@ export const ALWAYS_PRESERVE: readonly string[] = [
   "purchase_completed",
   "shop_purchase_with_coins",
   "mega_card_unlocked",
+  // Coin economy spends and milestones - exact-ledger events, low volume.
+  "coin_spent",
+  "progression_milestone",
   // Ad monetization outcomes. All low volume; together well under 1% of events.
   "rewarded_ad_requested",
   "rewarded_ad_loaded",

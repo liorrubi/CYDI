@@ -25,6 +25,15 @@ import {
 } from "../src/services/ads/interstitialConfigSchema";
 import { ROUND_COUNT_OPTIONS } from "../src/multiplayer/protocol";
 import {
+  BALANCE_BUCKETS,
+  COIN_SINKS,
+  ECONOMY_MILESTONES,
+  GAMES_BUCKETS,
+  PLAYER_AGE_BUCKETS,
+  SPEND_ORDINALS,
+  isOneOf,
+} from "../src/services/economyBuckets";
+import {
   ATTRIBUTION_DIMENSIONS,
   ATTRIBUTION_OTHER,
   normalizeAttribution,
@@ -56,6 +65,7 @@ import {
   type AeFetch,
   type AeTelemetry,
 } from "./analyticsAeReport";
+import { economyExactFromCounters, fetchEconomyTelemetry } from "./analyticsEconomyReport";
 import {
   MAX_SEEN_IDS_PER_DAY,
   SEEN_INDEX_KEY,
@@ -108,6 +118,9 @@ const BUILD_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["app_open"]);
 // aggregated separately on purpose so the report's averageScore/passRate (computed
 // from shape_completed alone) stay a real-play baseline.
 const SCORED_EVENTS = new Set<AnalyticsEventName>(["shape_completed", "shape_practice_completed"]);
+
+/** Coin economy (exact events) - bounded bucket breakouts into byEconomy / economySum, see economyBreakoutKeys. */
+export const ECONOMY_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["coin_spent", "progression_milestone"]);
 // The web -> Google Play install funnel, and the ONLY events whose `surface` param
 // survives ingest. Every other non-funnel event's params are validated and then
 // dropped here, which for this pair would have meant a CTR that could never be split
@@ -490,6 +503,13 @@ type EventCounters = {
   // recorded before this field existed; merges treat that as 0, not "unknown".
   sumStarRating?: number;
   passedCount?: number;
+  // ECONOMY_BREAKOUT_EVENTS only (coin_spent, progression_milestone): "<dimension>:<value>"
+  // counts whose every part is a closed enum from src/services/economyBuckets.ts -
+  // e.g. "sink:category_unlock", "sinkOrdinal:pen_skin|first",
+  // "milestoneGames:mega_unlocked|50_99" - so the map is bounded by construction.
+  // economySum holds coin totals: "price:<sink>". Absent on every other event.
+  byEconomy?: Record<string, number>;
+  economySum?: Record<string, number>;
   // Count of shape_completed events that actually contributed to sumStarRating/
   // passedCount - NOT the same as `total`, which also includes events recorded
   // before these fields existed. Using `total` as the averaging denominator would
@@ -745,6 +765,22 @@ export function incrementEvent(
       updated.byContentKey = incrementKeyMap(existing.byContentKey, contentKey);
     }
   }
+  // Coin economy. economyBreakoutKeys re-checks every value against its closed enum,
+  // so a direct call with a bad value leaves both maps untouched.
+  if (ECONOMY_BREAKOUT_EVENTS.has(eventName)) {
+    const keys = economyBreakoutKeys(eventName, params);
+    if (keys) {
+      let byEconomy = existing.byEconomy;
+      for (const key of keys) byEconomy = incrementKeyMap(byEconomy, key);
+      updated.byEconomy = byEconomy;
+      if (eventName === "coin_spent") {
+        const sums = { ...(existing.economySum ?? {}) };
+        const sumKey = `price:${params.coinSink as string}`;
+        sums[sumKey] = (sums[sumKey] ?? 0) + (params.price as number);
+        updated.economySum = sums;
+      }
+    }
+  }
   if (SCORED_EVENTS.has(eventName)) {
     const starRating = params.starRating as number;
     const passed = params.passed as boolean;
@@ -753,6 +789,32 @@ export function incrementEvent(
     updated.scoredCount = (existing.scoredCount ?? 0) + 1;
   }
   return { ...counters, [eventName]: updated };
+}
+
+/**
+ * The byEconomy keys one coin_spent / progression_milestone contributes, or null when any
+ * value is outside its closed enum (validateEventParams already guarantees they are not,
+ * for anything that came through ingest).
+ */
+export function economyBreakoutKeys(eventName: AnalyticsEventName, params: Record<string, unknown>): string[] | null {
+  const { balanceBucket: balance, gamesBucket: games, playerAgeBucket: age } = params;
+  if (!isOneOf(BALANCE_BUCKETS, balance) || !isOneOf(GAMES_BUCKETS, games) || !isOneOf(PLAYER_AGE_BUCKETS, age)) return null;
+  if (eventName === "coin_spent") {
+    const { coinSink: sink, spendOrdinal: ordinal, price } = params;
+    if (!isOneOf(COIN_SINKS, sink) || !isOneOf(SPEND_ORDINALS, ordinal) || typeof price !== "number" || !Number.isFinite(price)) return null;
+    return [`sink:${sink}`, `sinkOrdinal:${sink}|${ordinal}`, `sinkBalanceAfter:${sink}|${balance}`, `balanceAfter:${balance}`, `games:${games}`, `age:${age}`];
+  }
+  if (eventName === "progression_milestone") {
+    const { milestone, categoryOrdinal } = params;
+    if (!isOneOf(ECONOMY_MILESTONES, milestone)) return null;
+    const keys = [`milestone:${milestone}`, `milestoneGames:${milestone}|${games}`, `milestoneAge:${milestone}|${age}`, `milestoneBalance:${milestone}|${balance}`];
+    if (milestone === "category_unlocked") {
+      if (typeof categoryOrdinal !== "number" || !Number.isInteger(categoryOrdinal) || categoryOrdinal < 1 || categoryOrdinal > 64) return null;
+      keys.push(`categoryOrdinal:${categoryOrdinal}`, `categoryOrdinalGames:${categoryOrdinal}|${games}`, `categoryOrdinalAge:${categoryOrdinal}|${age}`);
+    }
+    return keys;
+  }
+  return null;
 }
 
 function mergeOptionalSum(a: number | undefined, b: number | undefined): number | undefined {
@@ -904,6 +966,8 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byGameType: mergeKeyMaps(ae.byGameType, be.byGameType),
       byCategory: mergeKeyMaps(ae.byCategory, be.byCategory),
       byContentKey: mergeKeyMaps(ae.byContentKey, be.byContentKey),
+      byEconomy: mergeKeyMaps(ae.byEconomy, be.byEconomy),
+      economySum: mergeKeyMaps(ae.economySum, be.economySum),
       sumStarRating: mergeOptionalSum(ae.sumStarRating, be.sumStarRating),
       passedCount: mergeOptionalSum(ae.passedCount, be.passedCount),
       scoredCount: mergeOptionalSum(ae.scoredCount, be.scoredCount),
@@ -1472,6 +1536,9 @@ export class AnalyticsDO {
       ),
       sources: hybrid.sources,
     };
+    if (url.searchParams.get("economy") === "1") {
+      Object.assign(report, { economy: await this.buildEconomyBlock(buckets, audience, start, end) });
+    }
     if (wantSeries) {
       // Every requested date appears exactly once, zero-filled when nothing was
       // recorded, so chart clients never have to reconstruct missing days. Per-day
@@ -1488,6 +1555,27 @@ export class AnalyticsDO {
       return jsonNoStore({ ...report, days: dates.map((date) => ({ date, counts: perDay(date) })) });
     }
     return jsonNoStore(report);
+  }
+
+  /**
+   * The opt-in coin-economy block (analyticsEconomyReport.ts): exact spends/milestones from
+   * the DO counters, plus - when AE reporting is configured and the range is AE-covered -
+   * the rewarded-offer funnel by economy state, balance distribution and coin source mix.
+   * An AE failure never fails the report: the exact half is still returned.
+   */
+  private async buildEconomyBlock(buckets: RangeBuckets, audience: AudienceFilter, start: string, end: string) {
+    const counts = this.countsForAudience(buckets, audience);
+    const exact = economyExactFromCounters(counts.coin_spent, counts.progression_milestone);
+    const client =
+      this.aeFetchOverride ??
+      (this.env.ANALYTICS_AE_READ_TOKEN && this.env.ANALYTICS_AE_ACCOUNT_ID ? aeSqlClient(this.env.ANALYTICS_AE_ACCOUNT_ID, this.env.ANALYTICS_AE_READ_TOKEN) : null);
+    const window = coveredWindow(start, end, Date.now());
+    if (!client || !window) return { ...exact, telemetry: null, telemetryReason: !client ? "Analytics Engine reporting not configured" : "range not covered by Analytics Engine" };
+    try {
+      return { ...exact, telemetry: await fetchEconomyTelemetry(client, window.startMs, window.endMs, audience), telemetryDates: window.dates };
+    } catch (err) {
+      return { ...exact, telemetry: null, telemetryReason: `Analytics Engine query failed: ${String((err as Error)?.message ?? err).slice(0, 120)}` };
+    }
   }
 
   /** The running since-launch totals ("alltime" bucket) that ingestion has always maintained - startDate reports the first day that ever recorded an event. */

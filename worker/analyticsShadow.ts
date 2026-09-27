@@ -62,6 +62,16 @@
 //   double5  roundCount     double6 roundIndex  double7 playerCount  double8 price
 //   double9  gamesBetweenAds  double10 amount   double11 submitted  double12 hadCache
 //   double13 batchSize (envelopes in the request, valid or not)
+//   --- schema 2 (coin economy; 0 = the event carries no economy context) ---
+//   double14 balanceBucket     1-based position in BALANCE_BUCKETS
+//   double15 shortfallBucket   1-based position in SHORTFALL_BUCKETS
+//   double16 nextTarget        1-based position in NEXT_TARGETS
+//   double17 multiplier        2 | 3 (reward offer funnel)
+//   double18 offerFlags        1 + (adAvailable ? 1 : 0) + (adClosesGap ? 2 : 0), i.e. 1..4
+//   double19 coins             game_completed coinsEarned | reward offer baseReward
+//   double20 gamesBucket       1-based position in GAMES_BUCKETS
+// coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
+// balance BUCKET is ever written - never a balance.
 // Booleans are 1/0 and absent numbers are 0, so always filter on blob1 before reading
 // a double. Counts must use sum(_sample_interval), never count(): AE samples at write
 // time even at low volume (the probe stored 21 rows for a 200-point burst).
@@ -71,8 +81,9 @@ import { normalizeAnalyticsPlatform, normalizeAppVersion, normalizeAppVersionCod
 import { checkedEnvelopes, parseIngest, type CheckedEnvelope, type ParsedIngest } from "./analyticsIngest";
 import { normalizeAttribution } from "../src/services/analyticsAttribution";
 import { normalizeAnalyticsAudience } from "../src/services/analyticsUsage";
+import { BALANCE_BUCKETS, GAMES_BUCKETS, NEXT_TARGETS, SHORTFALL_BUCKETS, bucketPosition } from "../src/services/economyBuckets";
 
-export const AE_SCHEMA_VERSION = 1;
+export const AE_SCHEMA_VERSION = 2;
 
 /**
  * The index is a random bucket, "b00".."b63", drawn per data point.
@@ -96,7 +107,23 @@ type ShadowPath = "/event" | "/events";
 export type ShadowDataPoint = { blobs: string[]; doubles: number[]; indexes: string[] };
 
 /** Bounded enum params, first match wins. Every one is a closed set in analyticsSchema. */
-const DETAIL_PARAMS = ["difficulty", "phase", "tutorialType", "productType", "rarity", "surface", "installAge", "newRank"] as const;
+const DETAIL_PARAMS = ["difficulty", "phase", "tutorialType", "productType", "rarity", "surface", "installAge", "newRank", "coinSink", "coinSource", "milestone"] as const;
+
+/** The schema-2 economy doubles (14..20) for one accepted envelope's params; all 0 when it carries none. */
+export function economyDoubles(params: Record<string, unknown>): number[] {
+  const hasOffer = typeof params.adAvailable === "boolean";
+  const flags = hasOffer ? 1 + (params.adAvailable ? 1 : 0) + (params.adClosesGap === true ? 2 : 0) : 0;
+  const coins = typeof params.coinsEarned === "number" ? params.coinsEarned : typeof params.baseReward === "number" ? params.baseReward : 0;
+  return [
+    bucketPosition(BALANCE_BUCKETS, params.balanceBucket),
+    bucketPosition(SHORTFALL_BUCKETS, params.shortfallBucket),
+    bucketPosition(NEXT_TARGETS, params.nextTarget),
+    params.multiplier === 2 || params.multiplier === 3 ? params.multiplier : 0,
+    flags,
+    coins,
+    bucketPosition(GAMES_BUCKETS, params.gamesBucket),
+  ];
+}
 
 const FUNNEL = new Set(["game_started", "game_completed", "result_shared"]);
 
@@ -175,6 +202,7 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       num(params.submitted),
       num(params.hadCache),
       batchSize,
+      ...economyDoubles(params),
     ],
     indexes: [`b${String(bucket).padStart(2, "0")}`],
   };

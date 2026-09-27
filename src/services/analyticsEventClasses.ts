@@ -31,6 +31,8 @@ export const CLIENT_EXACT_EVENTS: ReadonlySet<string> = new Set([
   "purchase_completed",
   "shop_purchase_with_coins",
   "mega_card_unlocked",
+  "coin_spent",
+  "progression_milestone",
   "rewarded_ad_requested",
   "rewarded_ad_loaded",
   "rewarded_ad_shown",

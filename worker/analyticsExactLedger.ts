@@ -64,6 +64,11 @@ export const EXACT_LEDGER_EVENTS: ReadonlySet<string> = new Set([
   "purchase_completed",
   "shop_purchase_with_coins",
   "mega_card_unlocked",
+  // Coin economy: every spend and the once-per-player progression milestones. Low
+  // volume (well under 1 per session) and the answer to "do players reach the 1,000 /
+  // 10,000 targets" - a sampled count could not be trusted.
+  "coin_spent",
+  "progression_milestone",
   // Rewarded ad funnel outcomes.
   "rewarded_ad_requested",
   "rewarded_ad_loaded",

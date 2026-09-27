@@ -31,6 +31,27 @@ import {
   type InterstitialFailureReason,
   type InterstitialOutcome,
 } from "./ads/interstitialConfigSchema";
+import {
+  BALANCE_BUCKETS,
+  COIN_EARNED_SOURCES,
+  COIN_SINKS,
+  ECONOMY_MILESTONES,
+  GAMES_BUCKETS,
+  NEXT_TARGETS,
+  PLAYER_AGE_BUCKETS,
+  SHORTFALL_BUCKETS,
+  SPEND_ORDINALS,
+  isOneOf,
+  type BalanceBucket,
+  type CoinEarnedSource,
+  type CoinSink,
+  type EconomyMilestone,
+  type GamesBucket,
+  type NextTarget,
+  type PlayerAgeBucket,
+  type ShortfallBucket,
+  type SpendOrdinal,
+} from "./economyBuckets";
 
 export type GameType =
   | "shapeChallenge"
@@ -124,6 +145,26 @@ export type InstallAgeParam = (typeof INSTALL_AGE_PARAMS)[number];
 export function isInstallAgeParam(value: unknown): value is InstallAgeParam {
   return typeof value === "string" && (INSTALL_AGE_PARAMS as readonly string[]).includes(value);
 }
+
+/** Coins a game paid, and the balance bucket after crediting them. */
+export type GameCompletedCoins = { coinsEarned: number; balanceBucket: BalanceBucket };
+
+/** Economy context carried by the reward-offer funnel (all keys or none). */
+export type RewardOfferEconomy = {
+  balanceBucket: BalanceBucket;
+  baseReward: number;
+  multiplier: 2 | 3;
+  adAvailable: boolean;
+  nextTarget: NextTarget;
+  shortfallBucket: ShortfallBucket;
+  adClosesGap: boolean;
+  gamesBucket: GamesBucket;
+};
+export type RewardOfferParams = { placement: RewardedAdPlacement } | ({ placement: RewardedAdPlacement } & RewardOfferEconomy);
+
+const REWARD_OFFER_ECONOMY_KEYS = ["balanceBucket", "baseReward", "multiplier", "adAvailable", "nextTarget", "shortfallBucket", "adClosesGap", "gamesBucket"] as const;
+/** Bounds: a real reward/earn is far below these; a value past them is a bug, dropped rather than stored. */
+const MAX_ECONOMY_COINS = 100_000;
 
 export type EventParamsMap = {
   app_open: Record<string, never>;
@@ -228,7 +269,10 @@ export type EventParamsMap = {
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
   artist_pack_link_clicked: { artistKey: string; packKey: string; hasAffiliate: boolean };
   game_started: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
-  game_completed: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
+  // Coin-earning modes append GameCompletedCoins (coins this game paid + resulting
+  // balance BUCKET) - see economyAnalytics.ts. Optional and all-or-nothing, so every
+  // older client's three-key payload stays valid.
+  game_completed: { gameType: GameType; category: CategoryOrCustom; contentKey: string } | ({ gameType: GameType; category: CategoryOrCustom; contentKey: string } & GameCompletedCoins);
   result_shared: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
   // Daily challenge episode referenced a shape this client couldn't resolve
   // (old cached catalog / offline) and a safe local substitute was played
@@ -262,11 +306,17 @@ export type EventParamsMap = {
   // fallback_used is retained for historical data only: the math-quiz path it tracked
   // is now dev-only, so user-facing builds never emit it. `placement` only - no PII,
   // no new identifiers.
-  reward_offer_shown: { placement: RewardedAdPlacement };
-  reward_ad_started: { placement: RewardedAdPlacement };
-  reward_ad_completed: { placement: RewardedAdPlacement };
-  reward_ad_failed: { placement: RewardedAdPlacement };
-  reward_skipped: { placement: RewardedAdPlacement };
+  //
+  // Economy context (RewardOfferEconomy, appended by every current client): the
+  // player's balance BUCKET, the offer's base reward and multiplier, whether a
+  // rewarded ad could actually be served when the offer rendered, the next unlock
+  // target and the shortfall to it. Optional and all-or-nothing, so older clients'
+  // placement-only payloads stay valid.
+  reward_offer_shown: RewardOfferParams;
+  reward_ad_started: RewardOfferParams;
+  reward_ad_completed: RewardOfferParams;
+  reward_ad_failed: RewardOfferParams;
+  reward_skipped: RewardOfferParams;
   reward_fallback_used: { placement: RewardedAdPlacement };
   // The SAME offer funnel, for the periodic 3× bonus round only (app/bonusRewardRound.ts).
   // Mirrored EVENT NAMES rather than a `multiplier`/`rewardType` param, because the
@@ -275,11 +325,11 @@ export type EventParamsMap = {
   // new field would be silently discarded and could never be reported on. A ×3 round
   // emits only these, never the plain ones, so the two sets stay disjoint and the
   // existing reward_* counts remain a clean ×2-only baseline.
-  reward_bonus_offer_shown: { placement: RewardedAdPlacement };
-  reward_bonus_ad_started: { placement: RewardedAdPlacement };
-  reward_bonus_ad_completed: { placement: RewardedAdPlacement };
-  reward_bonus_ad_failed: { placement: RewardedAdPlacement };
-  reward_bonus_skipped: { placement: RewardedAdPlacement };
+  reward_bonus_offer_shown: RewardOfferParams;
+  reward_bonus_ad_started: RewardOfferParams;
+  reward_bonus_ad_completed: RewardOfferParams;
+  reward_bonus_ad_failed: RewardOfferParams;
+  reward_bonus_skipped: RewardOfferParams;
   /** The one-per-session nudge after 3 consecutive skips actually rendered. */
   reward_reminder_shown: { placement: RewardedAdPlacement };
   /** The one-time "watch a short ad to double" explainer actually rendered - fires at
@@ -291,6 +341,16 @@ export type EventParamsMap = {
    * its own and we deliberately add no attribution plumbing for it. */
   create_discovery_shown: Record<string, never>;
   create_discovery_accepted: Record<string, never>;
+  // --- Coin economy (src/services/economyAnalytics.ts) ------------------------
+  // Balances are buckets only (economyBuckets.ts). coin_spent and
+  // progression_milestone are EXACT (never sampled, durable ledger); coin_earned is
+  // telemetry and covers only the sources no existing event carries.
+  /** Every coin spend, from coinsStore.spendCoins - the sink is a required argument there. */
+  coin_spent: { coinSink: CoinSink; price: number; balanceBucket: BalanceBucket; gamesBucket: GamesBucket; playerAgeBucket: PlayerAgeBucket; spendOrdinal: SpendOrdinal };
+  /** Once-per-player progression points (category_unlocked once per paid category). categoryOrdinal is 0 except on category_unlocked. */
+  progression_milestone: { milestone: EconomyMilestone; categoryOrdinal: number; balanceBucket: BalanceBucket; gamesBucket: GamesBucket; playerAgeBucket: PlayerAgeBucket };
+  /** Coins from sources that are not a game completion (achievements, chests, daily prizes), summed per source per tick. */
+  coin_earned: { coinSource: CoinEarnedSource; amount: number; balanceBucket: BalanceBucket };
   /** A challenge was created and saved - from the discovery prompt or anywhere else,
    * so this doubles as the overall "challenges created" measure. */
   challenge_created: Record<string, never>;
@@ -364,6 +424,9 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "create_discovery_shown",
   "create_discovery_accepted",
   "challenge_created",
+  "coin_spent",
+  "progression_milestone",
+  "coin_earned",
   "play_store_cta_shown",
   "play_store_click",
   "mp_room_created",
@@ -578,7 +641,7 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     return { valid: true, params: { artistKey, packKey, hasAffiliate } };
   },
   game_started: (p) => validateFunnelEvent(p),
-  game_completed: (p) => validateFunnelEvent(p),
+  game_completed: (p) => validateGameCompleted(p),
   result_shared: (p) => validateFunnelEvent(p),
   daily_shape_fallback: (p) => {
     if (!isRecord(p) || !hasExactKeys(p, ["contentKey", "substituteKey", "hadCache"])) return { valid: false };
@@ -607,23 +670,46 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     return { valid: true, params: { reason: p.reason } };
   },
   interstitial_dismissed: (p) => validateNoParams(p),
-  reward_offer_shown: (p) => validateAdEvent(p),
-  reward_ad_started: (p) => validateAdEvent(p),
-  reward_ad_completed: (p) => validateAdEvent(p),
-  reward_ad_failed: (p) => validateAdEvent(p),
-  reward_skipped: (p) => validateAdEvent(p),
+  reward_offer_shown: (p) => validateRewardOfferEvent(p),
+  reward_ad_started: (p) => validateRewardOfferEvent(p),
+  reward_ad_completed: (p) => validateRewardOfferEvent(p),
+  reward_ad_failed: (p) => validateRewardOfferEvent(p),
+  reward_skipped: (p) => validateRewardOfferEvent(p),
   reward_fallback_used: (p) => validateAdEvent(p),
-  reward_bonus_offer_shown: (p) => validateAdEvent(p),
-  reward_bonus_ad_started: (p) => validateAdEvent(p),
-  reward_bonus_ad_completed: (p) => validateAdEvent(p),
-  reward_bonus_ad_failed: (p) => validateAdEvent(p),
-  reward_bonus_skipped: (p) => validateAdEvent(p),
+  reward_bonus_offer_shown: (p) => validateRewardOfferEvent(p),
+  reward_bonus_ad_started: (p) => validateRewardOfferEvent(p),
+  reward_bonus_ad_completed: (p) => validateRewardOfferEvent(p),
+  reward_bonus_ad_failed: (p) => validateRewardOfferEvent(p),
+  reward_bonus_skipped: (p) => validateRewardOfferEvent(p),
   reward_reminder_shown: (p) => validateAdEvent(p),
   reward_double_tutorial_shown: (p) => validateAdEvent(p),
   result_actions_tutorial_shown: (p) => validateAdEvent(p),
   create_discovery_shown: (p) => validateNoParams(p),
   create_discovery_accepted: (p) => validateNoParams(p),
   challenge_created: (p) => validateNoParams(p),
+  coin_spent: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["coinSink", "price", "balanceBucket", "gamesBucket", "playerAgeBucket", "spendOrdinal"])) return { valid: false };
+    const { coinSink, price, balanceBucket, gamesBucket, playerAgeBucket, spendOrdinal } = p;
+    if (!isOneOf(COIN_SINKS, coinSink) || !isIntInRange(price, 1, MAX_ECONOMY_COINS)) return { valid: false };
+    if (!isOneOf(BALANCE_BUCKETS, balanceBucket) || !isOneOf(GAMES_BUCKETS, gamesBucket)) return { valid: false };
+    if (!isOneOf(PLAYER_AGE_BUCKETS, playerAgeBucket) || !isOneOf(SPEND_ORDINALS, spendOrdinal)) return { valid: false };
+    return { valid: true, params: { coinSink, price, balanceBucket, gamesBucket, playerAgeBucket, spendOrdinal } };
+  },
+  progression_milestone: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["milestone", "categoryOrdinal", "balanceBucket", "gamesBucket", "playerAgeBucket"])) return { valid: false };
+    const { milestone, categoryOrdinal, balanceBucket, gamesBucket, playerAgeBucket } = p;
+    if (!isOneOf(ECONOMY_MILESTONES, milestone)) return { valid: false };
+    // 1..64 on category_unlocked (the nth paid category), 0 on every other milestone.
+    if (milestone === "category_unlocked" ? !isIntInRange(categoryOrdinal, 1, 64) : categoryOrdinal !== 0) return { valid: false };
+    if (!isOneOf(BALANCE_BUCKETS, balanceBucket) || !isOneOf(GAMES_BUCKETS, gamesBucket) || !isOneOf(PLAYER_AGE_BUCKETS, playerAgeBucket)) return { valid: false };
+    return { valid: true, params: { milestone, categoryOrdinal: categoryOrdinal as number, balanceBucket, gamesBucket, playerAgeBucket } };
+  },
+  coin_earned: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["coinSource", "amount", "balanceBucket"])) return { valid: false };
+    const { coinSource, amount, balanceBucket } = p;
+    if (!isOneOf(COIN_EARNED_SOURCES, coinSource) || !isIntInRange(amount, 1, MAX_ECONOMY_COINS) || !isOneOf(BALANCE_BUCKETS, balanceBucket)) return { valid: false };
+    return { valid: true, params: { coinSource, amount, balanceBucket } };
+  },
   play_store_cta_shown: (p) => validatePlayStoreEvent(p),
   play_store_click: (p) => validatePlayStoreEvent(p),
 };
@@ -744,6 +830,45 @@ function validateFunnelEvent<E extends "game_started" | "game_completed" | "resu
   if (!isCategoryOrCustom(category)) return { valid: false };
   if (!isSafeString(contentKey)) return { valid: false };
   return { valid: true, params: { gameType, category, contentKey } as EventParamsMap[E] };
+}
+
+/** game_completed: the three funnel keys, plus - all or nothing - the coin block (GameCompletedCoins). */
+function validateGameCompleted(p: unknown): ValidationResult<"game_completed"> {
+  if (!isRecord(p)) return { valid: false };
+  if (!("coinsEarned" in p) && !("balanceBucket" in p)) return validateFunnelEvent<"game_completed">(p);
+  const { coinsEarned, balanceBucket, ...funnel } = p;
+  const base = validateFunnelEvent<"game_completed">(funnel);
+  if (!base.valid) return base;
+  if (!isIntInRange(coinsEarned, 0, MAX_ECONOMY_COINS) || !isOneOf(BALANCE_BUCKETS, balanceBucket)) return { valid: false };
+  return { valid: true, params: { ...base.params, coinsEarned, balanceBucket } };
+}
+
+/** The reward-offer funnel: placement, plus - all or nothing - the RewardOfferEconomy block. */
+function validateRewardOfferEvent<
+  E extends
+    | "reward_offer_shown"
+    | "reward_ad_started"
+    | "reward_ad_completed"
+    | "reward_ad_failed"
+    | "reward_skipped"
+    | "reward_bonus_offer_shown"
+    | "reward_bonus_ad_started"
+    | "reward_bonus_ad_completed"
+    | "reward_bonus_ad_failed"
+    | "reward_bonus_skipped",
+>(p: unknown): ValidationResult<E> {
+  if (!isRecord(p)) return { valid: false };
+  if (Object.keys(p).length === 1) return validateAdEvent(p) as ValidationResult<E>;
+  if (!hasExactKeys(p, ["placement", ...REWARD_OFFER_ECONOMY_KEYS])) return { valid: false };
+  const { placement, balanceBucket, baseReward, multiplier, adAvailable, nextTarget, shortfallBucket, adClosesGap, gamesBucket } = p;
+  if (!isRewardedAdPlacement(placement)) return { valid: false };
+  if (!isOneOf(BALANCE_BUCKETS, balanceBucket) || !isIntInRange(baseReward, 1, MAX_ECONOMY_COINS)) return { valid: false };
+  if ((multiplier !== 2 && multiplier !== 3) || !isBoolean(adAvailable) || !isBoolean(adClosesGap)) return { valid: false };
+  if (!isOneOf(NEXT_TARGETS, nextTarget) || !isOneOf(SHORTFALL_BUCKETS, shortfallBucket) || !isOneOf(GAMES_BUCKETS, gamesBucket)) return { valid: false };
+  return {
+    valid: true,
+    params: { placement, balanceBucket, baseReward, multiplier, adAvailable, nextTarget, shortfallBucket, adClosesGap, gamesBucket } as EventParamsMap[E],
+  };
 }
 
 /** All-or-nothing: an unknown event name or any single invalid/extra/missing param fails the whole event. */

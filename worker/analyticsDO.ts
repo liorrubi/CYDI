@@ -56,6 +56,17 @@ import {
   type AeFetch,
   type AeTelemetry,
 } from "./analyticsAeReport";
+import {
+  MAX_SEEN_IDS_PER_DAY,
+  SEEN_INDEX_KEY,
+  containsEventId,
+  normalizeEventId,
+  retentionCutoff,
+  seenStorageKey,
+} from "./analyticsEventDedup";
+
+/** What ingesting one envelope did. A duplicate is accepted (2xx) but not counted again. */
+type IngestOutcome = "counted" | "duplicate" | "invalid";
 
 // Single global Durable Object instance (see worker/index.ts's forwardToAnalyticsDO,
 // same pattern as DailyChallengeDO) so every /event write is processed one at a time -
@@ -960,6 +971,14 @@ export class AnalyticsDO {
    */
   private lastFlushAt = 0;
   private pendingEvents = 0;
+  /**
+   * Exact-event dedup (analyticsEventDedup.ts). Loaded lazily, on the first envelope that
+   * carries a valid eventId, so traffic without ids never reads or writes a `seen:` key.
+   */
+  private seenLoadedFor: string | null = null;
+  private seenDays: string[] = [];
+  private seenCache = new Map<string, string>();
+  private seenDeletes: string[] = [];
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -1010,6 +1029,48 @@ export class AnalyticsDO {
     return stored;
   }
 
+  /**
+   * Seen ids for the retention window ending on `dateKey`: the index plus every day key
+   * still inside the window, in one multi-key read. Days that fell out of the window are
+   * dropped from the index and deleted at the next flush.
+   */
+  private async loadSeen(dateKey: string): Promise<void> {
+    if (this.seenLoadedFor === dateKey) return;
+    const cutoff = retentionCutoff(dateKey);
+    const index = this.seenLoadedFor !== null ? this.seenDays : ((await this.state.storage.get<string[]>(SEEN_INDEX_KEY)) ?? []);
+    const keep = index.filter((d) => d >= cutoff);
+    const expired = index.filter((d) => d < cutoff);
+    // Days this instance already holds are authoritative (they may be newer than storage).
+    const missing = keep.filter((d) => !this.seenCache.has(d));
+    const stored = missing.length > 0 ? await this.state.storage.get<string>(missing.map(seenStorageKey)) : new Map<string, string>();
+    for (const d of missing) this.seenCache.set(d, stored.get(seenStorageKey(d)) ?? "");
+    for (const d of expired) this.seenCache.delete(d);
+    this.seenDays = keep;
+    if (expired.length > 0) {
+      this.seenDeletes.push(...expired.map(seenStorageKey));
+      this.dirty.add(SEEN_INDEX_KEY);
+    }
+    this.seenLoadedFor = dateKey;
+  }
+
+  private hasSeen(eventId: string): boolean {
+    for (const ids of this.seenCache.values()) if (containsEventId(ids, eventId)) return true;
+    return false;
+  }
+
+  /** Marks the id seen today, in the same buffer as the counters it guards. False once the day is full. */
+  private recordSeen(dateKey: string, eventId: string): boolean {
+    const ids = this.seenCache.get(dateKey) ?? "";
+    if (ids.length / eventId.length >= MAX_SEEN_IDS_PER_DAY) return false;
+    this.seenCache.set(dateKey, ids + eventId);
+    this.dirty.add(seenStorageKey(dateKey));
+    if (!this.seenDays.includes(dateKey)) {
+      this.seenDays = [...this.seenDays, dateKey].sort();
+      this.dirty.add(SEEN_INDEX_KEY);
+    }
+    return true;
+  }
+
   /** True when the buffer has reached either budget and the current request must write it out. */
   private flushDue(now: number): boolean {
     return this.pendingEvents >= MAX_PENDING_EVENTS || now - this.lastFlushAt >= FLUSH_INTERVAL_MS;
@@ -1033,6 +1094,8 @@ export class AnalyticsDO {
     const entries: Record<string, unknown> = {};
     for (const key of keys) {
       if (key === DAYS_KEY) entries[key] = this.days;
+      else if (key === SEEN_INDEX_KEY) entries[key] = this.seenDays;
+      else if (key.startsWith("seen:")) entries[key] = this.seenCache.get(key.slice("seen:".length)) ?? "";
       else if (this.usageCache.has(key)) entries[key] = this.usageCache.get(key);
       else entries[key] = this.counterCache.get(key);
     }
@@ -1044,6 +1107,17 @@ export class AnalyticsDO {
     }
     this.lastFlushAt = Date.now();
     this.pendingEvents = 0;
+    // Expired dedup days, after the index that no longer lists them is safely stored. A
+    // failed delete only leaves an unlisted key behind, which is never read again.
+    if (this.seenDeletes.length > 0) {
+      const doomed = this.seenDeletes;
+      this.seenDeletes = [];
+      try {
+        await this.state.storage.delete(doomed);
+      } catch {
+        /* harmless: unlisted keys are never read */
+      }
+    }
   }
 
   /**
@@ -1083,13 +1157,13 @@ export class AnalyticsDO {
     country: string,
     countRequest = false,
     keepPercent: number = FULL_KEEP_PERCENT,
-  ): Promise<boolean> {
+  ): Promise<IngestOutcome> {
     const b = body as Record<string, unknown> | null;
     const eventName = b?.eventName;
-    if (!isAnalyticsEventName(eventName)) return false;
+    if (!isAnalyticsEventName(eventName)) return "invalid";
 
     const validated = validateEventParams(eventName, b?.params);
-    if (!validated.valid) return false;
+    if (!validated.valid) return "invalid";
     const params = validated.params as unknown as Record<string, unknown>;
     // Coerced to a closed set, and never rejected: an event from an older client
     // that sends no platform is still recorded, just as "unknown". The three
@@ -1128,6 +1202,25 @@ export class AnalyticsDO {
 
     const alltimeKey = this.alltimeStorageKey(audience);
     const dayKey = this.dayStorageKey(dateKey, audience);
+
+    // Exact-event dedup: an id already counted inside the retention window is accepted but
+    // not counted again. The request itself still happened, so it keeps its request count.
+    // No id (every client up to 0.53.x) -> none of this runs and nothing new is read.
+    const eventId = normalizeEventId(b?.eventId);
+    if (eventId !== null) {
+      await this.loadSeen(dateKey);
+      if (this.hasSeen(eventId)) {
+        if (countRequest) {
+          const [alltimeNow, dayNow] = await Promise.all([this.loadCounters(alltimeKey), this.loadCounters(dayKey)]);
+          this.counterCache.set(alltimeKey, incrementRequestCountry(alltimeNow, country, keepPercent));
+          this.counterCache.set(dayKey, incrementRequestCountry(dayNow, country, keepPercent));
+          this.dirty.add(alltimeKey);
+          this.dirty.add(dayKey);
+        }
+        return "duplicate";
+      }
+      this.recordSeen(dateKey, eventId);
+    }
     const usageKey = this.usageStorageKey(dateKey);
     const [alltime, dayCounters, usage] = await Promise.all([
       this.loadCounters(alltimeKey),
@@ -1171,7 +1264,7 @@ export class AnalyticsDO {
     }
 
     this.pendingEvents++;
-    return true;
+    return "counted";
   }
 
   /**
@@ -1199,7 +1292,7 @@ export class AnalyticsDO {
     // Split so the two failure modes stay distinguishable for a single event, which
     // is the contract old clients already rely on.
     if (!isAnalyticsEventName(b?.eventName)) return json({ error: "invalid event" }, 400);
-    if (!(await this.ingestOne(body, country, true, keepPercent))) return json({ error: "invalid params" }, 400);
+    if ((await this.ingestOne(body, country, true, keepPercent)) === "invalid") return json({ error: "invalid params" }, 400);
     await this.flushIfDue();
     return json({ ok: true });
   }
@@ -1220,14 +1313,17 @@ export class AnalyticsDO {
     if (events.length > MAX_BATCH_EVENTS) return json({ error: "batch too large" }, 400);
 
     let accepted = 0;
+    let duplicates = 0;
     // The whole batch is ONE DO request, so the request counter is offered to each
     // entry until one is actually ingested, and then never again for this batch.
     let requestCounted = false;
     for (const event of events) {
-      if (await this.ingestOne(event, country, !requestCounted, keepPercent)) {
-        accepted++;
-        requestCounted = true;
-      }
+      const outcome = await this.ingestOne(event, country, !requestCounted, keepPercent);
+      if (outcome === "invalid") continue;
+      // A duplicate is accepted (the client must not resend it) but not counted again.
+      accepted++;
+      if (outcome === "duplicate") duplicates++;
+      requestCounted = true;
     }
     // Phase 2 exact ledger (`/ledger`, analyticsExactLedger.ts): persist BEFORE answering,
     // whatever the buffer budget says. Output gating guarantees the put lands before the
@@ -1235,7 +1331,7 @@ export class AnalyticsDO {
     // discard. Anything an earlier `/events` request left buffered is persisted with it.
     if (durable) await this.flush();
     else await this.flushIfDue();
-    return json({ ok: true, accepted, rejected: events.length - accepted, ...(durable ? { durable: true } : {}) });
+    return json({ ok: true, accepted, rejected: events.length - accepted, ...(duplicates > 0 ? { duplicates } : {}), ...(durable ? { durable: true } : {}) });
   }
 
   /**

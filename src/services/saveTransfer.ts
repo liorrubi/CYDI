@@ -1,6 +1,7 @@
 import { SAVE_SCHEMA_VERSION, type SaveData } from "./saveData";
 import { backupCurrentSaveData, getSaveData, replaceSaveData } from "./saveStore";
 import { MAX_SHARE_POINTS } from "./shareLink";
+import { onSaveRestored } from "./economyAnalytics";
 
 function encodeUtf8Base64(text: string): string {
   const bytes = new TextEncoder().encode(text);
@@ -85,5 +86,7 @@ export function importSaveCode(code: string): ImportResult {
   }
 
   replaceSaveData(parsed);
+  // Economy analytics state described the replaced save - rebuild it from the restored one.
+  onSaveRestored();
   return { ok: true };
 }

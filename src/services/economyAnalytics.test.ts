@@ -230,3 +230,20 @@ test("every rewarded-offer funnel event carries the offer's economy context; the
   assert.match(screen, /if \(offerSkipReporterRef\.current\) offerSkipReporterRef\.current\(\);/, "leaving a ×3 offer records reward_bonus_skipped, not reward_skipped");
   assert.equal((screen.match(/onSkipReporter=/g) ?? []).length, 2, "both result layouts wire the reporter");
 });
+
+test("Backup & Transfer restore of a veteran save onto a fresh install: unknown history, no false 'first' milestones", () => {
+  freshPlayer(0); // brand-new install, tracking started (d0)
+  updateSaveData((d) => {
+    d.progress.coins = 6500;
+    d.progress.completedRounds = 120;
+  }); // what replaceSaveData(parsed) leaves behind
+  E.onSaveRestored();
+  addCoins(80, "shape_stars");
+  spendCoins(500, "chest_key");
+  assert.equal(named("progression_milestone").length, 0, "the restored 6,500 had already crossed 1,000 - not a milestone now");
+  const [spend] = named("coin_spent");
+  assert.equal(spend.params.playerAgeBucket, "unknown");
+  assert.equal(spend.params.spendOrdinal, "unknown");
+  const transfer = readFileSync(join(import.meta.dirname, "saveTransfer.ts"), "utf8");
+  assert.match(transfer, /replaceSaveData\(parsed\);\s*\/\/[^\n]*\n\s*onSaveRestored\(\);/, "the import path rebuilds the economy state");
+});

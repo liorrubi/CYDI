@@ -227,3 +227,42 @@ test("economy report block: exact half from the DO, telemetry from AE, AE failur
   const plain = (await (await obj.fetch(new Request(`https://analytics.internal/report?period=range&start=${d}&end=${d}`, { headers: { authorization: "Bearer t" } }))).json()) as Record<string, unknown>;
   assert.equal("economy" in plain, false, "opt-in: a normal report runs no economy queries");
 });
+
+// ------------------------------------------------ live Phase 2 routing ----
+
+const { handleAnalyticsEvent } = await import("./index.ts");
+const { _resetAnalyticsBreakerCacheForTests } = await import("./analyticsBreaker.ts");
+
+test("under the LIVE Phase 2 config, coin_spent / progression_milestone travel the durable /ledger path at keep 100 - not the shed path", async () => {
+  // Production today: exactLedger on, telemetryToDo false, rollback rate 10, legacy shedding ELEVATED 10%.
+  const live = { disabled: false, shed: { monitorOnly: false, globalMode: "ELEVATED", globalKeepPercent: 10, countries: {}, preserveExtra: [], expiresAt: "2099-01-01T00:00:00Z" }, exactLedger: { enabled: true, telemetryToDo: false, telemetrySamplePercent: 10 } };
+  _resetAnalyticsBreakerCacheForTests();
+  const calls: { path: string; body: string; keep: string | null }[] = [];
+  const env = {
+    CONTENT_KV: { get: async () => JSON.stringify(live) },
+    ANALYTICS_AE: { writeDataPoint() {} },
+    ANALYTICS_DO: {
+      idFromName: (name: string) => ({ name }),
+      get: () => ({
+        fetch: async (url: string, init: RequestInit) => {
+          const body = init.body instanceof ReadableStream ? await new Response(init.body).text() : String(init.body ?? "");
+          calls.push({ path: new URL(url).pathname, body, keep: new Headers(init.headers).get("x-cydi-shed-keep") });
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        },
+      }),
+    },
+  } as unknown as Parameters<typeof handleAnalyticsEvent>[1];
+  const real = Math.random;
+  Math.random = () => 0.99; // a roll that would shed anything sheddable
+  try {
+    const events = [env1("coin_spent", SPENT), env1("progression_milestone", MILESTONE), env1("coin_earned", { coinSource: "daily_chest", amount: 90, balanceBucket: "0_99" }), env1("game_completed", { ...GAME, coinsEarned: 35, balanceBucket: "100_499" })];
+    const res = await handleAnalyticsEvent(new Request("https://playcydi.com/api/analytics/events", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }) }), env, "/events", { waitUntil: () => {} });
+    assert.ok(res.status >= 200 && res.status < 300);
+  } finally {
+    Math.random = real;
+  }
+  assert.equal(calls.length, 1, "one DO request");
+  assert.equal(calls[0].path, "/ledger", "the durable exact ledger");
+  assert.equal(calls[0].keep, "100", "exact events are never a sample");
+  assert.deepEqual((JSON.parse(calls[0].body).events as { eventName: string }[]).map((e) => e.eventName), ["coin_spent", "progression_milestone"], "telemetry (coin_earned, enriched game_completed) goes to AE only");
+});

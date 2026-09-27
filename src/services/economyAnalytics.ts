@@ -130,6 +130,24 @@ function saveState(): void {
   }
 }
 
+/**
+ * A Backup & Transfer import just replaced the whole save. The tracking state belonged to
+ * the save that was on the device, so it is rebuilt from the restored one: a restored save
+ * with progress is an existing player of unknown start date and spend history (never a
+ * "day 0" player), and a 1,000 / 10,000 threshold it already holds is not a milestone
+ * reached now. An empty restored save keeps the current state.
+ */
+export function onSaveRestored(): void {
+  try {
+    const restored = freshState(Date.now());
+    if (restored.firstSeenAt !== null) return; // restored save shows no progress: nothing to correct
+    memoryState = restored;
+    saveState();
+  } catch {
+    /* never break a restore */
+  }
+}
+
 /** Starts tracking (records first-seen) on app launch, so days-playing counts from the first run, not the first coin. */
 export function initEconomyAnalytics(): void {
   try {

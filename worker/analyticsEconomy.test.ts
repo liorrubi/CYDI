@@ -209,6 +209,9 @@ test("economy report: offer -> start -> completion conversion by balance, shortf
   const q = buildEconomyAeQueries(0, 86_400_000);
   assert.equal(Object.keys(q).length, 8);
   for (const sql of Object.values(q)) assert.match(sql, /double1 >= 2/, "only schema-2 rows");
+  // Analytics Engine SQL has no multiIf (live 422 on 27 Sep 2026); bucket with nested if().
+  for (const sql of Object.values(q)) assert.doesNotMatch(sql, /multiIf/i, "AE SQL does not support multiIf");
+  assert.match(q.funnelReward, /if\(double18 < 50, 1, if\(double18 < 100, 2, if\(double18 < 250, 3, if\(double18 < 500, 4, if\(double18 < 1000, 5, 6\)\)\)\)\)/);
 });
 
 test("economy report block: exact half from the DO, telemetry from AE, AE failure never fails the report", async () => {

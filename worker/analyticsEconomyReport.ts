@@ -69,7 +69,9 @@ export function buildEconomyAeQueries(startMs: number, endMs: number): Record<st
   // 17 offer flags, 18 coins, 19 games, 20 reserved sampleWeight (1).
   const F = `${T} AND blob1 IN (${sqlList(OFFER_FUNNEL_EVENTS)}) AND double17 > 0`;
   const avail = `if(double17 = 2 OR double17 = 4, 1, 0)`;
-  const size = `multiIf(double18 < 50, 1, double18 < 100, 2, double18 < 250, 3, double18 < 500, 4, double18 < 1000, 5, 6)`;
+  // Nested if(), not multiIf(): Analytics Engine SQL rejects multiIf with HTTP 422
+  // ("unknown function call: MULTIIF"), which blanked the whole telemetry half.
+  const size = `if(double18 < 50, 1, if(double18 < 100, 2, if(double18 < 250, 3, if(double18 < 500, 4, if(double18 < 1000, 5, 6)))))`;
   const funnel = (key: string) =>
     `SELECT blob1 AS ev, blob7 AS aud, ${key} AS k, ${avail} AS avail, sum(_sample_interval) AS n FROM ${ECONOMY_AE_DATASET} WHERE ${F} GROUP BY ev, aud, k, avail`;
   return {

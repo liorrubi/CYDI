@@ -29,6 +29,7 @@ import { scoreAttempt } from "../engine/scoring";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins, getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
+import { withGameCoins } from "../services/economyAnalytics";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
@@ -153,7 +154,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
       const reward = coinsForSpecialChallengeScore(scoreResult.total) - coinsForSpecialChallengeScore(previousBest ?? 0);
       recordSpecialChallengeScore(SHAPE.id, scoreResult.total);
       if (reward > 0) {
-        addCoins(reward);
+        addCoins(reward, "special_score");
         setDoubleOfferAmount(reward);
       }
 
@@ -161,7 +162,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
       setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
       if (passed) playSuccessSound();
       else playEncourageSound();
-      trackEvent("game_completed", { gameType: "specialChallenge", category: SHAPE.category, contentKey: SHAPE.id });
+      trackEvent("game_completed", withGameCoins({ gameType: "specialChallenge", category: SHAPE.category, contentKey: SHAPE.id }, Math.max(0, reward)));
       setPhase("result");
     }, delay);
   }
@@ -169,7 +170,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
   /** The base reward is already credited above - only the extra half of a successful double is new (mirrors ChestRewardOverlay), so navigating away before resolving the offer can never forfeit the coins already earned. */
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
     if (doubleOfferAmount !== null && finalAmount > doubleOfferAmount) {
-      addCoins(finalAmount - doubleOfferAmount);
+      addCoins(finalAmount - doubleOfferAmount, "ad_multiplier");
     }
     triggerCoinFlight(anchorEl);
     setDoubleOfferAmount(null);
@@ -178,7 +179,7 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
   /** Starts a fresh attempt, charging the retry cost first - used both from the intro card and from the result screen, since by the time either is reachable the day's free attempt is already spent. */
   function handlePaidRetry() {
     if (coins < SPECIAL_CHALLENGE_RETRY_COST) return;
-    spendCoins(SPECIAL_CHALLENGE_RETRY_COST);
+    spendCoins(SPECIAL_CHALLENGE_RETRY_COST, "special_retry");
     setAttemptPath(null);
     setResult(null);
     setFeedbackMessage(null);

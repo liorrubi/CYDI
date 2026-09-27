@@ -123,6 +123,6 @@ export function applyShapeRoundOutcome(
   recordRoundCompleted();
   if (countsAsSuccessfulDrawing) recordSuccessfulDrawing();
   onProgressChange(progress);
-  if (coins > 0) addCoins(coins);
+  if (coins > 0) addCoins(coins, "shape_stars");
   return coins;
 }

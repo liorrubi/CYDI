@@ -32,6 +32,7 @@ import { scoreAttempt } from "../engine/scoring";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playEncourageSound, playSelectSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins, getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
+import { withGameCoins } from "../services/economyAnalytics";
 import { getDifficulty } from "../services/difficultySettings";
 import {
   collectedMegaCardCount,
@@ -104,7 +105,7 @@ export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenP
   function handleBuyCard(card: MegaCardDefinition) {
     const cost = MEGA_SPECIFIC_UNLOCK_COST[card.rarity];
     if (coins < cost || progress.unlockedCardIds.includes(card.id)) return;
-    spendCoins(cost);
+    spendCoins(cost, "mega_card_album");
     unlockMegaCard(card.id);
     playSuccessSound();
     setBanner(`🃏 New Mega Card unlocked: ${card.name}!`);
@@ -344,7 +345,7 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
       const passed = scoreResult.total >= passScore;
       const outcome = recordMegaResult(card.id, scoreResult.total, passed);
       if (outcome.completionRewardCoins > 0) {
-        addCoins(outcome.completionRewardCoins);
+        addCoins(outcome.completionRewardCoins, "mega_completion");
         setDoubleOfferAmount(outcome.completionRewardCoins);
       }
 
@@ -358,7 +359,7 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
       );
       if (passed) playSuccessSound();
       else playEncourageSound();
-      trackEvent("game_completed", { gameType: "megaChallenge", category: card.category, contentKey: card.id });
+      trackEvent("game_completed", withGameCoins({ gameType: "megaChallenge", category: card.category, contentKey: card.id }, outcome.completionRewardCoins));
       setPhase("result");
     }, delay);
   }
@@ -366,7 +367,7 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
   /** Only the extra half of a successful double is new - the base reward was credited immediately, so leaving mid-offer never forfeits earned coins (same rule as SpecialChallengeScreen). */
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
     if (doubleOfferAmount !== null && finalAmount > doubleOfferAmount) {
-      addCoins(finalAmount - doubleOfferAmount);
+      addCoins(finalAmount - doubleOfferAmount, "ad_multiplier");
     }
     triggerCoinFlight(anchorEl);
     setDoubleOfferAmount(null);

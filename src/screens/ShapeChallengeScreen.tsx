@@ -84,6 +84,7 @@ import {
   runInterstitialCheckpoint,
 } from "../services/ads/interstitialController";
 import { trackEvent } from "../services/analytics";
+import { withGameCoins } from "../services/economyAnalytics";
 import {
   clearProgress,
   getCategoryCompletedCount,
@@ -180,7 +181,7 @@ function detectAndBankNewAchievements(progress: ShapeChallengeProgress): Achieve
   const newlyUnlocked = findNewlyUnlockedAchievements(stats, unlockedIds);
   for (const achievement of newlyUnlocked) {
     markAchievementUnlocked(achievement.id);
-    addCoinsPending(achievement.coinReward);
+    addCoinsPending(achievement.coinReward, "achievement");
   }
   return newlyUnlocked;
 }
@@ -433,7 +434,7 @@ function CategoryListScreen({
       setMegaUnlocked(true);
       return;
     }
-    spendCoins(MEGA_CHALLENGE_UNLOCK_COST);
+    spendCoins(MEGA_CHALLENGE_UNLOCK_COST, "mega_unlock");
     playAchievementUnlockedSound();
     setMegaUnlocked(true);
     setMegaUnlockCelebrating(true);
@@ -459,7 +460,7 @@ function CategoryListScreen({
 
   function handleUnlockCategory(category: CategoryId) {
     if (coins < CATEGORY_UNLOCK_COST) return;
-    spendCoins(CATEGORY_UNLOCK_COST);
+    spendCoins(CATEGORY_UNLOCK_COST, "category_unlock");
     unlockCategory(category);
     setUnlockingCategory(category);
     window.setTimeout(() => {
@@ -848,6 +849,8 @@ function ShapePlay({
   // round-count thresholds and the "already discovered" checks stay current.
   const [createDiscovery, setCreateDiscovery] = useState<ReturnType<typeof createDiscoveryVariant>>(null);
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
+  /** Set by the open DoubleCoinsOffer: records a leave-the-screen forfeit under the offer's own event name and context. */
+  const offerSkipReporterRef = useRef<(() => void) | null>(null);
   /** Set by DoubleCoinsOffer once the double is EARNED: settles it like Continue does. Cleared with the offer. */
   const earnedOfferFinalizeRef = useRef<(() => void) | null>(null);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
@@ -1040,10 +1043,11 @@ function ShapePlay({
   /** The base reward is already credited where `doubleOfferAmount` is set below - only the extra half of a successful double is new (mirrors ChestRewardOverlay), so navigating away before resolving the offer can never forfeit the coins already earned. */
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
     if (doubleOfferAmount !== null && finalAmount > doubleOfferAmount) {
-      addCoins(finalAmount - doubleOfferAmount);
+      addCoins(finalAmount - doubleOfferAmount, "ad_multiplier");
     }
     triggerCoinFlight(anchorEl ?? document.querySelector(".score-total"));
     earnedOfferFinalizeRef.current = null;
+    offerSkipReporterRef.current = null;
     setDoubleOfferAmount(null);
   }
 
@@ -1075,7 +1079,11 @@ function ShapePlay({
     // Same rule the offer's own Skip button uses: the streak only counts a double the
     // player could really have watched an ad for (see recordOfferSkipped).
     recordOfferSkipped(isRewardedAdAvailable());
-    trackEvent("reward_skipped", { placement: "shape_challenge_double_reward" });
+    // Reported by the offer itself, so a ×3 round records reward_bonus_skipped (not the
+    // ×2 name) with the same economy context as the rest of that offer's funnel.
+    if (offerSkipReporterRef.current) offerSkipReporterRef.current();
+    else trackEvent("reward_skipped", { placement: "shape_challenge_double_reward" });
+    offerSkipReporterRef.current = null;
     earnedOfferFinalizeRef.current = null;
     setDoubleOfferAmount(null);
   }
@@ -1157,7 +1165,9 @@ function ShapePlay({
         passed: outcome.passed,
         isNewBest: outcome.isNewBest,
       });
-      trackEvent("game_completed", { gameType: roundGameType(practice), category, contentKey: shape.id });
+      // Practice rounds earn nothing and are not normal play: they keep the plain payload.
+      const completedBase = { gameType: roundGameType(practice), category, contentKey: shape.id };
+      trackEvent("game_completed", practice ? completedBase : withGameCoins(completedBase, offerAmount));
       // A new result cycle (resets the rewarded-collision marker), then the completion
       // itself - the only thing that advances the interstitial cadence.
       beginInterstitialResultCycle();
@@ -1212,6 +1222,9 @@ function ShapePlay({
           deferExplainer={showResultTutorial}
           onRewardEarned={(finalize) => {
             earnedOfferFinalizeRef.current = finalize;
+          }}
+          onSkipReporter={(report) => {
+            offerSkipReporterRef.current = report;
           }}
         />
       ) : null;
@@ -1327,6 +1340,9 @@ function ShapePlay({
             deferExplainer={showResultTutorial}
             onRewardEarned={(finalize) => {
               earnedOfferFinalizeRef.current = finalize;
+            }}
+            onSkipReporter={(report) => {
+              offerSkipReporterRef.current = report;
             }}
           />
         )}

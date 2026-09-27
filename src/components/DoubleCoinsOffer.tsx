@@ -10,6 +10,8 @@ import {
 import { MAX_PAID_CHEST_DOUBLES_PER_DAY } from "../services/chestDoubleLimitStore";
 import { isRewardedAdAvailable, preloadRewardedAd, showRewardedAd, type RewardedAdPlacement } from "../services/ads";
 import { trackEvent } from "../services/analytics";
+import type { RewardOfferEconomy } from "../services/analyticsSchema";
+import { rewardOfferContext } from "../services/economyAnalytics";
 import { markDoubleRewardTutorialShown, shouldShowDoubleRewardTutorial } from "../services/tutorialStore";
 import { consumesDoubleAttempt, resolveAdOutcome } from "./doubleOfferAdFlow";
 import { createOfferSettlement } from "../app/doubleOfferSettlement";
@@ -48,6 +50,12 @@ type DoubleCoinsOfferProps = {
    * once-only: Continue and the exit path can never both credit.
    */
   onRewardEarned?: (finalize: () => void) => void;
+  /**
+   * Called once on mount with a function that records a skip exactly as this offer's own
+   * Skip button would - right event name for a ×3 round, same economy context. A screen
+   * whose exit forfeits the offer calls it instead of emitting its own event.
+   */
+  onSkipReporter?: (report: () => void) => void;
 };
 
 type Phase = "offer" | "quiz" | "feedback";
@@ -97,7 +105,7 @@ function isMathFallbackEnabled(): boolean {
  * once the cap is hit, the double option disappears and only the base reward remains
  * collectible, with the current count shown to the player.
  */
-export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted, deferExplainer = false, onRewardEarned }: DoubleCoinsOfferProps) {
+export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted, deferExplainer = false, onRewardEarned, onSkipReporter }: DoubleCoinsOfferProps) {
   const [phase, setPhase] = useState<Phase>("offer");
   const [question] = useState(() => ({ a: randomFactor(), b: randomFactor() }));
   const [answer, setAnswer] = useState("");
@@ -167,12 +175,25 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   // ad can be served, so it shares the same gate.
   const showReminder = adAvailable && !showTutorial && reminderPending && !deferExplainer;
 
+  // Economy context for every funnel event of THIS offer (economyAnalytics.ts): computed
+  // once, one tick after mount - a parent can credit the base reward in its own mount
+  // effect, which React runs after this child's - so the balance bucket always includes
+  // the coins just earned. adAvailable is the capability at that moment, which is what
+  // separates "an offer with no ad behind it" from a real one.
+  const economyRef = useRef<RewardOfferEconomy | null>(null);
+  const funnelParams = () => {
+    if (!economyRef.current) economyRef.current = rewardOfferContext(amount, multiplier as 2 | 3, isRewardedAdAvailable());
+    return economyRef.current ? { placement, ...economyRef.current } : { placement };
+  };
+
   useEffect(() => {
     preloadRewardedAd(placement);
+    onSkipReporter?.(() => trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", funnelParams()));
     // A ×3 round reports on its own event names so the two offer types can be compared
     // in the report; see the reward_bonus_* block in analyticsSchema.ts for why this is
     // a separate name rather than a param. Same funnel, same placement, either way.
-    trackEvent(isBonusRound ? "reward_bonus_offer_shown" : "reward_offer_shown", { placement });
+    const t = window.setTimeout(() => trackEvent(isBonusRound ? "reward_bonus_offer_shown" : "reward_offer_shown", funnelParams()), 0);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -214,7 +235,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     // away from one whose ad could not be served does not - `skipForfeitsRealDouble`
     // already draws exactly that line for the skip-streak nudge.
     resolveBonusRewardRound({ wasBonusRound: isBonusRound, granted: false, forfeitedRealOffer: skipForfeitsRealDouble });
-    trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", { placement });
+    trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", funnelParams());
     onResolved(amount, anchorRef.current);
   }
 
@@ -226,7 +247,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
 
   async function handleWatchAd() {
     playChipSound();
-    trackEvent(isBonusRound ? "reward_bonus_ad_started" : "reward_ad_started", { placement });
+    trackEvent(isBonusRound ? "reward_bonus_ad_started" : "reward_ad_started", funnelParams());
     setAdPending(true);
     const result = await showRewardedAd(placement);
     setAdPending(false);
@@ -242,11 +263,11 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       setWasCorrect(true);
       // The player did the thing the nudge was for - the skip streak starts over.
       recordRewardGranted();
-      trackEvent(isBonusRound ? "reward_bonus_ad_completed" : "reward_ad_completed", { placement });
+      trackEvent(isBonusRound ? "reward_bonus_ad_completed" : "reward_ad_completed", funnelParams());
       const finalAmount = amount * multiplier;
       onRewardEarned?.(() => settlement.settle({ granted: true, finalAmount }, anchorRef.current));
     } else {
-      trackEvent(isBonusRound ? "reward_bonus_ad_failed" : "reward_ad_failed", { placement });
+      trackEvent(isBonusRound ? "reward_bonus_ad_failed" : "reward_ad_failed", funnelParams());
       // No substitute route is offered - just a quiet notice back on the offer screen.
       if (outcome.adUnavailable) setAdUnavailableNotice(true);
     }

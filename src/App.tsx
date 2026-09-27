@@ -61,6 +61,7 @@ import { toAchievements, toChallengesHub, toDailyChallenge, toFriendChallengeInt
 import { resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
+import { initEconomyAnalytics } from "./services/economyAnalytics";
 import {
   armTutorialReplay,
   markAchievementsTutorialShown,
@@ -546,6 +547,8 @@ export default function App({ landing }: AppProps) {
 
   useEffect(() => {
     trackEvent("app_open", {});
+    // Starts coin-economy tracking on first launch, so days-playing counts from here.
+    initEconomyAnalytics();
   }, []);
 
   // Covers opening a share link in a tab that already has CYDI loaded (a

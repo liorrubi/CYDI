@@ -26,6 +26,7 @@ import { resolveDailyShape } from "../services/dailyShapeResolver";
 import { scoreAttempt } from "../engine/scoring";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins } from "../services/coinsStore";
+import { withGameCoins } from "../services/economyAnalytics";
 import { dailyChallengeShareUrl } from "../services/dailyChallengeShare";
 import { genericShareUrl, shareOrCopy } from "../services/nativeShare";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
@@ -109,7 +110,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   async function claimPrizes() {
     const result = await claimDailyPrizes(playerId);
     if (!result || result.claimed.length === 0) return [];
-    addCoins(result.claimed.reduce((sum, prize) => sum + prize.coins, 0));
+    addCoins(result.claimed.reduce((sum, prize) => sum + prize.coins, 0), "daily_prize");
     return result.claimed;
   }
 
@@ -235,7 +236,8 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
       if (passed) playSuccessSound();
       else playEncourageSound();
-      trackEvent("game_completed", { gameType: "dailyChallenge", category: shape.category, contentKey: `daily:${episode.id}` });
+      // A daily game pays nothing itself (prizes are claimed later, as coin_earned) - 0 still records the balance bucket.
+      trackEvent("game_completed", withGameCoins({ gameType: "dailyChallenge", category: shape.category, contentKey: `daily:${episode.id}` }, 0));
       setPhase("result");
     }, delay);
   }

@@ -153,7 +153,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
 
   function handlePurchase(id: (typeof PEN_COLOR_PRODUCTS)[number]["id"], price: number) {
     if (coins < price || unlocked.includes(id)) return;
-    spendCoins(price);
+    spendCoins(price, "pen_color");
     unlockColor(id);
     setSelectedColor(id);
     setUnlocked(getUnlockedColors());
@@ -162,7 +162,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
 
   function handleBuySkin(id: PenSkinId, price: number) {
     if (coins < price || unlockedSkins.includes(id)) return;
-    spendCoins(price);
+    spendCoins(price, "pen_skin");
     unlockSkin(id);
     // Auto-equip on purchase, mirroring handlePurchase's auto-select for ink colors.
     // Equipping a different owned skin afterward happens via the in-game pen style
@@ -178,7 +178,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
     // the click, before any coins move or a reward is rolled, so a click that lands right
     // as the cooldown state is stale (or a rapid double-click) can't double-charge.
     if (coins < tier.price || isChestOnCooldown(tier.id)) return;
-    spendCoins(tier.price);
+    spendCoins(tier.price, "chest_key");
     startChestCooldown(tier.id);
     setPendingChestReveal({ tier, amount: rollChestReward(tier.rewardMin, tier.rewardMax) });
     trackEvent("shop_purchase_with_coins", { productType: "chestKey", tier: tier.id, price: tier.price });
@@ -195,7 +195,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
     }
     const pool = lockedMegaCards(product.rarity);
     if (coins < product.price || pool.length === 0) return;
-    spendCoins(product.price);
+    spendCoins(product.price, "mega_card_shop");
     const card = pool[Math.floor(Math.random() * pool.length)];
     unlockMegaCard(card.id);
     playSuccessSound();

@@ -37,6 +37,7 @@ import { scoreAttempt } from "../engine/scoring";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playEncourageSound, playSelectSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins } from "../services/coinsStore";
+import { withGameCoins } from "../services/economyAnalytics";
 import { getDifficulty } from "../services/difficultySettings";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
@@ -355,14 +356,14 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
       const passed = scoreResult.total >= passScore;
       const outcome = recordArtistPackResult(artwork.id, scoreResult.total);
       if (outcome.starCoins > 0) {
-        addCoins(outcome.starCoins);
+        addCoins(outcome.starCoins, "artist_stars");
         setDoubleOfferAmount(outcome.starCoins);
       }
       setResult(scoreResult);
       setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
       if (passed) playSuccessSound();
       else playEncourageSound();
-      trackEvent("game_completed", { gameType: "artistPack", category: artwork.category, contentKey: `${pack.id}:${artwork.id}` });
+      trackEvent("game_completed", withGameCoins({ gameType: "artistPack", category: artwork.category, contentKey: `${pack.id}:${artwork.id}` }, outcome.starCoins));
       setPhase("result");
     }, delay);
   }
@@ -370,7 +371,7 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
   /** Only the extra half of a successful double is new — the base reward was credited immediately, so leaving mid-offer never forfeits earned coins (same rule as MegaPlay). */
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
     if (doubleOfferAmount !== null && finalAmount > doubleOfferAmount) {
-      addCoins(finalAmount - doubleOfferAmount);
+      addCoins(finalAmount - doubleOfferAmount, "ad_multiplier");
     }
     triggerCoinFlight(anchorEl);
     setDoubleOfferAmount(null);

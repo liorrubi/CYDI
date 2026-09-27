@@ -80,14 +80,14 @@ export default function ChestRewardOverlay({
 
   useEffect(() => {
     if (phase !== "revealed") return;
-    addCoins(amount);
+    addCoins(amount, isPaidChest ? "chest_payout" : "daily_chest");
     triggerCoinFlight(amountRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   function handleDoubleResolved(finalAmount: number, anchorEl: HTMLElement | null) {
     // The base `amount` is already credited above - only the extra half of a successful double is new.
-    if (finalAmount > amount) addCoins(finalAmount - amount);
+    if (finalAmount > amount) addCoins(finalAmount - amount, "ad_multiplier");
     triggerCoinFlight(anchorEl);
     onDismissed();
   }

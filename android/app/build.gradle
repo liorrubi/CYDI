@@ -306,8 +306,14 @@ android {
         // debounce + 15-120 s backoff, no automatic retry); client analytics flush 15 s ->
         // 30 s; Shop events renamed to shop_purchase_with_coins. The interstitial stays OFF
         // until /api/config/ads/interstitial is published. DEPLOY THE WORKER FIRST.
-        versionCode 48
-        versionName "0.53.0"
+        //
+        // 49/50 were Phase 3 analytics Stage-0 debug builds (0.53.99, Mi 8); 51 is the
+        // 0.54.0 Stage-0 debug build (temporary, never committed). 52 is the 0.54.0
+        // RELEASE: Phase 3 client analytics (batching, exact-event outbox recovered once
+        // via server eventId dedup) + coin-economy analytics + the 27 Sep privacy text.
+        // The new events need the matching Worker: DEPLOY THE WORKER (master) FIRST.
+        versionCode 52
+        versionName "0.54.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

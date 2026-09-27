@@ -69,6 +69,7 @@
       "!/terms",
       "!/privacy",
       "!/accessibility",
+      "!/delete-data",
       // Generated text, derived from CONTENT_PATHS.
       "!/robots.txt",
       "!/sitemap.xml"

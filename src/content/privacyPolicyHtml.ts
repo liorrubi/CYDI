@@ -330,6 +330,11 @@ export const PRIVACY_POLICY_HTML = `
 </ul>
 
 <h2>6. Your Rights &amp; Choices</h2>
+<p class="status-text">
+  To ask us to delete data held about you, see
+  <a href="https://playcydi.com/delete-data">Request data deletion</a> or email
+  <a href="mailto:privacy@playcydi.com">privacy@playcydi.com</a>.
+</p>
 <ul class="status-text privacy-list">
   <li>
     You can clear your on-device data at any time through your browser or Android app settings, which

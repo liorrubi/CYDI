@@ -794,6 +794,103 @@ const PRIVACY: ContentPage = {
   blocks: [{ kind: "raw", html: PRIVACY_POLICY_HTML }],
 };
 
+// ------------------------------------------------------------ delete data ----
+
+/*
+ * The public "Delete data URL" for Google Play's Data safety form. It only
+ * explains the request route - email - and is deliberately honest about what
+ * can and cannot be singled out: CYDI has no accounts, and its analytics
+ * carry nothing that ties a record to a person. Keep it consistent with the
+ * privacy policy's sections 5 and 6 (src/content/privacyPolicyHtml.ts).
+ */
+const DELETE_DATA: ContentPage = {
+  path: "/delete-data",
+  title: "Request Data Deletion - CYDI",
+  description:
+    "How to ask for deletion of data held about you by CYDI - Can You Draw It? (playcydi.com and the Android app): email privacy@playcydi.com. CYDI has no user accounts.",
+  h1: "Request data deletion",
+  standfirst: "CYDI - Can You Draw It? &middot; playcydi.com and the CYDI Android app",
+  blocks: [
+    {
+      kind: "p",
+      html:
+        "This page explains how to ask us to delete data about you held by <strong>CYDI - Can You Draw It?</strong>, " +
+        'the drawing game at <a href="https://playcydi.com">playcydi.com</a> and on Google Play. CYDI has ' +
+        "<strong>no user accounts</strong>: there is no sign-up, login or password, and no account to close.",
+    },
+
+    { kind: "h2", text: "How to request deletion" },
+    {
+      kind: "steps",
+      items: [
+        {
+          title: "Email us",
+          html:
+            'Send an email to <a href="mailto:privacy@playcydi.com?subject=CYDI%20data%20deletion%20request">' +
+            "<strong>privacy@playcydi.com</strong></a> with the subject &ldquo;CYDI data deletion request&rdquo;.",
+        },
+        {
+          title: "Include your Privacy Request ID",
+          html:
+            "In the game, open Settings and copy your Privacy Request ID into the email. Because there are no " +
+            "accounts, it is the only thing that lets us find your Daily Challenge leaderboard entries.",
+        },
+        {
+          title: "Add any share links",
+          html: "If you want a share link removed before it expires on its own, include its complete URL.",
+        },
+      ],
+    },
+    {
+      kind: "p",
+      html: "We will reply from the same address to confirm what we found and deleted.",
+    },
+
+    { kind: "h2", text: "What we can delete" },
+    {
+      kind: "ul",
+      items: [
+        "<strong>Daily Challenge leaderboard entries</strong> linked to your Privacy Request ID: your display " +
+          "name, your scores and any unclaimed prizes.",
+        `<strong>Share links</strong> you identify by their complete URL. Otherwise they expire automatically after ` +
+          `${SHARE_LINK_EXPIRY_DAYS} days.`,
+      ],
+    },
+
+    { kind: "h2", text: "What cannot be singled out" },
+    {
+      kind: "ul",
+      items: [
+        "<strong>Analytics records and statistics.</strong> They contain no name, player ID or contact details, so " +
+          "they cannot be matched to a person or to your Privacy Request ID. Individual event records are deleted " +
+          "automatically after about 3 months; what remains is aggregate totals.",
+        "<strong>The random installation and session numbers</strong> the app uses to count distinct players are " +
+          "not linked to your Privacy Request ID or to anything that identifies you, so we cannot find yours from a " +
+          "request.",
+        "<strong>Play Together rooms</strong> are deleted automatically 30 minutes after the last player leaves.",
+        "<strong>Advertising data</strong> collected by Google's ads SDK in the Android app is controlled by Google " +
+          '(<a href="https://policies.google.com/technologies/ads" rel="noopener">how Google uses advertising data</a>). ' +
+          "You can reset or delete your advertising ID in your Android settings.",
+      ],
+    },
+
+    { kind: "h2", text: "Data on your device" },
+    {
+      kind: "p",
+      html:
+        "Your progress, coins and settings are stored on your own device, not by us. You can delete them at any " +
+        "time by clearing the app's storage in Android settings, uninstalling the app, or clearing this site's data " +
+        "in your browser.",
+    },
+    {
+      kind: "note",
+      html:
+        'More detail is in our <a href="/privacy">Privacy Policy</a>, sections 5 (Data Retention) and 6 ' +
+        "(Your Rights &amp; Choices).",
+    },
+  ],
+};
+
 // ---------------------------------------------------------- accessibility ----
 
 /*
@@ -895,7 +992,7 @@ const ACCESSIBILITY: ContentPage = {
 
 /** Every page this module serves. */
 
-export const CONTENT_PAGES: ContentPage[] = [HOW_TO_PLAY, ABOUT, CONTACT, TERMS, ACCESSIBILITY, PRIVACY];
+export const CONTENT_PAGES: ContentPage[] = [HOW_TO_PLAY, ABOUT, CONTACT, TERMS, ACCESSIBILITY, PRIVACY, DELETE_DATA];
 
 export const CONTENT_PATHS: string[] = CONTENT_PAGES.map((page) => page.path);
 

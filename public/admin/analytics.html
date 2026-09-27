@@ -802,6 +802,17 @@
         } else {
           label = "Last " + tab.days + " days: " + report.startDate + " → " + report.endDate + " (Israel time)";
         }
+        // Where the numbers came from (worker/analyticsAeReport.ts). Gameplay telemetry read
+        // from Analytics Engine is the full stream; read from the DO it is a 10% sample since
+        // 25 Sep - so a reader must be able to tell which one they are looking at.
+        var src = report.sources;
+        if (src && src.mode === "hybrid") {
+          label += src.telemetryDoDates && src.telemetryDoDates.length
+            ? " · Gameplay telemetry: full (Analytics Engine) from " + src.telemetryAeDates[0] + ", sampled before · installs, purchases and ads: exact ledger"
+            : " · Gameplay telemetry: full (Analytics Engine) · installs, purchases and ads: exact ledger";
+        } else if (src) {
+          label += " · Gameplay telemetry: stored counts (a 10% sample since 25 Sep)";
+        }
         byId("range-label").textContent = label;
       }
 

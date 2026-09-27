@@ -45,6 +45,17 @@ import {
   type UsageGameTotals,
   type UsageSummary,
 } from "../src/services/analyticsUsage";
+import {
+  AE_COVERAGE_START_DATE,
+  AE_DATASET,
+  aeSqlClient,
+  coveredWindow,
+  datesBetween,
+  fetchAeTelemetry,
+  stripTelemetry,
+  type AeFetch,
+  type AeTelemetry,
+} from "./analyticsAeReport";
 
 // Single global Durable Object instance (see worker/index.ts's forwardToAnalyticsDO,
 // same pattern as DailyChallengeDO) so every /event write is processed one at a time -
@@ -524,7 +535,30 @@ function gameTotals(counts: AllCounters): UsageGameTotals {
 
 type Env = {
   ANALYTICS_ADMIN_TOKEN?: string;
+  /**
+   * Hybrid reporting (analyticsAeReport.ts): a Cloudflare API token with Account Analytics
+   * Read, used ONLY to query the Analytics Engine SQL API. Optional - absent means the report
+   * is the DO-only report it has always been.
+   */
+  ANALYTICS_AE_READ_TOKEN?: string;
+  /** The Cloudflare account the AE dataset lives in (a plain var, not a secret). */
+  ANALYTICS_AE_ACCOUNT_ID?: string;
 };
+
+/** Where a report's numbers came from - attached to every report so no source change is silent. */
+type ReportSources = {
+  mode: "hybrid" | "durable-object";
+  exactEvents: "durable-object";
+  telemetryEvents: "analytics-engine" | "durable-object" | "analytics-engine+durable-object";
+  telemetryAeDates: string[];
+  telemetryDoDates: string[];
+  reason?: string;
+  aeDataset?: string;
+  notes?: string[];
+};
+
+/** Key under which the AE range counters ride in a RangeBuckets map (never a date, so series ignore it). */
+const AE_RANGE_KEY = "ae:telemetry";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
@@ -911,6 +945,8 @@ export class AnalyticsDO {
   private counterCache = new Map<string, AllCounters>();
   private usageCache = new Map<string, UsageBucket>();
   private days: string[] = [];
+  /** Test seam for hybrid reporting: an injected AE client. Null = build one from env. */
+  aeFetchOverride: AeFetch | null = null;
   /** Storage keys whose in-memory value is newer than what is stored. */
   private dirty = new Set<string>();
   /** The Israel date every buffered mutation belongs to; see the rollover flush in handleEvent. */
@@ -1327,21 +1363,28 @@ export class AnalyticsDO {
     if (dates.length > MAX_RANGE_DAYS) return jsonNoStore({ error: "range too long" }, 400);
 
     const buckets = await this.readDayBuckets(start, end);
-    const report = this.buildReport(
-      "range",
-      start,
-      end,
-      audience,
-      this.countsForAudience(buckets, audience),
-      this.usageSummaries(buckets, audience),
-    );
-    if (url.searchParams.get("series") === "1") {
+    const wantSeries = url.searchParams.get("series") === "1";
+    const hybrid = await this.applyHybridTelemetry(buckets, start, end, url, wantSeries);
+    const report = {
+      ...this.buildReport(
+        "range",
+        start,
+        end,
+        audience,
+        this.countsForAudience(buckets, audience),
+        this.usageSummaries(buckets, audience),
+      ),
+      sources: hybrid.sources,
+    };
+    if (wantSeries) {
       // Every requested date appears exactly once, zero-filled when nothing was
       // recorded, so chart clients never have to reconstruct missing days. Per-day
-      // counts follow the selected audience, same as the totals above.
+      // counts follow the selected audience, same as the totals above. On AE dates the
+      // DO bucket holds exact events only and AE adds per-day telemetry totals.
       const perDay = (date: string): AllCounters => {
-        const external = buckets.external.get(date) ?? {};
-        const internal = buckets.internal.get(date) ?? {};
+        const ae = hybrid.aeDays[date];
+        const external = ae ? mergeCounters(buckets.external.get(date) ?? {}, ae.external) : buckets.external.get(date) ?? {};
+        const internal = ae ? mergeCounters(buckets.internal.get(date) ?? {}, ae.internal) : buckets.internal.get(date) ?? {};
         if (audience === "external") return external;
         if (audience === "internal") return internal;
         return mergeCounters(external, internal);
@@ -1365,7 +1408,71 @@ export class AnalyticsDO {
     const counts =
       audience === "external" ? external : audience === "internal" ? internal : mergeCounters(external, internal);
     // No usage block here on purpose - see buildReport.
-    return jsonNoStore(this.buildReport("alltime", startDate, today, audience, counts, null));
+    const sources: ReportSources = {
+      mode: "durable-object",
+      exactEvents: "durable-object",
+      telemetryEvents: "durable-object",
+      telemetryAeDates: [],
+      telemetryDoDates: [],
+      reason: "alltime is the DO's since-launch running total; Analytics Engine keeps 3 months, so it cannot back an all-time figure. Telemetry here stops growing once telemetryToDo is off.",
+    };
+    return jsonNoStore({ ...this.buildReport("alltime", startDate, today, audience, counts, null), sources });
+  }
+
+  /**
+   * Hybrid reporting (analyticsAeReport.ts). On success, for every Israel day AE fully covers,
+   * the DO day buckets keep ONLY exact-ledger events (+ the request counter) and the AE range
+   * counters for those days ride in the maps under AE_RANGE_KEY - so countsForAudience,
+   * usageSummaries and buildReport work unchanged and exact events are never double counted.
+   * Buckets are mutated only after every AE query has succeeded; any failure leaves the
+   * DO-only report exactly as it was and records why in `sources`.
+   */
+  private async applyHybridTelemetry(buckets: RangeBuckets, startDate: string, endDate: string, url: URL, series: boolean): Promise<{ sources: ReportSources; aeDays: AeTelemetry["days"] }> {
+    const allDates = datesBetween(startDate, endDate);
+    const doOnly = (reason: string): { sources: ReportSources; aeDays: AeTelemetry["days"] } => ({
+      sources: { mode: "durable-object", exactEvents: "durable-object", telemetryEvents: "durable-object", telemetryAeDates: [], telemetryDoDates: allDates, reason },
+      aeDays: {},
+    });
+    if (url.searchParams.get("source") === "do") return doOnly("requested: source=do");
+    const client =
+      this.aeFetchOverride ??
+      (this.env.ANALYTICS_AE_READ_TOKEN && this.env.ANALYTICS_AE_ACCOUNT_ID ? aeSqlClient(this.env.ANALYTICS_AE_ACCOUNT_ID, this.env.ANALYTICS_AE_READ_TOKEN) : null);
+    if (!client) return doOnly("Analytics Engine reporting not configured (ANALYTICS_AE_READ_TOKEN / ANALYTICS_AE_ACCOUNT_ID)");
+    const window = coveredWindow(startDate, endDate, Date.now());
+    if (!window) return doOnly(`range predates Analytics Engine coverage (${AE_COVERAGE_START_DATE})`);
+
+    let ae: AeTelemetry;
+    try {
+      ae = await fetchAeTelemetry(client, window.startMs, window.endMs, series ? window.dates : null);
+      if (ae.truncated) throw new Error("an Analytics Engine result hit the row limit");
+    } catch (err) {
+      return doOnly(`Analytics Engine unavailable, DO fallback: ${String((err as Error)?.message ?? err).slice(0, 160)}`);
+    }
+
+    for (const date of window.dates) {
+      buckets.external.set(date, stripTelemetry(buckets.external.get(date)));
+      buckets.internal.set(date, stripTelemetry(buckets.internal.get(date)));
+    }
+    buckets.external.set(AE_RANGE_KEY, ae.counters.external);
+    buckets.internal.set(AE_RANGE_KEY, ae.counters.internal);
+    const doDates = allDates.filter((d) => !window.dates.includes(d));
+    return {
+      sources: {
+        mode: "hybrid",
+        exactEvents: "durable-object",
+        telemetryEvents: doDates.length ? "analytics-engine+durable-object" : "analytics-engine",
+        telemetryAeDates: window.dates,
+        telemetryDoDates: doDates,
+        aeDataset: AE_DATASET,
+        notes: [
+          "Exact-ledger events (acquisition, purchases, ad outcomes, interstitial, result_shared, mp_room_created) and analytics_requests come from the DO ledger only.",
+          "Telemetry on AE dates is the full, unsampled stream weighted by _sample_interval; on DO dates it is whatever the DO recorded (a 10% sample from 25 Sep 03:06Z, and an undercount before 26 Sep 19:35Z).",
+          "usage installations/sessions come from DO distinct-id sets; usage games and per-source games come from the merged counters (AE on AE dates).",
+          "shareRate = result_shared (DO ledger) / game_completed (AE on AE dates).",
+        ],
+      },
+      aeDays: ae.days,
+    };
   }
 
   private async handleReport(url: URL, authHeader: string | null): Promise<Response> {
@@ -1400,8 +1507,9 @@ export class AnalyticsDO {
     }
 
     const buckets = await this.readDayBuckets(startDate, endDate);
-    return jsonNoStore(
-      this.buildReport(
+    const hybrid = await this.applyHybridTelemetry(buckets, startDate, endDate, url, false);
+    return jsonNoStore({
+      ...this.buildReport(
         period,
         startDate,
         endDate,
@@ -1409,7 +1517,8 @@ export class AnalyticsDO {
         this.countsForAudience(buckets, audience),
         this.usageSummaries(buckets, audience),
       ),
-    );
+      sources: hybrid.sources,
+    });
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -1445,3 +1554,26 @@ export class AnalyticsDO {
     return json({ error: "not found" }, 404);
   }
 }
+
+// Read-only re-exports for the Analytics Engine report builder (analyticsAeReport.ts), which must
+// shape AE counters with exactly the same per-event breakouts this object keeps. Visibility only.
+export type { EventCounters, AllCounters };
+export {
+  FUNNEL_EVENTS,
+  SCORED_EVENTS,
+  SURFACE_BREAKOUT_EVENTS,
+  REASON_BREAKOUT_EVENTS,
+  ROUND_COUNT_BREAKOUT_EVENTS,
+  ROUND_INDEX_BREAKOUT_EVENTS,
+  COUNTRY_BREAKOUT_EVENTS,
+  COUNTRY_REASON_BREAKOUT_EVENTS,
+  COUNTRY_VERSION_BREAKOUT_EVENTS,
+  COUNTRY_GAME_TYPE_BREAKOUT_EVENTS,
+  ATTRIBUTION_BREAKOUT_EVENTS,
+  MAX_ATTRIBUTION_KEYS,
+  MAX_COUNTRY_REASON_KEYS,
+  MAX_COUNTRY_VERSION_KEYS,
+  MAX_COUNTRY_VERSION_REASON_KEYS,
+  MAX_COUNTRY_GAME_TYPE_KEYS,
+  COUNTRY_REASON_OVERFLOW,
+};

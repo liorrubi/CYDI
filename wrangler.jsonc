@@ -120,6 +120,12 @@
   // not a DO request (measured 25 Sep 2026), so this adds no load on the Free caps.
   // Removing this block turns the shadow off with no other change - the binding is
   // optional in Env.
+  // Hybrid analytics reporting (worker/analyticsAeReport.ts): the account the AE dataset lives
+  // in - an identifier, not a credential. Reads also need the secret ANALYTICS_AE_READ_TOKEN
+  // (Account Analytics Read); without it the report stays DO-only, exactly as before.
+  "vars": {
+    "ANALYTICS_AE_ACCOUNT_ID": "b427b821ef5e501713c82810033ef48f"
+  },
   "analytics_engine_datasets": [
     {
       "binding": "ANALYTICS_AE",

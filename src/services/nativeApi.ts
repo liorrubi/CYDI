@@ -72,7 +72,22 @@ type ApiFetchInit = {
 };
 
 /** The subset of `Response` every caller here actually uses - satisfied by a real `fetch()` Response on web, and by the wrapper below on native. */
-export type ApiResponse = { ok: boolean; status: number; json(): Promise<unknown>; text(): Promise<string> };
+export type ApiResponse = {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+  text(): Promise<string>;
+  /** A response header, case-insensitive; null when absent. Optional so existing test doubles stay valid. */
+  header?(name: string): string | null;
+};
+
+/** Case-insensitive lookup in the plain header object CapacitorHttp returns. */
+export function nativeHeader(headers: Record<string, string> | undefined, name: string): string | null {
+  if (!headers) return null;
+  const want = name.toLowerCase();
+  for (const [k, v] of Object.entries(headers)) if (k.toLowerCase() === want) return v;
+  return null;
+}
 
 /** Shape of the options CapacitorHttp.request expects - split out from `apiFetch` purely so the URL-resolution logic can be tested directly, without going through the real native bridge (which doesn't exist in a unit-test environment). */
 export type NativeHttpOptions = {
@@ -116,7 +131,8 @@ export async function apiFetch(path: string, init: ApiFetchInit = {}): Promise<A
     const controller = timeoutMs !== undefined ? new AbortController() : undefined;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
     try {
-      return await fetch(path, { method, headers, body, keepalive, signal: controller?.signal });
+      const res = await fetch(path, { method, headers, body, keepalive, signal: controller?.signal });
+      return Object.assign(res, { header: (name: string) => res.headers.get(name) });
     } finally {
       if (timer !== undefined) clearTimeout(timer);
     }
@@ -129,5 +145,6 @@ export async function apiFetch(path: string, init: ApiFetchInit = {}): Promise<A
     status: response.status,
     json: async () => (typeof response.data === "string" ? JSON.parse(response.data) : response.data),
     text: async () => (typeof response.data === "string" ? response.data : JSON.stringify(response.data)),
+    header: (name: string) => nativeHeader(response.headers as Record<string, string> | undefined, name),
   };
 }

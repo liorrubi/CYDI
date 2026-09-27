@@ -2,170 +2,240 @@
  * © 2026 Lior Rubinovich. All rights reserved.
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
-// Client-side analytics batching (A4).
+// Client analytics batching (Phase 3).
 //
-// The properties that matter are all about what happens when things go wrong:
-// a failed batch must not retry (there is no idempotency key server-side, so a
-// retry would double-count), the queue must not grow without bound, and nothing
-// in here may ever throw into the gameplay call that produced the event.
+// What must hold: far fewer, fuller requests (never above the Worker's 50-event / body
+// limits); telemetry is never retried (no retry storms); exact events survive an app kill
+// without ever being duplicated by default; lifecycle flushes send everything at once;
+// nothing here ever throws into gameplay.
 import test from "node:test";
 import assert from "node:assert/strict";
+
+// In-memory localStorage so the outbox can be exercised under node.
+class MemoryStorage {
+  private m = new Map<string, string>();
+  getItem(k: string) {
+    return this.m.has(k) ? (this.m.get(k) as string) : null;
+  }
+  setItem(k: string, v: string) {
+    this.m.set(k, String(v));
+  }
+  removeItem(k: string) {
+    this.m.delete(k);
+  }
+  clear() {
+    this.m.clear();
+  }
+}
+(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage();
 
 const {
   enqueueAnalyticsEvent,
   flushAnalyticsQueue,
-  MAX_BATCH_EVENTS,
+  WORKER_MAX_BATCH_EVENTS,
   _setAnalyticsSenderForTests,
   _analyticsQueueStateForTests,
+  _analyticsOutboxForTests,
   _resetAnalyticsQueueForTests,
 } = await import("./analyticsQueue.ts");
+const { applyConfigHeader, getClientConfig, SAFE_DEFAULTS, _resetClientConfigForTests, CONFIG_HEADER } = await import("./analyticsClientConfig.ts");
 
-type Batch = Record<string, unknown>[];
+type Env = Record<string, unknown>;
+type Sent = { events: Env[]; keepalive: boolean };
 
-/** Captures every batch the queue tries to send, without a network. */
-function capture(behaviour: "ok" | "reject" | "throw" = "ok") {
-  const batches: Batch[] = [];
-  _setAnalyticsSenderForTests(async (events) => {
-    batches.push(events);
+function capture(behaviour: "ok" | "reject" | "throw" = "ok", header: string | null = null) {
+  const sent: Sent[] = [];
+  _setAnalyticsSenderForTests(async (events, opts) => {
+    sent.push({ events, keepalive: opts.keepalive });
     if (behaviour === "reject") throw new Error("network down");
     if (behaviour === "throw") throw new Error("boom");
+    return { status: 204, header: (n) => (n === CONFIG_HEADER ? header : null) };
   });
-  return batches;
+  return sent;
 }
-
-const event = (n: number) => ({ eventName: "app_open", params: {}, seq: n });
+const settle = () => new Promise((r) => setTimeout(r, 5));
+const tel = (n: number) => ({ eventName: "game_started", params: { gameType: "shapeChallenge", category: "geometric", contentKey: "circle" }, seq: n });
+const exact = (n: number) => ({ eventName: "app_open", params: {}, seq: n });
 
 test.beforeEach(() => {
   _resetAnalyticsQueueForTests();
+  _resetClientConfigForTests();
 });
 test.after(() => {
   _resetAnalyticsQueueForTests();
+  _resetClientConfigForTests();
 });
 
-test("one event is queued, not sent", () => {
-  const batches = capture();
-  enqueueAnalyticsEvent(event(1));
-  assert.equal(batches.length, 0, "a single event must not cost a request - that is the whole point");
-  assert.equal(_analyticsQueueStateForTests().queued, 1);
-  assert.equal(_analyticsQueueStateForTests().timerArmed, true, "and the timer guarantees it still goes out");
+// ---------------------------------------------------------------- batching ----
+
+test("defaults: 50-event batches, 2-minute telemetry window, never above the Worker limit", () => {
+  assert.equal(SAFE_DEFAULTS.maxBatchEvents, 50);
+  assert.equal(WORKER_MAX_BATCH_EVENTS, 50);
+  assert.equal(SAFE_DEFAULTS.flushIntervalMs, 120_000);
+  const sent = capture();
+  for (let i = 0; i < 49; i++) enqueueAnalyticsEvent(tel(i));
+  assert.equal(sent.length, 0, "49 telemetry events stay queued");
+  enqueueAnalyticsEvent(tel(49));
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].events.length, 50);
+  assert.deepEqual(sent[0].events.map((e) => e.seq), Array.from({ length: 50 }, (_, i) => i), "in order, exactly once");
 });
 
-test("a partial batch stays queued", () => {
-  const batches = capture();
-  for (let i = 0; i < MAX_BATCH_EVENTS - 1; i++) enqueueAnalyticsEvent(event(i));
-  assert.equal(batches.length, 0);
-  assert.equal(_analyticsQueueStateForTests().queued, MAX_BATCH_EVENTS - 1);
-});
-
-test("a full batch flushes immediately, in order, exactly once", () => {
-  const batches = capture();
-  for (let i = 0; i < MAX_BATCH_EVENTS; i++) enqueueAnalyticsEvent(event(i));
-  assert.equal(batches.length, 1);
-  assert.equal(batches[0].length, MAX_BATCH_EVENTS);
-  assert.deepEqual(batches[0].map((e) => e.seq), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-  assert.equal(_analyticsQueueStateForTests().queued, 0);
-  assert.equal(_analyticsQueueStateForTests().timerArmed, false, "the timer is cancelled by the flush");
-});
-
-test("twenty events become two batches, never twenty requests", () => {
-  const batches = capture();
-  for (let i = 0; i < 20; i++) enqueueAnalyticsEvent(event(i));
-  assert.equal(batches.length, 2);
-  assert.deepEqual(batches.map((b) => b.length), [10, 10]);
-});
-
-test("the timer flushes a partial batch", async () => {
-  const batches = capture();
-  enqueueAnalyticsEvent(event(1));
-  enqueueAnalyticsEvent(event(2));
-  assert.equal(batches.length, 0);
-  // The queue arms a real timer; drive it directly rather than waiting 15s.
+test("120 telemetry events become 3 requests (50, 50, then the 20 left on flush), never 12", () => {
+  const sent = capture();
+  for (let i = 0; i < 120; i++) enqueueAnalyticsEvent(tel(i));
   flushAnalyticsQueue();
-  assert.equal(batches.length, 1);
-  assert.equal(batches[0].length, 2);
+  assert.deepEqual(sent.map((s) => s.events.length), [50, 50, 20]);
 });
 
-test("an explicit flush with an empty queue sends nothing", () => {
-  const batches = capture();
+test("a remote maxBatchEvents above 50 is clamped to the Worker limit; a byte cap splits big batches", () => {
+  applyConfigHeader(JSON.stringify({ v: 1, maxBatchEvents: 500, maxBatchBytes: 4000 }));
+  assert.equal(getClientConfig().maxBatchEvents, 50);
+  const sent = capture();
+  const fat = (n: number) => ({ ...tel(n), pad: "x".repeat(900) });
+  for (let i = 0; i < 12; i++) enqueueAnalyticsEvent(fat(i));
   flushAnalyticsQueue();
-  assert.equal(batches.length, 0);
+  for (const s of sent) assert.ok(JSON.stringify(s.events).length <= 4000 + 2, "each request body stays within maxBatchBytes");
+  assert.equal(sent.reduce((t, s) => t + s.events.length, 0), 12, "nothing lost when splitting");
 });
 
-test("a lifecycle flush drains whatever is queued", () => {
-  const batches = capture();
-  enqueueAnalyticsEvent(event(1));
-  // What the visibilitychange / pagehide listeners call.
+test("telemetry alone waits for the 2-minute window; an exact event pulls the send forward to 20 s", () => {
+  capture();
+  const t0 = Date.now();
+  enqueueAnalyticsEvent(tel(1));
+  const telDeadline = _analyticsQueueStateForTests().deadline;
+  assert.ok(telDeadline - t0 >= 119_000 && telDeadline - t0 <= 121_000);
+  enqueueAnalyticsEvent(exact(2));
+  const exDeadline = _analyticsQueueStateForTests().deadline;
+  assert.ok(exDeadline - t0 >= 19_000 && exDeadline - t0 <= 21_000, "exact deadline replaces the later one");
+  assert.equal(_analyticsQueueStateForTests().queued, 2, "both ride in the same request");
+});
+
+test("mixed exact + telemetry share one request; the exact envelope gains only an eventId", () => {
+  const sent = capture();
+  const t = tel(1), e = exact(2);
+  enqueueAnalyticsEvent(t);
+  enqueueAnalyticsEvent(e);
   flushAnalyticsQueue();
-  assert.equal(batches.length, 1);
-  assert.equal(_analyticsQueueStateForTests().queued, 0);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].events[0], tel(1), "telemetry envelope untouched");
+  const { eventId, ...rest } = sent[0].events[1];
+  assert.deepEqual(rest, exact(2), "exact envelope untouched apart from eventId");
+  assert.match(String(eventId), /^[0-9a-f]{24}$/);
+});
+
+// ---------------------------------------------------------------- lifecycle ----
+
+test("a lifecycle flush sends everything at once with keepalive and forgets exact events first (at-most-once)", () => {
+  const sent = capture();
+  enqueueAnalyticsEvent(tel(1));
+  enqueueAnalyticsEvent(exact(2));
+  assert.equal(_analyticsQueueStateForTests().outbox, 1, "exact event persisted while queued");
+  flushAnalyticsQueue("lifecycle");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].keepalive, true);
+  assert.equal(_analyticsQueueStateForTests().outbox, 0, "removed before the possibly-dying request");
+  assert.equal(_analyticsQueueStateForTests().timerArmed, false);
+});
+
+// ---------------------------------------------------------------- reliability ----
+
+test("an exact event queued when the app is killed goes out on the next launch - once", async () => {
+  capture();
+  enqueueAnalyticsEvent(exact(1)); // queued, never sent...
+  _resetAnalyticsQueueForTests({ keepStorage: true }); // ...app killed (memory gone, storage kept)
+  const sent = capture();
+  enqueueAnalyticsEvent(tel(2)); // next launch: first event restores the outbox
+  flushAnalyticsQueue();
+  await settle();
+  const all = sent.flatMap((s) => s.events);
+  assert.equal(all.filter((e) => e.eventName === "app_open").length, 1, "the lost exact event is delivered exactly once");
+  assert.equal(_analyticsQueueStateForTests().outbox, 0, "and cleared after the server answered");
+});
+
+test("an exact event whose request was in flight when the app died is NOT resent (no duplicates by default)", async () => {
+  _setAnalyticsSenderForTests(() => new Promise(() => {})); // request never answers
+  enqueueAnalyticsEvent(exact(1));
+  flushAnalyticsQueue("timer");
+  assert.equal(_analyticsOutboxForTests()[0].inFlight, true);
+  _resetAnalyticsQueueForTests({ keepStorage: true });
+  const sent = capture();
+  enqueueAnalyticsEvent(tel(2));
+  flushAnalyticsQueue();
+  await settle();
+  assert.equal(sent.flatMap((s) => s.events).filter((e) => e.eventName === "app_open").length, 0);
+});
+
+test("network failure: telemetry is dropped, never retried; exact is dropped too by default", async () => {
+  const sent = capture("reject");
+  for (let i = 0; i < 50; i++) enqueueAnalyticsEvent(tel(i));
+  enqueueAnalyticsEvent(exact(99));
+  flushAnalyticsQueue();
+  await settle();
+  const before = sent.length;
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(sent.length, before, "no retry storm");
+  assert.equal(_analyticsQueueStateForTests().outbox, 0);
+  assert.equal(_analyticsQueueStateForTests().timerArmed, false);
+});
+
+test("with exactRetryOnNetworkError on, exact events back off exponentially and give up after 5 attempts", async () => {
+  applyConfigHeader(JSON.stringify({ v: 1, exactRetryOnNetworkError: true }));
+  capture("reject");
+  enqueueAnalyticsEvent(exact(1));
+  flushAnalyticsQueue();
+  await settle();
+  const e1 = _analyticsOutboxForTests()[0];
+  assert.equal(e1.attempts, 1);
+  assert.ok(e1.nextAttemptAt - Date.now() >= 55_000, "first retry no sooner than ~60 s");
+  assert.equal(_analyticsQueueStateForTests().queued, 0, "not re-queued immediately");
+  // Simulate the remaining attempts elapsing.
+  for (let i = 0; i < 6; i++) {
+    const cur = _analyticsOutboxForTests();
+    if (!cur.length) break;
+    // make it due, then trigger a send via the next enqueue path
+    (globalThis.localStorage as MemoryStorage).setItem("cydi.analyticsOutbox.v1", JSON.stringify(cur.map((e) => ({ ...e, nextAttemptAt: 0 }))));
+    _resetAnalyticsQueueForTests({ keepStorage: true });
+    capture("reject");
+    enqueueAnalyticsEvent(tel(i));
+    flushAnalyticsQueue();
+    await settle();
+  }
+  assert.equal(_analyticsQueueStateForTests().outbox, 0, "gives up - bounded, never a loop");
 });
 
 test("the queue stays bounded even when every send hangs forever", () => {
-  // A sender that never settles is the worst case for memory. The queue is emptied
-  // synchronously at flush, before the request leaves, so depth is capped by the
-  // flush threshold itself rather than by a separate ceiling.
-  _setAnalyticsSenderForTests(async () => {
-    await new Promise(() => {});
-  });
-  for (let i = 0; i < 5_000; i++) enqueueAnalyticsEvent(event(i));
-  const state = _analyticsQueueStateForTests();
-  assert.ok(state.queued < MAX_BATCH_EVENTS, `queue must stay bounded (got ${state.queued} after 5,000 events)`);
+  _setAnalyticsSenderForTests(() => new Promise(() => {}));
+  for (let i = 0; i < 5_000; i++) enqueueAnalyticsEvent(tel(i));
+  assert.ok(_analyticsQueueStateForTests().queued < 50);
 });
 
-test("a failed batch is dropped, never retried", async () => {
-  const batches = capture("reject");
-  for (let i = 0; i < MAX_BATCH_EVENTS; i++) enqueueAnalyticsEvent(event(i));
-  assert.equal(batches.length, 1);
-  await new Promise((r) => setTimeout(r, 20));
-  assert.equal(batches.length, 1, "a retry could double-count: the server has no idempotency key");
-  assert.equal(_analyticsQueueStateForTests().queued, 0, "and the failed events are not re-queued");
-});
-
-test("a sender that rejects never surfaces an unhandled rejection", async () => {
+test("a rejecting or throwing sender never reaches gameplay", async () => {
   capture("reject");
-  for (let i = 0; i < MAX_BATCH_EVENTS; i++) enqueueAnalyticsEvent(event(i));
-  await new Promise((r) => setTimeout(r, 20));
-  // Reaching here without the runner reporting an unhandled rejection is the assertion.
-  assert.ok(true);
-});
-
-test("a sender that throws synchronously never reaches the caller", () => {
+  for (let i = 0; i < 60; i++) enqueueAnalyticsEvent(tel(i));
+  await settle();
   _setAnalyticsSenderForTests(() => {
     throw new Error("synchronous boom");
   });
   assert.doesNotThrow(() => {
-    for (let i = 0; i < MAX_BATCH_EVENTS; i++) enqueueAnalyticsEvent(event(i));
-  }, "analytics must never break gameplay");
-});
-
-test("events queued during a flush join the next batch, not the one in flight", () => {
-  const batches: Batch[] = [];
-  _setAnalyticsSenderForTests(async (events) => {
-    batches.push(events);
+    for (let i = 0; i < 60; i++) enqueueAnalyticsEvent(tel(i));
+    enqueueAnalyticsEvent(exact(1));
+    flushAnalyticsQueue();
   });
-  for (let i = 0; i < MAX_BATCH_EVENTS; i++) enqueueAnalyticsEvent(event(i));
-  enqueueAnalyticsEvent(event(99));
-  assert.equal(batches.length, 1);
-  assert.equal(batches[0].length, MAX_BATCH_EVENTS);
-  assert.equal(_analyticsQueueStateForTests().queued, 1);
-  flushAnalyticsQueue();
-  assert.deepEqual(batches[1].map((e) => e.seq), [99]);
 });
 
-test("the envelope is forwarded untouched", () => {
-  const batches = capture();
-  const envelope = {
-    eventName: "first_open",
-    params: { installAge: "h0_24" },
-    platform: "android",
-    appVersion: "0.51.0",
-    appBuild: "abc1234",
-    installationId: "aaaaaaaaaaaa",
-    sessionId: "bbbbbbbbbbbb",
-    isInternal: false,
-    attribution: { source: "google-play", medium: "organic", campaign: "unknown", content: "unknown", term: "unknown" },
-  };
-  enqueueAnalyticsEvent(envelope);
+// ---------------------------------------------------------------- remote config ----
+
+test("a valid config header on a response is applied and cached; garbage is ignored; defaults otherwise", async () => {
+  capture("ok", JSON.stringify({ v: 1, flushIntervalMs: 60_000, telemetryKeepPercent: 25 }));
+  enqueueAnalyticsEvent(tel(1));
   flushAnalyticsQueue();
-  assert.deepEqual(batches[0][0], envelope, "batching must not reshape or drop a single field");
+  await settle();
+  assert.equal(getClientConfig().flushIntervalMs, 60_000);
+  assert.equal(getClientConfig().telemetryKeepPercent, 25);
+  assert.equal(applyConfigHeader("<html>not json</html>"), false);
+  assert.equal(applyConfigHeader(JSON.stringify({ v: 2 })), false, "unknown version ignored");
+  assert.equal(getClientConfig().flushIntervalMs, 60_000, "a bad header never replaces a good config");
+  _resetClientConfigForTests();
+  assert.deepEqual(getClientConfig(), { ...SAFE_DEFAULTS }, "no remote config -> safe defaults");
 });

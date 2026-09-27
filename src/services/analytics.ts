@@ -17,6 +17,8 @@ import { getInstallationId, getSessionId, shouldReportAsInternal } from "./analy
 import type { AnalyticsEventName, EventParamsMap } from "./analyticsSchema";
 import { enqueueAnalyticsEvent } from "./analyticsQueue";
 import { getAnalyticsAppVersion, getAnalyticsAppVersionCode } from "./nativeAppInfo";
+import { appliedKeepPercent, shouldKeepEvent } from "./analyticsEventClasses";
+import { getClientConfig } from "./analyticsClientConfig";
 
 export type { AnalyticsEventName };
 export type AnalyticsParams = Record<string, string | number | boolean>;
@@ -254,7 +256,18 @@ const cloudflareAnalyticsProvider: AnalyticsProvider = {
   name: "cloudflare-worker",
   trackEvent(eventName, params) {
     try {
-      enqueueAnalyticsEvent(buildAnalyticsEnvelope(eventName, params));
+      // Client-side sampling (Phase 3, analyticsEventClasses.ts): decided BEFORE anything is
+      // queued, per analytics session, so a sampled-out event never costs a byte or a request.
+      // Exact events are always kept. At the default 100% nothing is sampled and the envelope
+      // is byte-for-byte what it was; below 100% a kept event carries clientKeepPercent so the
+      // server can weight it (a server-side requirement - see the Phase 3 contract).
+      const rates = getClientConfig();
+      const sessionId = getSessionId();
+      if (!shouldKeepEvent(eventName, sessionId, rates)) return;
+      const envelope: Record<string, unknown> = buildAnalyticsEnvelope(eventName, params);
+      const keep = appliedKeepPercent(eventName, rates);
+      if (keep < 100) envelope.clientKeepPercent = keep;
+      enqueueAnalyticsEvent(envelope);
     } catch {
       // Queue unavailable or threw synchronously - swallow, never break gameplay.
     }

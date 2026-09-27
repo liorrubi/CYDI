@@ -45,8 +45,23 @@ const OUTBOX_MAX = 200;
 const MAX_EXACT_ATTEMPTS = 5;
 const BACKOFF_BASE_MS = 60_000;
 const BACKOFF_MAX_MS = 30 * 60_000;
+/**
+ * Outbox entries older than this are dropped, never resent. The server de-duplicates exact events
+ * by eventId for 7 Israel days (today included, so at least 6 full days - worker/analyticsEventDedup.ts);
+ * 5 days keeps every resend safely inside that window. An entry dated in the future beyond
+ * MAX_CLOCK_SKEW_MS (device clock moved back) is treated as unknown age and dropped too.
+ */
+export const OUTBOX_MAX_AGE_MS = 5 * 24 * 60 * 60_000;
+const MAX_CLOCK_SKEW_MS = 24 * 60 * 60_000;
 
-type OutboxEntry = { envelope: Envelope; attempts: number; nextAttemptAt: number; inFlight: boolean };
+type OutboxEntry = { envelope: Envelope; attempts: number; nextAttemptAt: number; inFlight: boolean; createdAt: number };
+
+/** Inside the server's dedup window? Entries without a timestamp (pre-cutoff builds) are of unknown age: no. */
+function withinRecoveryWindow(e: OutboxEntry, now: number): boolean {
+  if (typeof e.createdAt !== "number" || !Number.isFinite(e.createdAt)) return false;
+  const age = now - e.createdAt;
+  return age <= OUTBOX_MAX_AGE_MS && age >= -MAX_CLOCK_SKEW_MS;
+}
 
 let queue: Envelope[] = [];
 let queueBytes = 2; // "[]"
@@ -113,7 +128,7 @@ function restoreOutbox(now: number): void {
     stored = [];
   }
   const retry = getClientConfig(now).exactRetryOnNetworkError;
-  outbox = stored.filter((e) => !e.inFlight || retry).map((e) => ({ ...e, inFlight: false }));
+  outbox = stored.filter((e) => (!e.inFlight || retry) && withinRecoveryWindow(e, now)).map((e) => ({ ...e, inFlight: false }));
   saveOutbox();
   const due = outbox.filter((e) => e.nextAttemptAt <= now);
   for (const e of due) pushToQueue(e.envelope);
@@ -207,6 +222,9 @@ function onNetworkError(exactIds: Set<string>, lifecycle: boolean): void {
 
 /** Retries whose backoff has elapsed ride in the next send. */
 function requeueDueRetries(now: number): void {
+  const before = outbox.length;
+  outbox = outbox.filter((e) => withinRecoveryWindow(e, now));
+  if (outbox.length !== before) saveOutbox();
   for (const e of outbox) if (e.attempts > 0 && !e.inFlight && e.nextAttemptAt <= now) pushToQueue(e.envelope);
 }
 
@@ -218,7 +236,7 @@ export function enqueueAnalyticsEvent(envelope: Envelope): void {
     const cfg = getClientConfig(now);
     if (classifyEvent(String(envelope.eventName)) === "exact") {
       if (!envelope.eventId) envelope.eventId = randomEventId();
-      outbox.push({ envelope, attempts: 0, nextAttemptAt: 0, inFlight: false });
+      outbox.push({ envelope, attempts: 0, nextAttemptAt: 0, inFlight: false, createdAt: now });
       saveOutbox();
       pushToQueue(envelope);
       if (queue.length) scheduleAt(now + cfg.exactFlushDelayMs);

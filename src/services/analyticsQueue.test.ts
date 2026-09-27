@@ -37,6 +37,7 @@ const {
   _analyticsQueueStateForTests,
   _analyticsOutboxForTests,
   _resetAnalyticsQueueForTests,
+  OUTBOX_MAX_AGE_MS,
 } = await import("./analyticsQueue.ts");
 const { applyConfigHeader, getClientConfig, SAFE_DEFAULTS, _resetClientConfigForTests, CONFIG_HEADER } = await import("./analyticsClientConfig.ts");
 
@@ -202,6 +203,37 @@ test("with exactRetryOnNetworkError on, exact events back off exponentially and 
     await settle();
   }
   assert.equal(_analyticsQueueStateForTests().outbox, 0, "gives up - bounded, never a loop");
+});
+
+test("recovery cutoff: an outbox entry older than 5 days is dropped, never resent; a younger one is resent once", async () => {
+  assert.equal(OUTBOX_MAX_AGE_MS, 5 * 24 * 60 * 60_000, "inside the server's 7-day eventId dedup window");
+  const now = Date.now();
+  const entry = (id: string, createdAt: unknown) => ({ envelope: { eventName: "app_open", params: {}, eventId: id }, attempts: 0, nextAttemptAt: 0, inFlight: false, createdAt });
+  (globalThis.localStorage as MemoryStorage).setItem(
+    "cydi.analyticsOutbox.v1",
+    JSON.stringify([
+      entry("a".repeat(24), now - OUTBOX_MAX_AGE_MS + 60_000), // 5 days minus a minute: resent
+      entry("b".repeat(24), now - OUTBOX_MAX_AGE_MS - 60_000), // just over 5 days: dropped
+      entry("c".repeat(24), undefined), // no timestamp (0.53.99 test build): unknown age, dropped
+      entry("d".repeat(24), now + 2 * 24 * 60 * 60_000), // clock moved back 2 days: dropped
+    ]),
+  );
+  _resetAnalyticsQueueForTests({ keepStorage: true });
+  const sent = capture();
+  enqueueAnalyticsEvent(tel(1));
+  flushAnalyticsQueue();
+  await settle();
+  const ids = sent.flatMap((s) => s.events).map((e) => e.eventId).filter(Boolean);
+  assert.deepEqual(ids, ["a".repeat(24)]);
+  assert.equal(_analyticsQueueStateForTests().outbox, 0, "nothing expired lingers in storage");
+});
+
+test("new exact events are stamped with createdAt so their age can be checked on a later launch", () => {
+  capture();
+  const t0 = Date.now();
+  enqueueAnalyticsEvent(exact(1));
+  const [e] = _analyticsOutboxForTests();
+  assert.ok(e.createdAt >= t0 && e.createdAt <= Date.now());
 });
 
 test("the queue stays bounded even when every send hangs forever", () => {

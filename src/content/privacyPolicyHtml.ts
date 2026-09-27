@@ -25,7 +25,7 @@
 
 /** Shown at the top of the policy. Update both when the policy text changes materially. */
 export const PRIVACY_EFFECTIVE_DATE = "14 July 2026";
-export const PRIVACY_LAST_UPDATED = "24 September 2026";
+export const PRIVACY_LAST_UPDATED = "27 September 2026";
 
 /**
  * The policy body: everything between the page title and the closing copyright
@@ -62,9 +62,9 @@ export const PRIVACY_POLICY_HTML = `
   </li>
 </ul>
 <p class="status-text">
-  This on-device data is not automatically backed up to us. Clearing your browser/app data, switching
-  devices, or reinstalling can erase it. You can move it yourself using the in-game Backup &amp; Transfer
-  code feature.
+  This on-device data is not automatically sent to us. Clearing your browser/app data, switching devices,
+  or reinstalling can erase it. On Android, your device may include it in your own Google account backup.
+  You can also move it yourself using the in-game Backup &amp; Transfer code feature.
 </p>
 
 <h3>Information sent to our servers</h3>
@@ -93,7 +93,9 @@ export const PRIVACY_POLICY_HTML = `
     your place in the room, and the live game state — the current round, each player’s scores, and
     whether each player has finished drawing. Your drawing IS sent for this mode, because scoring happens
     on our server rather than on your device; it is used only to calculate that round’s score and is
-    not stored after the round is scored. None of this is linked to your player ID or to any other mode.
+    not stored after the round is scored. So that you can get your seat back if your connection drops,
+    the app also sends your anonymous player ID when you join; it is kept only inside that room and is
+    deleted with it. Nothing from the room is linked to your progress or to any other mode.
   </li>
   <li>
     <strong>How long a Play Together room lasts:</strong> a room is temporary by design. It is deleted
@@ -115,13 +117,34 @@ export const PRIVACY_POLICY_HTML = `
 
 <h3>Analytics</h3>
 <p class="status-text">
-  We use anonymous, aggregate analytics to understand how the game is used and to improve it. Analytics
-  events record only non-identifying facts such as “a shape was completed” or “a purchase was made with
-  in-game coins,” together with a small set of non-personal attributes. These events never include your
-  name, email, player ID, IP address, or other information that identifies you — identifying fields are
-  blocked before an event is sent and again on our server, which keeps only running totals, never a record
-  of individual events. On the website, we also use Cloudflare Web Analytics for aggregate site metrics
-  (such as visits, referrers, and performance). This is disabled during development.
+  We use analytics to understand how the game is used and to improve it. Analytics events record
+  non-identifying facts such as “a shape was completed” or “an item was bought with in-game coins,”
+  together with a small set of attributes: the app version, whether it is the Android app or the website,
+  the general country (see below), and details of the game event itself. Events never include your name,
+  email, player ID, IP address, or display name — identifying fields are blocked before an event is sent
+  and again on our server.
+</p>
+<p class="status-text">
+  Our server stores these event records — without any of the random installation or session numbers
+  described below — for about 3 months, and keeps longer-term statistics only as aggregate totals. On the
+  website, we also use Cloudflare Web Analytics for aggregate site metrics (such as visits, referrers, and
+  performance). This is disabled during development.
+</p>
+<p class="status-text">
+  To balance the game’s coin economy, analytics events also record game-economy details: how many coins a
+  game or reward paid, what coins were spent on and that item’s in-game price, progress milestones such as
+  unlocking a category, and your coin balance, number of games played and days since you started playing
+  as <strong>ranges</strong> (for example “1,000–2,500 coins”) — never your exact coin balance. The
+  days-since-you-started range is calculated on your device; the start date itself is never sent. When a
+  coin-doubling ad is offered, we also record whether an ad was available and how the offer relates to
+  your next unlock, again as ranges. CYDI Coins cannot be bought with real money, so none of this involves
+  payment information.
+</p>
+<p class="status-text">
+  If an analytics event cannot be sent right away, the app may keep it on your device for up to 5 days and
+  send it on a later launch. So that such an event is never counted twice, some important events (for
+  example app opens, coin purchases, and ad outcomes) carry a random one-time event number; our server
+  keeps these numbers for 7 days only to recognise duplicates, and then deletes them.
 </p>
 <p class="status-text">
   Play Together sends the same kind of aggregate events — for example that a room was created, that a game
@@ -142,19 +165,21 @@ export const PRIVACY_POLICY_HTML = `
   game, and one that identifies the current play session. They are created on your device, are not derived
   from your identity, your account, your IP address, or anything about your device, and are not used to
   track you across other apps or websites. On our server they are used only to count how many distinct
-  installations and sessions there were on a given day, and are kept only for the days they were counted in.
-  Clearing the app's or browser's local data starts a new random number.
+  installations and sessions there were on each day. Each day’s list of these numbers is stored separately
+  from the event records, grouped only by platform and by the visit labels described below, and is not
+  currently deleted automatically. Clearing the app's or browser's local data starts a new random number.
 </p>
 <p class="status-text">
-  A small number of analytics events — ad diagnostics such as whether a rewarded ad, or a full-screen ad
-  between games, was available and, if not, the general reason; a couple of Play Together events; and the events recorded when the app is first
-  opened after installation — also record a two-letter network-country code, inferred from the connection
-  as seen by our hosting provider (Cloudflare). This helps us understand the geographic distribution of
-  first opens and diagnose whether technical or advertising issues are concentrated in particular
-  countries. Your device is never asked where it is, and CYDI requests no location permission. It is
-  country level only: no city, no region, no coordinates, no GPS, and no network operator. We do not store your IP address for this. The code is kept only as a running total per
-  country, never against you, an event, an installation or a session. If you use a VPN or proxy, the
-  country recorded is the one your connection appears to come from, which may not be where you are.
+  Analytics events also record a two-letter network-country code, inferred from the connection as seen by
+  our hosting provider (Cloudflare). This helps us understand where the game is played and whether
+  technical or advertising issues are concentrated in particular countries. Your device is never asked
+  where it is, and CYDI requests no location permission. It is country level only: no city, no region, no
+  coordinates, no GPS, and no network operator. We do not store your IP address. The country code is stored
+  with event records and in aggregate totals, never together with your player ID or the installation and
+  session numbers. The country of a connection may also be used, at the moment of a request, to decide
+  whether certain features — such as full-screen ads — are available in your region. If you use a VPN or
+  proxy, the country recorded is the one your connection appears to come from, which may not be where you
+  are.
 </p>
 <p class="status-text">
   On the website, an analytics event also carries a few short labels describing how that visit reached us —
@@ -171,7 +196,8 @@ export const PRIVACY_POLICY_HTML = `
   it records whether this looks like the first launch of a newly installed app, and roughly how
   long ago the install happened as a coarse range (under a day, under a week, and so on) rather
   than a time. We never store the full referral address. Nothing here identifies your device or
-  your Google account: no advertising ID, no device ID and no account details are read or sent.
+  your Google account: no advertising ID, no device ID and no account details are read or sent for
+  this purpose.
   The app asks Google Play this once per installation and not again.
 </p>
 
@@ -231,13 +257,14 @@ export const PRIVACY_POLICY_HTML = `
   As with any website or online service, our hosting provider (Cloudflare) processes basic connection
   data such as your IP address at the network level in order to deliver requests. CYDI itself does not
   read, log, or store your IP address. The one thing CYDI keeps from that connection is the coarse country
-  code described under Analytics above, and only as an aggregate count.
+  code described under Analytics above.
 </p>
 
 <h2>2. How We Use Information</h2>
 <ul class="status-text privacy-list">
   <li>To run the game and save your progress and settings on your device.</li>
   <li>To operate the Daily Challenge leaderboard and the challenge-sharing features you choose to use.</li>
+  <li>To run Play Together rooms and keep everyone in a room in sync.</li>
   <li>To understand aggregate usage and improve the game.</li>
   <li>When enabled, to show optional rewarded ads, and full-screen ads between games in the Android app, through Google AdMob with your consent.</li>
 </ul>
@@ -253,8 +280,10 @@ export const PRIVACY_POLICY_HTML = `
 <h2>4. Service Providers</h2>
 <ul class="status-text privacy-list">
   <li>
-    <strong>Cloudflare</strong> — hosts the game and its server features (leaderboard, share links) and
-    provides aggregate web analytics. Cloudflare privacy information:
+    <strong>Cloudflare</strong> — hosts the game and all of its server features (Daily Challenge
+    leaderboard, share links, Play Together rooms, and the storage and reporting of analytics, using
+    Cloudflare Workers, Durable Objects and Workers Analytics Engine) and provides aggregate web analytics.
+    Cloudflare privacy information:
     <a href="https://www.cloudflare.com/privacypolicy/">https://www.cloudflare.com/privacypolicy/</a>.
   </li>
   <li>
@@ -276,14 +305,27 @@ export const PRIVACY_POLICY_HTML = `
     <strong>Share links</strong> stored on our server automatically expire after 180 days.
   </li>
   <li>
-    <strong>Daily Challenge leaderboard</strong> entries (anonymous player ID, display name, score) are
-    not deleted automatically. They are retained until deleted by us or in response to a deletion request.
-    Only the top scores for each daily episode are kept.
+    <strong>Daily Challenge leaderboard</strong> entries (anonymous player ID, display name, your best score
+    and when it was submitted) are kept for each daily challenge you take part in, and the top three of each
+    finished challenge appear in the public history. They are not deleted automatically; they are retained
+    until deleted by us or in response to a deletion request. Unclaimed top-three prizes wait until the app
+    claims them.
   </li>
   <li>
-    <strong>Analytics</strong> is kept only as anonymous aggregate totals, with no per-person records. The
-    random installation and session numbers described above are kept per day, purely to count distinct
-    installations and sessions, and are never joined to any other data.
+    <strong>Analytics event records</strong> (without names, player IDs, or installation or session numbers)
+    are kept for about 3 months. Aggregate totals derived from them are kept indefinitely.
+  </li>
+  <li>
+    <strong>Daily lists of random installation and session numbers</strong> are not currently deleted
+    automatically (see Analytics above).
+  </li>
+  <li>
+    <strong>Event de-duplication numbers</strong> are deleted after 7 days. <strong>Events waiting on your
+    device</strong> are discarded after 5 days.
+  </li>
+  <li>
+    <strong>Play Together rooms</strong> are deleted automatically 30 minutes after the last player
+    disconnects.
   </li>
 </ul>
 
@@ -334,8 +376,8 @@ export const PRIVACY_POLICY_HTML = `
 
 <h2>9. Changes to This Policy</h2>
 <p class="status-text">
-  We may update this policy as the game evolves — for example, before enabling advertising in production.
-  When we make material changes, we will update the “Last updated” date above.
+  We may update this policy as the game evolves. When we make material changes, we will update the “Last
+  updated” date above.
 </p>
 
 <h2>10. Contact</h2>

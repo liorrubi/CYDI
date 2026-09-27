@@ -8,7 +8,7 @@ import {
 } from "./analyticsBreaker";
 import { decideSheddingParsed, effectiveShedPolicy, shedEnforcementError, shedLogLine } from "./analyticsShedding";
 import { writeAnalyticsShadow, writeAnalyticsShadowParsed } from "./analyticsShadow";
-import { splitParsed } from "./analyticsExactLedger";
+import { splitParsed, telemetryToDoPolicy } from "./analyticsExactLedger";
 import { isValidExactLedgerConfig, type ExactLedgerConfig } from "./analyticsExactLedgerConfig";
 import { parseIngest, type ParsedIngest } from "./analyticsIngest";
 import type { AnalyticsControl } from "./analyticsBreaker";
@@ -674,12 +674,17 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
     if (parsed.disabled !== current.disabled) {
       return jsonNoStore({ error: "the ops panel credential cannot change the analytics breaker (disabled)" }, 403);
     }
-    // Phase 2 gate (exactLedger): a panel write that does not mention it keeps whatever is
-    // stored, so re-shaping shedding from the panel can never silently switch the exact
-    // ledger off (or on). Only a body that carries its own `exactLedger` changes it.
+    // Phase 2 gate (exactLedger): the panel cannot change it at all - not enabled, not
+    // telemetryToDo, not the rollback rate. Switching the exact ledger off loses the
+    // durable exact counts and multiplies DO load, so it stays an operator (CLI) decision,
+    // locked here like `disabled` so a leaked panel credential cannot do it either. A
+    // panel write that omits the block keeps whatever is stored; one that carries it must
+    // carry it exactly as stored.
+    const storedLedger = storedExactLedger(currentRaw);
     if (parsed.exactLedger === undefined) {
-      const storedLedger = storedExactLedger(currentRaw);
       if (storedLedger !== undefined) parsed.exactLedger = storedLedger;
+    } else if (storedLedger === undefined || canonicalLedger(parsed.exactLedger) !== canonicalLedger(storedLedger)) {
+      return jsonNoStore({ error: "the ops panel credential cannot change exactLedger" }, 403);
     }
   }
   await env.CONTENT_KV.put(ANALYTICS_BREAKER_KV_KEY, JSON.stringify(parsed));
@@ -690,6 +695,11 @@ async function handleAnalyticsBreakerPut(request: Request, env: Env): Promise<Re
     monitorOnly: shed?.monitorOnly ?? true,
     sheddingActive: shed !== undefined && shed.monitorOnly === false,
   });
+}
+
+/** Key-order-independent comparison of two exactLedger blocks. */
+function canonicalLedger(ledger: ExactLedgerConfig): string {
+  return JSON.stringify([ledger.enabled, ledger.telemetryToDo ?? null, ledger.telemetrySamplePercent ?? null]);
 }
 
 /** The `exactLedger` block exactly as stored, only when it is present and valid - never a default. */
@@ -935,14 +945,17 @@ async function handleExactLedgerIngest(
   const toDo: unknown[] = [...split.exact];
   let keepPercent = FULL_KEEP_PERCENT;
   if (control.exactLedger.telemetryToDo === true && split.telemetry.length > 0) {
-    if (policy.mode === "NORMAL" || policy.monitorOnly) {
+    // The shed policy's sample, or - when exactLedger.telemetrySamplePercent is set - that
+    // rollback rate, which holds even after the legacy shedding has lapsed.
+    const sample = telemetryToDoPolicy(control.exactLedger, policy);
+    if (sample === null) {
       toDo.push(...split.telemetry);
     } else {
-      const decision = decideSheddingParsed(policy, "/events", { events: split.telemetry }, control.shed);
-      console.log(shedLogLine(policy, decision, decision.action !== "forward"));
+      const decision = decideSheddingParsed(sample, "/events", { events: split.telemetry }, control.shed);
+      console.log(shedLogLine(sample, decision, decision.action !== "forward"));
       if (decision.action === "forward") toDo.push(...split.telemetry);
       else if (decision.action === "forward_filtered") toDo.push(...(decision.survivors ?? []));
-      keepPercent = policy.keepPercent;
+      keepPercent = sample.keepPercent;
     }
   }
   if (toDo.length === 0) return new Response(null, { status: 204 });

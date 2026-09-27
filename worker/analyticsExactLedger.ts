@@ -21,6 +21,8 @@
 //    its store). `telemetryToDo: true` keeps sending the existing shed-policy sample to the
 //    DO - riding in the SAME `/ledger` request, so it costs no extra DO request and is
 //    durable too - for a transition period while reports still read the DO.
+//    `telemetrySamplePercent` makes that sample independent of the legacy shed policy, so
+//    the rollback stays cheap after shedding expires (analyticsExactLedgerConfig.telemetryToDoPolicy).
 //
 // GATE. A block inside the existing `config:analytics-breaker` KV value, read by the same
 // cached read as the breaker and the shed policy - zero additional KV reads. Absent,
@@ -34,7 +36,7 @@
 import { checkedEnvelopes, parseIngest, type IngestPath, type ParsedIngest } from "./analyticsIngest";
 
 // The gate's shape lives in a dependency-free module the Ops Panel can import too.
-export { EXACT_LEDGER_OFF, isValidExactLedgerConfig, type ExactLedgerConfig } from "./analyticsExactLedgerConfig";
+export { EXACT_LEDGER_OFF, isValidExactLedgerConfig, telemetryToDoPolicy, type ExactLedgerConfig } from "./analyticsExactLedgerConfig";
 
 /**
  * Events that must be counted exactly: every one of them is a fact, not a sample.
@@ -118,3 +120,4 @@ export function splitParsed(parsed: ParsedIngest): LedgerSplit | null {
 export function splitForLedger(path: IngestPath, bodyText: string): LedgerSplit | null {
   return splitParsed(parseIngest(path, bodyText));
 }
+

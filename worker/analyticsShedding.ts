@@ -229,7 +229,8 @@ export function isValidAnalyticsShedConfig(value: unknown): value is AnalyticsSh
 export type ShedPolicy = {
   country: string;
   mode: GuardMode;
-  source: "global" | "country" | "expired";
+  /** "ledger" = the Phase 2 rollback rate (exactLedger.telemetrySamplePercent), never produced here. */
+  source: "global" | "country" | "expired" | "ledger";
   /** Percentage of sheddable events to keep. 100 under NORMAL, so NORMAL needs no special case downstream. */
   keepPercent: number;
   monitorOnly: boolean;

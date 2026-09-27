@@ -189,7 +189,7 @@ async function putBreaker(stored: object | null, body: object, who: "ops" | "ope
 }
 
 test("an Ops Panel write that omits exactLedger preserves the stored block, whatever its state", async () => {
-  for (const ledger of [{ enabled: true }, { enabled: false }, { enabled: true, telemetryToDo: true }]) {
+  for (const ledger of [{ enabled: true }, { enabled: false }, { enabled: true, telemetryToDo: true }, { enabled: true, telemetryToDo: false, telemetrySamplePercent: 10 }]) {
     const r = await putBreaker({ disabled: false, shed: SHED, exactLedger: ledger }, { disabled: false, shed: { ...SHED, globalKeepPercent: 25 } }, "ops");
     assert.equal(r.status, 200);
     assert.deepEqual(r.stored?.exactLedger, ledger, "carried through unchanged");
@@ -197,9 +197,20 @@ test("an Ops Panel write that omits exactLedger preserves the stored block, what
   }
 });
 
-test("an Ops Panel write that sets exactLedger changes it; none is invented when none was stored; breaker stays locked", async () => {
-  const explicit = await putBreaker({ disabled: false, shed: SHED, exactLedger: { enabled: true } }, { disabled: false, shed: SHED, exactLedger: { enabled: false } }, "ops");
-  assert.deepEqual(explicit.stored?.exactLedger, { enabled: false });
+test("an Ops Panel write cannot change exactLedger (403, stored value untouched); none is invented; breaker stays locked", async () => {
+  const stored = { disabled: false, shed: SHED, exactLedger: { enabled: true, telemetryToDo: false } };
+  for (const change of [{ enabled: false }, { enabled: true, telemetryToDo: true }, { enabled: true, telemetryToDo: false, telemetrySamplePercent: 10 }]) {
+    const r = await putBreaker(stored, { disabled: false, shed: SHED, exactLedger: change }, "ops");
+    assert.equal(r.status, 403, JSON.stringify(change));
+    assert.deepEqual(r.stored, stored, "nothing written");
+  }
+  // Carrying the block through exactly as stored (key order aside) is accepted.
+  const same = await putBreaker(stored, { disabled: false, shed: { ...SHED, globalKeepPercent: 25 }, exactLedger: { telemetryToDo: false, enabled: true } }, "ops");
+  assert.equal(same.status, 200);
+  assert.deepEqual(same.stored?.exactLedger, { telemetryToDo: false, enabled: true });
+  // No stored block: the panel cannot create one either.
+  const create = await putBreaker({ disabled: false, shed: SHED }, { disabled: false, shed: SHED, exactLedger: { enabled: true } }, "ops");
+  assert.equal(create.status, 403);
   const none = await putBreaker({ disabled: false, shed: SHED }, { disabled: false, shed: SHED }, "ops");
   assert.equal(none.stored && "exactLedger" in none.stored, false);
   const breaker = await putBreaker({ disabled: false, shed: SHED, exactLedger: { enabled: true } }, { disabled: true }, "ops");

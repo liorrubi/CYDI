@@ -82,14 +82,19 @@ export function buildEconomyAeQueries(startMs: number, endMs: number): Record<st
   };
 }
 
-type FunnelCell = { offers: number; offersWithAd: number; starts: number; completions: number; fails: number; skips: number };
+/**
+ * `*WithAd` counts only stages of offers that had a servable rewarded ad when they rendered
+ * (the flag is frozen per offer, so every stage of one offer shares it). Rates use those,
+ * so an offer with no ad behind it can neither dilute nor inflate a conversion rate.
+ */
+type FunnelCell = { offers: number; offersWithAd: number; starts: number; startsWithAd: number; completions: number; completionsWithAd: number; fails: number; skips: number };
 export type FunnelRow = FunnelCell & { startRate: number | null; completionRate: number | null; skipRate: number | null };
-const emptyCell = (): FunnelCell => ({ offers: 0, offersWithAd: 0, starts: 0, completions: 0, fails: 0, skips: 0 });
+const emptyCell = (): FunnelCell => ({ offers: 0, offersWithAd: 0, starts: 0, startsWithAd: 0, completions: 0, completionsWithAd: 0, fails: 0, skips: 0 });
 
 /** Rates are over offers where a rewarded ad could actually be served - an offer with no ad behind it cannot convert. */
 function finish(cell: FunnelCell): FunnelRow {
   const d = cell.offersWithAd;
-  return { ...cell, startRate: d > 0 ? cell.starts / d : null, completionRate: d > 0 ? cell.completions / d : null, skipRate: cell.offers > 0 ? cell.skips / cell.offers : null };
+  return { ...cell, startRate: d > 0 ? cell.startsWithAd / d : null, completionRate: d > 0 ? cell.completionsWithAd / d : null, skipRate: cell.offers > 0 ? cell.skips / cell.offers : null };
 }
 
 function inAudience(row: AeRow, audience: string): boolean {
@@ -106,7 +111,11 @@ function funnelBy(rows: AeRow[], audience: string, keyOf: (k: number) => string)
     const cell = (cells[key] ??= emptyCell());
     const n = num(row.n);
     cell[stage] += n;
-    if (stage === "offers" && num(row.avail) === 1) cell.offersWithAd += n;
+    if (num(row.avail) === 1) {
+      if (stage === "offers") cell.offersWithAd += n;
+      if (stage === "starts") cell.startsWithAd += n;
+      if (stage === "completions") cell.completionsWithAd += n;
+    }
   }
   return Object.fromEntries(Object.entries(cells).map(([k, c]) => [k, finish(c)]));
 }
@@ -130,7 +139,7 @@ export function economyTelemetryFromRows(results: Record<string, AeRow[]>, audie
   const byBalance = funnelBy(results.funnelBalance ?? [], audience, (k) => label(BALANCE_BUCKETS, k));
   const total = finish(
     Object.values(byBalance).reduce((acc, r) => {
-      for (const f of ["offers", "offersWithAd", "starts", "completions", "fails", "skips"] as const) acc[f] += r[f];
+      for (const f of ["offers", "offersWithAd", "starts", "startsWithAd", "completions", "completionsWithAd", "fails", "skips"] as const) acc[f] += r[f];
       return acc;
     }, emptyCell()),
   );

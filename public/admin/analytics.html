@@ -149,6 +149,14 @@
           <h3 class="section-title">Rewarded ads</h3>
           <div id="adsummary-body"></div>
         </div>
+        <div class="card" id="economy-card" hidden>
+          <details id="economy-details">
+            <summary>Coin economy</summary>
+            <p class="footnote">Loaded on demand for the selected range (runs extra Analytics Engine queries). Balances are buckets only. Rewarded rates count only offers where an ad could actually be served.</p>
+            <button id="economy-load" class="secondary" type="button">Load economy</button>
+            <div id="economy-body"></div>
+          </details>
+        </div>
         <div class="card" id="topcontent-card" hidden>
           <details id="topcontent-details">
             <summary>Top content (built-in only)</summary>
@@ -835,6 +843,86 @@
         byId("platform-card").hidden = true;
         byId("adsummary-card").hidden = true;
         byId("topcontent-card").hidden = true;
+        byId("economy-card").hidden = true;
+        clear(byId("economy-body"));
+      }
+
+      // --- Coin economy (opt-in: /report ... &economy=1) ---
+      function economyTable(title, rows, headers) {
+        var body = byId("economy-body");
+        body.appendChild(el("h4", "", title));
+        if (!rows.length) {
+          body.appendChild(el("p", "footnote", "No data yet."));
+          return;
+        }
+        var wrap = el("div", "table-scroll");
+        wrap.appendChild(makeTable(headers, rows));
+        body.appendChild(wrap);
+      }
+      function ordered(map, order) {
+        var keys = Object.keys(map || {});
+        if (order) keys.sort(function (a, b) { return order.indexOf(a.split("|").pop()) - order.indexOf(b.split("|").pop()) || (a < b ? -1 : 1); });
+        return keys;
+      }
+      function funnelRows(map, order) {
+        return ordered(map, order).map(function (k) {
+          var r = map[k];
+          return [k, fmtInt(r.offers), fmtInt(r.offersWithAd), fmtInt(r.startsWithAd), fmtInt(r.completionsWithAd), r.startRate == null ? "—" : fmtRate(r.startRate), r.completionRate == null ? "—" : fmtRate(r.completionRate), r.skipRate == null ? "—" : fmtRate(r.skipRate)];
+        });
+      }
+      var FUNNEL_HEADERS = [{ label: "State" }, { label: "Offers", num: true }, { label: "With ad", num: true }, { label: "Started", num: true }, { label: "Completed", num: true }, { label: "Start rate", num: true }, { label: "Completion rate", num: true }, { label: "Skip rate", num: true }];
+      function renderEconomy(e) {
+        var body = byId("economy-body");
+        clear(body);
+        var b = e.buckets || {};
+        var sinkRows = ordered(e.spend.bySink).map(function (sink) {
+          var o = (e.spend.ordinalBySink || {})[sink] || {};
+          return [sink, fmtInt(e.spend.bySink[sink].count), fmtInt(e.spend.bySink[sink].coins), fmtInt(o.first || 0), fmtInt((o["2_3"] || 0) + (o["4_plus"] || 0)), fmtInt(o.unknown || 0)];
+        });
+        economyTable("Coin spend by sink (exact)", sinkRows, [{ label: "Sink" }, { label: "Purchases", num: true }, { label: "Coins", num: true }, { label: "First", num: true }, { label: "Repeat", num: true }, { label: "Unknown", num: true }]);
+        var ms = e.milestones;
+        economyTable("Progression milestones (exact)", ordered(ms.counts).map(function (m) {
+          var g = (ms.byGames || {})[m] || {};
+          return [m, fmtInt(ms.counts[m])].concat((b.games || []).map(function (k) { return fmtInt(g[k] || 0); }));
+        }), [{ label: "Milestone" }, { label: "Players", num: true }].concat((b.games || []).map(function (k) { return { label: "games " + k, num: true }; })));
+        economyTable("Milestones by days playing (exact)", ordered(ms.byAge).map(function (m) {
+          return [m].concat((b.playerAge || []).map(function (k) { return fmtInt(ms.byAge[m][k] || 0); }));
+        }), [{ label: "Milestone" }].concat((b.playerAge || []).map(function (k) { return { label: k, num: true }; })));
+        var t = e.telemetry;
+        if (!t) {
+          body.appendChild(el("p", "footnote", "Telemetry part unavailable: " + (e.telemetryReason || "unknown")));
+          return;
+        }
+        var rf = t.rewardFunnel;
+        economyTable("Rewarded ×2/×3 offers by balance", funnelRows(rf.byBalance, b.balance), FUNNEL_HEADERS);
+        economyTable("Rewarded offers by next target | shortfall", funnelRows(rf.byTargetShortfall, b.shortfall), FUNNEL_HEADERS);
+        economyTable("Rewarded offers by multiplier | base reward", funnelRows(rf.byMultiplierRewardSize, b.rewardSize), FUNNEL_HEADERS);
+        economyTable("Rewarded offers: would the ad close the gap to the next unlock?", funnelRows(rf.byAdClosesGap), FUNNEL_HEADERS);
+        economyTable("Rewarded offers by games played", funnelRows(rf.byGames, b.games), FUNNEL_HEADERS);
+        economyTable("Balance at game completion", ordered(t.balanceAtGameCompleted, b.balance).map(function (k) { return [k, fmtInt(t.balanceAtGameCompleted[k])]; }), [{ label: "Balance" }, { label: "Games", num: true }]);
+        economyTable("Coin source mix", ordered(t.sourceMix).map(function (k) { return [k, fmtInt(t.sourceMix[k].events), fmtInt(t.sourceMix[k].coins)]; }), [{ label: "Source" }, { label: "Events", num: true }, { label: "Coins", num: true }]);
+      }
+      function loadEconomy() {
+        var tab = TABS.filter(function (x) { return x.id === activeTab; })[0];
+        var body = byId("economy-body");
+        clear(body);
+        if (!tab || tab.id === "alltime") {
+          body.appendChild(el("p", "footnote", "Pick a dated range (not All time) to load the economy view."));
+          return;
+        }
+        var params = reportParamsForTab(tab);
+        delete params.series;
+        params.economy = "1";
+        body.appendChild(el("p", "footnote", "Loading…"));
+        fetchReport(params)
+          .then(function (report) {
+            if (report.economy) renderEconomy(report.economy);
+            else { clear(body); body.appendChild(el("p", "footnote", "No economy block in the report.")); }
+          })
+          .catch(function (err) {
+            clear(body);
+            body.appendChild(el("p", "footnote", "Could not load the economy view: " + (err && err.message ? err.message : "unknown error")));
+          });
       }
 
       function loadTab(tabId) {
@@ -861,6 +949,7 @@
             renderPlatforms(report);
             renderAdSummary(report);
             renderTopContent(report);
+            byId("economy-card").hidden = false;
           })
           .catch(function (err) {
             if (seq !== loadSeq) return;
@@ -901,6 +990,8 @@
         showDashboard();
         loadTab(activeTab);
       });
+
+      byId("economy-load").addEventListener("click", loadEconomy);
 
       byId("logout-btn").addEventListener("click", function () {
         clearToken();

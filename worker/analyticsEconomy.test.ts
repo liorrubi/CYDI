@@ -164,12 +164,15 @@ test("AE schema 2: economy context lands as bucket positions and codes, never a 
   const points = buildShadowDataPointsFromParsed(parseIngest("/events", body), "DE", () => 0);
   const [offer, game, spent, legacy] = points;
   assert.equal(offer.doubles[0], 2, "schema version 2");
-  assert.deepEqual(offer.doubles.slice(13), [4, 3, 1, 3, 4, 80, 2], "800_999 / short_10_25 / category / x3 / ad+closes / base 80 / 10_24");
-  assert.deepEqual(game.doubles.slice(13), [9, 0, 0, 0, 0, 55, 0], "10k_20k bucket position 9, coinsEarned 55");
+  assert.deepEqual(offer.doubles.slice(13), [4, 13, 3, 4, 80, 2, 1], "800_999 / category*10+short_10_25 / x3 / ad+closes / base 80 / 10_24 / sampleWeight 1");
+  assert.deepEqual(game.doubles.slice(13), [9, 0, 0, 0, 55, 0, 1], "10k_20k bucket position 9, coinsEarned 55");
   assert.equal(spent.blobs[19], "coinSink:category_unlock");
   assert.equal(spent.doubles[7], 1000, "price in the existing price column");
-  assert.deepEqual(legacy.doubles.slice(13), [0, 0, 0, 0, 0, 0, 0], "a legacy event carries no economy context");
-  for (const p of points) assert.equal(p.doubles.length, 20);
+  assert.deepEqual(legacy.doubles.slice(13), [0, 0, 0, 0, 0, 0, 1], "a legacy event carries no economy context");
+  for (const p of points) {
+    assert.equal(p.doubles.length, 20);
+    assert.equal(p.doubles[19], 1, "double20 is the reserved sampleWeight, 1 (unsampled) on every row");
+  }
 });
 
 // ----------------------------------------------------------------- report ----
@@ -183,7 +186,7 @@ test("economy report: offer -> start -> completion conversion by balance, shortf
   ];
   const t = economyTelemetryFromRows({
     funnelBalance,
-    funnelShortfall: [rows("reward_offer_shown", 101, 1, 20), rows("reward_ad_started", 101, 1, 15)],
+    funnelShortfall: [rows("reward_offer_shown", 11, 1, 20), rows("reward_ad_started", 11, 1, 15)],
     funnelReward: [rows("reward_offer_shown", 23, 1, 10), rows("reward_ad_completed", 23, 1, 2)],
     funnelGap: [rows("reward_offer_shown", 1, 1, 5), rows("reward_ad_completed", 1, 1, 4)],
     funnelGames: [],

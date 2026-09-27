@@ -64,12 +64,13 @@
 //   double13 batchSize (envelopes in the request, valid or not)
 //   --- schema 2 (coin economy; 0 = the event carries no economy context) ---
 //   double14 balanceBucket     1-based position in BALANCE_BUCKETS
-//   double15 shortfallBucket   1-based position in SHORTFALL_BUCKETS
-//   double16 nextTarget        1-based position in NEXT_TARGETS
-//   double17 multiplier        2 | 3 (reward offer funnel)
-//   double18 offerFlags        1 + (adAvailable ? 1 : 0) + (adClosesGap ? 2 : 0), i.e. 1..4
-//   double19 coins             game_completed coinsEarned | reward offer baseReward
-//   double20 gamesBucket       1-based position in GAMES_BUCKETS
+//   double15 targetShortfall   nextTarget position x 10 + shortfallBucket position (NEXT_TARGETS / SHORTFALL_BUCKETS)
+//   double16 multiplier        2 | 3 (reward offer funnel)
+//   double17 offerFlags        1 + (adAvailable ? 1 : 0) + (adClosesGap ? 2 : 0), i.e. 1..4
+//   double18 coins             game_completed coinsEarned | reward offer baseReward
+//   double19 gamesBucket       1-based position in GAMES_BUCKETS
+//   double20 sampleWeight      RESERVED for a possible write-time sampling guard; always 1
+//                              (unsampled) today, on every row. Counts stay sum(_sample_interval).
 // coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
 // balance BUCKET is ever written - never a balance.
 // Booleans are 1/0 and absent numbers are 0, so always filter on blob1 before reading
@@ -109,19 +110,21 @@ export type ShadowDataPoint = { blobs: string[]; doubles: number[]; indexes: str
 /** Bounded enum params, first match wins. Every one is a closed set in analyticsSchema. */
 const DETAIL_PARAMS = ["difficulty", "phase", "tutorialType", "productType", "rarity", "surface", "installAge", "newRank", "coinSink", "coinSource", "milestone"] as const;
 
-/** The schema-2 economy doubles (14..20) for one accepted envelope's params; all 0 when it carries none. */
+/** The schema-2 doubles (14..20) for one accepted envelope's params: economy context (0 when absent) + the reserved sampleWeight (1). */
 export function economyDoubles(params: Record<string, unknown>): number[] {
   const hasOffer = typeof params.adAvailable === "boolean";
   const flags = hasOffer ? 1 + (params.adAvailable ? 1 : 0) + (params.adClosesGap === true ? 2 : 0) : 0;
   const coins = typeof params.coinsEarned === "number" ? params.coinsEarned : typeof params.baseReward === "number" ? params.baseReward : 0;
+  const target = bucketPosition(NEXT_TARGETS, params.nextTarget);
+  const shortfall = bucketPosition(SHORTFALL_BUCKETS, params.shortfallBucket);
   return [
     bucketPosition(BALANCE_BUCKETS, params.balanceBucket),
-    bucketPosition(SHORTFALL_BUCKETS, params.shortfallBucket),
-    bucketPosition(NEXT_TARGETS, params.nextTarget),
+    target > 0 && shortfall > 0 ? target * 10 + shortfall : 0,
     params.multiplier === 2 || params.multiplier === 3 ? params.multiplier : 0,
     flags,
     coins,
     bucketPosition(GAMES_BUCKETS, params.gamesBucket),
+    1, // sampleWeight: reserved, unsampled
   ];
 }
 

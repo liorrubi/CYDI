@@ -65,20 +65,22 @@ const label = (list: readonly string[], position: unknown) => list[num(position)
 /** The AE queries for one window. Only schema-2 rows (double1 >= 2) carry economy context. */
 export function buildEconomyAeQueries(startMs: number, endMs: number): Record<string, string> {
   const T = `timestamp >= ${sqlTime(startMs)} AND timestamp < ${sqlTime(endMs)} AND double1 >= 2`;
-  const F = `${T} AND blob1 IN (${sqlList(OFFER_FUNNEL_EVENTS)}) AND double18 > 0`;
-  const avail = `if(double18 = 2 OR double18 = 4, 1, 0)`;
-  const size = `multiIf(double19 < 50, 1, double19 < 100, 2, double19 < 250, 3, double19 < 500, 4, double19 < 1000, 5, 6)`;
+  // Schema-2 columns (analyticsShadow.ts): 14 balance, 15 target*10+shortfall, 16 multiplier,
+  // 17 offer flags, 18 coins, 19 games, 20 reserved sampleWeight (1).
+  const F = `${T} AND blob1 IN (${sqlList(OFFER_FUNNEL_EVENTS)}) AND double17 > 0`;
+  const avail = `if(double17 = 2 OR double17 = 4, 1, 0)`;
+  const size = `multiIf(double18 < 50, 1, double18 < 100, 2, double18 < 250, 3, double18 < 500, 4, double18 < 1000, 5, 6)`;
   const funnel = (key: string) =>
     `SELECT blob1 AS ev, blob7 AS aud, ${key} AS k, ${avail} AS avail, sum(_sample_interval) AS n FROM ${ECONOMY_AE_DATASET} WHERE ${F} GROUP BY ev, aud, k, avail`;
   return {
     funnelBalance: funnel("double14"),
-    funnelShortfall: funnel("double16 * 100 + double15"),
-    funnelReward: funnel(`double17 * 10 + ${size}`),
-    funnelGap: funnel("if(double18 >= 3, 1, 0)"),
-    funnelGames: funnel("double20"),
-    earnGames: `SELECT blob7 AS aud, blob9 AS gameType, double14 AS k, sum(_sample_interval) AS n, sum(double19 * _sample_interval) AS coins FROM ${ECONOMY_AE_DATASET} WHERE ${T} AND blob1 = 'game_completed' AND double14 > 0 GROUP BY aud, gameType, k`,
+    funnelShortfall: funnel("double15"),
+    funnelReward: funnel(`double16 * 10 + ${size}`),
+    funnelGap: funnel("if(double17 >= 3, 1, 0)"),
+    funnelGames: funnel("double19"),
+    earnGames: `SELECT blob7 AS aud, blob9 AS gameType, double14 AS k, sum(_sample_interval) AS n, sum(double18 * _sample_interval) AS coins FROM ${ECONOMY_AE_DATASET} WHERE ${T} AND blob1 = 'game_completed' AND double14 > 0 GROUP BY aud, gameType, k`,
     earnRare: `SELECT blob7 AS aud, blob20 AS detail, sum(_sample_interval) AS n, sum(double10 * _sample_interval) AS coins FROM ${ECONOMY_AE_DATASET} WHERE ${T} AND blob1 = 'coin_earned' GROUP BY aud, detail`,
-    earnAd: `SELECT blob7 AS aud, double17 AS m, sum(_sample_interval) AS n, sum(double19 * (double17 - 1) * _sample_interval) AS coins FROM ${ECONOMY_AE_DATASET} WHERE ${T} AND blob1 IN ('reward_ad_completed', 'reward_bonus_ad_completed') AND double17 > 0 GROUP BY aud, m`,
+    earnAd: `SELECT blob7 AS aud, double16 AS m, sum(_sample_interval) AS n, sum(double18 * (double16 - 1) * _sample_interval) AS coins FROM ${ECONOMY_AE_DATASET} WHERE ${T} AND blob1 IN ('reward_ad_completed', 'reward_bonus_ad_completed') AND double16 > 0 GROUP BY aud, m`,
   };
 }
 
@@ -173,7 +175,7 @@ export function economyTelemetryFromRows(results: Record<string, AeRow[]>, audie
     rewardFunnel: {
       total,
       byBalance,
-      byTargetShortfall: funnelBy(results.funnelShortfall ?? [], audience, (k) => `${label(NEXT_TARGETS, Math.floor(k / 100))}|${label(SHORTFALL_BUCKETS, k % 100)}`),
+      byTargetShortfall: funnelBy(results.funnelShortfall ?? [], audience, (k) => `${label(NEXT_TARGETS, Math.floor(k / 10))}|${label(SHORTFALL_BUCKETS, k % 10)}`),
       byMultiplierRewardSize: funnelBy(results.funnelReward ?? [], audience, (k) => `x${Math.floor(k / 10)}|${label(REWARD_SIZE_BUCKETS, k % 10)}`),
       byAdClosesGap: funnelBy(results.funnelGap ?? [], audience, (k) => (k === 1 ? "ad_closes_gap" : "ad_does_not_close_gap")),
       byGames: funnelBy(results.funnelGames ?? [], audience, (k) => label(GAMES_BUCKETS, k)),

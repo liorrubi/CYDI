@@ -127,6 +127,11 @@ export default function SiteShell({ children, active = null, onPlay, navExtra, f
             </a>
           </li>
           <li>
+            <a className="site-footer-link" href="/whats-new">
+              What's new
+            </a>
+          </li>
+          <li>
             <a className="site-footer-link" href="/about">
               About
             </a>

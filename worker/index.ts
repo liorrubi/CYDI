@@ -58,6 +58,7 @@ import { campaignLinkForPath, campaignRedirectUrl, CAMPAIGN_PATH_PREFIX } from "
 import { versionGateResponse } from "./multiplayerVersionGate";
 import { ANDROID_PATH, androidRedirectUrl, canonicalUrl, renderSeoSection, robotsTxt, seoPageForPath, sitemapXml, type SeoPage } from "./seoPages";
 import { CONTENT_PATHS, contentPageForPath, renderContentDocument } from "./contentPages";
+import { isAppRoute, isHtmlFallback, notFoundResponse } from "./notFound";
 
 export { AnalyticsDO, DailyChallengeDO, RoomDO };
 
@@ -1202,6 +1203,15 @@ export default {
       if (seoPage) return handleSeoPage(seoPage, request, env);
     }
 
-    return env.ASSETS.fetch(request);
+    // Everything else is a real static file, an app route, or nothing at all. The
+    // SPA fallback would answer "nothing at all" with the homepage and a 200, so it
+    // becomes a 404 here - decided from the one ASSETS response this request makes
+    // anyway, with no extra fetch (see worker/notFound.ts).
+    const response = await env.ASSETS.fetch(request);
+    if ((request.method === "GET" || request.method === "HEAD") && !isAppRoute(url.pathname) && isHtmlFallback(response)) {
+      await response.body?.cancel();
+      return notFoundResponse(request.method);
+    }
+    return response;
   },
 };

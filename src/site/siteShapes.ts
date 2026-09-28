@@ -38,8 +38,6 @@ export const HERO_SHAPE_IDS = [
   "nat-sun",
 ];
 
-/** The "more shapes to draw from memory" grid on the SEO/practice page. */
-export const PRACTICE_GRID_SHAPE_IDS = ["home-house", "sym-heart", "nat-leaf", "trans-car", "fant-crown", "food-donut"];
 
 /** How long each hero shape holds before the next one draws itself in (3a: 4.2s). */
 export const HERO_ROTATION_MS = 4200;

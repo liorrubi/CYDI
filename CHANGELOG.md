@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.54.1 - 2026-09-28
+
+Web only - the Android app is unchanged and needs no release. The site's pages now
+say on screen what they only used to say to crawlers, unknown addresses stop
+impersonating the homepage, and there is a page that shows the game is maintained.
+
+**Every challenge page explains its own shape, on screen.** The page-specific copy
+of the 13 practice pages (the four "perfect" and accuracy pages and the nine "from
+memory" ones) lived only in the Worker's crawlable block, which the app removes
+when it renders - so a visitor, or any crawler that runs JavaScript, saw one
+template with the shape's name swapped in. Measured on the live site, any two
+challenge pages overlapped by 90-94% of their rendered text, and
+`/drawing-accuracy-test` rendered character for character the same as
+`/draw-a-perfect-circle`. The copy now lives in `src/content/challengePageCopy.ts`,
+read by both the Worker and `SeoPracticePage.tsx`: each page renders its own h1,
+its own lede and an "About this challenge" section (with the geometry diagram on
+circle, star and heart). The crawlable HTML is unchanged apart from one word.
+Rendered overlap is now 0.38-0.69, and the accuracy test is its own page.
+
+**Real links between challenges.** The "More shapes" strip on a practice page was
+six fixed shapes with no link, the same six everywhere; it is now four linked
+challenge cards (same category first), and the "Practice" breadcrumb leads to the
+`/drawing-challenges` hub instead of the game's shape map.
+
+**Unknown addresses are a real 404.** The assets binding's SPA fallback answered
+any path with the prerendered homepage and a 200 - an unbounded set of duplicates
+of `/`. The Worker now returns a small `noindex` "Page not found" page instead,
+decided from the one ASSETS fetch the request already made (`worker/notFound.ts`),
+with the list of real routes built from the app's own route constants (`/play` and
+`/play/classic` moved to `src/app/webPaths.ts` so the Worker can read them). No
+KV, Durable Object or analytics access, and no extra request.
+
+**What's new.** A new prerendered page, `/whats-new`, lists the player-facing
+changes since August with their dates, linked from the site footer and from About.
+
 ## 0.53.1 - 2026-09-25
 
 **/s/gear, the Gear Short's campaign alias.** The Short is public, so the alias

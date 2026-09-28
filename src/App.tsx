@@ -58,7 +58,7 @@ function SiteChunkFallback() {
 import { toAchievements, toChallengesHub, toDailyChallenge, toFriendChallengeIntro, toHome, toPassPlay,
   toPlayTogether, toSeoLanding, toShapeChallenge, toSharedArtistResult, toSharedResult,
   toSiteHome } from "./app/routes";
-import { resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
+import { JOIN_LINK_PATH_PATTERN, resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
 import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
 import { initEconomyAnalytics } from "./services/economyAnalytics";
@@ -87,6 +87,9 @@ import { maybePromptAppUpdate } from "./services/appUpdate";
 import { isRoomCode } from "./multiplayer/protocol";
 import { getShapeById } from "./content/contentRepository";
 import type { Screen } from "./types/GameMode";
+// /play and /play/classic. A module of their own so the Worker's 404 routing
+// (worker/notFound.ts) reads the same two addresses this file serves.
+import { CLASSIC_PATH, PLAY_PATH } from "./app/webPaths";
 
 /** Imports a shared challenge idempotently, keeping the recipient's own progress if they've already opened this link before - only `name`/`target` ever sync from the payload, never `createdAt`/`personalBest`/`attempts`. */
 function importSharedChallenge(challenge: DecodedSharedChallenge) {
@@ -123,28 +126,11 @@ function importSharedScreenFromHash(): Screen | null {
 
 /** Matches the Play Together invite path, `/join/<CODE>`, and returns the code. Case-insensitive on the way in; codes themselves are always upper-case. */
 export function playTogetherJoinCode(pathname: string): string | null {
-  const match = pathname.match(/^\/join\/([A-Za-z0-9]{6})\/?$/);
+  const match = pathname.match(JOIN_LINK_PATH_PATTERN);
   if (!match) return null;
   const code = match[1].toUpperCase();
   return isRoomCode(code) ? code : null;
 }
-
-/**
- * Where the web serves the GAME. "/" is the public site (art direction 3a); the
- * game's own home screen lives here, so it is a real, shareable address rather
- * than a mode of "/". Android never sees either: Capacitor loads index.html
- * from inside the APK at "/", and `Capacitor.isNativePlatform()` gates every branch below.
- */
-export const PLAY_PATH = "/play";
-
-/**
- * Classic gameplay, entered straight from the site's primary CTA. It gets its
- * own address rather than sharing /play so a reload, a Back press and a shared
- * link all land where the button said they would. /play stays what it was: the
- * game's menu screen, and still the only route to Daily Challenge, Create
- * Challenge, My Challenges and the Shop.
- */
-export const CLASSIC_PATH = "/play/classic";
 
 function normalizePath(pathname: string): string {
   return pathname.replace(/\/+$/, "");
@@ -713,6 +699,7 @@ export default function App({ landing }: AppProps) {
             return (
               <Suspense fallback={<SiteChunkFallback />}>
                 <SeoPracticePage
+                  path={landing?.path ?? ""}
                   shape={landingShape}
                   onPractice={startLandingPractice}
                   onPlay={() => enterGame(toShapeChallenge(), CLASSIC_PATH)}

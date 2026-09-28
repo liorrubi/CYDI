@@ -89,6 +89,11 @@ export type ContentPage = {
   /** Optional line under the h1 (dates on the policy pages). */
   standfirst?: string;
   blocks: ContentBlock[];
+  /**
+   * The 404 page only: `noindex`, and no canonical or og:url - it is served at
+   * whatever address was mistyped, and none of them is its own.
+   */
+  noindex?: boolean;
 };
 
 // ------------------------------------------------------------ how to play ----
@@ -529,7 +534,8 @@ const ABOUT: ContentPage = {
     {
       kind: "p",
       html:
-        'CYDI is in active development, and the game changes often. If something is broken or you have an idea ' +
+        'CYDI is in active development, and the game changes often - <a href="/whats-new">what\'s new</a> lists ' +
+        "the recent changes. If something is broken or you have an idea " +
         'for it, <a href="/contact">get in touch</a> - it is a small project and messages are read by the people ' +
         "who make it.",
     },
@@ -990,9 +996,109 @@ const ACCESSIBILITY: ContentPage = {
   ],
 };
 
+// -------------------------------------------------------------- what's new ----
+
+/*
+ * What has changed for players, newest first. Every entry is a real, dated release
+ * from CHANGELOG.md - only the changes a player can see, in plain words, without
+ * the engineering detail the changelog carries. Nothing here is generated or
+ * fetched: it is edited by hand at release time, like the changelog itself.
+ */
+const WHATS_NEW_LAST_UPDATED = "28 September 2026";
+
+const WHATS_NEW: ContentPage = {
+  path: "/whats-new",
+  title: "What's New in CYDI - Recent Updates and New Challenges",
+  description:
+    "Recent updates to CYDI, the free drawing-from-memory game: new drawing challenges, multiplayer, two players on one phone, dark mode and more, with the date each one arrived.",
+  h1: "What's new in CYDI",
+  standfirst: `Last updated: ${WHATS_NEW_LAST_UPDATED}`,
+  blocks: [
+    {
+      kind: "p",
+      html:
+        "CYDI is made by two people and updated often. This page lists what has changed for players, newest " +
+        'first. For how the game itself works, see <a href="/how-to-play">How to play</a>.',
+    },
+
+    { kind: "h2", text: "September 2026" },
+    {
+      kind: "ul",
+      items: [
+        "<strong>28 September</strong> - Every challenge page now explains its own shape on screen: what the " +
+          "target is judged on and the mistakes memory makes with it, with links on to related challenges.",
+        "<strong>27 September</strong> - The <a href=\"/privacy\">privacy policy</a> was updated, and a new " +
+          'page explains how to <a href="/delete-data">ask for your data to be deleted</a>.',
+        '<strong>25 September</strong> - <a href="/draw-a-gear-from-memory">Draw a gear from memory</a>: an ' +
+          "eight-toothed cog, and the one challenge where the count is the hard part.",
+        '<strong>24 September</strong> - <a href="/draw-a-triangle-from-memory">Draw a triangle from memory</a>.',
+        '<strong>23 September</strong> - <a href="/draw-a-lightning-bolt-from-memory">Draw a lightning bolt from ' +
+          "memory</a>.",
+        '<strong>22 September</strong> - <a href="/draw-a-snail-from-memory">Draw a snail from memory</a>.',
+        '<strong>21 September</strong> - <a href="/draw-a-pig-from-memory">Draw a pig from memory</a>.',
+        '<strong>20 September</strong> - <a href="/draw-an-owl-from-memory">Draw an owl from memory</a>.',
+        '<strong>19 September</strong> - <a href="/draw-a-bear-from-memory">Draw a bear from memory</a>.',
+        '<strong>18 September</strong> - <a href="/drawing-challenges">Drawing Challenges</a>, one page listing ' +
+          'every single-shape challenge, arrived together with <a href="/draw-a-dog-from-memory">the dog</a> and ' +
+          '<a href="/draw-a-cat-from-memory">the cat</a>.',
+      ],
+    },
+
+    { kind: "h2", text: "August 2026" },
+    {
+      kind: "ul",
+      items: [
+        '<strong>28 August</strong> - <a href="/how-to-play">How to play</a>, <a href="/about">About</a>, ' +
+          '<a href="/contact">Contact</a> and <a href="/terms">Terms</a> pages, and a visual refresh of the ' +
+          "Android app.",
+        '<strong>23 August</strong> - <a href="/multiplayer-drawing-game">Play Together</a>: live rooms for two to ' +
+          "eight players, all drawing the same shape at once. The same day, " +
+          '<a href="/2-player-drawing-game-one-phone">2 Players</a> - pass-and-play for two people on one device - ' +
+          "and a mode selector on the home screen.",
+        '<strong>20 August</strong> - <a href="/draw-a-perfect-star">Draw a perfect star</a> and ' +
+          '<a href="/draw-a-perfect-heart">draw a perfect heart</a>.',
+        "<strong>19 August</strong> - A shorter start for new players - one \"Start here\" pointer instead of a " +
+          "five-step introduction - and higher-contrast colours wherever text was hard to read.",
+        "<strong>7 August</strong> - Dark mode, with a Light/Dark switch in Settings.",
+      ],
+    },
+  ],
+};
+
+// -------------------------------------------------------------- not found ----
+
+/**
+ * What an unknown address gets, with a real 404 status (worker/notFound.ts). Not
+ * in CONTENT_PAGES: it has no path of its own, so it is not in the sitemap and is
+ * never prerendered.
+ */
+export const NOT_FOUND_PAGE: ContentPage = {
+  path: "/404",
+  title: "Page not found - CYDI",
+  description: "There is no page at this address on playcydi.com.",
+  h1: "Page not found",
+  noindex: true,
+  blocks: [
+    {
+      kind: "p",
+      html:
+        "There is nothing at this address. It may have been mistyped, or it may be an old link to a page that " +
+        "has since moved.",
+    },
+    {
+      kind: "ul",
+      items: [
+        '<a href="/">Play CYDI</a> - the game, in your browser',
+        '<a href="/drawing-challenges">Drawing challenges</a> - practise one shape at a time',
+        '<a href="/how-to-play">How to play</a> - how a round works and how the score is worked out',
+      ],
+    },
+  ],
+};
+
 /** Every page this module serves. */
 
-export const CONTENT_PAGES: ContentPage[] = [HOW_TO_PLAY, ABOUT, CONTACT, TERMS, ACCESSIBILITY, PRIVACY, DELETE_DATA];
+export const CONTENT_PAGES: ContentPage[] = [HOW_TO_PLAY, ABOUT, CONTACT, TERMS, ACCESSIBILITY, PRIVACY, DELETE_DATA, WHATS_NEW];
 
 export const CONTENT_PATHS: string[] = CONTENT_PAGES.map((page) => page.path);
 
@@ -1147,14 +1253,14 @@ export function renderContentDocument(page: ContentPage): string {
     `<meta name="color-scheme" content="light dark">\n` +
     `<title>${escapeHtml(page.title)}</title>\n` +
     `<meta name="description" content="${escapeAttribute(page.description)}">\n` +
-    `<link rel="canonical" href="${canonical}">\n` +
+    (page.noindex ? `<meta name="robots" content="noindex">\n` : `<link rel="canonical" href="${canonical}">\n`) +
     `<link rel="icon" type="image/svg+xml" href="/favicon.svg">\n` +
     `<meta name="google-adsense-account" content="ca-pub-3787018288764544">\n` +
     `<meta property="og:type" content="article">\n` +
     `<meta property="og:site_name" content="CYDI">\n` +
     `<meta property="og:title" content="${escapeAttribute(page.title)}">\n` +
     `<meta property="og:description" content="${escapeAttribute(page.description)}">\n` +
-    `<meta property="og:url" content="${canonical}">\n` +
+    (page.noindex ? "" : `<meta property="og:url" content="${canonical}">\n`) +
     `<meta name="twitter:card" content="summary">\n` +
     `<meta name="twitter:title" content="${escapeAttribute(page.title)}">\n` +
     `<meta name="twitter:description" content="${escapeAttribute(page.description)}">\n` +

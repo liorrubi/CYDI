@@ -22,9 +22,13 @@
  */
 import SiteShell from "./SiteShell";
 import SiteShape from "./SiteShape";
-import { getCategories, getCategoryById, type ShapeDefinition } from "../content/contentRepository";
-import { resolveSiteShapesOrFirst, runtimeCatalogCounts, PRACTICE_GRID_SHAPE_IDS } from "./siteShapes";
+import { getCategories, getCategoryById, getShapeById, type ShapeDefinition } from "../content/contentRepository";
+import { runtimeCatalogCounts } from "./siteShapes";
 import { FIRST_ROUND_PREVIEW_SECONDS } from "../content/publicFacts";
+// This page's own copy, and the list of the other challenge pages: both static
+// modules inside this lazy, web-only chunk - nothing on this page is fetched.
+import { challengePageCopyForPath } from "../content/challengePageCopy";
+import { DRAWING_CHALLENGES, type DrawingChallenge } from "../content/drawingChallenges";
 import {
   HEAVIEST_CRITERION,
   LOOP_STEPS,
@@ -35,6 +39,8 @@ import {
 } from "../content/siteContent";
 
 type SeoPracticePageProps = {
+  /** The landing path being rendered - the key to this page's own copy. */
+  path: string;
   /** The shape this page is about, resolved through contentRepository. */
   shape: ShapeDefinition;
   /** Starts the existing practice flow for this shape. */
@@ -50,7 +56,7 @@ const LOOP_BADGE_CLASS: Record<string, string> = {
   Scored: "site-stepcard-badge site-stepcard-badge-good",
 };
 
-export default function SeoPracticePage({ shape, onPractice, onPlay }: SeoPracticePageProps) {
+export default function SeoPracticePage({ path, shape, onPractice, onPlay }: SeoPracticePageProps) {
   const categoryName = getCategoryById(shape.category)?.name ?? "";
   const categories = getCategories();
   // The chip row below renders one chip per entry of `categories`, so the
@@ -58,10 +64,12 @@ export default function SeoPracticePage({ shape, onPractice, onPlay }: SeoPracti
   // build-time publicFacts numbers. See runtimeCatalogCounts().
   const counts = runtimeCatalogCounts();
   const faq = siteFaq(counts);
-  const grid = resolveSiteShapesOrFirst(
-    PRACTICE_GRID_SHAPE_IDS.filter((id) => id !== shape.id),
-    6,
-  );
+  // Every landing path that opens this page has copy (landingPages.test.ts), so
+  // the generic heading and lede below are only a fallback for a path added
+  // without any.
+  const copy = challengePageCopyForPath(path);
+  const [lede, ...details] = copy?.paragraphs ?? [];
+  const related = relatedChallenges(path, shape.category, 4);
 
   return (
     <SiteShell
@@ -82,7 +90,10 @@ export default function SeoPracticePage({ shape, onPractice, onPlay }: SeoPracti
               <nav aria-label="Breadcrumb">
                 <ol className="site-crumbs">
                   <li>
-                    <a className="site-crumb-link" href="/draw-shapes-online">
+                    {/* The practice hub, not the game's shape map: "Practice" is
+                        what /drawing-challenges is, and it is the one page that
+                        lists every challenge. */}
+                    <a className="site-crumb-link" href="/drawing-challenges">
                       Practice
                     </a>
                   </li>
@@ -102,15 +113,20 @@ export default function SeoPracticePage({ shape, onPractice, onPlay }: SeoPracti
               </nav>
 
               <h1 className="site-h1">
-                Draw {indefiniteArticle(shape.name)} {shape.name.toLowerCase()}
-                <br />
-                from memory
+                {copy ? (
+                  <HeadingLines heading={copy.heading} />
+                ) : (
+                  <>
+                    Draw {indefiniteArticle(shape.name)} {shape.name.toLowerCase()}
+                    <br />
+                    from memory
+                  </>
+                )}
               </h1>
 
               <p className="site-lede">
-                {shape.name} is one of {counts.shapes} shapes in CYDI. You see the shape, it disappears, and you redraw
-                it from memory in a single attempt. The result is scored on how close your line came to the original
-                outline.
+                {lede ??
+                  `${shape.name} is one of ${counts.shapes} shapes in CYDI. You see the shape, it disappears, and you redraw it from memory in a single attempt. The result is scored on how close your line came to the original outline.`}
               </p>
 
               <div className="site-hero-actions">
@@ -147,6 +163,43 @@ export default function SeoPracticePage({ shape, onPractice, onPlay }: SeoPracti
           </div>
         </div>
       </section>
+
+      {/* ---------------------------------------------------------- detail -- */}
+      {/* What is particular about THIS shape - the one section no other challenge
+          page shares. Same sentences as the Worker's crawlable block, from the
+          same module, so what a visitor reads is what gets indexed. */}
+      {copy && (details.length > 0 || copy.image) && (
+        <section className="site-band" aria-labelledby="site-detail-heading">
+          <div className="site-width">
+            <div className={copy.image ? "site-guide site-guide-with-figure" : "site-guide"}>
+              <div className="site-guide-copy">
+                <span className="site-kicker">About this challenge</span>
+                <h2 className="site-h2" id="site-detail-heading">
+                  {copy.detailHeading}
+                </h2>
+                {details.map((paragraph) => (
+                  <p className="site-body site-guide-paragraph" key={paragraph.slice(0, 48)}>
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+              {copy.image && (
+                <figure className="site-guide-figure">
+                  <img
+                    src={copy.image.src}
+                    alt={copy.image.alt}
+                    width={copy.image.width}
+                    height={copy.image.height}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption>{copy.image.caption}</figcaption>
+                </figure>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ------------------------------------------------------------ loop -- */}
       <section className="site-band site-band-alt" aria-labelledby="site-loop-heading">
@@ -227,32 +280,38 @@ export default function SeoPracticePage({ shape, onPractice, onPlay }: SeoPracti
       </section>
 
       {/* ---------------------------------------------------- keep practising */}
-      {grid.length > 0 && (
+      {/* Real links to other challenge pages, in the hub's own card - these used
+          to be six fixed shapes with no link and no page behind most of them, the
+          same six on every challenge. Plain <a href>: a normal navigation, no
+          prefetch, nothing loaded until a visitor actually picks one. */}
+      {related.length > 0 && (
         <section className="site-band site-band-alt" aria-labelledby="site-more-heading">
           <div className="site-width">
             <div className="site-band-head">
               <div>
                 <span className="site-kicker">Keep practising</span>
                 <h2 className="site-h2" id="site-more-heading">
-                  More shapes to draw from memory
+                  More drawing challenges
                 </h2>
               </div>
-              <a className="site-textlink" href="/draw-shapes-online">
-                All {counts.categories} categories →
+              <a className="site-textlink" href="/drawing-challenges">
+                All drawing challenges →
               </a>
             </div>
-            <div className="site-shapegrid">
-              {grid.map((entry) => (
-                <div className="site-shapecard" key={entry.shape.id}>
-                  <div className="site-shapecard-art">
-                    <SiteShape shape={entry.shape} size={120} strokeWidth={4} variant="site-shape-ink" />
-                  </div>
-                  <div>
-                    <strong className="site-shapecard-name">{entry.shape.name}</strong>
-                    <br />
-                    <span className="site-shapecard-category">{entry.categoryName}</span>
-                  </div>
-                </div>
+            <div className="site-shapegrid site-shapegrid-challenges">
+              {related.map((card) => (
+                <a className="site-shapecard site-challengecard" href={card.href} key={card.href}>
+                  <span className="site-shapecard-art">
+                    <SiteShape shape={card.shape} size={160} strokeWidth={4} variant="site-shape-ink" />
+                  </span>
+                  <span className="site-challengecard-text">
+                    <strong className="site-shapecard-name">{card.name}</strong>
+                    <span className="site-shapecard-category">{card.note}</span>
+                  </span>
+                  <span className="site-challengecard-go">
+                    Play challenge <span aria-hidden="true">→</span>
+                  </span>
+                </a>
               ))}
             </div>
           </div>
@@ -315,6 +374,38 @@ export default function SeoPracticePage({ shape, onPractice, onPlay }: SeoPracti
       </section>
     </SiteShell>
   );
+}
+
+/**
+ * The page's own heading, keeping 4a's two-line form: "Draw a Bear" / "From
+ * Memory". A heading without that ending ("Draw a Perfect Circle") is one line.
+ */
+function HeadingLines({ heading }: { heading: string }) {
+  const split = heading.match(/^(.*) (From Memory)$/);
+  if (!split) return <>{heading}</>;
+  return (
+    <>
+      {split[1]}
+      <br />
+      {split[2]}
+    </>
+  );
+}
+
+type RelatedChallenge = DrawingChallenge & { shape: ShapeDefinition };
+
+/**
+ * Other challenge pages to send a visitor on to: up to three from this shape's
+ * own category, then the rest in the hub's order. Deterministic, and drawn from
+ * the same list the hub renders, so every card is a page that exists.
+ */
+function relatedChallenges(currentPath: string, category: string, count: number): RelatedChallenge[] {
+  const others = DRAWING_CHALLENGES.filter((challenge) => challenge.href !== currentPath)
+    .map((challenge) => ({ ...challenge, shape: getShapeById(challenge.shapeId) }))
+    .filter((challenge): challenge is RelatedChallenge => challenge.shape !== undefined);
+  const sameCategory = others.filter((challenge) => challenge.shape.category === category).slice(0, 3);
+  const rest = others.filter((challenge) => !sameCategory.includes(challenge));
+  return [...sameCategory, ...rest].slice(0, count);
 }
 
 /** "a compass star" / "an anchor" - so the H1 reads correctly for any catalog name. */

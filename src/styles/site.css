@@ -1495,6 +1495,51 @@
 }
 
 /*
+ * "About this challenge" on a practice page: the shape's own copy, and where the
+ * page has one, the diagram drawn from the shape's geometry. The diagram is dark
+ * ink on white, so it sits on the same white paper as the target shape above it.
+ */
+.site-guide {
+  max-width: 68ch;
+}
+
+.site-guide-with-figure {
+  max-width: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 48px);
+  align-items: start;
+}
+
+.site-guide-paragraph {
+  max-width: 68ch;
+  margin-top: 14px;
+}
+
+.site-guide-figure {
+  margin: 0;
+  border-radius: 20px;
+  background: var(--site-paper);
+  color: var(--site-ink-muted);
+  padding: 16px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+}
+
+.site-guide-figure img {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.site-guide-figure figcaption {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/*
  * "This is the practice corner" - one line under the hero meta row, with the way
  * into the full game next to it. Muted and small on purpose: the cards below are
  * the page, and this is the footnote that stops them being mistaken for it.
@@ -2361,7 +2406,8 @@
 
 @media (max-width: 900px) {
   .site-hero-inner,
-  .site-faq {
+  .site-faq,
+  .site-guide-with-figure {
     grid-template-columns: 1fr;
   }
 

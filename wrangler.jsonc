@@ -70,6 +70,7 @@
       "!/privacy",
       "!/accessibility",
       "!/delete-data",
+      "!/whats-new",
       // Generated text, derived from CONTENT_PATHS.
       "!/robots.txt",
       "!/sitemap.xml"

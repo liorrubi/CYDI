@@ -1539,6 +1539,92 @@
   line-height: 1.5;
 }
 
+/* Deep-dive tables: the scorer's share per part, and a scored example. */
+.site-datatable {
+  width: 100%;
+  max-width: 68ch;
+  margin-top: 22px;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.site-datatable caption {
+  caption-side: top;
+  text-align: left;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  padding-bottom: 8px;
+}
+
+.site-datatable th,
+.site-datatable td {
+  text-align: left;
+  font-weight: 500;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--site-hairline);
+  vertical-align: top;
+}
+
+.site-datatable thead th {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.site-datatable-num {
+  text-align: right !important;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.site-datatable-total {
+  font-weight: 800 !important;
+}
+
+.site-sharebar {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--site-chip);
+  overflow: hidden;
+}
+
+.site-sharebar > span {
+  display: block;
+  height: 100%;
+  background: var(--site-cta);
+}
+
+.site-drills {
+  list-style: none;
+  margin: 22px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+  counter-reset: drill;
+}
+
+.site-drill {
+  counter-increment: drill;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--site-panel);
+  border: 1px solid var(--site-hairline);
+}
+
+.site-drill-title::before {
+  content: counter(drill) " · ";
+  color: var(--color-text-muted);
+}
+
 /*
  * "This is the practice corner" - one line under the hero meta row, with the way
  * into the full game next to it. Muted and small on purpose: the cards below are

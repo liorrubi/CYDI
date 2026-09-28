@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.54.2 - 2026-09-28
+
+Web only - Android is unchanged and needs no release. Five challenge pages get a
+deeper, shape-specific treatment: the circle, and the four animal pages whose
+rendered text still overlapped most after 0.54.1 (owl, pig, snail, bear).
+
+**How the scorer reads the shape.** Each deepened page shows how the 128 comparison
+points split across the shape's parts - a part's share of the line is its share of
+the points - so a player can see what the score is really made of: on the owl the
+eyes take 35%, almost as much as the body outline; on the snail the spiral alone is
+30%; on the pig the eyes are only 8%.
+
+**A scored example of the signature mistake.** The same attempt, drawn with one
+fixed, slight wobble, scored with and without that shape's most common mistake,
+with an overlay of the attempt on the target (owl 93 -> 66 for small, wide-set eyes;
+pig 88 -> 61 for a small, high snout; snail 94 -> 73 for a spiral of 1.2 turns
+instead of 2.2; bear 88 -> 64 for drifting ears; circle 92 -> 66 unclosed, 73 at 58%
+of the size). Plus three practice drills per page, taken from the shape's real
+proportions.
+
+**Precomputed, never scored on a page.** `src/content/scoredExamples.ts` builds the
+attempts from the real generators and runs the real `scoreAttempt()` at build time;
+`scripts/generateScoredExamples.ts` writes the committed `scoredExamplesData.ts` and
+the five `/images/seo/*-scored-example.svg` overlays. Pages and the Worker read only
+the committed numbers - no API, Durable Object, analytics or scoring call on load -
+and `scoredExamples.test.ts` fails if the committed numbers or images drift from the
+scorer, or if anything a page loads imports it.
+
+Rendered overlap between the 13 challenge pages: median 0.52 -> 0.40; owl, pig,
+snail and bear now 0.38-0.41 against each other (were 0.66-0.69). The What's new
+entry for 28 September mentions the five pages.
+
 ## 0.54.1 - 2026-09-28
 
 Web only - the Android app is unchanged and needs no release. The site's pages now

@@ -28,6 +28,8 @@ import { FIRST_ROUND_PREVIEW_SECONDS } from "../content/publicFacts";
 // This page's own copy, and the list of the other challenge pages: both static
 // modules inside this lazy, web-only chunk - nothing on this page is fetched.
 import { challengePageCopyForPath } from "../content/challengePageCopy";
+// Numbers precomputed by the real scorer at build time - this page scores nothing.
+import { scoredExampleForPath } from "../content/scoredExamplesData";
 import { DRAWING_CHALLENGES, type DrawingChallenge } from "../content/drawingChallenges";
 import {
   HEAVIEST_CRITERION,
@@ -69,6 +71,8 @@ export default function SeoPracticePage({ path, shape, onPractice, onPlay }: Seo
   // without any.
   const copy = challengePageCopyForPath(path);
   const [lede, ...details] = copy?.paragraphs ?? [];
+  const deepDive = copy?.deepDive;
+  const scoredExample = deepDive ? scoredExampleForPath(path) : undefined;
   const related = relatedChallenges(path, shape.category, 4);
 
   return (
@@ -199,6 +203,136 @@ export default function SeoPracticePage({ path, shape, onPractice, onPlay }: Seo
             </div>
           </div>
         </section>
+      )}
+
+      {/* ------------------------------------------------------- deep dive -- */}
+      {/* A few pages go further: how the scorer weighs THIS shape, what its
+          signature mistake costs, and drills taken from its geometry. Same text
+          and numbers as the crawlable block; the numbers were computed by the
+          real scorer at build time (scoredExamplesData.ts). */}
+      {deepDive && scoredExample && (
+        <>
+          <section className="site-band site-band-alt" aria-labelledby="site-scorer-heading">
+            <div className="site-width">
+              <div className="site-guide">
+                <span className="site-kicker">Scoring this shape</span>
+                <h2 className="site-h2" id="site-scorer-heading">
+                  {deepDive.scorerHeading}
+                </h2>
+                {deepDive.scorerParagraphs.map((paragraph) => (
+                  <p className="site-body site-guide-paragraph" key={paragraph.slice(0, 48)}>
+                    {paragraph}
+                  </p>
+                ))}
+                <table className="site-datatable">
+                  <caption>Each part's share of the line, and of the scorer's comparison points</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Part</th>
+                      <th scope="col" className="site-datatable-num">
+                        Share
+                      </th>
+                      <th scope="col" className="site-datatable-num">
+                        Points
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scoredExample.partShares.map((part) => (
+                      <tr key={part.name}>
+                        <th scope="row">
+                          {part.name}
+                          <span className="site-sharebar" aria-hidden="true">
+                            <span style={{ width: `${part.percent}%` }} />
+                          </span>
+                        </th>
+                        <td className="site-datatable-num">{part.percent}%</td>
+                        <td className="site-datatable-num">{part.points}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="site-band" aria-labelledby="site-example-heading">
+            <div className="site-width">
+              <div className="site-guide site-guide-with-figure">
+                <div className="site-guide-copy">
+                  <span className="site-kicker">A scored example</span>
+                  <h2 className="site-h2" id="site-example-heading">
+                    {deepDive.exampleHeading}
+                  </h2>
+                  {deepDive.exampleParagraphs.map((paragraph) => (
+                    <p className="site-body site-guide-paragraph" key={paragraph.slice(0, 48)}>
+                      {paragraph}
+                    </p>
+                  ))}
+                  <table className="site-datatable">
+                    <caption>Scored by the game's own scorer, out of 100</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Attempt</th>
+                        <th scope="col" className="site-datatable-num">
+                          Total
+                        </th>
+                        <th scope="col" className="site-datatable-num">
+                          Shape
+                        </th>
+                        <th scope="col" className="site-datatable-num">
+                          Coverage
+                        </th>
+                        <th scope="col" className="site-datatable-num">
+                          Scale
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scoredExample.rows.map((row) => (
+                        <tr key={row.label}>
+                          <th scope="row">{row.label}</th>
+                          <td className="site-datatable-num site-datatable-total">{row.total}</td>
+                          <td className="site-datatable-num">{row.shapeMatch}</td>
+                          <td className="site-datatable-num">{row.coverage}</td>
+                          <td className="site-datatable-num">{row.scale}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <figure className="site-guide-figure">
+                  <img
+                    src={scoredExample.image}
+                    alt={deepDive.exampleImageAlt}
+                    width={400}
+                    height={400}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <figcaption>{deepDive.exampleImageCaption}</figcaption>
+                </figure>
+              </div>
+            </div>
+          </section>
+
+          <section className="site-band site-band-alt" aria-labelledby="site-drills-heading">
+            <div className="site-width">
+              <span className="site-kicker">Practice</span>
+              <h2 className="site-h2" id="site-drills-heading">
+                {deepDive.drillsHeading}
+              </h2>
+              <ol className="site-drills">
+                {deepDive.drills.map((drill) => (
+                  <li className="site-drill" key={drill.title}>
+                    <strong className="site-drill-title">{drill.title}</strong>
+                    <p className="site-body">{drill.body}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </section>
+        </>
       )}
 
       {/* ------------------------------------------------------------ loop -- */}

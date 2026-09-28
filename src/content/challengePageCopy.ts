@@ -28,6 +28,9 @@
  * which is shared by design (siteContent.ts).
  */
 import { RESAMPLE_POINTS, SCORE_WEIGHT_PERCENTS, SIZE_TOLERANCE_PERCENT } from "./publicFacts";
+// Precomputed by the real scorer at build time (scripts/generateScoredExamples.ts).
+// Every number in a deepDive below is read from here, never typed.
+import { scoredExampleForPath, type ScoredExampleData } from "./scoredExamplesData";
 
 export type ChallengePageImage = {
   src: string;
@@ -51,7 +54,38 @@ export type ChallengePageCopy = {
   paragraphs: string[];
   /** A diagram generated from the shape's own geometry (scripts/generateSeoShapeImages.ts). */
   image?: ChallengePageImage;
+  /**
+   * The deeper treatment a few pages get: how the scorer weighs this shape, a
+   * scored example with its overlay, and practice drills taken from the shape's
+   * geometry. The tables come from scoredExamplesData.ts, keyed by `path`.
+   */
+  deepDive?: ChallengeDeepDive;
 };
+
+export type ChallengeDeepDive = {
+  scorerHeading: string;
+  scorerParagraphs: string[];
+  exampleHeading: string;
+  exampleParagraphs: string[];
+  /** Alt text and caption for the scored overlay. */
+  exampleImageAlt: string;
+  exampleImageCaption: string;
+  drillsHeading: string;
+  drills: { title: string; body: string }[];
+};
+
+/** The scored example for a page, or a build error - a deepDive must never quote numbers that do not exist. */
+function scored(path: string): ScoredExampleData {
+  const example = scoredExampleForPath(path);
+  if (!example) throw new Error(`no scored example for ${path} - run scripts/generateScoredExamples.ts`);
+  return example;
+}
+
+const circleExample = scored("/draw-a-perfect-circle");
+const owlExample = scored("/draw-an-owl-from-memory");
+const pigExample = scored("/draw-a-pig-from-memory");
+const snailExample = scored("/draw-a-snail-from-memory");
+const bearExample = scored("/draw-a-bear-from-memory");
 
 const ACCURACY_TEST: ChallengePageCopy = {
   path: "/drawing-accuracy-test",
@@ -83,6 +117,35 @@ const PERFECT_CIRCLE: ChallengePageCopy = {
       "The circle target and the two things it is judged on: one distance from the centre, held all the way round, and a line that closes back onto its own start.",
     width: 400,
     height: 400,
+  },
+  deepDive: {
+    scorerHeading: "How the scorer reads a circle",
+    scorerParagraphs: [
+      `A circle is one closed line, so all ${RESAMPLE_POINTS} comparison points land on it - there is no small detail to hide behind and none to rescue you. Because it is closed, the scorer also tries every possible starting point, in both directions, before it compares: where you begin and which way you go round never cost anything.`,
+      "What does cost you is the stretch of line that strays furthest. After finding the best alignment, the scorer checks the worst-matching tenth of the outline, and shape match can be no better than that tenth allows. One flat side or one unfinished end therefore counts for more than an even wobble spread all the way round.",
+    ],
+    exampleHeading: "What two common circle mistakes cost",
+    exampleParagraphs: [
+      `The same freehand circle, drawn with one slight, even wobble, scores ${circleExample.rows[0].total}. Stop 12% short of the join and it scores ${circleExample.rows[1].total}: on paper the gap only costs coverage, but the unfinished end is exactly the worst tenth the contour check looks at, so shape match falls from ${circleExample.rows[0].shapeMatch} to ${circleExample.rows[1].shapeMatch}.`,
+      `Draw the same good circle at 58% of the size and shape match does not move - it is still ${circleExample.rows[2].shapeMatch} - yet the total falls to ${circleExample.rows[2].total}. Size beyond the ${SIZE_TOLERANCE_PERCENT}% tolerance lowers the ceiling the whole score is held under, however round the circle is.`,
+    ],
+    exampleImageAlt: "The circle target in grey with a freehand circle drawn over it in blue that stops short of closing, leaving a gap just before the top where it started",
+    exampleImageCaption: `A circle that stops 12% short of the join, over the target. Scored by the game's own scorer: ${circleExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for a rounder circle",
+    drills: [
+      {
+        title: "Four compass points",
+        body: "Before you draw, pick a centre and picture four marks - top, bottom, left and right - all the same distance out. Draw through them in one pass. Every point of a circle is that one distance from the centre, so four checkpoints catch an oval before it forms.",
+      },
+      {
+        title: "Finish on the start",
+        body: "Draw ten circles and watch only the join: slow down over the last quarter and land exactly on your starting point, without stopping short or overshooting. As the example shows, an unclosed end costs more than any wobble.",
+      },
+      {
+        title: "Fill two-thirds of the canvas",
+        body: "The target's diameter is 64% of the canvas width - nearly two-thirds. Practise at that size: the same circle drawn half as wide cannot score what it would full size.",
+      },
+    ],
   },
 };
 
@@ -152,6 +215,34 @@ const BEAR_FROM_MEMORY: ChallengePageCopy = {
     "The bear is on screen for a couple of seconds, then it is gone and the canvas is empty. You draw it back from memory - the round head, the two ears on top of it, the eyes, and the muzzle with its nose and mouth. Your line is scored against the target and laid over it afterwards, so you can see which parts you kept and which ones drifted.",
     "A bear is mostly one round head, which sounds easy until the details have to land on it. The ears are the giveaway: they sit high on the outline rather than beside it, and in memory they tend to slide outwards and shrink. The muzzle is the other one - it belongs low on the face, and almost everyone draws it closer to the eyes than it really is.",
   ],
+  deepDive: {
+    scorerHeading: "How the scorer reads a bear",
+    scorerParagraphs: [
+      `The bear is eight separate parts, and the scorer gives each a share of the ${RESAMPLE_POINTS} comparison points in proportion to how much line it has. The head outline carries ${bearExample.partShares[0].percent}%. The two ears are ${bearExample.partShares[1].percent}% between them - more than the muzzle, nose and mouth together (${bearExample.partShares[2].percent}%) - and the eyes only ${bearExample.partShares[3].percent}%.`,
+      "Ears that are a quarter of the drawing decide a lot. When they drift, they become the worst-matching tenth of the outline, and the scorer holds the whole shape-match score to that tenth - however good the face below them is.",
+    ],
+    exampleHeading: "What drifting ears cost",
+    exampleParagraphs: [
+      `Drawn with a slight, even wobble and nothing else wrong, the bear scores ${bearExample.rows[0].total}. Draw the ears 30% smaller and let them slide outwards and down the sides of the head - the way memory tends to move them - and the same bear scores ${bearExample.rows[1].total}. Shape match falls from ${bearExample.rows[0].shapeMatch} to ${bearExample.rows[1].shapeMatch}, while coverage stays at ${bearExample.rows[1].coverage}: all the line is there, just not where the ears belong.`,
+    ],
+    exampleImageAlt: "The bear target in grey with a freehand bear drawn over it in blue, its two ears smaller and lower on the sides of the head than the target's",
+    exampleImageCaption: `Ears smaller and slid down the sides, over the target. Scored by the game's own scorer: ${bearExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for the bear",
+    drills: [
+      {
+        title: "Ears on the rim",
+        body: "Draw the head, then centre each ear right on its outline, about a fifth of the head's width in from each side. Each ear is nearly a third as wide as the head - bigger than it feels.",
+      },
+      {
+        title: "Muzzle low",
+        body: "Draw the muzzle as an oval about 40% of the head's width, centred roughly 70% of the way down. Check it against the chin, not against the eyes.",
+      },
+      {
+        title: "Leave the gap",
+        body: "Between the eye line and the top of the muzzle, the target leaves about a sixth of the head's height. Draw the eyes, then deliberately leave that gap before starting the muzzle.",
+      },
+    ],
+  },
 };
 
 const OWL_FROM_MEMORY: ChallengePageCopy = {
@@ -162,6 +253,34 @@ const OWL_FROM_MEMORY: ChallengePageCopy = {
     "The owl is on screen for a couple of seconds, then it is gone and the canvas is empty. You draw it back from memory - the body, the two ear tufts, the big round eyes, the beak between them, and the feet. Your line is scored against the target and laid over it afterwards, so you can see which parts you kept and which ones drifted.",
     "An owl is two problems. The ear tufts are not shapes added to the head - they are corners of the outline itself, so the whole silhouette has to remember them while you draw it. Then the eyes: they are much bigger than they feel, and nearly everyone draws them too small and too far apart, which is the single change that makes a drawing stop reading as an owl.",
   ],
+  deepDive: {
+    scorerHeading: "How the scorer reads an owl",
+    scorerParagraphs: [
+      `The owl is ten separate parts, and the scorer gives each a share of the ${RESAMPLE_POINTS} comparison points in proportion to how much line it has. The body outline, which includes the two ear tufts, is the largest single part at ${owlExample.partShares[0].percent}%. But the eyes - two rings and two pupils - take ${owlExample.partShares[1].percent}% between them, about ${owlExample.partShares[1].points} of the ${RESAMPLE_POINTS} points: almost as much as the body. The beak is ${owlExample.partShares[3].percent}% and the two feet ${owlExample.partShares[4].percent}%.`,
+      "So an owl is scored on two things above all: the silhouette and the eyes. A careful beak cannot make up for eyes of the wrong size, and because the scorer also holds shape match to the worst-matching tenth of the drawing, one badly placed pair of eyes limits the whole result.",
+    ],
+    exampleHeading: "What small eyes cost",
+    exampleParagraphs: [
+      `Drawn with a slight, even wobble and nothing else wrong, the owl scores ${owlExample.rows[0].total}. Draw the same owl with the eyes 40% smaller and pushed apart - the most common owl mistake - and it scores ${owlExample.rows[1].total}. Shape match drops from ${owlExample.rows[0].shapeMatch} to ${owlExample.rows[1].shapeMatch}; coverage barely moves (${owlExample.rows[0].coverage} to ${owlExample.rows[1].coverage}), because smaller eyes remove only a little line. One mistake, ${owlExample.rows[0].total - owlExample.rows[1].total} points.`,
+    ],
+    exampleImageAlt: "The owl target in grey with a freehand owl drawn over it in blue, its eyes clearly smaller and further apart than the target's",
+    exampleImageCaption: `Eyes 40% smaller and set wider apart, over the target. Scored by the game's own scorer: ${owlExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for the owl",
+    drills: [
+      {
+        title: "Eyes a third of the body",
+        body: "Draw the two eye rings first, each a third as wide as the whole body. Then check the gap between them: on the target it is narrower than a pupil - the eyes almost touch.",
+      },
+      {
+        title: "The M at the top",
+        body: "Draw only the top of the outline, as a wide M: two tuft points, with the dip between them about 15% of the owl's height lower. The tufts are corners of the silhouette, not ears stuck on afterwards.",
+      },
+      {
+        title: "The eye line",
+        body: "Put the eye centres a little under halfway down from the tuft tips - about 42% of the owl's height - and the beak directly below the gap between them.",
+      },
+    ],
+  },
 };
 
 const PIG_FROM_MEMORY: ChallengePageCopy = {
@@ -172,6 +291,34 @@ const PIG_FROM_MEMORY: ChallengePageCopy = {
     "The pig is on screen for a couple of seconds, then it is gone and the canvas is empty. You draw it back from memory - the round head, the two ears folding forward at the top, the small eyes, and the big oval snout with its two nostrils. Your line is scored against the target and laid over it afterwards, so you can see which parts you kept and which ones drifted.",
     "Everything about a pig hangs on the snout. It is bigger than it feels and it sits lower on the face than memory puts it, so the most common miss is a neat small oval floating in the middle of the head. The ears are the other one: they fold forward as triangles rather than standing up as points, and people who remember them as points draw a cat instead.",
   ],
+  deepDive: {
+    scorerHeading: "How the scorer reads a pig",
+    scorerParagraphs: [
+      `The pig is eight separate parts, each given a share of the ${RESAMPLE_POINTS} comparison points in proportion to how much line it has. The head outline carries ${pigExample.partShares[0].percent}%, the two ears ${pigExample.partShares[1].percent}% and the snout with its nostrils ${pigExample.partShares[2].percent}% - while the eyes, the part people usually take most care over, are only ${pigExample.partShares[3].percent}%.`,
+      "The snout is a quarter of the drawing on its own. When it is the wrong size or in the wrong place it becomes the worst-matching tenth of the attempt - and the scorer's contour check holds the whole shape-match score to that tenth.",
+    ],
+    exampleHeading: "What a small, high snout costs",
+    exampleParagraphs: [
+      `Drawn with a slight, even wobble and nothing else wrong, the pig scores ${pigExample.rows[0].total}. Shrink the snout by 40% and lift it towards the eyes - the way memory tends to redraw it - and the same pig scores ${pigExample.rows[1].total}. Shape match falls from ${pigExample.rows[0].shapeMatch} to ${pigExample.rows[1].shapeMatch}, and coverage from ${pigExample.rows[0].coverage} to ${pigExample.rows[1].coverage}.`,
+    ],
+    exampleImageAlt: "The pig target in grey with a freehand pig drawn over it in blue, its snout visibly smaller and higher on the face than the target's",
+    exampleImageCaption: `Snout 40% smaller and higher on the face, over the target. Scored by the game's own scorer: ${pigExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for the pig",
+    drills: [
+      {
+        title: "Half the head",
+        body: "Draw the head, then the snout as an oval exactly half the head's width and about a third of its height. It will feel too big; it is not.",
+      },
+      {
+        title: "Low on the face",
+        body: "Put the snout's centre about two-thirds of the way down the head, so its lower edge ends close to the chin rather than in the middle of the face.",
+      },
+      {
+        title: "Ears to the edges",
+        body: "The ear tips lean outwards until they line up with the widest points of the head, and rise above it by about a quarter of the head's height. Draw them leaning, not straight up.",
+      },
+    ],
+  },
 };
 
 const SNAIL_FROM_MEMORY: ChallengePageCopy = {
@@ -182,6 +329,34 @@ const SNAIL_FROM_MEMORY: ChallengePageCopy = {
     "The snail is on screen for a couple of seconds, then it is gone and the canvas is empty. You draw it back from memory - the long foot along the ground, the round shell sitting on it, the spiral wound inside that shell, and the two eye stalks rising from the head. Your line is scored against the target and laid over it afterwards, so you can see which parts you kept and which ones drifted.",
     "The spiral is what makes this one hard. It has a real number of turns, it starts at the outer edge and finishes at the centre, and it is the first thing a memory smooths into a vague swirl. The other common miss is the shell's position: it sits on top of the foot, roughly above the middle of it, not trailing behind like a shell being dragged.",
   ],
+  deepDive: {
+    scorerHeading: "How the scorer reads a snail",
+    scorerParagraphs: [
+      `The snail's spiral is ${snailExample.partShares[1].percent}% of the ${RESAMPLE_POINTS} comparison points on its own - almost as much as the foot (${snailExample.partShares[0].percent}%) and more than the shell outline around it (${snailExample.partShares[2].percent}%). The eye stalks and eyes, the part that makes it read as a snail at a glance, are only ${snailExample.partShares[3].percent}%.`,
+      "Because the spiral is long, every turn you leave out removes a lot of line: coverage drops, and the comparison points that belong on the inner turns have nothing of yours to match.",
+    ],
+    exampleHeading: "What a missing turn costs",
+    exampleParagraphs: [
+      `Drawn with a slight, even wobble and nothing else wrong, the snail scores ${snailExample.rows[0].total}. Give the same snail a spiral of 1.2 turns instead of the target's 2.2 - the vague swirl a memory tends to produce - and it scores ${snailExample.rows[1].total}. Shape match falls from ${snailExample.rows[0].shapeMatch} to ${snailExample.rows[1].shapeMatch}, and coverage from ${snailExample.rows[0].coverage} to ${snailExample.rows[1].coverage}.`,
+    ],
+    exampleImageAlt: "The snail target in grey with a freehand snail drawn over it in blue whose spiral makes about one turn instead of two",
+    exampleImageCaption: `A spiral of 1.2 turns instead of 2.2, over the target. Scored by the game's own scorer: ${snailExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for the snail",
+    drills: [
+      {
+        title: "Two turns and a bit",
+        body: "Draw the spiral on its own: start at the top of the shell on its outer edge and wind inwards for just over two full turns, ending close to the centre.",
+      },
+      {
+        title: "Shell size",
+        body: "The shell's diameter is a little more than half the foot's length. Draw the foot first, then a shell that spans just over half of it.",
+      },
+      {
+        title: "Shell position",
+        body: "The shell's centre sits about 40% of the way along the foot from the tail - slightly behind the middle, resting on the foot rather than trailing off its end.",
+      },
+    ],
+  },
 };
 
 const LIGHTNING_FROM_MEMORY: ChallengePageCopy = {

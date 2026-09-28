@@ -1026,7 +1026,11 @@ const WHATS_NEW: ContentPage = {
       kind: "ul",
       items: [
         "<strong>28 September</strong> - Every challenge page now explains its own shape on screen: what the " +
-          "target is judged on and the mistakes memory makes with it, with links on to related challenges.",
+          "target is judged on and the mistakes memory makes with it, with links on to related challenges. " +
+          'Five of them - <a href="/draw-a-perfect-circle">the circle</a>, <a href="/draw-an-owl-from-memory">the ' +
+          'owl</a>, <a href="/draw-a-pig-from-memory">the pig</a>, <a href="/draw-a-snail-from-memory">the snail</a> ' +
+          'and <a href="/draw-a-bear-from-memory">the bear</a> - go further: how the scorer weighs each part of the ' +
+          "shape, a scored example of its most common mistake, and three practice drills.",
         "<strong>27 September</strong> - The <a href=\"/privacy\">privacy policy</a> was updated, and a new " +
           'page explains how to <a href="/delete-data">ask for your data to be deleted</a>.',
         '<strong>25 September</strong> - <a href="/draw-a-gear-from-memory">Draw a gear from memory</a>: an ' +

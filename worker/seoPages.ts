@@ -40,7 +40,9 @@ import {
 import { siteFaq } from "../src/content/siteContent";
 // The page-specific copy of the challenge pages, shared with SeoPracticePage.tsx so
 // the sentences a crawler indexes are the ones a visitor reads (see that module).
-import { challengePageCopy } from "../src/content/challengePageCopy";
+import { challengePageCopy, challengePageCopyForPath } from "../src/content/challengePageCopy";
+// Scored examples, precomputed at build time - the Worker only prints the numbers.
+import { scoredExampleForPath } from "../src/content/scoredExamplesData";
 // The one list of challenges, shared with the site's own rendering of this page
 // (src/site/SiteChallenges.tsx) so the crawlable links and the cards a visitor
 // sees can never be different sets.
@@ -659,6 +661,56 @@ export function canonicalUrl(path: string): string {
  * inline (the block is served before the app's CSS bundle loads) and read the
  * app's own theme variables where they exist, with plain fallbacks.
  */
+/**
+ * The deeper treatment of a few challenge pages (challengePageCopy.ts deepDive):
+ * how the scorer weighs the shape, a scored example with its overlay, and drills.
+ * Every number is read from scoredExamplesData.ts, which the build computed with
+ * the real scorer - nothing is scored here. Empty for every other page.
+ */
+function renderDeepDive(path: string): string {
+  const deepDive = challengePageCopyForPath(path)?.deepDive;
+  const example = scoredExampleForPath(path);
+  if (!deepDive || !example) return "";
+  const shares =
+    `<div class="cydi-seo-tablewrap"><table class="cydi-seo-table">` +
+    `<caption>Each part's share of the line, and of the scorer's comparison points</caption>` +
+    `<thead><tr><th>Part</th><th class="n">Share of the line</th><th class="n">Comparison points</th></tr></thead><tbody>` +
+    example.partShares
+      .map((part) => `<tr><td>${escapeHtml(part.name)}</td><td class="n">${part.percent}%</td><td class="n">${part.points}</td></tr>`)
+      .join("") +
+    `</tbody></table></div>`;
+  const rows =
+    `<div class="cydi-seo-tablewrap"><table class="cydi-seo-table">` +
+    `<caption>Scored by the game's own scorer, out of 100</caption>` +
+    `<thead><tr><th>Attempt</th><th class="n">Total</th><th class="n">Shape</th><th class="n">Coverage</th>` +
+    `<th class="n">Smoothness</th><th class="n">Scale</th></tr></thead><tbody>` +
+    example.rows
+      .map(
+        (row) =>
+          `<tr><td>${escapeHtml(row.label)}</td><td class="n"><strong>${row.total}</strong></td><td class="n">${row.shapeMatch}</td>` +
+          `<td class="n">${row.coverage}</td><td class="n">${row.smoothness}</td><td class="n">${row.scale}</td></tr>`,
+      )
+      .join("") +
+    `</tbody></table></div>`;
+  return (
+    `<h2 class="cydi-seo-h2">${escapeHtml(deepDive.scorerHeading)}</h2>` +
+    deepDive.scorerParagraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join("") +
+    shares +
+    `<h2 class="cydi-seo-h2">${escapeHtml(deepDive.exampleHeading)}</h2>` +
+    deepDive.exampleParagraphs.map((text) => `<p>${escapeHtml(text)}</p>`).join("") +
+    `<figure class="cydi-seo-figure">` +
+    `<img src="${escapeHtml(example.image)}" alt="${escapeHtml(deepDive.exampleImageAlt)}" ` +
+    `width="400" height="400" loading="lazy" decoding="async">` +
+    `<figcaption>${escapeHtml(deepDive.exampleImageCaption)}</figcaption>` +
+    `</figure>` +
+    rows +
+    `<h2 class="cydi-seo-h2">${escapeHtml(deepDive.drillsHeading)}</h2>` +
+    `<ol>` +
+    deepDive.drills.map((drill) => `<li><strong>${escapeHtml(drill.title)}.</strong> ${escapeHtml(drill.body)}</li>`).join("") +
+    `</ol>`
+  );
+}
+
 export function renderSeoSection(page: SeoPage): string {
   // The illustration sits after the opening paragraph rather than at the very top,
   // so the page still leads with text and the image lands next to the copy that
@@ -674,6 +726,7 @@ export function renderSeoSection(page: SeoPage): string {
   const paragraphs = page.paragraphs
     .map((text, index) => `<p>${escapeHtml(text)}</p>${index === 0 ? image : ""}`)
     .join("");
+  const deepDive = renderDeepDive(page.path);
   // Headed block of prominent internal links (the hub's practice list). Plain
   // <a href> with real anchor text, so each target is crawlable from here.
   const linkGroup = page.linkGroup
@@ -754,11 +807,21 @@ export function renderSeoSection(page: SeoPage): string {
     `.cydi-seo-nav a:hover{text-decoration:underline}` +
     `.cydi-seo-foot{margin:1.5rem 0 0!important;padding-top:1rem;border-top:1px solid rgba(128,128,128,.35);` +
     `font-size:.85rem;opacity:.7!important}` +
+    // The deep-dive tables and drills: plain, and a table scrolls on its own on a
+    // phone rather than widening the page.
+    `.cydi-seo-tablewrap{overflow-x:auto;margin:0 0 1rem}` +
+    `.cydi-seo-table{border-collapse:collapse;font-size:.9rem;min-width:100%}` +
+    `.cydi-seo-table caption{text-align:left;font-size:.85rem;opacity:.7;margin-bottom:.35rem}` +
+    `.cydi-seo-table th,.cydi-seo-table td{text-align:left;padding:.35rem .6rem;border-bottom:1px solid rgba(128,128,128,.3)}` +
+    `.cydi-seo-table .n{text-align:right}` +
+    `.cydi-seo ol{margin:0 0 1rem;padding-left:1.25rem}` +
+    `.cydi-seo ol li{margin:0 0 .5rem;opacity:.85}` +
     `</style>` +
     `<section class="cydi-seo">` +
     `<nav class="cydi-seo-nav" aria-label="CYDI site">${renderNavLinks(page.path)}</nav>` +
     `<h1>${escapeHtml(page.h1)}</h1>` +
     paragraphs +
+    deepDive +
     linkGroup +
     faq +
     (page.paragraphsAfterLinkGroup ?? []).map((text) => `<p>${escapeHtml(text)}</p>`).join("") +

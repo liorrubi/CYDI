@@ -22,18 +22,19 @@
 // The list of real routes is built from the constants the app itself routes on,
 // never retyped here, so a route App.tsx serves cannot 404 by drift.
 import { JOIN_LINK_PATH_PATTERN, SHORT_LINK_PATH_PATTERN } from "../src/app/appLinks";
-import { CLASSIC_PATH, PLAY_PATH } from "../src/app/webPaths";
+import { CLASSIC_PATH, JOIN_PATH, PLAY_PATH } from "../src/app/webPaths";
 import { isDailyChallengeSharePath } from "../src/services/dailyChallengeShare";
 import { CONTENT_PATHS, NOT_FOUND_PAGE, renderContentDocument } from "./contentPages";
 import { CONTENT_PAGE_CACHE_CONTROL, CONTENT_PAGE_CONTENT_TYPE } from "./cachePolicy";
 import { LANDING_PATHS } from "./seoPages";
 
 /** Exact paths the app or the Worker serves as a page. Trailing slashes are tolerated. */
-const PAGE_PATHS = new Set<string>(["/", PLAY_PATH, CLASSIC_PATH, ...LANDING_PATHS, ...CONTENT_PATHS]);
+const PAGE_PATHS = new Set<string>(["/", PLAY_PATH, CLASSIC_PATH, JOIN_PATH, ...LANDING_PATHS, ...CONTENT_PATHS]);
 
 /**
- * True for every address that is a real page: the site and game paths, the
- * landing and content pages, and the three parameterised app routes - the
+ * True for every address that is a real page: the site and game paths (including
+ * the bare /join page the lobby sends guests to), the landing and content pages,
+ * and the three parameterised app routes - the
  * Daily Challenge share (/daily), a Play Together invite (/join/<code>) and a
  * share link (/c/<id>).
  */

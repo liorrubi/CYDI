@@ -42,6 +42,8 @@ type PlayTogetherScreenProps = {
   onNavigate: (screen: Screen) => void;
   /** Prefilled when the player arrived on /join/<code>. */
   initialJoinCode?: string;
+  /** Open on the join form even without a code - the bare /join page. */
+  openJoin?: boolean;
 };
 
 type View = "menu" | "create" | "join";
@@ -70,8 +72,8 @@ const DIFFICULTY_HINTS: Record<MultiplayerDifficulty, string> = {
  */
 const MultiplayerEntry = lazy(() => import("../site/MultiplayerEntry"));
 
-export default function PlayTogetherScreen({ onNavigate, initialJoinCode }: PlayTogetherScreenProps) {
-  const [view, setView] = useState<View>(initialJoinCode ? "join" : "menu");
+export default function PlayTogetherScreen({ onNavigate, initialJoinCode, openJoin }: PlayTogetherScreenProps) {
+  const [view, setView] = useState<View>(initialJoinCode || openJoin ? "join" : "menu");
   const [session, setSession] = useState<RoomTransport | null>(null);
 
   const [rounds, setRounds] = useState<RoundCount>(10);

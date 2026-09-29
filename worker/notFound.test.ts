@@ -43,6 +43,8 @@ test("every app route is recognised - site, game, landing, content and the param
     "/play/classic",
     "/daily",
     "/daily/",
+    "/join",
+    "/join/",
     "/join/ABC234",
     "/join/abc234",
     "/c/abcd2345",
@@ -63,6 +65,10 @@ test("invented, mistyped and malformed addresses are not routes", () => {
     "/play/nothing",
     "/join/abc",
     "/join/ABC2345",
+    "/join/ABC234/extra",
+    "/JOIN",
+    "/joinx",
+    "/join-now",
     "/c/x",
     "/admin/foo",
     "/api/nope",
@@ -99,6 +105,33 @@ test("the SPA routes still get the app shell with a 200", async () => {
     assert.equal(res.status, 200, path);
     assert.match(await res.text(), /id=root/, path);
     assert.deepEqual(fetched, [path], `${path}: exactly one ASSETS fetch`);
+  }
+});
+
+test("bare /join is the app shell with a 200 and noindex - the lobby's 'Enter it at playcydi.com/join' works", async () => {
+  // 0.54.1's real 404s dropped this address: only /join/<CODE> was a route, so the
+  // URL the room-code card prints answered 404. It must stay a page, kept out of the index.
+  for (const path of ["/join", "/join/"]) {
+    const { env, fetched } = makeEnv();
+    const res = await worker.fetch(get(path), env);
+    assert.equal(res.status, 200, path);
+    assert.match(await res.text(), /id=root/, path);
+    assert.equal(res.headers.get("x-robots-tag"), "noindex", path);
+    assert.deepEqual(fetched, [path], `${path}: exactly one ASSETS fetch`);
+  }
+  const head = await worker.fetch(get("/join", "HEAD"), makeEnv().env);
+  assert.equal(head.status, 200);
+});
+
+test("invite links and near-misses keep their existing behaviour next to /join", async () => {
+  // The invite route is unchanged - no new header, still the app shell.
+  const invite = await worker.fetch(get("/join/ABC234"), makeEnv().env);
+  assert.equal(invite.status, 200);
+  assert.equal(invite.headers.get("x-robots-tag"), null);
+  // Adding /join did not widen the allowlist: its look-alikes are still real 404s.
+  for (const path of ["/joinx", "/join-now", "/join/abc", "/join/ABC234/extra", "/JOIN"]) {
+    const res = await worker.fetch(get(path), makeEnv().env);
+    assert.equal(res.status, 404, path);
   }
 });
 

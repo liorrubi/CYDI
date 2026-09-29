@@ -22,3 +22,17 @@ export const PLAY_PATH = "/play";
  * Challenge, My Challenges and the Shop.
  */
 export const CLASSIC_PATH = "/play/classic";
+
+/**
+ * The bare Play Together join page. The lobby's room-code card tells guests to
+ * "Enter it at playcydi.com/join", so this address must open the join form rather
+ * than 404 - invite links (/join/<CODE>) are a separate route and arrive with the
+ * code already filled in. A utility screen, not a landing page: the Worker serves
+ * it with noindex so it never competes with "/".
+ */
+export const JOIN_PATH = "/join";
+
+/** True for exactly /join (a trailing slash is tolerated) - never for /join/<anything>. */
+export function isJoinPagePath(pathname: string): boolean {
+  return (pathname.replace(/\/+$/, "") || "/") === JOIN_PATH;
+}

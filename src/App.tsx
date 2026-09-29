@@ -56,7 +56,7 @@ function SiteChunkFallback() {
   return <div style={{ minHeight: "100dvh", background: "#14151f" }} aria-busy="true" />;
 }
 import { toAchievements, toChallengesHub, toDailyChallenge, toFriendChallengeIntro, toHome, toPassPlay,
-  toPlayTogether, toSeoLanding, toShapeChallenge, toSharedArtistResult, toSharedResult,
+  toPlayTogether, toPlayTogetherJoin, toSeoLanding, toShapeChallenge, toSharedArtistResult, toSharedResult,
   toSiteHome } from "./app/routes";
 import { JOIN_LINK_PATH_PATTERN, resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
 import { recordDailyVisit } from "./services/dailyStreakStore";
@@ -89,7 +89,7 @@ import { getShapeById } from "./content/contentRepository";
 import type { Screen } from "./types/GameMode";
 // /play and /play/classic. A module of their own so the Worker's 404 routing
 // (worker/notFound.ts) reads the same two addresses this file serves.
-import { CLASSIC_PATH, PLAY_PATH } from "./app/webPaths";
+import { CLASSIC_PATH, PLAY_PATH, isJoinPagePath } from "./app/webPaths";
 
 /** Imports a shared challenge idempotently, keeping the recipient's own progress if they've already opened this link before - only `name`/`target` ever sync from the payload, never `createdAt`/`personalBest`/`attempts`. */
 function importSharedChallenge(challenge: DecodedSharedChallenge) {
@@ -227,6 +227,10 @@ export default function App({ landing }: AppProps) {
       history.replaceState(null, "", "/" + location.search);
       return toPlayTogether(joinCode);
     }
+    // The bare /join page ("Enter it at playcydi.com/join" on the lobby's code
+    // card): Play Together's own join form, empty. Nothing to consume, so the URL
+    // stays /join and a reload lands on the form again. Web only - Android loads "/".
+    if (!Capacitor.isNativePlatform() && isJoinPagePath(location.pathname)) return toPlayTogetherJoin();
     // Landing pages keep their URL (unlike the share paths above) - it is the
     // canonical, indexed address of this page, not a payload to consume.
     // A site page rather than a destination in the game: the hub starts nothing,
@@ -402,6 +406,8 @@ export default function App({ landing }: AppProps) {
         setScreen(toShapeChallenge());
       } else if (isPlayPath(path)) {
         setScreen(toHome());
+      } else if (isJoinPagePath(path)) {
+        setScreen(toPlayTogetherJoin());
       } else if (landing && normalizePath(landing.path) === path) {
         // Back onto the landing page it started from. A shape-focused one shows
         // its 4a presentation again; the mode pages keep opening their mode.
@@ -759,7 +765,7 @@ export default function App({ landing }: AppProps) {
           case "passPlay":
             return <PassPlayScreen onNavigate={navigate} />;
           case "playTogether":
-            return <PlayTogetherScreen onNavigate={navigate} initialJoinCode={screen.joinCode} />;
+            return <PlayTogetherScreen onNavigate={navigate} initialJoinCode={screen.joinCode} openJoin={screen.openJoin} />;
         }
       })()}
       {/* Which game, before which card: the mode card comes first and the Shape

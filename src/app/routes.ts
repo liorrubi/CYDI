@@ -109,3 +109,8 @@ export function toPassPlay(): Screen {
 export function toPlayTogether(joinCode?: string): Screen {
   return { name: "playTogether", joinCode };
 }
+
+/** Play Together opened straight on its (empty) join form - the bare /join page the lobby points guests to. */
+export function toPlayTogetherJoin(): Screen {
+  return { name: "playTogether", openJoin: true };
+}

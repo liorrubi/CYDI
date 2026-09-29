@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.55.1 - 2026-09-29
+
+Web only - Android is unchanged (0.55.0 / vc53 stays the Play release) and needs no
+release. **playcydi.com/join works again.** The Play Together lobby tells guests to
+"Enter it at playcydi.com/join", but since 0.54.1's real 404s that bare address
+answered 404: only invite links (`/join/<CODE>`) were on the Worker's list of real
+routes. `/join` now opens Play Together straight on its join form - room code and
+nickname - and joining runs the same code as before; an invite link still arrives
+with the code filled in.
+
+- `JOIN_PATH` joins the app's own web addresses (`src/app/webPaths.ts`), so the
+  Worker's route list and App.tsx read the same constant; nothing else about the
+  404 rules changed, and look-alikes (`/joinx`, `/join/abc`, `/JOIN`) are still
+  real 404s.
+- The page is the app shell, so the Worker serves it with `x-robots-tag: noindex` -
+  a utility screen, never a second copy of the homepage in the index.
+- Reload and Back/Forward on `/join` land on the join form again.
+
 ## 0.54.2 - 2026-09-28
 
 Web only - Android is unchanged and needs no release. Five challenge pages get a

@@ -59,6 +59,7 @@ import { versionGateResponse } from "./multiplayerVersionGate";
 import { ANDROID_PATH, androidRedirectUrl, canonicalUrl, renderSeoSection, robotsTxt, seoPageForPath, sitemapXml, type SeoPage } from "./seoPages";
 import { CONTENT_PATHS, contentPageForPath, renderContentDocument } from "./contentPages";
 import { isAppRoute, isHtmlFallback, notFoundResponse } from "./notFound";
+import { isJoinPagePath } from "../src/app/webPaths";
 
 export { AnalyticsDO, DailyChallengeDO, RoomDO };
 
@@ -1212,6 +1213,9 @@ export default {
       await response.body?.cancel();
       return notFoundResponse(request.method);
     }
+    // The bare /join page is the app shell (the homepage document) showing the Play
+    // Together join form - a utility screen, kept out of the index like /c/ share pages.
+    if (isJoinPagePath(url.pathname)) return withHeader(response, "x-robots-tag", "noindex");
     return response;
   },
 };

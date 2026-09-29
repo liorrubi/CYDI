@@ -79,6 +79,7 @@ import { isRewardedAdAvailable, preloadRewardedAd } from "../services/ads";
 import { offerExitAction } from "../app/doubleOfferSettlement";
 import {
   beginInterstitialResultCycle,
+  getInterstitialArmForAnalytics,
   isInterstitialDueThisCycle,
   recordInterstitialGameCompleted,
   recordInterstitialGameStarted,
@@ -1243,7 +1244,7 @@ function ShapePlay({
         });
         if (decision === "show") {
           showOffer = true;
-          setRewardedOffer({ arm: getRewardedArm(), ...upcomingOfferContext() });
+          setRewardedOffer({ arm: getRewardedArm(), ...upcomingOfferContext(), interstitialArm: getInterstitialArmForAnalytics() });
         }
       }
       if (offerAmount > 0) {

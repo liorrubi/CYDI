@@ -10,7 +10,7 @@ import {
 import { MAX_PAID_CHEST_DOUBLES_PER_DAY } from "../services/chestDoubleLimitStore";
 import { isRewardedAdAvailable, preloadRewardedAd, showRewardedAd, type RewardedAdPlacement } from "../services/ads";
 import { trackEvent } from "../services/analytics";
-import type { RewardOfferEconomy } from "../services/analyticsSchema";
+import type { RewardInterstitialArm, RewardOfferEconomy } from "../services/analyticsSchema";
 import { rewardOfferContext } from "../services/economyAnalytics";
 import { markDoubleRewardTutorialShown, shouldShowDoubleRewardTutorial } from "../services/tutorialStore";
 import { consumesDoubleAttempt, resolveAdOutcome } from "./doubleOfferAdFlow";
@@ -37,7 +37,7 @@ import {
 } from "../app/rewardedOfferCadence";
 
 /** Rewarded Ads Experiment v1 context for the Classic result offer (src/app/rewardedOfferCadence.ts). */
-export type RewardedExperimentOffer = { arm: RewardedArm; offerNumber: number; sessionGames: number };
+export type RewardedExperimentOffer = { arm: RewardedArm; offerNumber: number; sessionGames: number; interstitialArm: RewardInterstitialArm };
 
 type DoubleCoinsOfferProps = {
   /** The coin reward already earned and guaranteed - doubling only ever adds on top of this, never takes it away. */
@@ -233,6 +233,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       offerNumber: experiment.offerNumber,
       sessionGames: experiment.sessionGames,
       bonusCoins: adFinalAmount - amount,
+      interstitialArm: experiment.interstitialArm,
     };
   };
 

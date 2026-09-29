@@ -12,8 +12,8 @@ const { economyTelemetryFromRows, buildEconomyAeQueries } = await import("./anal
 const valid = (name: string, params: unknown) => validateEventParams(name as never, params).valid;
 const PLACEMENT = { placement: "shape_challenge_double_reward" };
 const ECON = { balanceBucket: "100_499", baseReward: 40, adAvailable: true, nextTarget: "category", shortfallBucket: "short_50_75", adClosesGap: false, gamesBucket: "10_24" };
-const X3 = { ...PLACEMENT, ...ECON, multiplier: 3, arm: "x3", offerNumber: 2, sessionGames: 8, bonusCoins: 80 };
-const PLUS = { ...PLACEMENT, ...ECON, multiplier: 1, arm: "plus100", offerNumber: 1, sessionGames: 3, bonusCoins: 100 };
+const X3 = { ...PLACEMENT, ...ECON, multiplier: 3, arm: "x3", offerNumber: 2, sessionGames: 8, bonusCoins: 80, interstitialArm: "treatment" };
+const PLUS = { ...PLACEMENT, ...ECON, multiplier: 1, arm: "plus100", offerNumber: 1, sessionGames: 3, bonusCoins: 100, interstitialArm: "none" };
 const FUNNEL = ["reward_offer_shown", "reward_ad_started", "reward_ad_completed", "reward_ad_failed", "reward_skipped"];
 
 test("both arms validate on every funnel event", () => {
@@ -37,6 +37,10 @@ test("the experiment block is all-or-nothing and bounded", () => {
   assert.equal(valid("reward_offer_shown", { ...X3, offerNumber: 0 }), false);
   assert.equal(valid("reward_offer_shown", { ...X3, bonusCoins: 0 }), false);
   assert.equal(valid("reward_offer_shown", { ...X3, sessionGames: -1 }), false);
+  assert.equal(valid("reward_offer_shown", { ...X3, interstitialArm: "unassigned" }), false, "unknown interstitial arm");
+  const { interstitialArm: _ia, ...noIa } = X3;
+  assert.equal(valid("reward_offer_shown", noIa), false, "interstitialArm is part of the block");
+  assert.equal(valid("reward_offer_shown", { ...X3, interstitialArm: "control" }), true);
 });
 
 test("older payloads stay valid; multiplier 1 is only legal inside the experiment block", () => {
@@ -64,6 +68,8 @@ test("AE schema 3: arm, offer number, session games and bonus coins land on rewa
   assert.equal(plus.doubles[5], 1, "double6 offerNumber");
   assert.equal(plus.doubles[9], 100, "double10 bonusCoins");
   assert.equal(plus.doubles[15], 1, "double16 multiplier 1 = flat bonus");
+  assert.equal(plus.blobs[18], "none", "blob19 = interstitialArm on reward funnel rows");
+  assert.equal(x3.blobs[18], "treatment");
   assert.equal(x3.blobs[17], "x3");
   assert.equal(x3.doubles[15], 3);
   assert.equal(x3.doubles[9], 80);

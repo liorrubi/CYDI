@@ -77,6 +77,15 @@ function participation(): Participation | null {
   return { arm: assigned, cadence: config.gamesBetweenAds, sessionCap: config.maxOpportunitiesPerSession };
 }
 
+/**
+ * This installation's interstitial arm right now, for stratifying the Rewarded experiment:
+ * "none" when it takes no part (see participation()). Purely local - the frozen config was
+ * fetched once at startup and the arm is a hash - so reading it makes no network call.
+ */
+export function getInterstitialArmForAnalytics(): InterstitialArm | "none" {
+  return participation()?.arm ?? "none";
+}
+
 // --- Gameplay hooks -----------------------------------------------------------------
 
 /** A result phase begins. Resets the per-cycle rewarded marker and the due flag. */

@@ -74,7 +74,9 @@
 //   --- schema 3 (Rewarded Ads Experiment v1; no new columns - reward-offer rows never
 //   carry the params these slots were named for, so they are reused on those rows only) ---
 //   blob18 arm                 also the rewarded arm: "x3" | "plus100" (reward_* funnel + reward_continuation)
-//   blob19 outcome             also reward_continuation's outcome: completed | skipped | failed
+//   blob19 outcome             also reward_continuation's outcome: completed | skipped | failed;
+//                              on reward_* funnel rows: the installation's interstitialArm
+//                              (treatment | control | none), to stratify Rewarded by interstitial arm
 //   double5  sessionGames      reward_* funnel rows: completed Classic games in the session at the offer
 //   double6  offerNumber       reward_* funnel + reward_continuation rows: the offer's number in the session
 //   double10 bonusCoins        reward_* funnel rows: coins the ad adds (x3: base x 2; plus100: 100)
@@ -196,7 +198,8 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       str(params.placement),
       str(params.reason),
       str(params.arm),
-      str(params.outcome),
+      // Schema 3: reward funnel rows carry no outcome, so this slot holds their interstitialArm.
+      str(params.outcome ?? params.interstitialArm),
       detailFor(params),
     ],
     doubles: [

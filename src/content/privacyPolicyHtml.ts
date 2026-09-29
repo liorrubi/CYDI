@@ -25,7 +25,7 @@
 
 /** Shown at the top of the policy. Update both when the policy text changes materially. */
 export const PRIVACY_EFFECTIVE_DATE = "14 July 2026";
-export const PRIVACY_LAST_UPDATED = "27 September 2026";
+export const PRIVACY_LAST_UPDATED = "29 September 2026";
 
 /**
  * The policy body: everything between the page title and the closing copyright
@@ -136,7 +136,7 @@ export const PRIVACY_POLICY_HTML = `
   unlocking a category, and your coin balance, number of games played and days since you started playing
   as <strong>ranges</strong> (for example “1,000–2,500 coins”) — never your exact coin balance. The
   days-since-you-started range is calculated on your device; the start date itself is never sent. When a
-  coin-doubling ad is offered, we also record whether an ad was available and how the offer relates to
+  bonus-Coins rewarded ad is offered, we also record whether an ad was available and how the offer relates to
   your next unlock, again as ranges. CYDI Coins cannot be bought with real money, so none of this involves
   payment information.
 </p>
@@ -204,9 +204,9 @@ export const PRIVACY_POLICY_HTML = `
 <h3>Advertising (Android app)</h3>
 <p class="status-text">
   The CYDI Android app may offer optional rewarded advertisements through the Google AdMob / Google Mobile
-  Ads SDK. After you earn coins, the app may offer you the chance to double them by watching a rewarded
-  video ad. Watching is entirely your choice: you can always decline and simply continue with the coins you
-  have already earned, which are yours either way.
+  Ads SDK. After you earn coins, the app may offer an optional rewarded video ad in exchange for bonus
+  Coins; the reward amount may vary. Watching is entirely your choice: you can always decline and simply
+  continue with the coins you have already earned, which are yours either way.
 </p>
 <p class="status-text">
   The Android app may also show a full-screen advertisement between games, at a natural transition such as

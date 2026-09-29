@@ -383,7 +383,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
             <p className="double-offer-headline">
               {canAttemptDouble
                 ? `🪙 +${amount} coins - ${offerQuestion}`
-                : `🪙 +${amount} coins`}
+                : `🪙 You earned ${amount} Coins`}
             </p>
           )}
           {showTutorial && (

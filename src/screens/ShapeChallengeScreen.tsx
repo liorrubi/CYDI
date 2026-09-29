@@ -1325,7 +1325,7 @@ function ShapePlay({
         />
       ) : plainCoinsAmount !== null ? (
         <div ref={plainCoinsRef} className="double-offer-banner">
-          <p className="double-offer-headline">🪙 +{plainCoinsAmount} coins</p>
+          <p className="double-offer-headline">🪙 You earned {plainCoinsAmount} Coins</p>
         </div>
       ) : null;
 
@@ -1450,7 +1450,7 @@ function ShapePlay({
         )}
         {doubleOfferAmount === null && plainCoinsAmount !== null && (
           <div ref={plainCoinsRef} className="double-offer-banner">
-            <p className="double-offer-headline">🪙 +{plainCoinsAmount} coins</p>
+            <p className="double-offer-headline">🪙 You earned {plainCoinsAmount} Coins</p>
           </div>
         )}
         {/* The continue actions sit ABOVE the comparison canvas and are no longer

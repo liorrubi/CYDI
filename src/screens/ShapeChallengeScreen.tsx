@@ -80,7 +80,8 @@ import { offerExitAction } from "../app/doubleOfferSettlement";
 import {
   beginInterstitialResultCycle,
   getInterstitialArmForAnalytics,
-  isInterstitialDueThisCycle,
+  claimResultAdLane,
+  markRewardedOfferRenderedThisCycle,
   recordInterstitialGameCompleted,
   recordInterstitialGameStarted,
   runInterstitialCheckpoint,
@@ -1098,6 +1099,12 @@ function ShapePlay({
   }, [showResultTutorial, practice]);
 
   /** The base reward is already credited where `doubleOfferAmount` is set below - only the extra half of a successful double is new (mirrors ChestRewardOverlay), so navigating away before resolving the offer can never forfeit the coins already earned. */
+  /** The offer is on screen: it counts as shown (cadence restarts) and this Result screen's ad lane is rewarded - no interstitial may follow from it. */
+  function handleRewardedOfferShown() {
+    markRewardedOfferShown();
+    markRewardedOfferRenderedThisCycle();
+  }
+
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
     if (doubleOfferAmount !== null && finalAmount > doubleOfferAmount) {
       addCoins(finalAmount - doubleOfferAmount, "ad_multiplier");
@@ -1230,18 +1237,22 @@ function ShapePlay({
       recordInterstitialGameCompleted(roundGameType(practice));
 
       // Rewarded Ads Experiment v1 (app/rewardedOfferCadence.ts). A normal round advances the
-      // cadence; the offer renders only when it is due, no interstitial is due on this
-      // result's exit (the interstitial wins, the offer stays pending), the round paid coins
-      // and a rewarded ad can actually be offered. Otherwise the coins are shown plainly.
+      // cadence; the offer renders only when it is due, the round paid coins and a rewarded ad
+      // can actually be offered. Only then is the result's ad lane claimed (result-screen
+      // exclusivity, interstitialController.claimResultAdLane): a due AND loaded treatment
+      // interstitial reserves this screen once per opportunity and the offer stays pending;
+      // otherwise the offer renders and, from that moment, no interstitial may follow from
+      // this screen. A zero-coin result never claims, so it cannot spend the reservation.
       let showOffer = false;
       if (!practice) {
         const due = recordRewardedGameCompleted();
-        const decision = decideResultOffer({
+        const eligible = decideResultOffer({
           due,
-          interstitialDue: isInterstitialDueThisCycle(),
+          interstitialDue: false,
           coinsEarned: offerAmount,
           canOfferAd: isRewardedAdAvailable() || isMathFallbackEnabled(),
         });
+        const decision = eligible === "show" && claimResultAdLane() === "interstitial" ? "pending_interstitial" : eligible;
         if (decision === "show") {
           showOffer = true;
           setRewardedOffer({ arm: getRewardedArm(), ...upcomingOfferContext(), interstitialArm: getInterstitialArmForAnalytics() });
@@ -1304,7 +1315,7 @@ function ShapePlay({
           experiment={rewardedOffer ?? undefined}
           // Rendered = exposed: the cadence restarts here, so leaving without starting the
           // ad (Back, Back to Map, Android Back) is a skip and this offer cannot re-show.
-          onShown={markRewardedOfferShown}
+          onShown={handleRewardedOfferShown}
           onRewardEarned={(finalize) => {
             earnedOfferFinalizeRef.current = finalize;
           }}
@@ -1428,7 +1439,7 @@ function ShapePlay({
             placement="shape_challenge_double_reward"
             deferExplainer={showResultTutorial}
             experiment={rewardedOffer ?? undefined}
-            onShown={markRewardedOfferShown}
+            onShown={handleRewardedOfferShown}
             onRewardEarned={(finalize) => {
               earnedOfferFinalizeRef.current = finalize;
             }}

@@ -32,7 +32,7 @@ import {
   saveState,
   type InterstitialStorage,
 } from "./interstitialExperiment";
-import { preloadInterstitial, presentInterstitial, subscribeInterstitialLifecycle, type PresentOutcome } from "./interstitialAds";
+import { getInterstitialState, preloadInterstitial, presentInterstitial, subscribeInterstitialLifecycle, type PresentOutcome } from "./interstitialAds";
 
 const ELIGIBLE_GAME_TYPE: GameType = "shapeChallenge";
 
@@ -51,6 +51,15 @@ let rewardedShownThisCycle = false;
 let dueThisCycle = false;
 /** The arm of this cycle's opportunity - only a treatment opportunity can actually show an ad. */
 let dueArmThisCycle: InterstitialArm | null = null;
+/** A rewarded OFFER was rendered on this result: nothing may present an interstitial from it. */
+let rewardedRenderedThisCycle = false;
+/**
+ * The current (not yet consumed) opportunity has already reserved one Result screen and
+ * deferred the rewarded offer there. It may do so only once: if the player left that
+ * screen without presenting it (Back to Map), later results do not starve the offer.
+ * Cleared when the opportunity is consumed at a checkpoint.
+ */
+let laneReservedForOpportunity = false;
 /** One preload attempt per upcoming opportunity; reset when an opportunity is consumed. */
 let preloadAttemptedForUpcoming = false;
 /** A checkpoint is running; a second tap cannot start another. */
@@ -91,6 +100,7 @@ export function getInterstitialArmForAnalytics(): InterstitialArm | "none" {
 /** A result phase begins. Resets the per-cycle rewarded marker and the due flag. */
 export function beginInterstitialResultCycle(): void {
   rewardedShownThisCycle = false;
+  rewardedRenderedThisCycle = false;
   dueThisCycle = false;
   dueArmThisCycle = null;
 }
@@ -116,12 +126,41 @@ export function recordInterstitialGameCompleted(gameType: GameType): void {
  * Whether this result cycle's exit (Next Shape / Try Again) runs an interstitial opportunity
  * that can actually show an ad - the TREATMENT arm only; a control opportunity shows nothing,
  * so deferring for it would only skew rewarded exposure between the interstitial arms.
- * Read by the Rewarded experiment right after recordInterstitialGameCompleted(): when true,
- * no rewarded offer is rendered on this result (the interstitial has priority and the offer
- * stays pending), so the two can never follow each other in one result flow.
+ * Diagnostic only: the Rewarded experiment decides through claimResultAdLane(), which also
+ * requires the interstitial to be loaded and reserves a screen only once per opportunity.
  */
 export function isInterstitialDueThisCycle(): boolean {
   return dueThisCycle && dueArmThisCycle === "treatment";
+}
+
+/**
+ * Result-screen ad exclusivity: a Result screen exposes at most ONE ad lane. Called once,
+ * only when a rewarded offer is otherwise ready to render on this result (due, paying, a
+ * rewarded ad can be offered) - so a zero-coin result never spends the reservation.
+ *
+ * "interstitial": a treatment interstitial is due AND already loaded, and this opportunity
+ *   has not reserved a screen before - the screen is reserved for it; the rewarded offer
+ *   stays pending (its cadence is not reset).
+ * "rewarded": anything else - control arm (no ad to yield to), due but not loaded, not due,
+ *   or this opportunity already had its one reservation (the player left that screen without
+ *   it being presented). The caller renders the offer and then calls
+ *   markRewardedOfferRenderedThisCycle(), which keeps the interstitial off this screen.
+ */
+export function claimResultAdLane(): "interstitial" | "rewarded" {
+  if (dueThisCycle && dueArmThisCycle === "treatment" && getInterstitialState() === "ready" && !laneReservedForOpportunity) {
+    laneReservedForOpportunity = true;
+    return "interstitial";
+  }
+  return "rewarded";
+}
+
+/**
+ * The rewarded offer is on this Result screen. From this moment no interstitial may be
+ * presented when leaving it - even one that finishes loading afterwards. (The older guard,
+ * rewardedShownThisCycle, only covered a WATCHED rewarded ad.)
+ */
+export function markRewardedOfferRenderedThisCycle(): void {
+  rewardedRenderedThisCycle = true;
 }
 
 function checkpointParams(arm: InterstitialArm, result: PresentOutcome | { outcome: "control" | "suppressed" }, cadence: InterstitialCadence): InterstitialCheckpointParams {
@@ -151,6 +190,7 @@ export function runInterstitialCheckpoint(): Promise<boolean> | null {
   // Consumed before anything else, so a crash or kill mid-ad still counts it once.
   saveState(storage, consumeOpportunity(loadState(storage), sessionId));
   preloadAttemptedForUpcoming = false;
+  laneReservedForOpportunity = false;
 
   const record = (result: PresentOutcome | { outcome: "control" | "suppressed" }) => {
     const params = checkpointParams(who.arm, result, who.cadence);
@@ -161,9 +201,10 @@ export function runInterstitialCheckpoint(): Promise<boolean> | null {
     track("interstitial_checkpoint", params);
   };
 
-  // Symmetric across arms: a rewarded ad this result cycle suppresses the opportunity
-  // in control too, so the two arms consume opportunities at the same moments.
-  if (rewardedShownThisCycle) {
+  // Symmetric across arms: a rewarded ad - or a rewarded OFFER rendered - this result cycle
+  // suppresses the opportunity in control too, so the two arms consume opportunities at the
+  // same moments. Rewarded rendered -> never an interstitial from the same Result screen.
+  if (rewardedShownThisCycle || rewardedRenderedThisCycle) {
     record({ outcome: "suppressed" });
     return null;
   }
@@ -248,6 +289,8 @@ export function _resetInterstitialControllerForTests(options: {
   sessionIdSource = options.sessionId ?? (() => getSessionId());
   installationIdSource = options.installationId ?? getPersistedInstallationId;
   rewardedShownThisCycle = false;
+  rewardedRenderedThisCycle = false;
+  laneReservedForOpportunity = false;
   dueThisCycle = false;
   dueArmThisCycle = null;
   preloadAttemptedForUpcoming = false;

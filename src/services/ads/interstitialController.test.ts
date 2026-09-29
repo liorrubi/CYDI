@@ -9,7 +9,9 @@ import { test, beforeEach } from "node:test";
 import {
   _resetInterstitialControllerForTests,
   beginInterstitialResultCycle,
+  claimResultAdLane,
   isInterstitialDueThisCycle,
+  markRewardedOfferRenderedThisCycle,
   recordInterstitialGameCompleted,
   recordInterstitialGameStarted,
   runInterstitialCheckpoint,
@@ -505,4 +507,88 @@ test("isInterstitialDueThisCycle: a control opportunity never defers the rewarde
     if (i < 7) runInterstitialCheckpoint();
   }
   assert.equal(isInterstitialDueThisCycle(), false, "control shows no ad, so nothing to yield to");
+});
+
+// --- Result-screen ad exclusivity (Rewarded Ads Experiment v1) -------------------------
+// Each Result screen exposes at most one ad lane. claimResultAdLane() is asked only when a
+// rewarded offer is otherwise ready to render (due, paying, ad-capable).
+
+async function dueAndLoaded() {
+  playRounds(6); // preload for the upcoming opportunity starts here
+  ad.resolveLoad();
+  await flush();
+  completeRound(); // 7th: due, ad ready
+}
+
+test("lane 1: due + loaded -> the screen is reserved for the interstitial, which shows on exit", async () => {
+  await dueAndLoaded();
+  assert.equal(claimResultAdLane(), "interstitial", "rewarded deferred");
+  const pending = runInterstitialCheckpoint();
+  assert.ok(pending, "the interstitial is presented");
+  ad.fire({ type: "showed" });
+  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "shown", gamesBetweenAds: 7 }]);
+});
+
+test("lane 2: due + loaded, player leaves via Back to Map -> next paying result renders rewarded", async () => {
+  await dueAndLoaded();
+  assert.equal(claimResultAdLane(), "interstitial");
+  // Back to Map: no checkpoint, nothing presented. Next result - still due and loaded.
+  completeRound();
+  assert.equal(isInterstitialDueThisCycle(), true);
+  assert.equal(claimResultAdLane(), "rewarded", "one reservation per opportunity - no starvation");
+  markRewardedOfferRenderedThisCycle();
+  assert.equal(runInterstitialCheckpoint(), null, "rewarded rendered -> no interstitial from this screen");
+  assert.equal(checkpoints()[0].outcome, "suppressed");
+  assert.equal(ad.calls.show, 0);
+});
+
+test("lane 3: due but NOT loaded -> rewarded renders", () => {
+  playRounds(6); // preload started but never resolves
+  completeRound();
+  assert.equal(isInterstitialDueThisCycle(), true);
+  assert.equal(claimResultAdLane(), "rewarded");
+});
+
+test("lane 4: rewarded rendered, interstitial finishes loading afterwards -> still no interstitial from that screen", async () => {
+  playRounds(6);
+  completeRound(); // due, still loading
+  assert.equal(claimResultAdLane(), "rewarded");
+  markRewardedOfferRenderedThisCycle();
+  ad.resolveLoad(); // the race: loaded after the offer rendered
+  await flush();
+  assert.equal(runInterstitialCheckpoint(), null);
+  assert.equal(checkpoints()[0].outcome, "suppressed");
+  assert.equal(ad.calls.show, 0);
+});
+
+test("lane 5: a zero-coin result (no claim) does not spend the reservation", async () => {
+  await dueAndLoaded();
+  // Zero-coin result: the screen never asks for the lane; the player goes Back to Map.
+  completeRound(); // next result is paying
+  assert.equal(claimResultAdLane(), "interstitial", "the reservation is still available");
+});
+
+test("lane 6: no repeated starvation; a fresh opportunity gets its own single reservation", async () => {
+  await dueAndLoaded();
+  assert.equal(claimResultAdLane(), "interstitial");
+  for (let i = 0; i < 3; i++) {
+    completeRound(); // left via Back to Map each time
+    assert.equal(claimResultAdLane(), "rewarded", `result ${i + 2} after the reservation renders rewarded`);
+  }
+  markRewardedOfferRenderedThisCycle();
+  runInterstitialCheckpoint(); // consumed (suppressed) at the rewarded screen's exit
+  // A new session reopens the cap; the next opportunity may reserve one screen again.
+  session = "sess00000002";
+  playRounds(6);
+  ad.resolveLoad();
+  await flush();
+  completeRound();
+  assert.equal(claimResultAdLane(), "interstitial");
+});
+
+test("lane: control arm never reserves a screen", async () => {
+  installation = CONTROL_ID;
+  playRounds(6);
+  completeRound();
+  assert.equal(claimResultAdLane(), "rewarded");
 });

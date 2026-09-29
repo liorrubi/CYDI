@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.55.3 - 2026-09-29
+
+Web only - nothing changes for players, and Android (0.55.0 / vc53) needs no release.
+
+- **Website analytics no longer double-send with several tabs open:** every open
+  playcydi.com page used to pick up and resend the other open pages' pending analytics
+  events, so N tabs at once sent 1+2+...+N copies (13 tabs: 91 instead of 13). Each page
+  now keeps its own pending events and takes over another page's only once that page has
+  closed or stopped. Same requests, same event ids, same retry and recovery; no new
+  events, identifiers or requests.
+- **Dashboard wording:** the private analytics dashboard's version table now says what a
+  gap between Analytics Engine and the exact ledger can mean (resent copies that Analytics
+  Engine counted, or missing events in either path).
+- **Worker type check is clean again** (the daily share path moved to a browser-free
+  module); the served code is unchanged.
+
 ## 0.55.2 - 2026-09-29
 
 Web and Worker only - nothing changes for players, and Android (0.55.0 / vc53) needs no

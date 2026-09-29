@@ -643,7 +643,7 @@
               v.reconcile.map((r) => [r.label, fmtInt(r.versions), fmtInt(r.aggregate), r.note, fmtPct(r.delta)]),
             ),
           );
-          body.appendChild(note("App opens and first opens are exact-ledger events; the version rows read Analytics Engine's copy of the same events so that every column shares one source. A difference of a few percent is the two stores, not a bug; a large one means one of them is dropping events."));
+          body.appendChild(note("App opens and first opens are exact-ledger events; the version rows read Analytics Engine's copy of the same events so that every column shares one source. A difference between Analytics Engine and the exact ledger can reflect duplicate or resent copies that Analytics Engine counted, or missing events in either path. The exact ledger de-duplicates by event ID; Analytics Engine keeps every copy it receives, so a positive difference usually means resends rather than loss."));
         }
       } else {
         lede.textContent =

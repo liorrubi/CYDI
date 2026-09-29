@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
@@ -77,6 +78,8 @@ function useTimeUntilNextShape(): string {
 
 export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeScreenProps) {
   const [phase, setPhase] = useState<Phase>("intro");
+  // The intro and each attempt start with the game at the top of the viewport (hooks/useRoundStartScroll.ts).
+  useRoundStartScroll(phase === "intro" || phase === "preview" ? phase : false);
   // Whether the attempt currently in progress is the day's free one - only true once, for
   // whichever attempt happens to be the first completed today; every attempt after that
   // (including retries within this same visit) costs coins, checked at completion time.

@@ -25,10 +25,17 @@
  * and works under both. This adds identity and hierarchy, not a third theme.
  */
 import type { ReactNode } from "react";
+import { useCrawlableBlockTakeover } from "../site/crawlableBlock";
 import "../styles/appShell.css";
 
 type AppSkinProps = { children: ReactNode };
 
 export default function AppSkin({ children }: AppSkinProps) {
+  // The bundled index.html is the prerendered public page, so it carries the Worker's
+  // crawlable block (section.cydi-seo) after #root. The web's site and game shells remove it
+  // once the UI is on screen; Android mounts neither, so without this the whole SEO page sat
+  // under every Android screen (~1,280 px): every screen became scrollable, rounds inherited
+  // scroll offsets, and its site links could navigate the WebView away from the game.
+  useCrawlableBlockTakeover();
   return <div className="app-shell">{children}</div>;
 }

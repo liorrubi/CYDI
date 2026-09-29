@@ -163,7 +163,7 @@ test("AE schema 2: economy context lands as bucket positions and codes, never a 
   ] });
   const points = buildShadowDataPointsFromParsed(parseIngest("/events", body), "DE", () => 0);
   const [offer, game, spent, legacy] = points;
-  assert.equal(offer.doubles[0], 2, "schema version 2");
+  assert.equal(offer.doubles[0], 3, "schema version 3 (rewarded experiment); the economy doubles are unchanged since 2");
   assert.deepEqual(offer.doubles.slice(13), [4, 13, 3, 4, 80, 2, 1], "800_999 / category*10+short_10_25 / x3 / ad+closes / base 80 / 10_24 / sampleWeight 1");
   assert.deepEqual(game.doubles.slice(13), [9, 0, 0, 0, 55, 0, 1], "10k_20k bucket position 9, coinsEarned 55");
   assert.equal(spent.blobs[19], "coinSink:category_unlock");

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRoundStartScroll } from "../../hooks/useRoundStartScroll";
 import UpdateRequiredNotice from "./UpdateRequiredNotice";
 import Button from "../Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../DrawingCanvas";
@@ -99,6 +100,8 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
   const isHost = you?.isHost ?? false;
   const submitted = you?.submitted ?? false;
   const roundIndex = snapshot?.roundIndex ?? -1;
+  // Every round (from the lobby, and each next round) starts with the game at the top of the viewport.
+  useRoundStartScroll(phase === "COUNTDOWN" || phase === "SHOW_SHAPE" ? roundIndex : false);
 
   // First-run tutorial, keyed on the role you actually hold. Host and guest
   // have separate flags, so being a guest once does not consume the

@@ -9,6 +9,7 @@ import { test, beforeEach } from "node:test";
 import {
   _resetInterstitialControllerForTests,
   beginInterstitialResultCycle,
+  isInterstitialDueThisCycle,
   recordInterstitialGameCompleted,
   recordInterstitialGameStarted,
   runInterstitialCheckpoint,
@@ -482,4 +483,26 @@ test("safety-timeout release after Showed stays on Result; the next explicit tap
   await flush();
   assert.equal(tracked.filter((t) => t.name === "interstitial_dismissed").length, 1);
   assert.equal(tracked.filter((t) => t.name === "interstitial_checkpoint").length, 1);
+});
+
+// Rewarded Ads Experiment v1 reads this to defer the rewarded offer (interstitial priority).
+test("isInterstitialDueThisCycle: true only on a TREATMENT result whose exit runs an opportunity", async () => {
+  for (let i = 1; i <= 6; i++) {
+    completeRound();
+    assert.equal(isInterstitialDueThisCycle(), false, `game ${i} is not due`);
+    runInterstitialCheckpoint();
+  }
+  completeRound();
+  assert.equal(isInterstitialDueThisCycle(), true, "game 7 is due in treatment");
+  beginInterstitialResultCycle();
+  assert.equal(isInterstitialDueThisCycle(), false, "a new result cycle clears it");
+});
+
+test("isInterstitialDueThisCycle: a control opportunity never defers the rewarded offer", async () => {
+  installation = CONTROL_ID;
+  for (let i = 1; i <= 7; i++) {
+    completeRound();
+    if (i < 7) runInterstitialCheckpoint();
+  }
+  assert.equal(isInterstitialDueThisCycle(), false, "control shows no ad, so nothing to yield to");
 });

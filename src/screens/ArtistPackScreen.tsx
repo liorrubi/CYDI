@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useListScrollMemory, useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
@@ -67,6 +68,8 @@ export default function ArtistPackScreen({ packId, from, replyTo, onNavigate }: 
   // dedicated "unavailable" screen below, not a silent substitution.
   const replyArtwork = pack && replyTo?.artworkId ? resolvePublishedArtwork(packId, replyTo.artworkId) : undefined;
   const [playing, setPlaying] = useState<ArtistArtworkDefinition | null>(() => replyArtwork ?? null);
+  // The gallery hosts rounds in place: returning from an artwork restores its scroll position.
+  useListScrollMemory(playing === null);
   // Never reassigned after mount - a reply session always fully navigates away on
   // finish/back (see handleFinishedPlaying) rather than returning to this same
   // screen instance with `playing` cleared, so there's no later point where this
@@ -302,6 +305,8 @@ type ArtistPlayProps = {
 function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: ArtistPlayProps) {
   const isReply = replyTo !== undefined;
   const [phase, setPhase] = useState<ArtistPhase>("preview");
+  // An artwork start and each retry begin with the game at the top of the viewport.
+  useRoundStartScroll(phase === "preview" ? "preview" : false);
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
   const [result, setResult] = useState<ScoreBreakdown | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);

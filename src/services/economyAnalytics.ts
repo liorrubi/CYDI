@@ -182,12 +182,15 @@ export function nextEconomyTarget(): { target: NextTarget; price: number | null 
  * Economy context for the reward-offer funnel, or null if it cannot be computed (the
  * offer then reports placement only). `balance` is read now - every caller has already
  * credited the base reward by the time it asks.
+ *
+ * `bonusCoins` overrides what the ad adds when it is not a multiple of the base - the
+ * Rewarded experiment's flat "+100" arm, which reports multiplier 1.
  */
-export function rewardOfferContext(baseReward: number, multiplier: 2 | 3, adAvailable: boolean): RewardOfferEconomy | null {
+export function rewardOfferContext(baseReward: number, multiplier: 1 | 2 | 3, adAvailable: boolean, bonusCoins?: number): RewardOfferEconomy | null {
   try {
     const balance = currentBalance();
     const { target, price } = nextEconomyTarget();
-    const extra = Math.max(0, Math.round(baseReward)) * (multiplier - 1);
+    const extra = bonusCoins ?? Math.max(0, Math.round(baseReward)) * (multiplier - 1);
     return {
       balanceBucket: balanceBucket(balance),
       baseReward: Math.max(1, Math.round(baseReward)),

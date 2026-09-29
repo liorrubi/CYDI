@@ -3,6 +3,7 @@
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRoundStartScroll } from "../../hooks/useRoundStartScroll";
 import Button from "../Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../DrawingCanvas";
 import MultiplayerLeaderboard, { type LeaderboardPlayer } from "../multiplayer/MultiplayerLeaderboard";
@@ -115,6 +116,8 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
   const { phase, roundIndex, turnPosition } = game;
   const player = currentPlayer(game);
   const turnKey = `${roundIndex}-${turnPosition}`;
+  // Every turn (first turn, each hand-off, each next round) starts with the game at the top of the viewport.
+  useRoundStartScroll(phase === "HANDOFF" || phase === "COUNTDOWN" ? turnKey : false);
 
   // A badge hold must never outlive this screen - leaving before the progress
   // card appears would otherwise freeze the badge on a stale number.

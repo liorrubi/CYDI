@@ -71,6 +71,14 @@
 //   double19 gamesBucket       1-based position in GAMES_BUCKETS
 //   double20 sampleWeight      RESERVED for a possible write-time sampling guard; always 1
 //                              (unsampled) today, on every row. Counts stay sum(_sample_interval).
+//   --- schema 3 (Rewarded Ads Experiment v1; no new columns - reward-offer rows never
+//   carry the params these slots were named for, so they are reused on those rows only) ---
+//   blob18 arm                 also the rewarded arm: "x3" | "plus100" (reward_* funnel + reward_continuation)
+//   blob19 outcome             also reward_continuation's outcome: completed | skipped | failed
+//   double5  sessionGames      reward_* funnel rows: completed Classic games in the session at the offer
+//   double6  offerNumber       reward_* funnel + reward_continuation rows: the offer's number in the session
+//   double10 bonusCoins        reward_* funnel rows: coins the ad adds (x3: base x 2; plus100: 100)
+//   double16 multiplier        1 = flat bonus (the "plus100" arm; see double10)
 // coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
 // balance BUCKET is ever written - never a balance.
 // Booleans are 1/0 and absent numbers are 0, so always filter on blob1 before reading
@@ -84,7 +92,7 @@ import { normalizeAttribution } from "../src/services/analyticsAttribution";
 import { normalizeAnalyticsAudience } from "../src/services/analyticsUsage";
 import { BALANCE_BUCKETS, GAMES_BUCKETS, NEXT_TARGETS, SHORTFALL_BUCKETS, bucketPosition } from "../src/services/economyBuckets";
 
-export const AE_SCHEMA_VERSION = 2;
+export const AE_SCHEMA_VERSION = 3;
 
 /**
  * The index is a random bucket, "b00".."b63", drawn per data point.
@@ -120,7 +128,7 @@ export function economyDoubles(params: Record<string, unknown>): number[] {
   return [
     bucketPosition(BALANCE_BUCKETS, params.balanceBucket),
     target > 0 && shortfall > 0 ? target * 10 + shortfall : 0,
-    params.multiplier === 2 || params.multiplier === 3 ? params.multiplier : 0,
+    params.multiplier === 1 || params.multiplier === 2 || params.multiplier === 3 ? params.multiplier : 0,
     flags,
     coins,
     bucketPosition(GAMES_BUCKETS, params.gamesBucket),
@@ -196,12 +204,14 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       num(params.starRating),
       num(params.passed),
       num(params.isNewBest),
-      num(params.roundCount),
-      num(params.roundIndex),
+      // Schema 3: sessionGames / offerNumber / bonusCoins share these slots on reward rows,
+      // which never carry roundCount / roundIndex / amount (see the SCHEMA block above).
+      num(params.roundCount ?? params.sessionGames),
+      num(params.roundIndex ?? params.offerNumber),
       num(params.playerCount),
       num(params.price),
       num(params.gamesBetweenAds),
-      num(params.amount),
+      num(params.amount ?? params.bonusCoins),
       num(params.submitted),
       num(params.hadCache),
       batchSize,

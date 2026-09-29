@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useListScrollMemory, useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
@@ -67,6 +68,8 @@ function achievementNameFor(card: MegaCardDefinition): string {
 export default function MegaChallengeScreen({ onNavigate }: MegaChallengeScreenProps) {
   const [progress, setProgress] = useState<MegaChallengeProgress>(() => getMegaProgress());
   const [playingCard, setPlayingCard] = useState<MegaCardDefinition | null>(null);
+  // The album hosts rounds in place: returning from a card restores its scroll position.
+  useListScrollMemory(playingCard === null);
   const [banner, setBanner] = useState<string | null>(null);
   const [showChampionOverlay, setShowChampionOverlay] = useState(false);
   const [coins, setCoins] = useState(() => getCoins());
@@ -303,6 +306,8 @@ type MegaPlayProps = {
 
 function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
   const [phase, setPhase] = useState<MegaPhase>("preview");
+  // A card start and each retry begin with the game at the top of the viewport.
+  useRoundStartScroll(phase === "preview" ? "preview" : false);
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
   const [result, setResult] = useState<ScoreBreakdown | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);

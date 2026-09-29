@@ -28,6 +28,16 @@ import {
   recordRewardGranted,
   shouldShowReminder,
 } from "../app/rewardOfferNudge";
+import {
+  PLUS_BONUS_COINS,
+  rewardedFinalAmount,
+  setRewardedContinuation,
+  type RewardedArm,
+  type RewardedOutcome,
+} from "../app/rewardedOfferCadence";
+
+/** Rewarded Ads Experiment v1 context for the Classic result offer (src/app/rewardedOfferCadence.ts). */
+export type RewardedExperimentOffer = { arm: RewardedArm; offerNumber: number; sessionGames: number };
 
 type DoubleCoinsOfferProps = {
   /** The coin reward already earned and guaranteed - doubling only ever adds on top of this, never takes it away. */
@@ -56,6 +66,16 @@ type DoubleCoinsOfferProps = {
    * whose exit forfeits the offer calls it instead of emitting its own event.
    */
   onSkipReporter?: (report: () => void) => void;
+  /**
+   * Rewarded Ads Experiment v1 (Classic result offer only). When set, the offer is worth the
+   * arm's value - "x3" triples the coins, "plus100" adds a flat 100 - instead of the ×2 /
+   * periodic ×3, the funnel events carry the experiment context, and the offer's outcome
+   * feeds reward_continuation. Everything else (layout, buttons, availability) is identical
+   * for both arms.
+   */
+  experiment?: RewardedExperimentOffer;
+  /** Called once, when the offer is genuinely on screen (same moment as its offer_shown event). */
+  onShown?: () => void;
 };
 
 type Phase = "offer" | "quiz" | "feedback";
@@ -77,7 +97,7 @@ function randomFactor(): number {
  * whole purpose is that players cannot reach it. `import.meta.env.DEV` is statically
  * replaced at build time, so this is false in every production bundle.
  */
-function isMathFallbackEnabled(): boolean {
+export function isMathFallbackEnabled(): boolean {
   try {
     return import.meta.env.DEV === true;
   } catch {
@@ -105,7 +125,7 @@ function isMathFallbackEnabled(): boolean {
  * once the cap is hit, the double option disappears and only the base reward remains
  * collectible, with the current count shown to the player.
  */
-export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted, deferExplainer = false, onRewardEarned, onSkipReporter }: DoubleCoinsOfferProps) {
+export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted, deferExplainer = false, onRewardEarned, onSkipReporter, experiment, onShown }: DoubleCoinsOfferProps) {
   const [phase, setPhase] = useState<Phase>("offer");
   const [question] = useState(() => ({ a: randomFactor(), b: randomFactor() }));
   const [answer, setAnswer] = useState("");
@@ -117,7 +137,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
 
   // Frozen at mount from a PURE read, so a re-render can never flip the offer's
   // identity halfway through (and StrictMode's double invocation is harmless).
-  const [isBonusRound] = useState(() => isBonusRewardRound(placement));
+  // The experiment replaces the periodic ×3 on the offer it drives - never both.
+  const [isBonusRound] = useState(() => !experiment && isBonusRewardRound(placement));
   // One settlement per offer, shared by Continue and any exit path (onRewardEarned).
   // onResolved is read through a ref so a settlement triggered from the screen's exit
   // handler still reaches the screen's latest callback.
@@ -131,9 +152,25 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   );
   /** What this offer advertises: 3 on a bonus round, otherwise the usual 2. */
   const multiplier = rewardMultiplier(isBonusRound);
+  /** Experiment arms: "x3" -> the round's coins x3, "plus100" -> the round's coins + 100. */
+  const isX3Arm = experiment?.arm === "x3";
+  /** The total a confirmed rewarded-ad completion pays. */
+  const adFinalAmount = experiment ? rewardedFinalAmount(experiment.arm, amount) : amount * multiplier;
   /** What actually gets PAID. The 3× is reserved for a confirmed rewarded-ad
-   *  completion, so the dev-only math route always settles at the standard ×2. */
-  const paidMultiplier = grantSource === "ad" ? multiplier : STANDARD_REWARD_MULTIPLIER;
+   *  completion, so the dev-only math route always settles at the standard ×2
+   *  (for an experiment offer it mirrors the arm, so the dev flow shows the real value). */
+  const paidAmount = grantSource === "ad" || experiment ? adFinalAmount : amount * STANDARD_REWARD_MULTIPLIER;
+
+  // Experiment only: the offer's final outcome, for the next game_started's reward_continuation.
+  // completed beats failed beats skipped, so a skip after a failed ad still reads as "tried".
+  const outcomeRef = useRef<RewardedOutcome | null>(null);
+  const recordOutcome = (outcome: RewardedOutcome) => {
+    if (!experiment) return;
+    const rank: Record<RewardedOutcome, number> = { skipped: 0, failed: 1, completed: 2 };
+    if (outcomeRef.current && rank[outcomeRef.current] >= rank[outcome]) return;
+    outcomeRef.current = outcome;
+    setRewardedContinuation(experiment.arm, experiment.offerNumber, outcome);
+  };
 
   const doublingAvailable = remainingDoubles === undefined || remainingDoubles > 0;
   const adAvailable = isRewardedAdAvailable();
@@ -182,17 +219,38 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   // separates "an offer with no ad behind it" from a real one.
   const economyRef = useRef<RewardOfferEconomy | null>(null);
   const funnelParams = () => {
-    if (!economyRef.current) economyRef.current = rewardOfferContext(amount, multiplier as 2 | 3, isRewardedAdAvailable());
-    return economyRef.current ? { placement, ...economyRef.current } : { placement };
+    if (!economyRef.current) {
+      economyRef.current = experiment
+        ? rewardOfferContext(amount, isX3Arm ? 3 : 1, isRewardedAdAvailable(), adFinalAmount - amount)
+        : rewardOfferContext(amount, multiplier as 2 | 3, isRewardedAdAvailable());
+    }
+    if (!economyRef.current) return { placement };
+    if (!experiment) return { placement, ...economyRef.current };
+    return {
+      placement,
+      ...economyRef.current,
+      arm: experiment.arm,
+      offerNumber: experiment.offerNumber,
+      sessionGames: experiment.sessionGames,
+      bonusCoins: adFinalAmount - amount,
+    };
   };
 
   useEffect(() => {
     preloadRewardedAd(placement);
-    onSkipReporter?.(() => trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", funnelParams()));
+    onSkipReporter?.(() => {
+      recordOutcome("skipped");
+      trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", funnelParams());
+    });
     // A ×3 round reports on its own event names so the two offer types can be compared
     // in the report; see the reward_bonus_* block in analyticsSchema.ts for why this is
     // a separate name rather than a param. Same funnel, same placement, either way.
-    const t = window.setTimeout(() => trackEvent(isBonusRound ? "reward_bonus_offer_shown" : "reward_offer_shown", funnelParams()), 0);
+    // onShown fires in the same tick as offer_shown: this is the moment the offer counts
+    // as rendered (once - the timeout is cleared if StrictMode re-runs the effect).
+    const t = window.setTimeout(() => {
+      trackEvent(isBonusRound ? "reward_bonus_offer_shown" : "reward_offer_shown", funnelParams());
+      onShown?.();
+    }, 0);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -235,6 +293,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     // away from one whose ad could not be served does not - `skipForfeitsRealDouble`
     // already draws exactly that line for the skip-streak nudge.
     resolveBonusRewardRound({ wasBonusRound: isBonusRound, granted: false, forfeitedRealOffer: skipForfeitsRealDouble });
+    recordOutcome("skipped");
     trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", funnelParams());
     onResolved(amount, anchorRef.current);
   }
@@ -263,10 +322,12 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       setWasCorrect(true);
       // The player did the thing the nudge was for - the skip streak starts over.
       recordRewardGranted();
+      recordOutcome("completed");
       trackEvent(isBonusRound ? "reward_bonus_ad_completed" : "reward_ad_completed", funnelParams());
-      const finalAmount = amount * multiplier;
+      const finalAmount = adFinalAmount;
       onRewardEarned?.(() => settlement.settle({ granted: true, finalAmount }, anchorRef.current));
     } else {
+      recordOutcome("failed");
       trackEvent(isBonusRound ? "reward_bonus_ad_failed" : "reward_ad_failed", funnelParams());
       // No substitute route is offered - just a quiet notice back on the offer screen.
       if (outcome.adUnavailable) setAdUnavailableNotice(true);
@@ -285,7 +346,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       onDoubleAttempted?.();
       playSuccessSound();
       playCoinsSound();
-      const finalAmount = amount * STANDARD_REWARD_MULTIPLIER;
+      const finalAmount = experiment ? adFinalAmount : amount * STANDARD_REWARD_MULTIPLIER;
       onRewardEarned?.(() => settlement.settle({ granted: false, finalAmount }, anchorRef.current));
     } else {
       playDangerSound();
@@ -294,8 +355,14 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
 
   function handleContinue() {
     const granted = wasCorrect && grantSource === "ad";
-    settlement.settle({ granted, finalAmount: wasCorrect ? amount * paidMultiplier : amount }, anchorRef.current);
+    settlement.settle({ granted, finalAmount: wasCorrect ? paidAmount : amount }, anchorRef.current);
   }
+
+  // Copy. The experiment arms share every string's shape; only the value differs.
+  const offerQuestion = experiment ? (isX3Arm ? "triple it?" : `get +${PLUS_BONUS_COINS} more?`) : isBonusRound ? "triple it?" : "double it?";
+  const watchLabel = experiment ? (isX3Arm ? "🎬 Watch Ad for 3×" : `🎬 Watch Ad for +${PLUS_BONUS_COINS}`) : isBonusRound ? "🎬 Watch Ad for 3×" : "🎬 Watch Ad to Double";
+  const tutorialValue = experiment ? (isX3Arm ? "3× coins" : `+${PLUS_BONUS_COINS} coins`) : `${multiplier}× coins`;
+  const reminderText = experiment ? (isX3Arm ? "triples your coins" : `adds ${PLUS_BONUS_COINS} coins`) : `${isBonusRound ? "triples" : "doubles"} your coins`;
 
   return (
     <div ref={anchorRef} className={isBonusRound ? "double-offer-banner double-offer-banner-bonus" : "double-offer-banner"}>
@@ -309,23 +376,23 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
               on web, so the website always renders the original line. */}
           {nudgesEnabled && canAttemptDouble ? (
             <p className="double-offer-headline">
-              🪙 You earned {amount} coins - watch an ad to get {amount * multiplier}
+              🪙 You earned {amount} coins - watch an ad to get {adFinalAmount}
             </p>
           ) : (
             <p className="double-offer-headline">
               {canAttemptDouble
-                ? `🪙 +${amount} coins - ${isBonusRound ? "triple it?" : "double it?"}`
+                ? `🪙 +${amount} coins - ${offerQuestion}`
                 : `🪙 +${amount} coins`}
             </p>
           )}
           {showTutorial && (
             <p className="double-offer-limit-note">
-              Watch a short ad to get {multiplier}× coins - completely optional.
+              Watch a short ad to get {tutorialValue} - completely optional.
             </p>
           )}
           {showReminder && (
             <p className="double-offer-limit-note">
-              Tip: one short ad {isBonusRound ? "triples" : "doubles"} your coins.
+              Tip: one short ad {reminderText}.
             </p>
           )}
           {remainingDoubles !== undefined && (
@@ -337,7 +404,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
           <div className="double-offer-buttons">
             {doublingAvailable && adAvailable && (
               <button type="button" className="double-offer-double double-offer-ad-primary" onClick={handleWatchAd} disabled={adPending}>
-                {adPending ? "Loading ad…" : isBonusRound ? "🎬 Watch Ad for 3×" : "🎬 Watch Ad to Double"}
+                {adPending ? "Loading ad…" : watchLabel}
               </button>
             )}
             {/* Dev-only: never rendered in a user-facing build (see isMathFallbackEnabled). */}
@@ -378,12 +445,16 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       )}
       {phase === "feedback" && (
         <>
-          {wasCorrect && grantSource === "ad" && isBonusRound ? (
-            <p className="double-offer-headline">✨ 3× BONUS! You tripled your coins: 🪙 +{amount * paidMultiplier}</p>
+          {wasCorrect && experiment ? (
+            <p className="double-offer-headline">
+              {isX3Arm ? "✅ Ad watched! You tripled your coins" : `✅ Ad watched! +${PLUS_BONUS_COINS} bonus coins`}: 🪙 +{paidAmount}
+            </p>
+          ) : wasCorrect && grantSource === "ad" && isBonusRound ? (
+            <p className="double-offer-headline">✨ 3× BONUS! You tripled your coins: 🪙 +{paidAmount}</p>
           ) : wasCorrect && grantSource === "ad" ? (
-            <p className="double-offer-headline">✅ Ad watched! You doubled your coins: 🪙 +{amount * paidMultiplier}</p>
+            <p className="double-offer-headline">✅ Ad watched! You doubled your coins: 🪙 +{paidAmount}</p>
           ) : wasCorrect ? (
-            <p className="double-offer-headline">✅ Correct! You doubled your coins: 🪙 +{amount * paidMultiplier}</p>
+            <p className="double-offer-headline">✅ Correct! You doubled your coins: 🪙 +{paidAmount}</p>
           ) : (
             <p className="double-offer-headline">
               ❌ Not quite - {question.a} × {question.b} = {question.a * question.b}. You keep your original 🪙 +{amount}.

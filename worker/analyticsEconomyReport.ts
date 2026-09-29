@@ -82,7 +82,9 @@ export function buildEconomyAeQueries(startMs: number, endMs: number): Record<st
     funnelGames: funnel("double19"),
     earnGames: `SELECT blob7 AS aud, blob9 AS gameType, double14 AS k, sum(_sample_interval) AS n, sum(double18 * _sample_interval) AS coins FROM ${ECONOMY_AE_DATASET} WHERE ${T} AND blob1 = 'game_completed' AND double14 > 0 GROUP BY aud, gameType, k`,
     earnRare: `SELECT blob7 AS aud, blob20 AS detail, sum(_sample_interval) AS n, sum(double10 * _sample_interval) AS coins FROM ${ECONOMY_AE_DATASET} WHERE ${T} AND blob1 = 'coin_earned' GROUP BY aud, detail`,
-    earnAd: `SELECT blob7 AS aud, double16 AS m, sum(_sample_interval) AS n, sum(double18 * (double16 - 1) * _sample_interval) AS coins FROM ${ECONOMY_AE_DATASET} WHERE ${T} AND blob1 IN ('reward_ad_completed', 'reward_bonus_ad_completed') AND double16 > 0 GROUP BY aud, m`,
+    // Coins the ad added: schema-3 rows carry them directly (double10 bonusCoins - the only
+    // way to count the flat "plus100" arm, multiplier 1); older rows derive base x (m - 1).
+    earnAd: `SELECT blob7 AS aud, double16 AS m, sum(_sample_interval) AS n, sum(if(double10 > 0, double10, double18 * (double16 - 1)) * _sample_interval) AS coins FROM ${ECONOMY_AE_DATASET} WHERE ${T} AND blob1 IN ('reward_ad_completed', 'reward_bonus_ad_completed') AND double16 > 0 GROUP BY aud, m`,
   };
 }
 
@@ -171,14 +173,15 @@ export function economyTelemetryFromRows(results: Record<string, AeRow[]>, audie
   }
   for (const row of results.earnAd ?? []) {
     if (!inAudience(row, audience)) continue;
-    addSource(num(row.m) === 3 ? "ad_multiplier_x3" : "ad_multiplier_x2", num(row.n), num(row.coins));
+    const m = num(row.m);
+    addSource(m === 3 ? "ad_multiplier_x3" : m === 1 ? "ad_bonus_plus100" : "ad_multiplier_x2", num(row.n), num(row.coins));
   }
   return {
     rewardFunnel: {
       total,
       byBalance,
       byTargetShortfall: funnelBy(results.funnelShortfall ?? [], audience, (k) => `${label(NEXT_TARGETS, Math.floor(k / 10))}|${label(SHORTFALL_BUCKETS, k % 10)}`),
-      byMultiplierRewardSize: funnelBy(results.funnelReward ?? [], audience, (k) => `x${Math.floor(k / 10)}|${label(REWARD_SIZE_BUCKETS, k % 10)}`),
+      byMultiplierRewardSize: funnelBy(results.funnelReward ?? [], audience, (k) => `${Math.floor(k / 10) === 1 ? "plus100" : `x${Math.floor(k / 10)}`}|${label(REWARD_SIZE_BUCKETS, k % 10)}`),
       byAdClosesGap: funnelBy(results.funnelGap ?? [], audience, (k) => (k === 1 ? "ad_closes_gap" : "ad_does_not_close_gap")),
       byGames: funnelBy(results.funnelGames ?? [], audience, (k) => label(GAMES_BUCKETS, k)),
     },

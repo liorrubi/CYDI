@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
@@ -54,6 +55,8 @@ type PlayChallengeScreenProps = {
 export default function PlayChallengeScreen({ challengeId, from, onNavigate }: PlayChallengeScreenProps) {
   const [challenge, setChallenge] = useState<Challenge | null>(() => getChallenge(challengeId));
   const [phase, setPhase] = useState<Phase>("preview");
+  // The first attempt (preview) and a retry (which jumps straight to drawing) start at the top of the viewport.
+  useRoundStartScroll(phase === "preview" || phase === "drawing" ? "round" : false);
   const [attemptPath, setAttemptPath] = useState<DrawingPath | null>(null);
   const [result, setResult] = useState<ScoreBreakdown | null>(null);
   const [isNewBest, setIsNewBest] = useState(false);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import DailyLeaderboardTable from "../components/DailyLeaderboardTable";
@@ -74,6 +75,8 @@ type DailyChallengeScreenProps = {
 export default function DailyChallengeScreen({ onNavigate, replay }: DailyChallengeScreenProps) {
   const playerId = useMemo(() => getPlayerId(), []);
   const [phase, setPhase] = useState<Phase>("loading");
+  // Each attempt (first, Try Again, Play New Challenge) starts with the game at the top of the viewport.
+  useRoundStartScroll(phase === "preview" ? "preview" : false);
   const [episode, setEpisode] = useState<DailyEpisode | null>(null);
   /** Resolved ONCE per episode in load() (see dailyShapeResolver) and never re-resolved afterwards - the challenge must not change after the player has seen or started it, even if a newer catalog arrives mid-session. */
   const [shape, setShape] = useState<ShapeDefinition | null>(null);

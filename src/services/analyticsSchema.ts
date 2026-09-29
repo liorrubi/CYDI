@@ -153,16 +153,38 @@ export type GameCompletedCoins = { coinsEarned: number; balanceBucket: BalanceBu
 export type RewardOfferEconomy = {
   balanceBucket: BalanceBucket;
   baseReward: number;
-  multiplier: 2 | 3;
+  /** 2 | 3 multiply the round's coins; 1 = no multiplier, a flat bonus (Rewarded experiment arm "plus100", see bonusCoins). */
+  multiplier: 1 | 2 | 3;
   adAvailable: boolean;
   nextTarget: NextTarget;
   shortfallBucket: ShortfallBucket;
   adClosesGap: boolean;
   gamesBucket: GamesBucket;
 };
-export type RewardOfferParams = { placement: RewardedAdPlacement } | ({ placement: RewardedAdPlacement } & RewardOfferEconomy);
+/**
+ * Rewarded Ads Experiment v1 (src/app/rewardedOfferCadence.ts): the two arms differ only in
+ * reward value - "x3" triples the round's coins, "plus100" adds a flat 100.
+ */
+export const REWARD_EXPERIMENT_ARMS = ["x3", "plus100"] as const;
+export type RewardExperimentArm = (typeof REWARD_EXPERIMENT_ARMS)[number];
+export type RewardOfferOutcome = "completed" | "skipped" | "failed";
+const REWARD_OFFER_OUTCOMES: readonly RewardOfferOutcome[] = ["completed", "skipped", "failed"];
+/**
+ * Experiment context on the Classic result offer's funnel events, alongside the economy
+ * block (all keys or none): the arm, the offer's number within the analytics session, the
+ * session's completed Classic games so far (heavy-user analysis) and the coins the ad adds.
+ */
+export type RewardOfferExperiment = { arm: RewardExperimentArm; offerNumber: number; sessionGames: number; bonusCoins: number };
+export type RewardOfferParams =
+  | { placement: RewardedAdPlacement }
+  | ({ placement: RewardedAdPlacement } & RewardOfferEconomy)
+  | ({ placement: RewardedAdPlacement } & RewardOfferEconomy & RewardOfferExperiment);
 
 const REWARD_OFFER_ECONOMY_KEYS = ["balanceBucket", "baseReward", "multiplier", "adAvailable", "nextTarget", "shortfallBucket", "adClosesGap", "gamesBucket"] as const;
+const REWARD_OFFER_EXPERIMENT_KEYS = ["arm", "offerNumber", "sessionGames", "bonusCoins"] as const;
+/** Bounds for the experiment context: far above any real session, a value past them is a bug. */
+const MAX_OFFER_NUMBER = 1000;
+const MAX_SESSION_GAMES = 10_000;
 /** Bounds: a real reward/earn is far below these; a value past them is a bug, dropped rather than stored. */
 const MAX_ECONOMY_COINS = 100_000;
 
@@ -295,6 +317,8 @@ export type EventParamsMap = {
   interstitial_checkpoint: InterstitialCheckpointParams;
   /** The next eligible Shape Challenge game_started in the same session after a checkpoint. */
   interstitial_continuation: { arm: InterstitialArm; outcome: InterstitialOutcome; gamesBetweenAds: InterstitialCadence };
+  /** Rewarded experiment: the next Classic game_started in the same session after an offer (absence = abandonment after the offer). */
+  reward_continuation: { arm: RewardExperimentArm; offerNumber: number; outcome: RewardOfferOutcome };
   /** A background interstitial load that produced no ad, with the bounded reason (from the GMA numeric code). */
   interstitial_load_failed: { reason: InterstitialFailureReason };
   /** The SDK's own Dismissed callback - never inferred from the page becoming visible. */
@@ -405,6 +429,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "rewarded_ad_failed",
   "interstitial_checkpoint",
   "interstitial_continuation",
+  "reward_continuation",
   "interstitial_load_failed",
   "interstitial_dismissed",
   "reward_offer_shown",
@@ -664,6 +689,12 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     if (!isArmOutcomePair(arm, outcome)) return { valid: false };
     return { valid: true, params: { arm, outcome, gamesBetweenAds } };
   },
+  reward_continuation: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["arm", "offerNumber", "outcome"])) return { valid: false };
+    const { arm, offerNumber, outcome } = p;
+    if (!isOneOf(REWARD_EXPERIMENT_ARMS, arm) || !isIntInRange(offerNumber, 1, MAX_OFFER_NUMBER) || !isOneOf(REWARD_OFFER_OUTCOMES, outcome)) return { valid: false };
+    return { valid: true, params: { arm, offerNumber, outcome } };
+  },
   interstitial_load_failed: (p) => {
     if (!isRecord(p) || !hasExactKeys(p, ["reason"])) return { valid: false };
     if (!isInterstitialFailureReason(p.reason)) return { valid: false };
@@ -859,16 +890,25 @@ function validateRewardOfferEvent<
 >(p: unknown): ValidationResult<E> {
   if (!isRecord(p)) return { valid: false };
   if (Object.keys(p).length === 1) return validateAdEvent(p) as ValidationResult<E>;
-  if (!hasExactKeys(p, ["placement", ...REWARD_OFFER_ECONOMY_KEYS])) return { valid: false };
+  const withExperiment = hasExactKeys(p, ["placement", ...REWARD_OFFER_ECONOMY_KEYS, ...REWARD_OFFER_EXPERIMENT_KEYS]);
+  if (!withExperiment && !hasExactKeys(p, ["placement", ...REWARD_OFFER_ECONOMY_KEYS])) return { valid: false };
   const { placement, balanceBucket, baseReward, multiplier, adAvailable, nextTarget, shortfallBucket, adClosesGap, gamesBucket } = p;
   if (!isRewardedAdPlacement(placement)) return { valid: false };
   if (!isOneOf(BALANCE_BUCKETS, balanceBucket) || !isIntInRange(baseReward, 1, MAX_ECONOMY_COINS)) return { valid: false };
-  if ((multiplier !== 2 && multiplier !== 3) || !isBoolean(adAvailable) || !isBoolean(adClosesGap)) return { valid: false };
+  if (!isBoolean(adAvailable) || !isBoolean(adClosesGap)) return { valid: false };
   if (!isOneOf(NEXT_TARGETS, nextTarget) || !isOneOf(SHORTFALL_BUCKETS, shortfallBucket) || !isOneOf(GAMES_BUCKETS, gamesBucket)) return { valid: false };
-  return {
-    valid: true,
-    params: { placement, balanceBucket, baseReward, multiplier, adAvailable, nextTarget, shortfallBucket, adClosesGap, gamesBucket } as EventParamsMap[E],
-  };
+  const economy = { placement, balanceBucket, baseReward, multiplier, adAvailable, nextTarget, shortfallBucket, adClosesGap, gamesBucket };
+  if (!withExperiment) {
+    // Every other offer: the standard ×2 and the old periodic ×3.
+    if (multiplier !== 2 && multiplier !== 3) return { valid: false };
+    return { valid: true, params: economy as EventParamsMap[E] };
+  }
+  const { arm, offerNumber, sessionGames, bonusCoins } = p;
+  if (!isOneOf(REWARD_EXPERIMENT_ARMS, arm)) return { valid: false };
+  // The multiplier must agree with the arm: x3 advertises 3, plus100 is a flat bonus (1).
+  if (multiplier !== (arm === "x3" ? 3 : 1)) return { valid: false };
+  if (!isIntInRange(offerNumber, 1, MAX_OFFER_NUMBER) || !isIntInRange(sessionGames, 0, MAX_SESSION_GAMES) || !isIntInRange(bonusCoins, 1, MAX_ECONOMY_COINS)) return { valid: false };
+  return { valid: true, params: { ...economy, arm, offerNumber, sessionGames, bonusCoins } as EventParamsMap[E] };
 }
 
 /** All-or-nothing: an unknown event name or any single invalid/extra/missing param fails the whole event. */

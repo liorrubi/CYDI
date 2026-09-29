@@ -49,6 +49,8 @@ let installationIdSource: () => string | null = getPersistedInstallationId;
 let rewardedShownThisCycle = false;
 /** The completion that opened this result cycle made an opportunity due. */
 let dueThisCycle = false;
+/** The arm of this cycle's opportunity - only a treatment opportunity can actually show an ad. */
+let dueArmThisCycle: InterstitialArm | null = null;
 /** One preload attempt per upcoming opportunity; reset when an opportunity is consumed. */
 let preloadAttemptedForUpcoming = false;
 /** A checkpoint is running; a second tap cannot start another. */
@@ -81,6 +83,7 @@ function participation(): Participation | null {
 export function beginInterstitialResultCycle(): void {
   rewardedShownThisCycle = false;
   dueThisCycle = false;
+  dueArmThisCycle = null;
 }
 
 /** A completed, scored round. Only an eligible game type advances anything. */
@@ -91,12 +94,25 @@ export function recordInterstitialGameCompleted(gameType: GameType): void {
   const decision = recordEligibleCompletion(loadState(storage), who.cadence, who.sessionCap, sessionIdSource(), who.arm);
   saveState(storage, decision.state);
   dueThisCycle = decision.due;
+  dueArmThisCycle = decision.due ? who.arm : null;
   if (decision.preload && !preloadAttemptedForUpcoming) {
     // preloadInterstitial() itself refuses when something is already loading/ready,
     // so this can never become a second concurrent load.
     preloadAttemptedForUpcoming = true;
     preloadInterstitial();
   }
+}
+
+/**
+ * Whether this result cycle's exit (Next Shape / Try Again) runs an interstitial opportunity
+ * that can actually show an ad - the TREATMENT arm only; a control opportunity shows nothing,
+ * so deferring for it would only skew rewarded exposure between the interstitial arms.
+ * Read by the Rewarded experiment right after recordInterstitialGameCompleted(): when true,
+ * no rewarded offer is rendered on this result (the interstitial has priority and the offer
+ * stays pending), so the two can never follow each other in one result flow.
+ */
+export function isInterstitialDueThisCycle(): boolean {
+  return dueThisCycle && dueArmThisCycle === "treatment";
 }
 
 function checkpointParams(arm: InterstitialArm, result: PresentOutcome | { outcome: "control" | "suppressed" }, cadence: InterstitialCadence): InterstitialCheckpointParams {
@@ -224,6 +240,7 @@ export function _resetInterstitialControllerForTests(options: {
   installationIdSource = options.installationId ?? getPersistedInstallationId;
   rewardedShownThisCycle = false;
   dueThisCycle = false;
+  dueArmThisCycle = null;
   preloadAttemptedForUpcoming = false;
   checkpointInFlight = false;
   connectObservers();

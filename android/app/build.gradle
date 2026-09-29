@@ -312,8 +312,13 @@ android {
         // RELEASE: Phase 3 client analytics (batching, exact-event outbox recovered once
         // via server eventId dedup) + coin-economy analytics + the 27 Sep privacy text.
         // The new events need the matching Worker: DEPLOY THE WORKER (master) FIRST.
-        versionCode 52
-        versionName "0.54.0"
+        //
+        // 53 is the 0.55.0 RELEASE: Rewarded Ads Experiment v1 on the Classic result offer
+        // (arms x3 / +100, first offer after 3 games then every 5, interstitial priority,
+        // exposure on render), the Android SEO-block takeover and round-start scroll reset.
+        // Its reward events carry new experiment keys: DEPLOY THE WORKER (master) FIRST.
+        versionCode 53
+        versionName "0.55.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

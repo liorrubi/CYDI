@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AchievementUnlockedBanner from "../components/AchievementUnlockedBanner";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
-import DoubleCoinsOffer from "../components/DoubleCoinsOffer";
+import DoubleCoinsOffer, { isMathFallbackEnabled, type RewardedExperimentOffer } from "../components/DoubleCoinsOffer";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../components/DrawingCanvas";
 import DrawingTutorialOverlay from "../components/DrawingTutorialOverlay";
 import PenColorMenu from "../components/PenColorMenu";
@@ -79,10 +79,20 @@ import { isRewardedAdAvailable, preloadRewardedAd } from "../services/ads";
 import { offerExitAction } from "../app/doubleOfferSettlement";
 import {
   beginInterstitialResultCycle,
+  isInterstitialDueThisCycle,
   recordInterstitialGameCompleted,
   recordInterstitialGameStarted,
   runInterstitialCheckpoint,
 } from "../services/ads/interstitialController";
+import {
+  decideResultOffer,
+  getRewardedArm,
+  markRewardedOfferShown,
+  recordRewardedGameCompleted,
+  takeRewardedContinuation,
+  upcomingOfferContext,
+} from "../app/rewardedOfferCadence";
+import { useListScrollMemory, useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import { trackEvent } from "../services/analytics";
 import { withGameCoins } from "../services/economyAnalytics";
 import {
@@ -195,6 +205,8 @@ export default function ShapeChallengeScreen({ onNavigate, initialShape }: Shape
   const [selectedIndex, setSelectedIndex] = useState<number | null>(initialSelection?.index ?? null);
   /** True only while the landing page's own practice round is on screen; cleared the moment the player moves anywhere themselves. */
   const [practiceRound, setPracticeRound] = useState(initialSelection?.practice ?? false);
+  // The shape map hosts rounds in place: returning from a round restores its scroll position.
+  useListScrollMemory(selectedCategory !== null && selectedIndex === null);
   const [justUnlockedIndex, setJustUnlockedIndex] = useState<number | null>(null);
   const [pendingAchievements, setPendingAchievements] = useState<Achievement[]>([]);
 
@@ -849,10 +861,48 @@ function ShapePlay({
   // round-count thresholds and the "already discovered" checks stay current.
   const [createDiscovery, setCreateDiscovery] = useState<ReturnType<typeof createDiscoveryVariant>>(null);
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
+  /** Rewarded Ads Experiment v1: the arm and session context of the offer this result renders (null = no offer on this result). */
+  const [rewardedOffer, setRewardedOffer] = useState<RewardedExperimentOffer | null>(null);
+  /** Coins this result earned when no offer is rendered - shown as a plain "+N coins" line. */
+  const [plainCoinsAmount, setPlainCoinsAmount] = useState<number | null>(null);
+  const plainCoinsRef = useRef<HTMLDivElement | null>(null);
   /** Set by the open DoubleCoinsOffer: records a leave-the-screen forfeit under the offer's own event name and context. */
   const offerSkipReporterRef = useRef<(() => void) | null>(null);
   /** Set by DoubleCoinsOffer once the double is EARNED: settles it like Continue does. Cleared with the offer. */
   const earnedOfferFinalizeRef = useRef<(() => void) | null>(null);
+
+  // A new round - the first one, Next Shape (which remounts this component) or Try Again -
+  // starts with the game at the top of the viewport, never at an inherited scroll offset.
+  useRoundStartScroll(phase === "preview" ? "preview" : false);
+
+  // Leaving this screen by any route that bypasses the result buttons - Android hardware
+  // Back, a header shortcut - while the offer is open. Same rules as forfeitDoubleOffer():
+  // an EARNED reward is settled, an unstarted offer is a skip (it was rendered, so it already
+  // counted as shown). The result buttons clear both refs first, so nothing is double-counted.
+  useEffect(
+    () => () => {
+      const finalize = earnedOfferFinalizeRef.current;
+      if (finalize) {
+        earnedOfferFinalizeRef.current = null;
+        finalize();
+        return;
+      }
+      const report = offerSkipReporterRef.current;
+      if (report) {
+        offerSkipReporterRef.current = null;
+        recordOfferSkipped(isRewardedAdAvailable());
+        report();
+      }
+    },
+    [],
+  );
+
+  // No offer on this result: the earned coins still fly to the counter, as they would on Continue.
+  useEffect(() => {
+    if (phase !== "result" || plainCoinsAmount === null) return;
+    const t = window.setTimeout(() => triggerCoinFlight(plainCoinsRef.current ?? document.querySelector(".score-total")), 0);
+    return () => window.clearTimeout(t);
+  }, [phase, plainCoinsAmount]);
   const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
@@ -903,6 +953,12 @@ function ShapePlay({
       // Interstitial continuation: the first eligible game_started after a checkpoint.
       // Only "shapeChallenge" counts - a practice round's seoPractice is ignored inside.
       recordInterstitialGameStarted(roundGameType(practice));
+      // Rewarded experiment: the first normal round after an offer reports that offer's
+      // outcome - an offer with no continuation is an abandonment after the offer.
+      if (!practice) {
+        const continuation = takeRewardedContinuation();
+        if (continuation) trackEvent("reward_continuation", continuation);
+      }
       // Start warming a rewarded ad the moment drawing begins. DoubleCoinsOffer also
       // preloads, but it does so from its own mount effect - i.e. once the offer is
       // ALREADY on screen - and a rewarded video needs seconds the player does not
@@ -1153,7 +1209,6 @@ function ShapePlay({
       });
       const offerAmount = applyShapeRoundOutcome(outcome, onProgressChange);
       earnedOfferFinalizeRef.current = null;
-      if (offerAmount > 0) setDoubleOfferAmount(offerAmount);
 
       // Practice rounds are reported, never suppressed - but under their own game
       // type and their own completion event, so they can never be counted as
@@ -1173,6 +1228,29 @@ function ShapePlay({
       beginInterstitialResultCycle();
       recordInterstitialGameCompleted(roundGameType(practice));
 
+      // Rewarded Ads Experiment v1 (app/rewardedOfferCadence.ts). A normal round advances the
+      // cadence; the offer renders only when it is due, no interstitial is due on this
+      // result's exit (the interstitial wins, the offer stays pending), the round paid coins
+      // and a rewarded ad can actually be offered. Otherwise the coins are shown plainly.
+      let showOffer = false;
+      if (!practice) {
+        const due = recordRewardedGameCompleted();
+        const decision = decideResultOffer({
+          due,
+          interstitialDue: isInterstitialDueThisCycle(),
+          coinsEarned: offerAmount,
+          canOfferAd: isRewardedAdAvailable() || isMathFallbackEnabled(),
+        });
+        if (decision === "show") {
+          showOffer = true;
+          setRewardedOffer({ arm: getRewardedArm(), ...upcomingOfferContext() });
+        }
+      }
+      if (offerAmount > 0) {
+        if (showOffer) setDoubleOfferAmount(offerAmount);
+        else setPlainCoinsAmount(offerAmount);
+      }
+
       setResult(scoreResult);
       setIsNewBest(outcome.isNewBest);
       setFeedbackMessage(outcome.passed ? randomCelebrationMessage() : randomEncouragementMessage());
@@ -1189,6 +1267,8 @@ function ShapePlay({
     setFeedbackMessage(null);
     earnedOfferFinalizeRef.current = null;
     setDoubleOfferAmount(null);
+    setRewardedOffer(null);
+    setPlainCoinsAmount(null);
     // The callout was already marked as seen when it rendered, so this resolves to
     // false after the first showing - a retry does not repeat it.
     setResultTutorialPending(shouldShowResultActionsTutorial());
@@ -1220,6 +1300,10 @@ function ShapePlay({
           onResolved={handleDoubleOfferResolved}
           placement="shape_challenge_double_reward"
           deferExplainer={showResultTutorial}
+          experiment={rewardedOffer ?? undefined}
+          // Rendered = exposed: the cadence restarts here, so leaving without starting the
+          // ad (Back, Back to Map, Android Back) is a skip and this offer cannot re-show.
+          onShown={markRewardedOfferShown}
           onRewardEarned={(finalize) => {
             earnedOfferFinalizeRef.current = finalize;
           }}
@@ -1227,6 +1311,10 @@ function ShapePlay({
             offerSkipReporterRef.current = report;
           }}
         />
+      ) : plainCoinsAmount !== null ? (
+        <div ref={plainCoinsRef} className="double-offer-banner">
+          <p className="double-offer-headline">🪙 +{plainCoinsAmount} coins</p>
+        </div>
       ) : null;
 
     const notesNode = (
@@ -1338,6 +1426,8 @@ function ShapePlay({
             onResolved={handleDoubleOfferResolved}
             placement="shape_challenge_double_reward"
             deferExplainer={showResultTutorial}
+            experiment={rewardedOffer ?? undefined}
+            onShown={markRewardedOfferShown}
             onRewardEarned={(finalize) => {
               earnedOfferFinalizeRef.current = finalize;
             }}
@@ -1345,6 +1435,11 @@ function ShapePlay({
               offerSkipReporterRef.current = report;
             }}
           />
+        )}
+        {doubleOfferAmount === null && plainCoinsAmount !== null && (
+          <div ref={plainCoinsRef} className="double-offer-banner">
+            <p className="double-offer-headline">🪙 +{plainCoinsAmount} coins</p>
+          </div>
         )}
         {/* The continue actions sit ABOVE the comparison canvas and are no longer
             gated on the ×2 offer being resolved: doubling is a bonus, never a step

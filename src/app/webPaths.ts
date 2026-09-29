@@ -36,3 +36,15 @@ export const JOIN_PATH = "/join";
 export function isJoinPagePath(pathname: string): boolean {
   return (pathname.replace(/\/+$/, "") || "/") === JOIN_PATH;
 }
+
+/**
+ * The Daily Challenge share link: a fixed, memorable path - every link points at whatever
+ * challenge is live right now. Lives here (services/dailyChallengeShare.ts re-exports it)
+ * because that module also builds the full URL from the browser's `location`, which the
+ * Worker - reading this path for its route list - cannot type-check.
+ */
+export const DAILY_CHALLENGE_SHARE_PATH = "/daily";
+
+export function isDailyChallengeSharePath(pathname: string): boolean {
+  return new RegExp(`^${DAILY_CHALLENGE_SHARE_PATH}/?$`).test(pathname);
+}

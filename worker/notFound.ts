@@ -22,8 +22,7 @@
 // The list of real routes is built from the constants the app itself routes on,
 // never retyped here, so a route App.tsx serves cannot 404 by drift.
 import { JOIN_LINK_PATH_PATTERN, SHORT_LINK_PATH_PATTERN } from "../src/app/appLinks";
-import { CLASSIC_PATH, JOIN_PATH, PLAY_PATH } from "../src/app/webPaths";
-import { isDailyChallengeSharePath } from "../src/services/dailyChallengeShare";
+import { CLASSIC_PATH, JOIN_PATH, PLAY_PATH, isDailyChallengeSharePath } from "../src/app/webPaths";
 import { CONTENT_PATHS, NOT_FOUND_PAGE, renderContentDocument } from "./contentPages";
 import { CONTENT_PAGE_CACHE_CONTROL, CONTENT_PAGE_CONTENT_TYPE } from "./cachePolicy";
 import { LANDING_PATHS } from "./seoPages";

@@ -18,6 +18,28 @@ with the code filled in.
   a utility screen, never a second copy of the homepage in the index.
 - Reload and Back/Forward on `/join` land on the join form again.
 
+## 0.55.0 - 2026-09-29
+
+*Entry added on 29 Sep 2026 from the release commits (b980cb4, 78e5f8c, 3b9b854, 9e9492b);
+the release shipped without one.*
+
+Android 0.55.0 (versionCode 53) and web 0.55.0.
+
+- **Rewarded Ads Experiment v1** on the Classic result offer: arm A "x3" (control) triples
+  the round's coins, arm B "plus100" adds a flat 100; stable 50/50 assignment. Same cadence
+  for both arms (first offer after 3 Classic games in a session, then every 5). Replaces
+  the periodic x3 bonus on this offer; chest, shop, Special, Mega and Artist keep x2.
+  Reward funnel events carry the arm, and a new `reward_continuation` records the next
+  Classic game after an offer.
+- **One ad per result screen:** a due, loaded treatment interstitial reserves the result
+  screen and the rewarded offer stays pending; once an offer renders, that checkpoint
+  records `suppressed`. Rewarded events also carry the interstitial arm.
+- **Mobile viewport fix:** on Android the prerendered crawlable block no longer sits under
+  the app, so rounds no longer inherit scroll offsets; every round start brings the game to
+  the top of the viewport.
+- Privacy policy wording for the rewarded ad ("optional bonus Coins"); result-screen copy
+  "You earned N Coins" for already-credited coins.
+
 ## 0.54.2 - 2026-09-28
 
 Web only - Android is unchanged and needs no release. Five challenge pages get a
@@ -84,6 +106,14 @@ KV, Durable Object or analytics access, and no extra request.
 
 **What's new.** A new prerendered page, `/whats-new`, lists the player-facing
 changes since August with their dates, linked from the site footer and from About.
+
+## 0.54.0 - 2026-09-27
+
+*Entry added on 29 Sep 2026 from the release commit (9f36247); the release shipped without one.*
+
+Web and Android 0.54.0 (Android versionCode 52). Phase 3 client analytics (batched
+delivery, exact-event outbox with eventId dedup) and coin-economy analytics reach the web
+and the Android app; the Worker had to be live before the Android build reached users.
 
 ## 0.53.1 - 2026-09-25
 

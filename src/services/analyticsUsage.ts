@@ -234,6 +234,14 @@ export type UsageSummary = UsagePlatformSummary & {
   bySource: Record<string, UsagePlatformSummary>;
   byCampaign: Record<string, UsagePlatformSummary>;
   byContent: Record<string, UsagePlatformSummary>;
+  /**
+   * The same three dimensions restricted to the website's segments. bySource & co. above
+   * span every platform, so they also hold Android installations - under the Play
+   * install-referrer sources, and under "unknown" for every Android event that carries no
+   * attribution at all. Report-time only: the same bucket, filtered by the platform part
+   * of each segment key; nothing new is stored.
+   */
+  web?: { bySource: Record<string, UsagePlatformSummary>; byCampaign: Record<string, UsagePlatformSummary>; byContent: Record<string, UsagePlatformSummary> };
   /** A per-day id cap was hit somewhere in this range: installations/sessions are a floor, not an exact count. */
   truncated: boolean;
 };
@@ -296,8 +304,8 @@ export function summarizeUsage(bucket: UsageBucket, audience: AudienceFilter, to
     sessions += sessionIds.size;
   }
 
-  const byDimension = (dimension: AttributionDimension): Record<string, UsagePlatformSummary> =>
-    summarizeByDimension(bucket, audience, totals, dimension);
+  const byDimension = (dimension: AttributionDimension, platform?: string): Record<string, UsagePlatformSummary> =>
+    summarizeByDimension(bucket, audience, totals, dimension, platform);
 
   return {
     audience,
@@ -306,6 +314,7 @@ export function summarizeUsage(bucket: UsageBucket, audience: AudienceFilter, to
     bySource: byDimension("source"),
     byCampaign: byDimension("campaign"),
     byContent: byDimension("content"),
+    web: { bySource: byDimension("source", "web"), byCampaign: byDimension("campaign", "web"), byContent: byDimension("content", "web") },
     truncated: bucket.truncated === true,
   };
 }
@@ -322,11 +331,15 @@ function summarizeByDimension(
   audience: AudienceFilter,
   totals: UsageGameTotals,
   dimension: AttributionDimension,
+  // Restricts the distinct ids to one platform's segments. Game counts need no filter:
+  // only website events carry attribution for games, so they are web counts already.
+  platform?: string,
 ): Record<string, UsagePlatformSummary> {
   const games = totals.gamesByAttribution?.[dimension];
+  const inScope = (key: string) => (audience === "all" || segmentAudience(key) === audience) && (platform === undefined || segmentPlatform(key) === platform);
   const values = new Set<string>([
     ...Object.keys(bucket.segments)
-      .filter((key) => audience === "all" || segmentAudience(key) === audience)
+      .filter(inScope)
       .map((key) => segmentDimension(key, dimension)),
     ...Object.keys(games?.started ?? {}),
     ...Object.keys(games?.completed ?? {}),
@@ -338,7 +351,7 @@ function summarizeByDimension(
     const sessionIds = new Set<string>();
     for (const [key, sets] of Object.entries(bucket.segments)) {
       if (segmentDimension(key, dimension) !== value) continue;
-      if (audience !== "all" && segmentAudience(key) !== audience) continue;
+      if (!inScope(key)) continue;
       for (const id of sets.installations) installationIds.add(id);
       for (const id of sets.sessions) sessionIds.add(id);
     }

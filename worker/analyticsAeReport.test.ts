@@ -93,6 +93,38 @@ test("AE rows become DO-shaped counters, per audience, weighted, with the DO's b
   assert.equal(t.truncated, false);
 });
 
+test("the base query carries app_open / first_open rows for the version mix only; every other query still excludes all exact events", () => {
+  const q = buildAeQueries(Date.parse("2026-09-25T21:00:00Z"), Date.parse("2026-09-26T21:00:00Z"));
+  assert.match(q.base, /OR blob1 IN \('app_open','first_open'\)/, "only the two exact version-mix events are added");
+  assert.doesNotMatch(q.base.split(" OR blob1 IN ")[1], /shop_purchase_with_coins|rewarded_ad_shown/, "no other exact event rides along");
+  for (const [name, sql] of Object.entries(q)) {
+    if (name === "base") continue;
+    assert.doesNotMatch(sql, / OR blob1 IN /, `${name} unchanged`);
+  }
+  assert.equal(Object.keys(q).length, 6, "still six queries without a series - nothing added");
+});
+
+test("version mix: exact rows feed `versions` but never a count; telemetry rows feed both", () => {
+  const base = [
+    { ev: "game_started", aud: "external", platform: "android", ver: "0.55.0", n: "40" },
+    { ev: "game_completed", aud: "external", platform: "android", ver: "0.55.0", n: "35" },
+    { ev: "app_open", aud: "external", platform: "android", ver: "0.55.0", n: "20" },
+    { ev: "app_open", aud: "external", platform: "web", ver: "0.55.0", n: "5" },
+    { ev: "first_open", aud: "external", platform: "android", ver: "0.55.0", n: "3" },
+    { ev: "shape_completed", aud: "external", platform: "android", ver: "0.55.0", n: "30" },
+    { ev: "app_open", aud: "internal", platform: "android", ver: "0.55.0", n: "9" },
+  ];
+  const withMix = aeRowsToCounters({ base });
+  const withoutExact = aeRowsToCounters({ base: base.filter((r) => r.ev !== "app_open" && r.ev !== "first_open") });
+  assert.deepEqual(withMix.counters, withoutExact.counters, "adding the exact rows moves no counter");
+  assert.equal(withMix.counters.external.app_open, undefined);
+  assert.deepEqual(withMix.versions.external, {
+    "android|0.55.0": { game_started: 40, game_completed: 35, app_open: 20, first_open: 3 },
+    "web|0.55.0": { app_open: 5 },
+  }, "same version string, two platforms, kept apart; shape_completed is not a version-mix event");
+  assert.deepEqual(withMix.versions.internal, { "android|0.55.0": { app_open: 9 } });
+});
+
 test("a result at the row limit is flagged truncated", () => {
   const rows = Array.from({ length: AE_ROW_LIMIT }, () => ({ ev: "game_started", aud: "external", platform: "android", ver: "x", n: 1 }));
   assert.equal(aeRowsToCounters({ base: rows }).truncated, true);
@@ -172,6 +204,8 @@ function fakeAe(opts: { fail?: boolean } = {}) {
     if (sql.includes("GROUP BY ev, aud, platform, ver")) return [
       { ev: "game_started", aud: "external", platform: "android", ver: "0.53.0", n: 50 },
       { ev: "game_completed", aud: "external", platform: "android", ver: "0.53.0", n: 40 },
+      // AE's copy of an exact event: the version mix may read it, no count may.
+      { ev: "app_open", aud: "external", platform: "android", ver: "0.53.0", n: 11 },
     ];
     return [];
   };
@@ -220,6 +254,34 @@ test("a range spanning AE coverage mixes per day: 25 Sep from the DO, 26 Sep fro
   assert.equal(d25.game_started.total, 3);
   assert.equal(d26.game_started.total, 50);
   assert.equal(d26.app_open.total, 10);
+});
+
+test("report cost is pinned: a 7-day page load is 7 AE queries, economy=only is the 8 economy queries alone, economy=1 is unchanged at 14", async () => {
+  const range = "period=range&start=2026-09-26&end=2026-09-27";
+  const pageLoad = fakeAe();
+  const r = await report(await makeDO(pageLoad.fn), `${range}&series=1`);
+  assert.equal(pageLoad.calls.length, 7, "6 main queries + 1 series segment");
+  assert.ok(r.versions, "the version mix rides in the same response");
+  assert.equal(r.sources.exactLedgerEvents.includes("app_open"), true);
+
+  const only = fakeAe();
+  const e = await report(await makeDO(only.fn), `${range}&economy=only`);
+  assert.equal(only.calls.length, 8, "economy queries only");
+  assert.ok(only.calls.every((sql) => sql.includes("double1 >= 2")), "every call is an economy (schema-2) query");
+  assert.ok(e.economy && e.economy.spend, "economy block present");
+  assert.equal("counts" in e, false, "no main report re-run");
+
+  const legacy = fakeAe();
+  const l = await report(await makeDO(legacy.fn), `${range}&economy=1`);
+  assert.equal(legacy.calls.length, 14, "economy=1 keeps its old behaviour for any caller still using it");
+  assert.deepEqual(l.economy.spend, e.economy.spend, "same exact half either way");
+});
+
+test("the version mix follows the audience and is null when AE was not used", async () => {
+  const withAe = await report(await makeDO(fakeAe().fn), "period=daily&date=2026-09-26");
+  assert.deepEqual(withAe.versions, { "android|0.53.0": { game_started: 50, game_completed: 40, app_open: 11 } });
+  const doOnly = await report(await makeDO(fakeAe().fn), "period=daily&date=2026-09-26&source=do");
+  assert.equal(doOnly.versions, null);
 });
 
 test("a range entirely before AE coverage never queries AE", async () => {

@@ -124,10 +124,22 @@ const telemetryIn = (set: ReadonlySet<AnalyticsEventName>) => sqlList(telemetryE
  * blob12 source, blob14 campaign, blob15 utm content, blob17 reason, blob20 detail,
  * double2 starRating, double3 passed, double5 roundCount, double6 roundIndex.
  */
+/**
+ * Events whose platform x app-version mix is reported (`versions`, the admin page's
+ * version / rollout view). app_open and first_open are exact-ledger events, so their
+ * COUNTS stay the DO's - but their rows ride in the existing `base` query (same query,
+ * a few more rows, no extra request) purely so that one source (AE) backs every column
+ * of the version view. counter() still refuses exact events, so no total moves.
+ */
+export const VERSION_MIX_EVENTS = ["app_open", "first_open", "game_started", "game_completed"] as const;
+/** Lazy for the same import-cycle reason as telemetryEvents(). */
+const versionMixExact = () => VERSION_MIX_EVENTS.filter((e) => EXACT_LEDGER_EVENTS.has(e));
+
 export function buildAeQueries(startMs: number, endMs: number, series: { startMs: number; endMs: number; offsetHours: number }[] = []): Record<string, string> {
-  const W = `timestamp >= ${sqlTime(startMs)} AND timestamp < ${sqlTime(endMs)} AND blob1 NOT IN (${sqlList(EXACT_LEDGER_EVENTS)})`;
+  const T = `timestamp >= ${sqlTime(startMs)} AND timestamp < ${sqlTime(endMs)}`;
+  const W = `${T} AND blob1 NOT IN (${sqlList(EXACT_LEDGER_EVENTS)})`;
   const q: Record<string, string> = {
-    base: `SELECT blob1 AS ev, blob7 AS aud, blob4 AS platform, blob5 AS ver, sum(_sample_interval) AS n FROM ${AE_DATASET} WHERE ${W} GROUP BY ev, aud, platform, ver LIMIT ${AE_ROW_LIMIT}`,
+    base: `SELECT blob1 AS ev, blob7 AS aud, blob4 AS platform, blob5 AS ver, sum(_sample_interval) AS n FROM ${AE_DATASET} WHERE ${T} AND (blob1 NOT IN (${sqlList(EXACT_LEDGER_EVENTS)}) OR blob1 IN (${sqlList(versionMixExact())})) GROUP BY ev, aud, platform, ver LIMIT ${AE_ROW_LIMIT}`,
     country: `SELECT blob1 AS ev, blob7 AS aud, blob3 AS country, blob5 AS ver, sum(_sample_interval) AS n FROM ${AE_DATASET} WHERE ${W} AND blob1 IN (${telemetryIn(COUNTRY_BREAKOUT_EVENTS)}) GROUP BY ev, aud, country, ver LIMIT ${AE_ROW_LIMIT}`,
     funnel: `SELECT blob1 AS ev, blob7 AS aud, blob9 AS gameType, blob10 AS category, blob11 AS contentKey, sum(_sample_interval) AS n FROM ${AE_DATASET} WHERE ${W} AND blob1 IN (${telemetryIn(FUNNEL_EVENTS)}) GROUP BY ev, aud, gameType, category, contentKey LIMIT ${AE_ROW_LIMIT}`,
     countryGameType: `SELECT blob1 AS ev, blob7 AS aud, blob3 AS country, blob9 AS gameType, sum(_sample_interval) AS n FROM ${AE_DATASET} WHERE ${W} AND blob1 IN (${telemetryIn(COUNTRY_GAME_TYPE_BREAKOUT_EVENTS)}) GROUP BY ev, aud, country, gameType LIMIT ${AE_ROW_LIMIT}`,
@@ -177,9 +189,14 @@ function capMap(map: Record<string, number> | undefined, max: number, overflow: 
   return kept;
 }
 
+/** "<platform>|<appVersion>" -> event -> weighted count, for VERSION_MIX_EVENTS only. */
+export type VersionMix = Record<string, Record<string, number>>;
+
 export type AeTelemetry = {
   counters: Record<Audience, AllCounters>;
   days: Record<string, Record<Audience, AllCounters>>;
+  /** The platform x version mix of the whole AE window, from the `base` query's rows. */
+  versions: Record<Audience, VersionMix>;
   truncated: boolean;
 };
 
@@ -195,11 +212,20 @@ function counter(counters: Record<Audience, AllCounters>, aud: string, ev: strin
 export function aeRowsToCounters(results: Record<string, AeRow[]>, dateOfDay: (day: string) => string = (d) => d.slice(0, 10)): AeTelemetry {
   const counters: Record<Audience, AllCounters> = { external: {}, internal: {} };
   const days: AeTelemetry["days"] = {};
+  const versions: AeTelemetry["versions"] = { external: {}, internal: {} };
   let truncated = false;
   for (const rows of Object.values(results)) if (rows.length >= AE_ROW_LIMIT) truncated = true;
 
   for (const r of results.base ?? []) {
-    const c = counter(counters, str(r.aud), str(r.ev));
+    const aud = str(r.aud), ev = str(r.ev);
+    // The version mix reads the row before counter() gets a say: it is the one place an
+    // exact event's AE row is used, and it never feeds a count.
+    if ((aud === "external" || aud === "internal") && (VERSION_MIX_EVENTS as readonly string[]).includes(ev)) {
+      const key = `${str(r.platform) || "unknown"}|${str(r.ver) || "unknown"}`;
+      const cell = (versions[aud][key] ??= {});
+      cell[ev] = (cell[ev] ?? 0) + num(r.n);
+    }
+    const c = counter(counters, aud, ev);
     if (!c) continue;
     const n = num(r.n);
     c.total += n;
@@ -277,7 +303,7 @@ export function aeRowsToCounters(results: Record<string, AeRow[]>, dateOfDay: (d
       c.total += num(r.n);
     }
   }
-  return { counters, days, truncated };
+  return { counters, days, versions, truncated };
 }
 
 /** A DO day bucket with its telemetry removed: exact events and the request counter stay. */

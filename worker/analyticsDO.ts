@@ -64,8 +64,12 @@ import {
   stripTelemetry,
   type AeFetch,
   type AeTelemetry,
+  type VersionMix,
 } from "./analyticsAeReport";
 import { economyExactFromCounters, fetchEconomyTelemetry } from "./analyticsEconomyReport";
+// Read at report time only (never at module load - the same import cycle telemetryEvents()
+// in analyticsAeReport.ts guards against), to tell the admin page which events are exact.
+import { EXACT_LEDGER_EVENTS } from "./analyticsExactLedger";
 import {
   MAX_SEEN_IDS_PER_DAY,
   SEEN_INDEX_KEY,
@@ -583,10 +587,31 @@ type ReportSources = {
   telemetryEvents: "analytics-engine" | "durable-object" | "analytics-engine+durable-object";
   telemetryAeDates: string[];
   telemetryDoDates: string[];
+  /**
+   * The events counted from the exact ledger, whatever the telemetry source. Sent so the
+   * admin page labels exact vs telemetry numbers from the server's own set rather than a
+   * copy that could drift.
+   */
+  exactLedgerEvents?: string[];
   reason?: string;
   aeDataset?: string;
   notes?: string[];
 };
+
+const exactLedgerEventList = (): string[] => [...EXACT_LEDGER_EVENTS].sort();
+
+/** The selected audience's version mix; "all" sums both. */
+function versionsForAudience(versions: Record<"external" | "internal", VersionMix>, audience: AudienceFilter): VersionMix {
+  if (audience === "external" || audience === "internal") return versions[audience];
+  const out: VersionMix = {};
+  for (const aud of ["external", "internal"] as const) {
+    for (const [key, events] of Object.entries(versions[aud])) {
+      const cell = (out[key] ??= {});
+      for (const [ev, n] of Object.entries(events)) cell[ev] = (cell[ev] ?? 0) + n;
+    }
+  }
+  return out;
+}
 
 /** Key under which the AE range counters ride in a RangeBuckets map (never a date, so series ignore it). */
 const AE_RANGE_KEY = "ae:telemetry";
@@ -1523,6 +1548,22 @@ export class AnalyticsDO {
     if (dates.length > MAX_RANGE_DAYS) return jsonNoStore({ error: "range too long" }, 400);
 
     const buckets = await this.readDayBuckets(start, end);
+
+    // economy=only: the admin page already holds the main report for this range, so the
+    // economy panel asks for the economy block alone. The block reads only exact
+    // counters (coin_spent / progression_milestone, untouched by the hybrid merge) and
+    // its own AE queries - skipping applyHybridTelemetry saves the six main-report AE
+    // queries that economy=1 re-runs for nothing. Nothing else about the block changes.
+    if (url.searchParams.get("economy") === "only") {
+      return jsonNoStore({
+        period: "range",
+        startDate: start,
+        endDate: end,
+        audience,
+        economy: await this.buildEconomyBlock(buckets, audience, start, end),
+      });
+    }
+
     const wantSeries = url.searchParams.get("series") === "1";
     const hybrid = await this.applyHybridTelemetry(buckets, start, end, url, wantSeries);
     const report = {
@@ -1535,6 +1576,8 @@ export class AnalyticsDO {
         this.usageSummaries(buckets, audience),
       ),
       sources: hybrid.sources,
+      // AE-covered dates only (sources.telemetryAeDates); null when AE was not used.
+      versions: hybrid.versions ? versionsForAudience(hybrid.versions, audience) : null,
     };
     if (url.searchParams.get("economy") === "1") {
       Object.assign(report, { economy: await this.buildEconomyBlock(buckets, audience, start, end) });
@@ -1598,6 +1641,7 @@ export class AnalyticsDO {
       telemetryEvents: "durable-object",
       telemetryAeDates: [],
       telemetryDoDates: [],
+      exactLedgerEvents: exactLedgerEventList(),
       reason: "alltime is the DO's since-launch running total; Analytics Engine keeps 3 months, so it cannot back an all-time figure. Telemetry here stops growing once telemetryToDo is off.",
     };
     return jsonNoStore({ ...this.buildReport("alltime", startDate, today, audience, counts, null), sources });
@@ -1611,11 +1655,12 @@ export class AnalyticsDO {
    * Buckets are mutated only after every AE query has succeeded; any failure leaves the
    * DO-only report exactly as it was and records why in `sources`.
    */
-  private async applyHybridTelemetry(buckets: RangeBuckets, startDate: string, endDate: string, url: URL, series: boolean): Promise<{ sources: ReportSources; aeDays: AeTelemetry["days"] }> {
+  private async applyHybridTelemetry(buckets: RangeBuckets, startDate: string, endDate: string, url: URL, series: boolean): Promise<{ sources: ReportSources; aeDays: AeTelemetry["days"]; versions: AeTelemetry["versions"] | null }> {
     const allDates = datesBetween(startDate, endDate);
-    const doOnly = (reason: string): { sources: ReportSources; aeDays: AeTelemetry["days"] } => ({
-      sources: { mode: "durable-object", exactEvents: "durable-object", telemetryEvents: "durable-object", telemetryAeDates: [], telemetryDoDates: allDates, reason },
+    const doOnly = (reason: string): { sources: ReportSources; aeDays: AeTelemetry["days"]; versions: null } => ({
+      sources: { mode: "durable-object", exactEvents: "durable-object", telemetryEvents: "durable-object", telemetryAeDates: [], telemetryDoDates: allDates, exactLedgerEvents: exactLedgerEventList(), reason },
       aeDays: {},
+      versions: null,
     });
     if (url.searchParams.get("source") === "do") return doOnly("requested: source=do");
     const client =
@@ -1647,6 +1692,7 @@ export class AnalyticsDO {
         telemetryEvents: doDates.length ? "analytics-engine+durable-object" : "analytics-engine",
         telemetryAeDates: window.dates,
         telemetryDoDates: doDates,
+        exactLedgerEvents: exactLedgerEventList(),
         aeDataset: AE_DATASET,
         notes: [
           "Exact-ledger events (acquisition, purchases, ad outcomes, interstitial, result_shared, mp_room_created) and analytics_requests come from the DO ledger only.",
@@ -1656,6 +1702,7 @@ export class AnalyticsDO {
         ],
       },
       aeDays: ae.days,
+      versions: ae.versions,
     };
   }
 
@@ -1702,6 +1749,7 @@ export class AnalyticsDO {
         this.usageSummaries(buckets, audience),
       ),
       sources: hybrid.sources,
+      versions: hybrid.versions ? versionsForAudience(hybrid.versions, audience) : null,
     });
   }
 

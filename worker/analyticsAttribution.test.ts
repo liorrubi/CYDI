@@ -146,6 +146,21 @@ test("installations and sessions are counted per source", () => {
   assert.equal(summary.byPlatform.web.installations, 3);
 });
 
+test("the website-only split leaves Android installations out; the all-platform rows are unchanged", () => {
+  let bucket: UsageBucket = emptyUsageBucket();
+  bucket = recordUsageIds(bucket, "external", "web", "aaaaaaaaaaaa", "111111111111", attribution());
+  // Android: an install referrer on first_open, and plain app events with no attribution.
+  bucket = recordUsageIds(bucket, "external", "android", "dddddddddddd", "444444444444", attribution({ source: "google-play", campaign: ATTRIBUTION_UNKNOWN, content: ATTRIBUTION_UNKNOWN }));
+  bucket = recordUsageIds(bucket, "external", "android", "eeeeeeeeeeee", "555555555555");
+
+  const summary = summarizeUsage(bucket, "external", noGames);
+  assert.deepEqual(Object.keys(summary.bySource).sort(), ["google-play", "unknown", "youtube"], "all platforms, as before");
+  assert.deepEqual(Object.keys(summary.web!.bySource), ["youtube"], "website rows only");
+  assert.equal(summary.web!.bySource.youtube.installations, 1);
+  assert.deepEqual(Object.keys(summary.web!.byCampaign), ["cydi_shorts"]);
+  assert.equal(summary.bySource.unknown.installations, 1, "an Android install without attribution is not 'website traffic before attribution'");
+});
+
 test("a source row carries that source's games, so per-campaign conversion is readable", () => {
   let bucket: UsageBucket = emptyUsageBucket();
   bucket = recordUsageIds(bucket, "external", "web", "aaaaaaaaaaaa", "111111111111", attribution());

@@ -15,77 +15,105 @@
       min-height: 100vh;
       padding: 16px;
     }
-    .wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+    .wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
     header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     .brand { display: flex; align-items: baseline; gap: 10px; }
     .brand h1 { font-size: 22px; letter-spacing: 0.5px; color: #5b5bf7; }
     .brand span { font-size: 14px; color: #6b6e85; }
-    .card {
-      background: #ffffff;
-      border-radius: 16px;
-      padding: 18px;
-      box-shadow: 0 2px 10px rgba(30, 32, 46, 0.07);
-    }
+    .card { background: #ffffff; border-radius: 16px; padding: 18px; box-shadow: 0 2px 10px rgba(30, 32, 46, 0.07); min-width: 0; }
     button {
-      font: inherit;
-      cursor: pointer;
-      border: none;
-      border-radius: 999px;
-      padding: 9px 18px;
-      background: #5b5bf7;
-      color: #fff;
-      font-weight: 600;
+      font: inherit; cursor: pointer; border: none; border-radius: 999px; padding: 9px 18px;
+      background: #5b5bf7; color: #fff; font-weight: 600;
     }
     button.secondary { background: #e9eaf6; color: #3a3d55; }
+    button.small { padding: 6px 13px; font-size: 13px; }
     button:disabled { opacity: 0.55; cursor: default; }
+    input[type="date"] { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid #d4d6e6; border-radius: 8px; }
     /* Login */
     #login-section { max-width: 420px; margin: 8vh auto 0; width: 100%; }
     #login-section h2 { font-size: 18px; margin-bottom: 6px; }
     #login-section p { font-size: 13px; color: #6b6e85; margin-bottom: 14px; }
-    #token-input {
-      width: 100%;
-      font: inherit;
-      padding: 10px 12px;
-      border: 1px solid #d4d6e6;
-      border-radius: 10px;
-      margin-bottom: 12px;
-    }
+    #token-input { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid #d4d6e6; border-radius: 10px; margin-bottom: 12px; }
     .form-error { color: #d43f3f; font-size: 13px; margin-bottom: 10px; min-height: 16px; }
-    /* Tabs */
+    /* Controls */
     .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
     .tabs button { background: #e9eaf6; color: #3a3d55; }
     .tabs button[aria-selected="true"] { background: #5b5bf7; color: #fff; }
-    .range-label { font-size: 13px; color: #6b6e85; }
+    .controls-row { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: #6b6e85; }
+    .custom-range { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .custom-range[hidden] { display: none; }
+    .load-meta { margin-left: auto; }
+    /* Context banner */
+    #context-card { border-left: 5px solid #5b5bf7; }
+    #context-card.has-warnings { border-left-color: #e0a100; }
+    .ctx-range { font-size: 16px; font-weight: 700; color: #2c2f45; }
+    .ctx-range .badge { margin-left: 8px; vertical-align: 2px; }
+    .ctx-lines { margin-top: 8px; display: grid; gap: 4px; font-size: 13px; color: #3a3d55; }
+    .ctx-lines b { color: #2c2f45; }
+    .ctx-warnings { margin-top: 10px; display: grid; gap: 6px; }
+    .ctx-warning { font-size: 13px; background: #fff7e0; color: #6a4b00; border-radius: 10px; padding: 8px 11px; }
+    .ctx-history { margin-top: 10px; font-size: 12.5px; color: #6b6e85; }
+    .ctx-history li { margin: 4px 0 0 16px; }
+    .badge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; border-radius: 999px; padding: 2px 8px; background: #e9eaf6; color: #3a3d55; }
+    .badge.partial { background: #fff0c2; color: #6a4b00; }
+    .badge.closed { background: #dff5e6; color: #1d6b3a; }
+    .tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; border-radius: 6px; padding: 1px 5px; margin-left: 6px; vertical-align: 1px; }
+    .tag.exact { background: #e3f1ff; color: #1b4f8a; }
+    .tag.telemetry { background: #f0e8ff; color: #5a2d9c; }
+    .tag.derived { background: #eef0f4; color: #4c5163; }
     /* KPIs */
-    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-    .kpi { background: #f7f8fd; border-radius: 12px; padding: 12px; }
-    .kpi .kpi-value { font-size: 24px; font-weight: 700; color: #2c2f45; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .kpi { background: #f7f8fd; border-radius: 12px; padding: 12px; min-width: 0; }
+    .kpi .kpi-value { font-size: 24px; font-weight: 700; color: #2c2f45; font-variant-numeric: tabular-nums; }
     .kpi .kpi-label { font-size: 12px; color: #6b6e85; margin-top: 2px; }
+    .kpi .kpi-sub { font-size: 11.5px; color: #8a8da3; margin-top: 3px; }
     .kpi.accent { background: rgba(91, 91, 247, 0.08); }
     .kpi.accent .kpi-value { color: #5b5bf7; }
-    h3.section-title { font-size: 15px; margin-bottom: 10px; color: #3a3d55; }
+    h3.section-title { font-size: 16px; margin-bottom: 4px; color: #2c2f45; }
+    .section-lede { font-size: 13px; color: #6b6e85; margin-bottom: 12px; }
+    h4.sub { font-size: 13.5px; color: #3a3d55; margin: 18px 0 8px; }
+    h4.sub:first-child { margin-top: 0; }
+    /* Funnel */
+    .funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+    .funnel-step { background: #f7f8fd; border-radius: 12px; padding: 10px 12px; position: relative; min-width: 0; }
+    .funnel-step .v { font-size: 22px; font-weight: 700; color: #2c2f45; font-variant-numeric: tabular-nums; }
+    .funnel-step .l { font-size: 12px; color: #6b6e85; }
+    .funnel-step .r { font-size: 12px; color: #5b5bf7; font-weight: 600; margin-top: 4px; }
+    .funnel-step.muted .v { color: #9a9db3; }
     /* Charts */
     .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
     .chart-box h4 { font-size: 13px; color: #6b6e85; margin-bottom: 4px; font-weight: 600; }
     .chart-box svg { width: 100%; height: auto; display: block; }
+    .chart-legend { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 12px; color: #6b6e85; margin-top: 10px; }
+    .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 5px; }
+    .release-list { font-size: 12px; color: #3a3d55; margin-top: 8px; display: grid; gap: 3px; }
     /* Tables */
-    .table-scroll { overflow-x: auto; }
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { border-collapse: collapse; width: 100%; font-size: 13px; }
     th, td { text-align: left; padding: 7px 10px; white-space: nowrap; }
     th { color: #6b6e85; font-weight: 600; border-bottom: 2px solid #e9eaf6; }
+    th[title] { cursor: help; text-decoration: underline dotted #b9bccf; text-underline-offset: 3px; }
     td { border-bottom: 1px solid #f0f1f8; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .footnote { font-size: 11.5px; color: #8a8da3; margin-top: 8px; }
-    /* Attribution: same table language as everywhere else, plus a highlight for the
-       Short currently being promoted so it can be found without reading the column. */
+    tr.subtotal td { font-weight: 700; background: #f7f8fd; }
+    tr.attr-current td { background: rgba(91, 91, 247, 0.08); font-weight: 600; }
+    .footnote { font-size: 11.5px; color: #8a8da3; margin-top: 8px; line-height: 1.45; }
     .attr-group + .attr-group { margin-top: 18px; }
     .attr-headline { font-size: 13px; color: #3a3d55; background: rgba(91, 91, 247, 0.08); border-radius: 12px; padding: 11px 13px; margin-bottom: 14px; }
-    .attr-headline strong { color: #5b5bf7; }
-    tr.attr-current td { background: rgba(91, 91, 247, 0.08); font-weight: 600; }
-    details > summary { cursor: pointer; font-size: 15px; font-weight: 600; color: #3a3d55; padding: 2px 0; }
+    .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+    .empty { font-size: 13px; color: #8a8da3; background: #f7f8fd; border-radius: 10px; padding: 10px 12px; }
+    details > summary { cursor: pointer; font-size: 16px; font-weight: 700; color: #2c2f45; padding: 2px 0; }
     details[open] > summary { margin-bottom: 10px; }
     .status-line { font-size: 14px; color: #6b6e85; }
+    .status-line.error { color: #b3261e; }
     [hidden] { display: none !important; }
+    @media (max-width: 560px) {
+      body { padding: 10px; }
+      .card { padding: 14px; border-radius: 14px; }
+      .kpi .kpi-value { font-size: 20px; }
+      .funnel-step .v { font-size: 19px; }
+      .load-meta { margin-left: 0; width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -112,51 +140,85 @@
       <div class="wrap" style="padding: 0;">
         <div class="card">
           <nav class="tabs" id="tabs" aria-label="Report period"></nav>
-          <p class="range-label" id="range-label" style="margin-top: 10px;"></p>
+          <div class="controls-row">
+            <form class="custom-range" id="custom-range" hidden>
+              <label>From <input type="date" id="custom-start" required /></label>
+              <label>to <input type="date" id="custom-end" required /></label>
+              <button type="submit" class="small">Show range</button>
+              <span id="custom-error" class="form-error" style="margin: 0;"></span>
+            </form>
+            <span class="load-meta" id="load-meta"></span>
+            <button type="button" class="secondary small" id="reload-btn" title="Fetch this range again. Every other view reuses what this page already loaded.">Reload</button>
+          </div>
         </div>
         <p id="status" class="status-line" hidden></p>
+
+        <div class="card" id="context-card" hidden>
+          <p class="ctx-range" id="ctx-range"></p>
+          <div class="ctx-lines" id="ctx-lines"></div>
+          <div class="ctx-warnings" id="ctx-warnings"></div>
+          <details class="ctx-history" id="ctx-history">
+            <summary style="font-size: 12.5px; font-weight: 600; color: #6b6e85;">Analytics changes inside this range</summary>
+            <ul id="ctx-history-list"></ul>
+          </details>
+        </div>
+
         <div class="card" id="kpi-card" hidden>
           <h3 class="section-title">Overview</h3>
+          <p class="section-lede">Event counts for the range. <span class="tag exact">exact</span> = the exact ledger; <span class="tag telemetry">telemetry</span> = gameplay telemetry (see the source above). None of these is a count of people.</p>
           <div class="kpi-grid" id="kpi-grid"></div>
           <p class="footnote">"App opens" counts app launches, not unique users — no user identifier is collected.</p>
         </div>
+
         <div class="card" id="charts-card" hidden>
           <h3 class="section-title">Daily trend</h3>
+          <p class="section-lede">Per Israel day. Hover a bar for the exact value.</p>
           <div class="chart-grid" id="chart-grid"></div>
+          <div class="chart-legend" id="chart-legend"></div>
+          <div class="release-list" id="release-list"></div>
         </div>
-        <div class="card" id="gametype-card" hidden>
-          <h3 class="section-title">By game type</h3>
-          <div class="table-scroll" id="gametype-table"></div>
-          <p class="footnote">Custom Challenges are aggregate counts only — no per-challenge identifiers are ever recorded for them.</p>
+
+        <div class="card" id="versions-card" hidden>
+          <h3 class="section-title">Versions &amp; rollout</h3>
+          <p class="section-lede" id="versions-lede"></p>
+          <div id="versions-body"></div>
         </div>
-        <div class="card" id="usage-card" hidden>
-          <h3 class="section-title">Installations &amp; sessions</h3>
+
+        <div class="card" id="rewarded-card" hidden>
+          <h3 class="section-title">Rewarded ads</h3>
+          <p class="section-lede">The offer funnel a player sees, then the SDK's own delivery by market.</p>
+          <div id="rewarded-body"></div>
+        </div>
+
+        <div class="card" id="interstitial-card" hidden>
+          <h3 class="section-title">Interstitial ads</h3>
+          <p class="section-lede">Android, Shape Challenge only. Every checkpoint (an ad opportunity) ends in exactly one outcome.</p>
+          <div id="interstitial-body"></div>
+        </div>
+
+        <div class="card" id="acquisition-card" hidden>
+          <h3 class="section-title">Acquisition</h3>
+          <p class="section-lede">Where the website's visits and the Android app's new installations came from. Two different mechanisms, never added together.</p>
+          <div id="acquisition-body"></div>
+        </div>
+
+        <div class="card" id="engagement-card" hidden>
+          <h3 class="section-title">Engagement</h3>
+          <div id="gametype-table"></div>
+          <h4 class="sub">Installations &amp; sessions</h4>
           <div class="table-scroll" id="usage-table"></div>
           <p class="footnote" id="usage-note"></p>
         </div>
-        <div class="card" id="attribution-card" hidden>
-          <h3 class="section-title">Where visits came from</h3>
-          <p class="attr-headline" id="attr-headline"></p>
-          <div id="attr-groups"></div>
-          <p class="footnote" id="attr-note"></p>
-        </div>
-        <div class="card" id="platform-card" hidden>
-          <h3 class="section-title">App vs. web</h3>
-          <div class="table-scroll" id="platform-table"></div>
-          <p class="footnote">Coarse build type only (Android app / website). These totals start from the release that added the split, so they can be lower than the KPIs above, which also include earlier history that carries no platform at all. “Unknown” means an event that arrived without a platform — an older client still in the wild.</p>
-        </div>
-        <div class="card" id="adsummary-card" hidden>
-          <h3 class="section-title">Rewarded ads</h3>
-          <div id="adsummary-body"></div>
-        </div>
+
         <div class="card" id="economy-card" hidden>
           <details id="economy-details">
             <summary>Coin economy</summary>
-            <p class="footnote">Loaded on demand for the selected range (runs extra Analytics Engine queries). Balances are buckets only. Rewarded rates count only offers where an ad could actually be served.</p>
+            <p class="footnote" style="margin: 0 0 10px;">Loaded on demand for the selected range — one request running the eight economy Analytics Engine queries. Loaded once per range and reused for this session.</p>
             <button id="economy-load" class="secondary" type="button">Load economy</button>
             <div id="economy-body"></div>
           </details>
         </div>
+
         <div class="card" id="topcontent-card" hidden>
           <details id="topcontent-details">
             <summary>Top content (built-in only)</summary>
@@ -169,842 +231,1097 @@
   </div>
 
   <script>
-    "use strict";
-    (function () {
-      var TOKEN_KEY = "cydi.adminAnalyticsToken";
-      var MS_PER_DAY = 24 * 60 * 60 * 1000;
-      var ACCENT = "#5b5bf7";
+    // Release markers for the daily trend, inlined from CHANGELOG.md when the site is
+    // built (scripts/injectAdminReleases.ts) - no request. Empty in development.
+    window.CYDI_RELEASES = /*__CYDI_RELEASES__*/[];
+  </script>
+  <script type="module">
+    // Absolute, so /admin/analytics and /admin/analytics/ both resolve it. A static file
+    // served straight from the assets binding: no Worker invocation.
+    import * as M from "/admin/analytics-model.js";
 
-      var GAME_TYPE_LABELS = {
-        shapeChallenge: "Shape Challenge",
-        dailyChallenge: "Daily Challenge",
-        specialChallenge: "Special Challenge",
-        megaChallenge: "Mega Challenge",
-        artistPack: "Artist Packs",
-        customChallenge: "Custom Challenges",
+    const TOKEN_KEY = "cydi.adminAnalyticsToken";
+    const ACCENT = "#5b5bf7";
+    const SAMPLED = "#c7c8f5";
+    const PARTIAL = "#9e9ef9";
+    const RELEASE = "#e0a100";
+
+    const GAME_TYPE_LABELS = {
+      shapeChallenge: "Shape Challenge",
+      dailyChallenge: "Daily Challenge",
+      specialChallenge: "Special Challenge",
+      megaChallenge: "Mega Challenge",
+      artistPack: "Artist Packs",
+      customChallenge: "Custom Challenges",
+      seoPractice: "Practice pages",
+    };
+    const PLATFORM_LABELS = { android: "Android app", ios: "iOS app", web: "Website", unknown: "Unknown" };
+
+    // Period views. Every view is one report request, fetched once per page session and
+    // reused (Reload refetches): switching back and forth costs nothing.
+    const TABS = [
+      { id: "today", label: "Today" },
+      { id: "yesterday", label: "Yesterday" },
+      { id: "7d", label: "Last 7 days", days: 7 },
+      { id: "30d", label: "Last 30 days", days: 30 },
+      { id: "custom", label: "Custom" },
+      { id: "alltime", label: "Since launch" },
+    ];
+    const MAX_RANGE_DAYS = 31;
+
+    let activeTab = "7d";
+    let customRange = null;
+    let loadSeq = 0;
+    let current = null; // { key, report }
+    let currentEconomy = null; // economy block for current.report's range, once loaded
+
+    // ------------------------------------------------------------------ DOM ----
+    // Report data is only ever rendered via textContent, never innerHTML.
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+    function clear(node) {
+      while (node.firstChild) node.removeChild(node.firstChild);
+    }
+    const byId = (id) => document.getElementById(id);
+    function tag(kind) {
+      return el("span", `tag ${kind}`, kind);
+    }
+
+    // ------------------------------------------------------------ formatting ----
+    const fmtInt = (n) => Number(n || 0).toLocaleString("en-US");
+    /** Legacy KPI rates: the server sends 0 when there is nothing to divide. */
+    const fmtRate = (r) => (Number(r || 0) * 100).toFixed(1) + "%";
+    /** Derived rates: null means "no denominator" and shows as a dash, never 0%. */
+    const fmtPct = (r, digits = 1) => (r === null || r === undefined ? "—" : (r * 100).toFixed(digits) + "%");
+    const fmtRatio = (v) => (v === null || v === undefined ? "—" : v.toFixed(1));
+    const fmtSigned = (n) => (n === null || n === undefined ? "—" : (n > 0 ? "+" : n < 0 ? "−" : "") + fmtInt(Math.abs(n)));
+    const fmtDate = (d) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+    const fmtRange = (list) => (!list.length ? "" : list.length === 1 ? fmtDate(list[0]) : fmtDate(list[0]) + " – " + fmtDate(list[list.length - 1]));
+
+    // ----------------------------------------------------------------- tables ----
+    /** headers: [{ label, num?, help? }]; rows: arrays of cells, or { cells, className }. */
+    function makeTable(headers, rows) {
+      const table = el("table");
+      const thead = el("thead");
+      const headRow = el("tr");
+      headers.forEach((h) => {
+        const th = el("th", h.num ? "num" : "", h.label);
+        if (h.help) th.title = h.help;
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+      const tbody = el("tbody");
+      rows.forEach((row) => {
+        const cells = Array.isArray(row) ? row : row.cells;
+        const tr = el("tr", Array.isArray(row) ? "" : row.className || "");
+        cells.forEach((cell, i) => tr.appendChild(el("td", headers[i].num ? "num" : "", cell)));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      const scroll = el("div", "table-scroll");
+      scroll.appendChild(table);
+      return scroll;
+    }
+    function empty(text) {
+      return el("p", "empty", text);
+    }
+    function sub(text, kind) {
+      const h = el("h4", "sub", text);
+      if (kind) h.appendChild(tag(kind));
+      return h;
+    }
+    function note(text) {
+      return el("p", "footnote", text);
+    }
+
+    // ------------------------------------------------------------------ auth ----
+    function getToken() {
+      try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
+    }
+    function setToken(token) {
+      try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* session-only convenience */ }
+    }
+    function clearToken() {
+      try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+    }
+    function showLogin(message) {
+      byId("dashboard").hidden = true;
+      byId("logout-btn").hidden = true;
+      byId("login-section").hidden = false;
+      byId("login-error").textContent = message || "";
+      byId("token-input").value = "";
+    }
+    function showDashboard() {
+      byId("login-section").hidden = true;
+      byId("dashboard").hidden = false;
+      byId("logout-btn").hidden = false;
+    }
+
+    // ------------------------------------------------------------------ data ----
+    function fetchReport(params) {
+      return fetch("/api/analytics/report?" + new URLSearchParams(params).toString(), {
+        headers: { authorization: "Bearer " + getToken() },
+        cache: "no-store",
+      }).then((res) => {
+        if (res.status === 401) {
+          const err = new Error("unauthorized");
+          err.unauthorized = true;
+          throw err;
+        }
+        if (!res.ok) throw new Error("Report request failed (HTTP " + res.status + ")");
+        return res.json();
+      });
+    }
+    // One cache for the page session: a range already loaded is never fetched again
+    // unless Reload is pressed, and a double click shares the request in flight.
+    const cache = M.createReportCache(fetchReport, () => Date.now());
+    const keyOf = (params) => new URLSearchParams(params).toString();
+
+    function paramsForTab(tab) {
+      const today = M.israelDateKey(Date.now());
+      if (tab.id === "alltime") return { period: "alltime" };
+      let start;
+      let end;
+      if (tab.id === "today") start = end = today;
+      else if (tab.id === "yesterday") start = end = M.addDays(today, -1);
+      else if (tab.id === "custom") {
+        if (!customRange) return null;
+        ({ start, end } = customRange);
+      } else {
+        end = today;
+        start = M.addDays(end, -(tab.days - 1));
+      }
+      const params = { period: "range", start, end };
+      if (start !== end) params.series = "1";
+      return params;
+    }
+
+    // --------------------------------------------------------------- context ----
+    function renderContext(report) {
+      const ctx = M.rangeContext(report, Date.now());
+      const exact = M.exactEventSet(report);
+      const range = byId("ctx-range");
+      clear(range);
+      if (ctx.alltime) {
+        range.textContent = "Since analytics launch: " + fmtDate(ctx.start) + " – " + fmtDate(ctx.end) + " (Israel time)";
+      } else {
+        range.textContent = (ctx.start === ctx.end ? fmtDate(ctx.start) : fmtDate(ctx.start) + " – " + fmtDate(ctx.end)) + " " + ctx.start.slice(0, 4) + " · Israel days · " + ctx.dayCount + (ctx.dayCount === 1 ? " day" : " days");
+        const badge = ctx.partial
+          ? el("span", "badge partial", ctx.dayCount === 1 ? "today · partial, up to " + M.israelTimeLabel(Date.now()) : "last day is today · partial")
+          : el("span", "badge closed", "closed days");
+        range.appendChild(badge);
+      }
+      const lines = byId("ctx-lines");
+      clear(lines);
+      const line = (label, text) => {
+        const p = el("p");
+        p.appendChild(el("b", "", label + ": "));
+        p.appendChild(document.createTextNode(text));
+        lines.appendChild(p);
       };
+      line("Exact events", "the exact ledger (Durable Object) — " + exact.size + " events incl. app opens, installs, ad outcomes, interstitials, purchases and shares");
+      if (ctx.alltime) line("Telemetry", "Durable Object running totals (sampled from 25 Sep; see the warning below)");
+      else {
+        if (ctx.aeDates.length) line("Telemetry, full stream", "Analytics Engine — " + fmtRange(ctx.aeDates));
+        if (ctx.doDates.length) line("Telemetry, Durable Object", fmtRange(ctx.doDates) + " — sampled or undercounted");
+      }
+      line("Audience", "real players only — internal test devices are excluded everywhere (shown separately under Engagement)");
+      const warnings = byId("ctx-warnings");
+      clear(warnings);
+      ctx.warnings.forEach((w) => warnings.appendChild(el("p", "ctx-warning", w)));
+      byId("context-card").classList.toggle("has-warnings", ctx.warnings.length > 0);
+      const hist = byId("ctx-history-list");
+      clear(hist);
+      ctx.crossed.forEach((h) => {
+        const li = el("li");
+        li.appendChild(el("b", "", h.at.slice(0, 16).replace("T", " ") + "Z · " + h.label + ". "));
+        li.appendChild(document.createTextNode(h.effect));
+        hist.appendChild(li);
+      });
+      byId("ctx-history").hidden = ctx.crossed.length === 0;
+      byId("context-card").hidden = false;
+      return ctx;
+    }
 
-      var TABS = [
-        { id: "today", label: "Today", days: 1 },
-        { id: "7d", label: "Last 7 days", days: 7 },
-        { id: "30d", label: "Last 30 days", days: 30 },
-        { id: "alltime", label: "Since analytics launch", days: 0 },
+    // ------------------------------------------------------------------ KPIs ----
+    function renderKpis(report, exact) {
+      const counts = report.counts || {};
+      const grid = byId("kpi-grid");
+      clear(grid);
+      const kind = (event) => (exact.has(event) ? "exact" : "telemetry");
+      const items = [
+        { label: "App opens (launches)", value: fmtInt(M.total(counts, "app_open")), accent: true, kind: kind("app_open") },
+        { label: "Games started", value: fmtInt(M.total(counts, "game_started")), accent: true, kind: kind("game_started") },
+        { label: "Games completed", value: fmtInt(M.total(counts, "game_completed")), accent: true, kind: kind("game_completed") },
+        { label: "Results shared", value: fmtInt(M.total(counts, "result_shared")), accent: true, kind: kind("result_shared") },
+        { label: "Completion rate", value: fmtRate(report.completionRate), accent: true, sub: "completed ÷ started", kind: "derived" },
+        { label: "Share rate", value: fmtRate(report.shareRate), accent: true, sub: "shared ÷ completed", kind: "derived" },
+        { label: "Shapes completed", value: fmtInt(M.total(counts, "shape_completed")), kind: kind("shape_completed") },
+        { label: "Average stars", value: report.averageScore == null ? "—" : report.averageScore.toFixed(2) + " / 5", sub: "per scored shape", kind: "derived" },
+        { label: "Pass rate", value: report.passRate == null ? "—" : fmtRate(report.passRate), sub: "passed ÷ scored shapes", kind: "derived" },
+        // Coin spend in the Shop, NOT money - CYDI has no real-money IAP.
+        { label: "Shop purchases (coins)", value: fmtInt(M.total(counts, "shop_purchase_with_coins")), kind: kind("shop_purchase_with_coins") },
+        { label: "Mega cards unlocked", value: fmtInt(M.total(counts, "mega_card_unlocked")), kind: kind("mega_card_unlocked") },
+        { label: "Artist link clicks", value: fmtInt(M.total(counts, "artist_pack_link_clicked")), kind: kind("artist_pack_link_clicked") },
       ];
+      items.forEach((item) => {
+        const box = el("div", "kpi" + (item.accent ? " accent" : ""));
+        box.appendChild(el("div", "kpi-value", item.value));
+        const label = el("div", "kpi-label", item.label);
+        label.appendChild(tag(item.kind));
+        box.appendChild(label);
+        if (item.sub) box.appendChild(el("div", "kpi-sub", item.sub));
+        grid.appendChild(box);
+      });
+      byId("kpi-card").hidden = false;
+    }
 
-      var activeTab = "7d";
-      var loadSeq = 0;
-
-      // --- DOM helpers (report data is only ever rendered via textContent, never innerHTML) ---
-      function el(tag, className, text) {
-        var node = document.createElement(tag);
-        if (className) node.className = className;
-        if (text !== undefined) node.textContent = text;
-        return node;
-      }
-      function clear(node) {
-        while (node.firstChild) node.removeChild(node.firstChild);
-      }
-      function byId(id) {
-        return document.getElementById(id);
-      }
-
-      // --- Dates (mirror the server's Asia/Jerusalem day buckets) ---
-      function israelToday() {
-        return new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Asia/Jerusalem",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        }).format(new Date());
-      }
-      function addDays(dateKey, days) {
-        var parts = dateKey.split("-");
-        var d = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]) + days));
-        return d.toISOString().slice(0, 10);
-      }
-
-      // --- Formatting ---
-      function fmtInt(n) {
-        return Number(n || 0).toLocaleString("en-US");
-      }
-      function fmtRate(r) {
-        return (Number(r || 0) * 100).toFixed(1) + "%";
-      }
-      function rateOf(part, whole) {
-        return whole > 0 ? part / whole : 0;
-      }
-
-      // --- Auth ---
-      function getToken() {
-        try {
-          return sessionStorage.getItem(TOKEN_KEY);
-        } catch (e) {
-          return null;
+    // ---------------------------------------------------------------- charts ----
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    function svgEl(name, attrs) {
+      const node = document.createElementNS(SVG_NS, name);
+      for (const key in attrs) node.setAttribute(key, attrs[key]);
+      return node;
+    }
+    function svgTitle(node, text) {
+      const t = document.createElementNS(SVG_NS, "title");
+      t.textContent = text;
+      node.appendChild(t);
+    }
+    /**
+     * opts.sampled: dates whose telemetry is a Durable Object sample (lighter bars);
+     * opts.partialDate: today, still running (striped-light bar);
+     * opts.releases: date -> [releases] (a marker under the bar).
+     */
+    function barChart(days, valueOf, opts) {
+      const W = 300, H = 118, padBottom = 22, padTop = 14;
+      const values = days.map(valueOf);
+      const max = Math.max(...values, 1);
+      const svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, role: "img" });
+      const slot = W / days.length;
+      const barW = Math.max(2, Math.min(18, slot * 0.7));
+      days.forEach((day, i) => {
+        const v = values[i];
+        const h = v === 0 ? 2 : Math.max(2, (v / max) * (H - padTop - padBottom));
+        const x = i * slot + (slot - barW) / 2;
+        const fill = v === 0 ? "#e2e3f0" : opts.partialDate === day.date ? PARTIAL : opts.sampled.has(day.date) ? SAMPLED : ACCENT;
+        const rect = svgEl("rect", { x: x.toFixed(1), y: (H - padBottom - h).toFixed(1), width: barW.toFixed(1), height: h.toFixed(1), rx: "2", fill });
+        const flags = [];
+        if (opts.sampled.has(day.date)) flags.push("Durable Object telemetry (sampled)");
+        if (opts.partialDate === day.date) flags.push("today, partial");
+        svgTitle(rect, day.date + ": " + fmtInt(v) + (flags.length ? " — " + flags.join(", ") : ""));
+        svg.appendChild(rect);
+        const rel = opts.releases[day.date];
+        if (rel) {
+          const cx = i * slot + slot / 2;
+          const tri = svgEl("path", { d: "M" + (cx - 4).toFixed(1) + " " + (H - 9) + " L" + (cx + 4).toFixed(1) + " " + (H - 9) + " L" + cx.toFixed(1) + " " + (H - 15) + " Z", fill: RELEASE });
+          svgTitle(tri, day.date + " release: " + rel.map((r) => r.version).join(", "));
+          svg.appendChild(tri);
         }
+      });
+      const maxLabel = svgEl("text", { x: "0", y: "10", "font-size": "9", fill: "#8a8da3" });
+      maxLabel.textContent = "max " + fmtInt(max);
+      svg.appendChild(maxLabel);
+      const startLabel = svgEl("text", { x: "0", y: String(H - 1), "font-size": "9", fill: "#8a8da3" });
+      startLabel.textContent = days[0].date.slice(5);
+      svg.appendChild(startLabel);
+      const endLabel = svgEl("text", { x: String(W), y: String(H - 1), "font-size": "9", fill: "#8a8da3", "text-anchor": "end" });
+      endLabel.textContent = days[days.length - 1].date.slice(5);
+      svg.appendChild(endLabel);
+      return svg;
+    }
+    function renderCharts(report, ctx, exact) {
+      const card = byId("charts-card");
+      const grid = byId("chart-grid");
+      clear(grid);
+      const days = report.days;
+      if (!days || days.length < 2) {
+        card.hidden = true;
+        return;
       }
-      function setToken(token) {
-        try {
-          sessionStorage.setItem(TOKEN_KEY, token);
-        } catch (e) {
-          /* session-only convenience; login still works for this page view */
-        }
-      }
-      function clearToken() {
-        try {
-          sessionStorage.removeItem(TOKEN_KEY);
-        } catch (e) {
-          /* ignore */
-        }
-      }
-      function showLogin(message) {
-        byId("dashboard").hidden = true;
-        byId("logout-btn").hidden = true;
-        byId("login-section").hidden = false;
-        byId("login-error").textContent = message || "";
-        byId("token-input").value = "";
-      }
-      function showDashboard() {
-        byId("login-section").hidden = true;
-        byId("dashboard").hidden = false;
-        byId("logout-btn").hidden = false;
-      }
-
-      // --- Data ---
-      function fetchReport(params) {
-        var token = getToken();
-        return fetch("/api/analytics/report?" + new URLSearchParams(params).toString(), {
-          headers: { authorization: "Bearer " + token },
-          cache: "no-store",
-        }).then(function (res) {
-          if (res.status === 401) {
-            var err = new Error("unauthorized");
-            err.unauthorized = true;
-            throw err;
-          }
-          if (!res.ok) throw new Error("Report request failed (HTTP " + res.status + ")");
-          return res.json();
-        });
-      }
-
-      function reportParamsForTab(tab) {
-        if (tab.id === "alltime") return { period: "alltime" };
-        var end = israelToday();
-        var start = addDays(end, -(tab.days - 1));
-        var params = { period: "range", start: start, end: end };
-        if (tab.days > 1) params.series = "1";
-        return params;
-      }
-
-      // --- Rendering ---
-      function renderKpis(report) {
-        var counts = report.counts || {};
-        var grid = byId("kpi-grid");
-        clear(grid);
-        function total(name) {
-          return (counts[name] && counts[name].total) || 0;
-        }
-        var items = [
-          { label: "App opens", value: fmtInt(total("app_open")), accent: true },
-          { label: "Games started", value: fmtInt(total("game_started")), accent: true },
-          { label: "Games completed", value: fmtInt(total("game_completed")), accent: true },
-          { label: "Results shared", value: fmtInt(total("result_shared")), accent: true },
-          { label: "Completion rate", value: fmtRate(report.completionRate), accent: true },
-          { label: "Share rate", value: fmtRate(report.shareRate), accent: true },
-          { label: "Shapes completed", value: fmtInt(total("shape_completed")) },
-          { label: "Average score", value: report.averageScore == null ? "—" : report.averageScore.toFixed(2) + " / 5" },
-          { label: "Pass rate", value: report.passRate == null ? "—" : fmtRate(report.passRate) },
-          // Coin spend in the Shop, NOT money - CYDI has no real-money IAP. The Worker
-          // folds the legacy `purchase_completed` key into this canonical one, so reading
-          // the canonical name alone already covers every historical bucket.
-          { label: "Shop purchases (coins)", value: fmtInt(total("shop_purchase_with_coins")) },
-          { label: "Mega cards unlocked", value: fmtInt(total("mega_card_unlocked")) },
-          { label: "Artist link clicks", value: fmtInt(total("artist_pack_link_clicked")) },
-        ];
-        items.forEach(function (item) {
-          var box = el("div", "kpi" + (item.accent ? " accent" : ""));
-          box.appendChild(el("div", "kpi-value", item.value));
-          box.appendChild(el("div", "kpi-label", item.label));
-          grid.appendChild(box);
-        });
-        byId("kpi-card").hidden = false;
-      }
-
-      var SVG_NS = "http://www.w3.org/2000/svg";
-      function svgEl(tag, attrs) {
-        var node = document.createElementNS(SVG_NS, tag);
-        for (var key in attrs) node.setAttribute(key, attrs[key]);
-        return node;
-      }
-
-      function barChart(days, valueOf) {
-        var W = 300;
-        var H = 110;
-        var padBottom = 16;
-        var padTop = 14;
-        var values = days.map(valueOf);
-        var max = Math.max.apply(null, values.concat([1]));
-        var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, role: "img" });
-        var slot = W / days.length;
-        var barW = Math.max(2, Math.min(18, slot * 0.7));
-        days.forEach(function (day, i) {
-          var v = values[i];
-          var h = v === 0 ? 0 : Math.max(2, (v / max) * (H - padTop - padBottom));
-          var x = i * slot + (slot - barW) / 2;
-          var rect = svgEl("rect", {
-            x: x.toFixed(1),
-            y: (H - padBottom - h).toFixed(1),
-            width: barW.toFixed(1),
-            height: h.toFixed(1),
-            rx: "2",
-            fill: v === 0 ? "#e2e3f0" : ACCENT,
+      const dates = days.map((d) => d.date);
+      const releases = M.releasesByDate(window.CYDI_RELEASES, dates);
+      const doDates = new Set(ctx.doDates);
+      const metrics = [
+        { label: "App opens", event: "app_open" },
+        { label: "Games started", event: "game_started" },
+        { label: "Games completed", event: "game_completed" },
+        { label: "Results shared", event: "result_shared" },
+      ];
+      metrics.forEach((metric) => {
+        const box = el("div", "chart-box");
+        const h = el("h4", "", metric.label);
+        h.appendChild(tag(exact.has(metric.event) ? "exact" : "telemetry"));
+        box.appendChild(h);
+        box.appendChild(
+          barChart(days, (day) => M.total(day.counts, metric.event), {
+            // Only telemetry is sampled on Durable Object dates; exact events are not.
+            sampled: exact.has(metric.event) ? new Set() : doDates,
+            partialDate: ctx.partial ? ctx.end : null,
+            releases,
+          }),
+        );
+        grid.appendChild(box);
+      });
+      const legend = byId("chart-legend");
+      clear(legend);
+      const item = (color, text) => {
+        const s = el("span");
+        const sw = el("span", "swatch");
+        sw.style.background = color;
+        s.appendChild(sw);
+        s.appendChild(document.createTextNode(text));
+        legend.appendChild(s);
+      };
+      item(ACCENT, "full data");
+      if (doDates.size) item(SAMPLED, "Durable Object telemetry (sampled/undercounted) — not comparable with full days");
+      if (ctx.partial) item(PARTIAL, "today, partial");
+      if (Object.keys(releases).length) item(RELEASE, "release shipped that day");
+      const list = byId("release-list");
+      clear(list);
+      // One line per release day; each release's first changelog sentence is its tooltip.
+      Object.keys(releases)
+        .sort()
+        .forEach((date) => {
+          const p = el("p", "", "▲ " + fmtDate(date) + " · ");
+          releases[date].forEach((r, i) => {
+            const v = el("span", "", r.version + (r.android ? " (Android)" : "") + (i < releases[date].length - 1 ? ", " : ""));
+            v.title = r.summary;
+            p.appendChild(v);
           });
-          if (v === 0) rect.setAttribute("height", "2");
-          if (v === 0) rect.setAttribute("y", String(H - padBottom - 2));
-          var title = document.createElementNS(SVG_NS, "title");
-          title.textContent = day.date + ": " + fmtInt(v);
-          rect.appendChild(title);
-          svg.appendChild(rect);
+          list.appendChild(p);
         });
-        var maxLabel = svgEl("text", { x: "0", y: "10", "font-size": "9", fill: "#8a8da3" });
-        maxLabel.textContent = "max " + fmtInt(max);
-        svg.appendChild(maxLabel);
-        var startLabel = svgEl("text", { x: "0", y: String(H - 4), "font-size": "9", fill: "#8a8da3" });
-        startLabel.textContent = days[0].date.slice(5);
-        svg.appendChild(startLabel);
-        var endLabel = svgEl("text", { x: String(W), y: String(H - 4), "font-size": "9", fill: "#8a8da3", "text-anchor": "end" });
-        endLabel.textContent = days[days.length - 1].date.slice(5);
-        svg.appendChild(endLabel);
-        return svg;
-      }
+      if (!window.CYDI_RELEASES.length) list.appendChild(note("Release markers are inlined from CHANGELOG.md when the site is built; this copy has none."));
+      card.hidden = false;
+    }
 
-      function renderCharts(report) {
-        var card = byId("charts-card");
-        var grid = byId("chart-grid");
-        clear(grid);
-        var days = report.days;
-        if (!days || days.length < 2) {
-          card.hidden = true;
-          return;
-        }
-        var metrics = [
-          { label: "App opens", event: "app_open" },
-          { label: "Games started", event: "game_started" },
-          { label: "Games completed", event: "game_completed" },
-          { label: "Results shared", event: "result_shared" },
-        ];
-        metrics.forEach(function (metric) {
-          var box = el("div", "chart-box");
-          box.appendChild(el("h4", "", metric.label));
-          box.appendChild(
-            barChart(days, function (day) {
-              var counts = day.counts || {};
-              return (counts[metric.event] && counts[metric.event].total) || 0;
-            })
-          );
-          grid.appendChild(box);
-        });
-        card.hidden = false;
-      }
-
-      function makeTable(headers, rows) {
-        var table = el("table");
-        var thead = el("thead");
-        var headRow = el("tr");
-        headers.forEach(function (h) {
-          var th = el("th", h.num ? "num" : "", h.label);
-          headRow.appendChild(th);
-        });
-        thead.appendChild(headRow);
-        table.appendChild(thead);
-        var tbody = el("tbody");
-        rows.forEach(function (cells) {
-          var tr = el("tr");
-          cells.forEach(function (cell, i) {
-            tr.appendChild(el("td", headers[i].num ? "num" : "", cell));
+    // -------------------------------------------------------------- versions ----
+    function renderVersions(report) {
+      const body = byId("versions-body");
+      clear(body);
+      const lede = byId("versions-lede");
+      const v = M.versionMix(report);
+      if (v && v.rows.length) {
+        lede.textContent =
+          "Platform × app version for " + fmtRange(v.dates) + " (Analytics Engine dates" + ((report.sources.telemetryDoDates || []).length ? " only — the earlier days of this range carry no platform × version split" : "") + "). Every column comes from the same source, so a shift in the mix and a shift in behaviour can be told apart.";
+        const rows = [];
+        v.platforms.forEach((p) => {
+          rows.push({
+            className: "subtotal",
+            cells: [PLATFORM_LABELS[p.platform] || p.platform, "all versions", fmtInt(p.appOpens), fmtPct(p.shareOfAppOpens), fmtInt(p.gamesStarted), fmtInt(p.gamesCompleted), fmtPct(p.shareOfGameplay), fmtRatio(p.gamesPerAppOpen), fmtInt(p.firstOpens)],
           });
-          tbody.appendChild(tr);
+          v.rows
+            .filter((r) => r.platform === p.platform)
+            .forEach((r) => rows.push([ "", r.version, fmtInt(r.appOpens), fmtPct(r.shareOfAppOpens), fmtInt(r.gamesStarted), fmtInt(r.gamesCompleted), fmtPct(r.shareOfGameplay), fmtRatio(r.gamesPerAppOpen), fmtInt(r.firstOpens) ]));
         });
-        table.appendChild(tbody);
-        return table;
-      }
-
-      function renderGameTypes(report) {
-        var counts = report.counts || {};
-        var started = (counts.game_started && counts.game_started.byGameType) || {};
-        var completed = (counts.game_completed && counts.game_completed.byGameType) || {};
-        var shared = (counts.result_shared && counts.result_shared.byGameType) || {};
-        var types = {};
-        [started, completed, shared].forEach(function (map) {
-          Object.keys(map).forEach(function (t) {
-            types[t] = true;
-          });
-        });
-        var typeList = Object.keys(types).sort(function (a, b) {
-          return (started[b] || 0) - (started[a] || 0);
-        });
-        var container = byId("gametype-table");
-        clear(container);
-        if (typeList.length === 0) {
-          container.appendChild(el("p", "status-line", "No game activity in this period."));
-        } else {
-          var rows = typeList.map(function (t) {
-            var s = started[t] || 0;
-            var c = completed[t] || 0;
-            var sh = shared[t] || 0;
-            return [GAME_TYPE_LABELS[t] || t, fmtInt(s), fmtInt(c), fmtInt(sh), fmtRate(rateOf(c, s)), fmtRate(rateOf(sh, c))];
-          });
-          container.appendChild(
+        body.appendChild(
+          makeTable(
+            [
+              { label: "Platform" },
+              { label: "Version" },
+              { label: "App opens", num: true },
+              { label: "Share of opens", num: true, help: "This row's app opens ÷ all app opens in the window." },
+              { label: "Games started", num: true },
+              { label: "Games completed", num: true },
+              { label: "Share of gameplay", num: true, help: "This row's completed games ÷ all completed games in the window." },
+              { label: "Games / open", num: true, help: "Completed games ÷ app opens on the same row. Launches, not players." },
+              { label: "First opens", num: true, help: "Android only: first launch observed for an installation whose installed version is the running one." },
+            ],
+            rows,
+          ),
+        );
+        if (v.reconcile) {
+          body.appendChild(sub("Reconciliation with the totals for the same dates"));
+          body.appendChild(
             makeTable(
-              [
-                { label: "Game type" },
-                { label: "Started", num: true },
-                { label: "Completed", num: true },
-                { label: "Shared", num: true },
-                { label: "Completion", num: true },
-                { label: "Share rate", num: true },
-              ],
-              rows
-            )
+              [{ label: "Metric" }, { label: "Version rows", num: true }, { label: "Totals", num: true }, { label: "Totals source" }, { label: "Difference", num: true, help: "(version rows − totals) ÷ totals. Version rows are all Analytics Engine; exact totals are the ledger." }],
+              v.reconcile.map((r) => [r.label, fmtInt(r.versions), fmtInt(r.aggregate), r.note, fmtPct(r.delta)]),
+            ),
           );
+          body.appendChild(note("App opens and first opens are exact-ledger events; the version rows read Analytics Engine's copy of the same events so that every column shares one source. A difference of a few percent is the two stores, not a bug; a large one means one of them is dropping events."));
         }
-        byId("gametype-card").hidden = false;
+      } else {
+        lede.textContent =
+          report.period === "alltime"
+            ? "The version mix is per report window and comes from Analytics Engine, which cannot back an all-time view. Pick a dated range."
+            : "No platform × version split for this range — it is built from Analytics Engine dates only (26 Sep onwards), or the server predates it. Below: the same-range platform totals and each version's counts, not cross-tabulated.";
+        const counts = report.counts || {};
+        const opens = M.breakout(counts, "app_open", "byAppVersion");
+        const done = M.breakout(counts, "game_completed", "byAppVersion");
+        const keys = [...new Set([...Object.keys(opens), ...Object.keys(done)])].sort((a, b) => (done[b] || 0) - (done[a] || 0));
+        if (keys.length) {
+          body.appendChild(sub("By app version (all platforms together)"));
+          body.appendChild(makeTable([{ label: "Version" }, { label: "App opens", num: true }, { label: "Games completed", num: true }], keys.map((k) => [k, fmtInt(opens[k] || 0), fmtInt(done[k] || 0)])));
+        }
+      }
+      // The long-standing platform totals for the whole range (was "App vs. web").
+      const plats = M.platformTotals(report.counts || {});
+      body.appendChild(sub("Platform totals, whole range"));
+      if (!plats.length) body.appendChild(empty("No platform data in this period."));
+      else {
+        body.appendChild(
+          makeTable(
+            [{ label: "Platform" }, { label: "Opens", num: true }, { label: "Started", num: true }, { label: "Completed", num: true }, { label: "Shared", num: true }, { label: "Completion", num: true }],
+            plats.map((p) => [PLATFORM_LABELS[p.platform] || p.platform, fmtInt(p.appOpens), fmtInt(p.gamesStarted), fmtInt(p.gamesCompleted), fmtInt(p.shared), fmtRate(p.completion)]),
+          ),
+        );
+        body.appendChild(note("Coarse build type only. These start from the release that added the split, so they can be lower than the Overview, which also counts older history that carries no platform. “Unknown” is an event without a platform — an older client still in the wild."));
+      }
+      byId("versions-card").hidden = false;
+    }
+
+    // -------------------------------------------------------------- rewarded ----
+    function funnelStep(value, label, rateText, muted) {
+      const box = el("div", "funnel-step" + (muted ? " muted" : ""));
+      box.appendChild(el("div", "v", value));
+      box.appendChild(el("div", "l", label));
+      if (rateText) box.appendChild(el("div", "r", rateText));
+      return box;
+    }
+    function renderRewarded(report, economy) {
+      const body = byId("rewarded-body");
+      clear(body);
+      const f = M.rewardedFunnel(report, economy);
+      const a = f.all;
+      const r = f.rates;
+      if (a.offers + a.starts + a.completions === 0 && M.total(report.counts, "rewarded_ad_requested") === 0) {
+        body.appendChild(empty("No rewarded-ad activity in this period."));
+        byId("rewarded-card").hidden = false;
+        return;
+      }
+      // The steps show the same days the rates are computed on, so every rate can be
+      // checked against the two numbers beside it. Whole-range totals go in the note.
+      const onBasis = f.basis === "ae-dates";
+      body.appendChild(sub(onBasis ? "Offer funnel — " + fmtRange(f.rateDates) + " (full-data days)" : "Offer funnel"));
+      const funnel = el("div", "funnel");
+      funnel.appendChild(funnelStep(fmtInt(r.offers), "Offers shown", "×2 " + fmtInt(r.offersX2) + " · bonus " + fmtInt(r.offersBonus)));
+      const av = f.availability;
+      funnel.appendChild(
+        av
+          ? funnelStep(fmtPct(av.availabilityRate), "Offers with an ad available", fmtInt(av.offersWithAd) + " of " + fmtInt(av.offers) + " (economy basis)")
+          : funnelStep("—", "Ad available", "load the coin economy below", true),
+      );
+      funnel.appendChild(funnelStep(fmtInt(r.starts), "Ad starts (taps)", "start ÷ offer " + fmtPct(r.startPerOffer, 2)));
+      funnel.appendChild(funnelStep(fmtInt(r.completions), "Completions (reward)", "completion ÷ start " + fmtPct(r.completionPerStart)));
+      funnel.appendChild(funnelStep(fmtInt(r.skips), "Skipped", "skip rate " + fmtPct(r.skipRate)));
+      funnel.appendChild(funnelStep(fmtInt(r.fails), "Failed after tap", ""));
+      body.appendChild(funnel);
+      const basisText = {
+        range: "Rates use the whole range.",
+        "ae-dates": "Rates use " + fmtRange(f.rateDates) + " only: on the earlier days offers and skips are a Durable Object sample while starts and completions are exact, so mixing them would inflate every rate.",
+        mixed: "Rates mix sampled Durable Object days with full days — read them as indicative only (no per-day series for this view).",
+        "do-only": "Every day here predates Analytics Engine: offers are a sample and starts are exact, so these rates overstate conversion.",
+      }[f.basis];
+      body.appendChild(
+        note(
+          "Offers and skips are telemetry; starts, completions and failures are exact. " +
+            "Denominators: start ÷ offer = ad starts ÷ offers shown; completion ÷ start = completions ÷ ad starts; skip rate = skips ÷ offers shown. " +
+            basisText +
+            " Whole range" + (onBasis ? ", sampled days included" : "") + ": offers " + fmtInt(a.offers) + " (“Double it?” ×2 " + fmtInt(a.offersX2) + ", bonus " + fmtInt(a.offersBonus) + "), starts " + fmtInt(a.starts) +
+            ", completions " + fmtInt(a.completions) + " (×2 offer " + fmtInt(M.total(report.counts, "reward_ad_completed")) + "), skips " + fmtInt(a.skips) + ", failures " + fmtInt(a.fails) + "." +
+            (av
+              ? " Ad availability comes from the economy block: only offers from app 0.54.0 onwards carry the flag, so its denominator is " + fmtInt(av.offers) + " offers, not all of them; start ÷ available offer there = " + fmtPct(av.startPerAvailableOffer, 2) + "."
+              : ""),
+        ),
+      );
+
+      // Experiment arms (0.55.0 v1) - only from data already in the economy block.
+      const exp = M.rewardedExperiment(economy);
+      body.appendChild(sub("Experiment arms (×3 vs +100)", "telemetry"));
+      if (!economy) body.appendChild(empty("Load the coin economy below to compare the arms — the arm split lives in the economy block."));
+      else if (!exp || !exp.arms.length) body.appendChild(empty("No arm data in this range."));
+      else {
+        body.appendChild(
+          makeTable(
+            [
+              { label: "Arm / multiplier" },
+              { label: "Offers", num: true },
+              { label: "With ad", num: true },
+              { label: "Starts", num: true, help: "Starts on offers that had an ad available." },
+              { label: "Completions", num: true },
+              { label: "Start ÷ available offer", num: true },
+              { label: "Completion ÷ start", num: true },
+              { label: "Skip rate", num: true, help: "Skips ÷ all offers of the arm." },
+            ],
+            exp.arms.map((x) => [
+              x.arm === "x3" ? "×3 (arm A, control)" : x.arm === "plus100" ? "+100 (arm B)" : x.arm === "x2" ? "×2 (chest, shop, Special, Mega, Artist)" : x.arm,
+              fmtInt(x.offers), fmtInt(x.offersWithAd), fmtInt(x.startsWithAd), fmtInt(x.completionsWithAd), fmtPct(x.startPerAvailableOffer, 2), fmtPct(x.completionPerStart), fmtPct(x.skipRate),
+            ]),
+          ),
+        );
+        body.appendChild(note("The experiment shipped in 0.55.0 (29 Sep). “×3” before that date is the old periodic ×3 bonus, so restrict the range to 29 Sep onwards for a clean arm comparison" + (exp.hasPlus100 ? "." : " — no +100 offers are in this range yet.")));
       }
 
-      var PLATFORM_LABELS = { android: "Android app", ios: "iOS app", web: "Website", unknown: "Unknown" };
-
-      // One decimal, and an em dash when there is nothing to divide by (the server
-      // sends null rather than 0 in that case - e.g. days recorded before installation
-      // ids existed, which have plays but no installations to attribute them to).
-      function fmtRatio(value) {
-        return value === null || value === undefined ? "—" : value.toFixed(1);
+      // Shortfall - already in the economy block; surfaced here, where the decision is.
+      const shortfall = economy && economy.telemetry && economy.telemetry.rewardFunnel && economy.telemetry.rewardFunnel.byTargetShortfall;
+      if (shortfall && Object.keys(shortfall).length) {
+        body.appendChild(sub("Offers by distance to the next unlock", "telemetry"));
+        const order = (economy.buckets && economy.buckets.shortfall) || [];
+        const keys = Object.keys(shortfall).sort((x, y) => (x.split("|")[0] < y.split("|")[0] ? -1 : x.split("|")[0] > y.split("|")[0] ? 1 : order.indexOf(x.split("|")[1]) - order.indexOf(y.split("|")[1])));
+        body.appendChild(
+          makeTable(
+            [{ label: "Next target | shortfall" }, { label: "Offers", num: true }, { label: "With ad", num: true }, { label: "Starts", num: true }, { label: "Start ÷ available offer", num: true }, { label: "Skip rate", num: true }],
+            keys.map((k) => { const x = shortfall[k]; return [k, fmtInt(x.offers), fmtInt(x.offersWithAd), fmtInt(x.startsWithAd), fmtPct(x.startRate, 2), fmtPct(x.skipRate)]; }),
+          ),
+        );
+        body.appendChild(note("Shortfall is how far the player's balance is from the next unlock price when the offer appears (economy basis: app 0.54.0 onwards)."));
       }
 
-      /**
-       * Real players only. The report defaults to audience=external, so our own test
-       * devices are counted in a separate bucket and only ever shown on the note line
-       * below - never mixed into the numbers above.
-       */
-      function renderUsage(report) {
-        var usage = report.usage;
-        var container = byId("usage-table");
-        var note = byId("usage-note");
-        clear(container);
-        if (!usage) {
-          note.textContent = "Installations and sessions are counted per day, so they are not available for the all-time view.";
-          byId("usage-card").hidden = false;
-          return;
-        }
+      // SDK delivery by market.
+      const d = M.rewardedDelivery(report.counts || {});
+      body.appendChild(sub("Ad delivery (SDK) by market", "exact"));
+      if (!d.rows.length) body.appendChild(empty("No rewarded load attempts recorded in this period."));
+      else {
+        body.appendChild(
+          makeTable(
+            [
+              { label: "Market", help: "Ads markets exclude IR, AZ and CU/KP/SY." },
+              { label: "Loaded", num: true },
+              { label: "Unavailable", num: true },
+              { label: "Load success", num: true, help: "loaded ÷ (loaded + unavailable). Background preloads and taps alike." },
+              { label: "sdk_error", num: true },
+              { label: "timeout", num: true },
+              { label: "no_fill", num: true },
+              { label: "other", num: true },
+            ],
+            d.rows.map((row) => {
+              const known = (row.reasons.sdk_error || 0) + (row.reasons.timeout || 0) + (row.reasons.no_fill || 0);
+              return [row.label, fmtInt(row.loaded), fmtInt(row.unavailable), fmtPct(row.loadSuccess), fmtInt(row.reasons.sdk_error || 0), fmtInt(row.reasons.timeout || 0), fmtInt(row.reasons.no_fill || 0), fmtInt(row.unavailable - known)];
+            }),
+          ),
+        );
+        body.appendChild(
+          note(
+            "At the tap: requested " + fmtInt(d.requested) + " · shown " + fmtInt(d.shown) + " · reward earned " + fmtInt(d.completed) + " · failed " + fmtInt(d.failed) +
+              (Object.keys(d.failedReasons).length ? " (" + Object.entries(d.failedReasons).map(([k, n]) => k + " " + fmtInt(n)).join(", ") + ")" : "") +
+              ". Google serves no ads in IR (policy); AZ has shown no availability — both are reported apart so they never read as a delivery failure.",
+          ),
+        );
+      }
+      byId("rewarded-card").hidden = false;
+    }
 
-        function row(label, summary) {
-          return [
-            label,
-            fmtInt(summary.installations),
-            fmtInt(summary.sessions),
-            fmtRatio(summary.gamesStartedPerInstallation),
-            fmtRatio(summary.gamesCompletedPerInstallation),
-            fmtRatio(summary.gamesStartedPerSession),
-            fmtRatio(summary.gamesCompletedPerSession),
-          ];
-        }
+    // ---------------------------------------------------------- interstitial ----
+    function renderInterstitial(report) {
+      const body = byId("interstitial-body");
+      clear(body);
+      const f = M.interstitialFunnel(report.counts || {});
+      if (f.checkpoints === 0 && f.loadFailures === 0) {
+        body.appendChild(empty("No interstitial activity in this period."));
+        byId("interstitial-card").hidden = false;
+        return;
+      }
+      body.appendChild(sub("Treatment arm funnel", "exact"));
+      const funnel = el("div", "funnel");
+      funnel.appendChild(funnelStep(fmtInt(f.checkpoints), "Opportunities (checkpoints)", "control " + fmtInt(f.control) + " · treatment " + fmtInt(f.treatment)));
+      funnel.appendChild(funnelStep(fmtInt(f.askedForAd), "Treatment, eligible", "suppressed by a rewarded ad " + fmtInt(f.outcomes.suppressed)));
+      funnel.appendChild(funnelStep(fmtInt(f.ready), "Ad ready", "readiness " + fmtPct(f.readiness)));
+      funnel.appendChild(funnelStep(fmtInt(f.outcomes.shown), "Shown (impression)", "show rate " + fmtPct(f.showRate)));
+      funnel.appendChild(funnelStep(fmtInt(f.dismissed), "Dismissed", "of shown " + fmtPct(f.dismissedPerShown)));
+      body.appendChild(funnel);
+      body.appendChild(
+        note(
+          "Denominators: readiness = (shown + show_failed) ÷ (treatment − suppressed); show rate = shown ÷ all treatment checkpoints; dismissed ÷ shown. Not ready " +
+            fmtInt(f.outcomes.not_ready) + " · show failed " + fmtInt(f.outcomes.show_failed) + ". Cadence: " +
+            (Object.keys(f.cadence).length ? Object.entries(f.cadence).map(([k, n]) => "every " + k + " games (" + fmtInt(n) + ")").join(", ") : "—") + ".",
+        ),
+      );
+      body.appendChild(sub("Did the player continue?", "exact"));
+      body.appendChild(
+        makeTable(
+          [{ label: "Arm" }, { label: "Outcome" }, { label: "Checkpoints", num: true }, { label: "Continued", num: true }, { label: "Continuation", num: true, help: "continuations ÷ checkpoints of the same arm and outcome." }],
+          f.continuation.map((r) => [r.arm, r.outcome, fmtInt(r.checkpoints), fmtInt(r.continued), fmtPct(r.rate)]),
+        ),
+      );
+      body.appendChild(note("A continuation is recorded when the player starts the next game after the moment. Checkpoints near the end of the range may not have had their chance to continue yet."));
+      const two = el("div", "two-col");
+      const left = el("div");
+      left.appendChild(sub("Load failures by reason", "exact"));
+      const reasons = Object.entries(f.loadFailureReasons).sort((x, y) => y[1] - x[1]);
+      left.appendChild(reasons.length ? makeTable([{ label: "Reason" }, { label: "Failures", num: true }, { label: "Share", num: true }], reasons.map(([k, n]) => [k, fmtInt(n), fmtPct(M.rate(n, f.loadFailures))])) : empty("No load failures."));
+      const right = el("div");
+      right.appendChild(sub("Opportunities by market", "exact"));
+      const markets = M.MARKET_GROUPS.filter((g) => f.checkpointsByMarket[g.id] > 0);
+      right.appendChild(markets.length ? makeTable([{ label: "Market" }, { label: "Checkpoints", num: true }, { label: "Share", num: true }], markets.map((g) => [g.label, fmtInt(f.checkpointsByMarket[g.id]), fmtPct(M.rate(f.checkpointsByMarket[g.id], f.checkpoints))])) : empty("No country data."));
+      right.appendChild(note("The report splits opportunities by country, not outcomes - so readiness per market is not available without a new breakout."));
+      two.appendChild(left);
+      two.appendChild(right);
+      body.appendChild(two);
+      byId("interstitial-card").hidden = false;
+    }
 
-        var platforms = Object.keys(usage.byPlatform).sort(function (a, b) {
-          return usage.byPlatform[b].installations - usage.byPlatform[a].installations;
-        });
-        var rows = [row("All platforms", usage)];
-        platforms.forEach(function (p) {
-          rows.push(row(PLATFORM_LABELS[p] || p, usage.byPlatform[p]));
-        });
+    // ------------------------------------------------------------ acquisition ----
+    // The Short currently being promoted (its utm_content), highlighted in the web tables.
+    const CURRENT_SHORT_ID = "N4H7VTj59A0";
+    // "unknown" means different things per column - see the notes rendered below.
+    const SOURCE_LABELS = {
+      direct: "Direct — typed, bookmarked or referrer withheld",
+      unknown: "Not recorded — visit predates attribution",
+      other: "Other — beyond the per-day source cap",
+      youtube: "YouTube",
+    };
+    const CAMPAIGN_LABELS = { unknown: "Untagged — link carried no utm_campaign", other: "Other — beyond the per-day cap" };
+    const CONTENT_LABELS = { unknown: "Untagged — link carried no utm_content", other: "Other — beyond the per-day cap" };
+    const ANDROID_SOURCE_LABELS = {
+      "google-play": "Google Play (store listing / organic)",
+      google: "Google (ads or search)",
+      "not-set": "No referrer data",
+      qa: "QA",
+    };
+
+    /** One web attribution dimension. Rows are not summed: see the note. */
+    function attributionGroup(title, rows, labels, markCurrentShort) {
+      const group = el("div", "attr-group");
+      const keys = Object.keys(rows).sort((a, b) => rows[b].sessions - rows[a].sessions || rows[b].installations - rows[a].installations);
+      const table = makeTable(
+        [{ label: title }, { label: "Installations", num: true }, { label: "Sessions", num: true }, { label: "Started", num: true }, { label: "Completed", num: true }, { label: "Completion", num: true }],
+        keys.map((key) => {
+          const r = rows[key];
+          let label = labels[key] || key;
+          if (markCurrentShort && key === CURRENT_SHORT_ID) label = key + " — current Short";
+          return {
+            className: markCurrentShort && key === CURRENT_SHORT_ID ? "attr-current" : "",
+            cells: [label, fmtInt(r.installations), fmtInt(r.sessions), fmtInt(r.gamesStarted), fmtInt(r.gamesCompleted), r.gamesStarted > 0 ? fmtRate(M.rate(r.gamesCompleted, r.gamesStarted)) : "—"],
+          };
+        }),
+      );
+      group.appendChild(table);
+      return group;
+    }
+    function shortHeadline(byContent) {
+      const row = byContent && byContent[CURRENT_SHORT_ID];
+      if (!row) return "Current Short " + CURRENT_SHORT_ID + ": no visits recorded in this period.";
+      const played = row.gamesStarted > 0
+        ? row.gamesStarted + " games started, " + row.gamesCompleted + " completed (" + fmtRate(M.rate(row.gamesCompleted, row.gamesStarted)) + " completion)"
+        : "no games started";
+      return "Current Short " + CURRENT_SHORT_ID + ": " + fmtInt(row.sessions) + " sessions · " + fmtInt(row.installations) + " installations · " + played + ".";
+    }
+    function renderAcquisition(report) {
+      const body = byId("acquisition-body");
+      clear(body);
+      const usage = report.usage;
+      // --- Web
+      // usage.web is the website's own segments. Without it (an older server) the rows
+      // span every platform, so Android installations sit in them too - said plainly.
+      const webOnly = Boolean(usage && usage.web);
+      const attr = usage ? (webOnly ? usage.web : usage) : null;
+      body.appendChild(sub(webOnly ? "Website — where visits came from" : "Visit attribution, all platforms"));
+      if (!attr || !attr.bySource) body.appendChild(empty("Traffic sources are counted per day, so they are not available for the all-time view."));
+      else {
+        const sourceKeys = Object.keys(attr.bySource);
+        if (sourceKeys.length === 0 || (sourceKeys.length === 1 && sourceKeys[0] === "unknown")) body.appendChild(empty("No traffic sources recorded in this period — these days predate attribution."));
+        else {
+          const sourceLabels = webOnly ? SOURCE_LABELS : { ...SOURCE_LABELS, unknown: "No attribution — Android app events, or website visits before attribution" };
+          body.appendChild(el("p", "attr-headline", shortHeadline(attr.byContent)));
+          body.appendChild(attributionGroup("Source", attr.bySource, sourceLabels, false));
+          body.appendChild(attributionGroup("Campaign", attr.byCampaign, CAMPAIGN_LABELS, false));
+          body.appendChild(attributionGroup("Short / creative", attr.byContent, CONTENT_LABELS, true));
+          const notes = webOnly
+            ? [
+                "Website segments only. Installations here are browser installations (a local id), not people.",
+                "“Direct” is a real visit with no campaign tag and no external referrer; “Not recorded” is older traffic from before attribution shipped. They are never the same thing.",
+              ]
+            : [
+                "These rows span every platform: Android installations appear under their install-referrer sources (google-play, google, not-set) and under “No attribution” for app events, which carry no referrer. The website-only split arrives with the next Worker release.",
+                "Installations are local ids (a browser or an app install), not people.",
+              ];
+          if (report.startDate !== report.endDate) notes.push("Rows are not additive over a multi-day range: one installation that arrives from the Short on one day and returns directly on another is counted in both rows. A single day never overlaps.");
+          body.appendChild(note(notes.join(" ")));
+        }
+      }
+      // --- Android
+      const a = M.androidAcquisition(report.counts || {});
+      body.appendChild(sub("Android app — new installations", "exact"));
+      if (a.firstOpens === 0 && a.installAttributed === 0) body.appendChild(empty("No Android install events in this period."));
+      else {
+        const grid = el("div", "kpi-grid");
+        const kpi = (value, label, subText) => {
+          const box = el("div", "kpi");
+          box.appendChild(el("div", "kpi-value", value));
+          box.appendChild(el("div", "kpi-label", label));
+          if (subText) box.appendChild(el("div", "kpi-sub", subText));
+          grid.appendChild(box);
+        };
+        kpi(fmtInt(a.firstOpens), "First opens", "≈ new installations, not exact");
+        kpi(fmtPct(a.referrerShare), "With a Play referrer source", fmtInt(a.withReferrerSource) + " of " + fmtInt(a.firstOpens) + " first opens");
+        kpi(fmtPct(a.campaignShare), "Campaign-tagged", "first opens with a utm_campaign");
+        kpi(fmtPct(a.within24h), "Opened within 24 h of install", "diagnostic only");
+        body.appendChild(grid);
+        const two = el("div", "two-col");
+        const left = el("div");
+        left.appendChild(sub("First opens by source"));
+        left.appendChild(makeTable([{ label: "Source" }, { label: "First opens", num: true }, { label: "Share", num: true }], Object.entries(a.sources).sort((x, y) => y[1] - x[1]).map(([k, n]) => [ANDROID_SOURCE_LABELS[k] || k, fmtInt(n), fmtPct(M.rate(n, a.firstOpens))])));
+        const campaigns = Object.entries(a.campaigns).filter(([k]) => k !== "unknown");
+        if (campaigns.length) left.appendChild(makeTable([{ label: "Campaign" }, { label: "First opens", num: true }], campaigns.sort((x, y) => y[1] - x[1]).map(([k, n]) => [k, fmtInt(n)])));
+        const right = el("div");
+        right.appendChild(sub("First opens by market"));
+        const markets = M.MARKET_GROUPS.filter((g) => a.byMarket[g.id] > 0);
+        right.appendChild(makeTable([{ label: "Market" }, { label: "First opens", num: true }, { label: "Share", num: true }], markets.map((g) => [g.label, fmtInt(a.byMarket[g.id]), fmtPct(M.rate(a.byMarket[g.id], a.firstOpens))])));
+        right.appendChild(note("Top countries: " + a.topCountries.map(([k, n]) => k + " " + fmtInt(n)).join(" · ")));
+        two.appendChild(left);
+        two.appendChild(right);
+        body.appendChild(two);
+        body.appendChild(sub("Install referrer results (install_attributed)", "exact"));
+        body.appendChild(makeTable([{ label: "Referrer source" }, { label: "Installs attributed", num: true }], Object.entries(a.attributedSources).sort((x, y) => y[1] - x[1]).map(([k, n]) => [ANDROID_SOURCE_LABELS[k] || k, fmtInt(n)])));
+        body.appendChild(
+          note(
+            "A first open is the first launch observed for an installation whose installed version is the running one — an approximation of new installs, never an exact install count (clear-data can repeat it). " +
+              "install_attributed is a separate decision made from a different Play field (" + fmtInt(a.installAttributed) + " in this range), so it is never divided into first opens: there is no valid “attribution rate” between the two. " +
+              "“With a Play referrer source” is the share of first opens whose Play response carried a source at all.",
+          ),
+        );
+      }
+      byId("acquisition-card").hidden = false;
+    }
+
+    // ------------------------------------------------------------ engagement ----
+    function renderEngagement(report) {
+      const counts = report.counts || {};
+      const started = M.breakout(counts, "game_started", "byGameType");
+      const completed = M.breakout(counts, "game_completed", "byGameType");
+      const shared = M.breakout(counts, "result_shared", "byGameType");
+      const types = [...new Set([...Object.keys(started), ...Object.keys(completed), ...Object.keys(shared)])].sort((a, b) => (started[b] || 0) - (started[a] || 0));
+      const gt = byId("gametype-table");
+      clear(gt);
+      gt.appendChild(sub("By game type"));
+      if (!types.length) gt.appendChild(empty("No game activity in this period."));
+      else {
+        gt.appendChild(
+          makeTable(
+            [{ label: "Game type" }, { label: "Started", num: true }, { label: "Completed", num: true }, { label: "Shared", num: true }, { label: "Completion", num: true }, { label: "Share rate", num: true, help: "shared ÷ completed" }],
+            types.map((t) => [GAME_TYPE_LABELS[t] || t, fmtInt(started[t] || 0), fmtInt(completed[t] || 0), fmtInt(shared[t] || 0), fmtRate(M.rate(completed[t] || 0, started[t] || 0)), fmtRate(M.rate(shared[t] || 0, completed[t] || 0))]),
+          ),
+        );
+        gt.appendChild(note("Custom Challenges are aggregate counts only — no per-challenge identifiers are ever recorded for them."));
+      }
+      // Installations & sessions - real players only; internal devices on the note line.
+      const usage = report.usage;
+      const container = byId("usage-table");
+      const noteEl = byId("usage-note");
+      clear(container);
+      if (!usage) {
+        noteEl.textContent = "Installations and sessions are counted per day, so they are not available for the all-time view.";
+      } else {
+        const row = (label, s) => [label, fmtInt(s.installations), fmtInt(s.sessions), fmtRatio(s.gamesStartedPerInstallation), fmtRatio(s.gamesCompletedPerInstallation), fmtRatio(s.gamesStartedPerSession), fmtRatio(s.gamesCompletedPerSession)];
+        const platforms = Object.keys(usage.byPlatform).sort((a, b) => usage.byPlatform[b].installations - usage.byPlatform[a].installations);
+        const rows = [row("All platforms", usage), ...platforms.map((p) => row(PLATFORM_LABELS[p] || p, usage.byPlatform[p]))];
         container.appendChild(
           makeTable(
             [
               { label: "Audience: real players" },
-              { label: "Installations", num: true },
+              { label: "Installations", num: true, help: "Distinct local installation ids seen in the range - an app or browser install, not a person." },
               { label: "Sessions", num: true },
               { label: "Started / install", num: true },
               { label: "Completed / install", num: true },
               { label: "Started / session", num: true },
               { label: "Completed / session", num: true },
             ],
-            rows
-          )
+            rows,
+          ),
         );
-
-        var internal = report.usageByAudience && report.usageByAudience.internal;
-        var notes = [];
-        if (usage.installations === 0 && usage.gamesStarted > 0) {
-          notes.push("No installation ids in this period — these days were recorded before installations and sessions were counted.");
-        }
+        const internal = report.usageByAudience && report.usageByAudience.internal;
+        const notes = ["Installation ids are local and reset on clear-data or a new browser, so installations are not unique people."];
+        if (usage.installations === 0 && usage.gamesStarted > 0) notes.push("No installation ids in this period — these days were recorded before installations and sessions were counted.");
         if (internal && (internal.installations > 0 || internal.gamesStarted > 0)) {
-          notes.push(
-            "Internal test devices, excluded from every number above — installations: " +
-              fmtInt(internal.installations) +
-              " · sessions: " +
-              fmtInt(internal.sessions) +
-              " · games started: " +
-              fmtInt(internal.gamesStarted) +
-              "."
-          );
-        } else {
-          notes.push("No internal test-device activity in this period.");
-        }
+          notes.push("Internal test devices, excluded from every number above — installations: " + fmtInt(internal.installations) + " · sessions: " + fmtInt(internal.sessions) + " · games started: " + fmtInt(internal.gamesStarted) + ".");
+        } else notes.push("No internal test-device activity in this period.");
         if (usage.truncated) notes.push("A per-day id cap was reached: installations and sessions are a floor, not an exact count.");
-        note.textContent = notes.join(" ");
-        byId("usage-card").hidden = false;
+        notes.push("Games per installation/session use the merged counters (Analytics Engine on its dates); installations and sessions are the Durable Object's distinct-id sets.");
+        noteEl.textContent = notes.join(" ");
       }
+      byId("engagement-card").hidden = false;
+    }
 
-      // The Short currently being promoted, so its row can be found at a glance
-      // instead of read out of the list. This is the utm_content value in the link -
-      // see the campaign URL in the release notes.
-      var CURRENT_SHORT_ID = "N4H7VTj59A0";
+    function renderTopContent(report) {
+      const counts = report.counts || {};
+      const started = M.breakout(counts, "game_started", "byContentKey");
+      const completed = M.breakout(counts, "game_completed", "byContentKey");
+      const shared = M.breakout(counts, "result_shared", "byContentKey");
+      const top = Object.keys(started).sort((a, b) => started[b] - started[a]).slice(0, 15);
+      const container = byId("topcontent-table");
+      clear(container);
+      if (!top.length) container.appendChild(empty("No content plays in this period."));
+      else container.appendChild(makeTable([{ label: "Content" }, { label: "Started", num: true }, { label: "Completed", num: true }, { label: "Shared", num: true }], top.map((k) => [k, fmtInt(started[k] || 0), fmtInt(completed[k] || 0), fmtInt(shared[k] || 0)])));
+      byId("topcontent-card").hidden = false;
+    }
 
-      // "unknown" means two different things depending on the column, and conflating
-      // them would be the easiest way to misread this whole section:
-      //   - source: only ever legacy traffic, recorded before attribution shipped. A
-      //     live visit always resolves to at least "direct".
-      //   - campaign/content: a live, counted visit that arrived on an untagged link.
-      // "direct" is never legacy - it is a real visit with no campaign and no external
-      // referrer (typed, bookmarked, or a referrer the browser withheld).
-      var SOURCE_LABELS = {
-        direct: "Direct — typed, bookmarked or referrer withheld",
-        unknown: "Not recorded — visit predates attribution",
-        other: "Other — beyond the per-day source cap",
-        youtube: "YouTube",
+    // --------------------------------------------------------------- economy ----
+    function ordered(map, order) {
+      const keys = Object.keys(map || {});
+      if (order) keys.sort((a, b) => order.indexOf(a.split("|").pop()) - order.indexOf(b.split("|").pop()) || (a < b ? -1 : 1));
+      return keys;
+    }
+    function funnelRows(map, order) {
+      return ordered(map, order).map((k) => {
+        const r = map[k];
+        return [k, fmtInt(r.offers), fmtInt(r.offersWithAd), fmtInt(r.startsWithAd), fmtInt(r.completionsWithAd), fmtPct(r.startRate), fmtPct(r.completionRate), fmtPct(r.skipRate)];
+      });
+    }
+    const FUNNEL_HEADERS = [
+      { label: "State" },
+      { label: "Offers", num: true },
+      { label: "With ad", num: true },
+      { label: "Started", num: true, help: "Starts on offers that had an ad available." },
+      { label: "Completed", num: true },
+      { label: "Start rate", num: true, help: "starts ÷ offers with an ad available" },
+      { label: "Completion rate", num: true, help: "completions ÷ offers with an ad available" },
+      { label: "Skip rate", num: true, help: "skips ÷ all offers" },
+    ];
+    function renderEconomy(e) {
+      const body = byId("economy-body");
+      clear(body);
+      const s = M.economySummary(e);
+      // Executive summary.
+      body.appendChild(sub("Summary"));
+      const grid = el("div", "kpi-grid");
+      const kpi = (value, label, kind, subText) => {
+        const box = el("div", "kpi");
+        box.appendChild(el("div", "kpi-value", value));
+        const l = el("div", "kpi-label", label);
+        if (kind) l.appendChild(tag(kind));
+        box.appendChild(l);
+        if (subText) box.appendChild(el("div", "kpi-sub", subText));
+        grid.appendChild(box);
       };
-      var CAMPAIGN_LABELS = {
-        unknown: "Untagged — link carried no utm_campaign",
-        other: "Other — beyond the per-day cap",
+      kpi(s.earned === null ? "—" : fmtInt(s.earned), "Coins earned", "telemetry", s.telemetryDates.length ? fmtRange(s.telemetryDates) : "no telemetry");
+      kpi(fmtInt(s.spent), "Coins spent (gross)", "exact", fmtInt(s.purchases) + " purchases");
+      kpi(fmtSigned(s.net), "Net coin creation", "derived", "earned − spent");
+      kpi(s.earnSpendRatio === null ? "—" : s.earnSpendRatio.toFixed(2) + "×", "Earn ÷ spend", "derived");
+      kpi(fmtInt(s.keySpend), "Chest keys bought", "exact", fmtInt(s.keyPurchases) + " keys");
+      kpi(s.chestPayout === null ? "—" : fmtInt(s.chestPayout), "Chest payout", "telemetry");
+      kpi(fmtSigned(s.chestNet), "Chest net", "derived", s.chestNet === null ? "" : s.chestNet < 0 ? "a coin sink" : "a coin source");
+      kpi(s.dailyChest === null ? "—" : fmtInt(s.dailyChest), "Free daily chest", "telemetry");
+      body.appendChild(grid);
+      body.appendChild(
+        note(
+          "Only clients that report coins count here (app 0.54.0 onwards). Earned coins are Analytics Engine telemetry for " + (s.telemetryDates.length ? fmtRange(s.telemetryDates) : "no dates") +
+            "; spent coins are the exact ledger for the whole range. " + (s.telemetryReason ? "Telemetry unavailable: " + s.telemetryReason + "." : ""),
+        ),
+      );
+      if (s.balance.length) {
+        body.appendChild(sub("Balance at game completion — game-completion observations, not unique players", "telemetry"));
+        body.appendChild(makeTable([{ label: "Balance" }, { label: "Observations", num: true }, { label: "Share", num: true }], s.balance.map((b) => [b.bucket, fmtInt(b.observations), fmtPct(b.share)])));
+        body.appendChild(note("One row per completed game: a player who finished 40 games is counted 40 times. This is where balances sit when games end, not how many players hold each balance."));
+      }
+      // Detail tables (unchanged content).
+      const b = e.buckets || {};
+      const table = (title, rows, headers, kind) => {
+        body.appendChild(sub(title, kind));
+        body.appendChild(rows.length ? makeTable(headers, rows) : empty("No data yet."));
       };
-      var CONTENT_LABELS = {
-        unknown: "Untagged — link carried no utm_content",
-        other: "Other — beyond the per-day cap",
-      };
-
-      /**
-       * One attribution dimension as a table. Rows are NOT summed: over a multi-day
-       * range one installation can appear under two sources (arrived from the Short on
-       * Monday, came back directly on Tuesday), so a total row would overstate reach.
-       * The note under the card says so rather than showing a number that looks
-       * authoritative and is not.
-       */
-      function attributionGroup(title, rows, labels, markCurrentShort) {
-        // No separate heading: the first column header already names the dimension,
-        // exactly as the "Platform" and "Game type" tables above do.
-        var group = el("div", "attr-group");
-        var keys = Object.keys(rows).sort(function (a, b) {
-          return rows[b].sessions - rows[a].sessions || rows[b].installations - rows[a].installations;
-        });
-        var cells = keys.map(function (key) {
-          var r = rows[key];
-          var label = labels[key] || key;
-          if (markCurrentShort && key === CURRENT_SHORT_ID) label = key + " — current Short";
-          return [
-            label,
-            fmtInt(r.installations),
-            fmtInt(r.sessions),
-            fmtInt(r.gamesStarted),
-            fmtInt(r.gamesCompleted),
-            r.gamesStarted > 0 ? fmtRate(rateOf(r.gamesCompleted, r.gamesStarted)) : "—",
-          ];
-        });
-        var scroll = el("div", "table-scroll");
-        var table = makeTable(
-          [
-            { label: title },
-            { label: "Installations", num: true },
-            { label: "Sessions", num: true },
-            { label: "Started", num: true },
-            { label: "Completed", num: true },
-            { label: "Completion", num: true },
-          ],
-          cells
-        );
-        if (markCurrentShort) {
-          // Applied after the fact so the shared makeTable helper stays untouched.
-          var bodyRows = table.tBodies[0].rows;
-          keys.forEach(function (key, i) {
-            if (key === CURRENT_SHORT_ID) bodyRows[i].className = "attr-current";
-          });
-        }
-        scroll.appendChild(table);
-        group.appendChild(scroll);
-        return group;
+      table("Coin spend by sink", ordered(e.spend.bySink).map((sink) => {
+        const o = (e.spend.ordinalBySink || {})[sink] || {};
+        return [sink, fmtInt(e.spend.bySink[sink].count), fmtInt(e.spend.bySink[sink].coins), fmtInt(o.first || 0), fmtInt((o["2_3"] || 0) + (o["4_plus"] || 0)), fmtInt(o.unknown || 0)];
+      }), [{ label: "Sink" }, { label: "Purchases", num: true }, { label: "Coins", num: true }, { label: "First", num: true }, { label: "Repeat", num: true }, { label: "Unknown", num: true }], "exact");
+      const ms = e.milestones;
+      table("Progression milestones", ordered(ms.counts).map((m) => {
+        const g = (ms.byGames || {})[m] || {};
+        return [m, fmtInt(ms.counts[m])].concat((b.games || []).map((k) => fmtInt(g[k] || 0)));
+      }), [{ label: "Milestone" }, { label: "Reached", num: true, help: "Milestone events in the range - counted from events, not a count of distinct players." }].concat((b.games || []).map((k) => ({ label: "games " + k, num: true }))), "exact");
+      table("Milestones by days playing", ordered(ms.byAge).map((m) => [m].concat((b.playerAge || []).map((k) => fmtInt(ms.byAge[m][k] || 0)))), [{ label: "Milestone" }].concat((b.playerAge || []).map((k) => ({ label: k, num: true }))), "exact");
+      const t = e.telemetry;
+      if (!t) {
+        body.appendChild(note("Telemetry part unavailable: " + (e.telemetryReason || "unknown")));
+        return;
       }
-
-      /** Answers "did the Short send traffic, and did those visitors play?" in one line. */
-      function shortHeadline(byContent) {
-        var row = byContent && byContent[CURRENT_SHORT_ID];
-        if (!row) {
-          return "Current Short " + CURRENT_SHORT_ID + ": no visits recorded in this period.";
-        }
-        var played =
-          row.gamesStarted > 0
-            ? row.gamesStarted + " games started, " + row.gamesCompleted + " completed (" + fmtRate(rateOf(row.gamesCompleted, row.gamesStarted)) + " completion)"
-            : "no games started";
-        return (
-          "Current Short " +
-          CURRENT_SHORT_ID +
-          ": " +
-          fmtInt(row.sessions) +
-          " sessions · " +
-          fmtInt(row.installations) +
-          " installations · " +
-          played +
-          "."
-        );
-      }
-
-      function renderAttribution(report) {
-        var usage = report.usage;
-        var groups = byId("attr-groups");
-        var headline = byId("attr-headline");
-        var note = byId("attr-note");
-        clear(groups);
-
-        if (!usage || !usage.bySource) {
-          headline.textContent = "Traffic sources are counted per day, so they are not available for the all-time view.";
-          note.textContent = "";
-          byId("attribution-card").hidden = false;
-          return;
-        }
-
-        var sourceKeys = Object.keys(usage.bySource);
-        var onlyLegacy = sourceKeys.length === 0 || (sourceKeys.length === 1 && sourceKeys[0] === "unknown");
-        if (onlyLegacy) {
-          headline.textContent = "No traffic sources recorded in this period — these days predate attribution.";
-          note.textContent = "";
-          byId("attribution-card").hidden = false;
-          return;
-        }
-
-        headline.textContent = shortHeadline(usage.byContent);
-        groups.appendChild(attributionGroup("Source", usage.bySource, SOURCE_LABELS, false));
-        groups.appendChild(attributionGroup("Campaign", usage.byCampaign, CAMPAIGN_LABELS, false));
-        groups.appendChild(attributionGroup("Short / creative", usage.byContent, CONTENT_LABELS, true));
-
-        var notes = [
-          "Website only — the Android app carries no link or referrer, so app activity is not counted here.",
-          "“Direct” is a real visit with no campaign tag and no external referrer; “Not recorded” is older traffic from before attribution shipped. They are never the same thing.",
-        ];
-        if (report.startDate !== report.endDate) {
-          // The one genuinely misleading reading, called out where it happens.
-          notes.push(
-            "Rows are not additive over a multi-day range: one installation that arrives from the Short on one day and returns directly on another is counted in both rows, so these can sum to more than the range total above. A single day never overlaps."
-          );
-        }
-        note.textContent = notes.join(" ");
-        byId("attribution-card").hidden = false;
-      }
-
-      function renderPlatforms(report) {
-        var counts = report.counts || {};
-        var opens = (counts.app_open && counts.app_open.byPlatform) || {};
-        var started = (counts.game_started && counts.game_started.byPlatform) || {};
-        var completed = (counts.game_completed && counts.game_completed.byPlatform) || {};
-        var shared = (counts.result_shared && counts.result_shared.byPlatform) || {};
-        var platforms = {};
-        [opens, started, completed, shared].forEach(function (map) {
-          Object.keys(map).forEach(function (p) {
-            platforms[p] = true;
-          });
-        });
-        var list = Object.keys(platforms).sort(function (a, b) {
-          return (started[b] || 0) - (started[a] || 0);
-        });
-        var container = byId("platform-table");
-        clear(container);
-        if (list.length === 0) {
-          container.appendChild(el("p", "status-line", "No platform data in this period."));
-        } else {
-          var rows = list.map(function (p) {
-            var s = started[p] || 0;
-            var c = completed[p] || 0;
-            return [PLATFORM_LABELS[p] || p, fmtInt(opens[p] || 0), fmtInt(s), fmtInt(c), fmtInt(shared[p] || 0), fmtRate(rateOf(c, s))];
-          });
-          container.appendChild(
-            makeTable(
-              [
-                { label: "Platform" },
-                { label: "Opens", num: true },
-                { label: "Started", num: true },
-                { label: "Completed", num: true },
-                { label: "Shared", num: true },
-                { label: "Completion", num: true },
-              ],
-              rows
-            )
-          );
-        }
-        byId("platform-card").hidden = false;
-      }
-
-      function renderTopContent(report) {
-        var counts = report.counts || {};
-        var started = (counts.game_started && counts.game_started.byContentKey) || {};
-        var completed = (counts.game_completed && counts.game_completed.byContentKey) || {};
-        var shared = (counts.result_shared && counts.result_shared.byContentKey) || {};
-        var keys = Object.keys(started).sort(function (a, b) {
-          return started[b] - started[a];
-        });
-        var top = keys.slice(0, 15);
-        var container = byId("topcontent-table");
-        clear(container);
-        if (top.length === 0) {
-          container.appendChild(el("p", "status-line", "No content plays in this period."));
-        } else {
-          var rows = top.map(function (key) {
-            return [key, fmtInt(started[key] || 0), fmtInt(completed[key] || 0), fmtInt(shared[key] || 0)];
-          });
-          container.appendChild(
-            makeTable(
-              [
-                { label: "Content" },
-                { label: "Started", num: true },
-                { label: "Completed", num: true },
-                { label: "Shared", num: true },
-              ],
-              rows
-            )
-          );
-        }
-        byId("topcontent-card").hidden = false;
-      }
-
-      function renderAdSummary(report) {
-        var counts = report.counts || {};
-        function total(name) {
-          return (counts[name] && counts[name].total) || 0;
-        }
-        var items = [
-          { label: "Ads requested", value: total("rewarded_ad_requested") },
-          { label: "Ads shown", value: total("rewarded_ad_shown") },
-          { label: "Ads completed (reward granted)", value: total("rewarded_ad_completed") },
-          { label: "“Double it?” offers shown", value: total("reward_offer_shown") },
-          { label: "Offers completed via ad", value: total("reward_ad_completed") },
-        ];
-        var grandTotal = items.reduce(function (sum, item) {
-          return sum + item.value;
-        }, 0);
-        var body = byId("adsummary-body");
+      const rf = t.rewardFunnel;
+      table("Rewarded offers by balance", funnelRows(rf.byBalance, b.balance), FUNNEL_HEADERS, "telemetry");
+      table("Rewarded offers by multiplier | base reward", funnelRows(rf.byMultiplierRewardSize, b.rewardSize), FUNNEL_HEADERS, "telemetry");
+      table("Rewarded offers: would the ad close the gap to the next unlock?", funnelRows(rf.byAdClosesGap), FUNNEL_HEADERS, "telemetry");
+      table("Rewarded offers by games played", funnelRows(rf.byGames, b.games), FUNNEL_HEADERS, "telemetry");
+      table("Coin source mix", ordered(t.sourceMix).map((k) => [k, fmtInt(t.sourceMix[k].events), fmtInt(t.sourceMix[k].coins)]), [{ label: "Source" }, { label: "Events", num: true }, { label: "Coins", num: true }], "telemetry");
+    }
+    function economyParams() {
+      const r = current && current.report;
+      if (!r || r.period !== "range") return null;
+      return { period: "range", start: r.startDate, end: r.endDate, economy: "only" };
+    }
+    function syncEconomyButton() {
+      const btn = byId("economy-load");
+      const params = economyParams();
+      btn.disabled = !params;
+      btn.textContent = !params ? "Load economy (dated ranges only)" : currentEconomy ? "Reload economy" : "Load economy";
+    }
+    function loadEconomy(force) {
+      const params = economyParams();
+      const body = byId("economy-body");
+      if (!params) {
         clear(body);
-        if (grandTotal === 0) {
-          body.appendChild(el("p", "status-line", "No rewarded-ad activity in this period."));
-        } else {
-          var grid = el("div", "kpi-grid");
-          items.forEach(function (item) {
-            var box = el("div", "kpi");
-            box.appendChild(el("div", "kpi-value", fmtInt(item.value)));
-            box.appendChild(el("div", "kpi-label", item.label));
-            grid.appendChild(box);
-          });
-          body.appendChild(grid);
-        }
-        byId("adsummary-card").hidden = false;
+        body.appendChild(note("Pick a dated range (not Since launch) to load the economy view."));
+        return;
       }
-
-      function renderRangeLabel(tab, report) {
-        var label;
-        if (tab.id === "alltime") {
-          label = "Since analytics launch: " + report.startDate + " → " + report.endDate + " (Israel time)";
-        } else if (tab.days === 1) {
-          label = "Today: " + report.startDate + " (Israel time)";
-        } else {
-          label = "Last " + tab.days + " days: " + report.startDate + " → " + report.endDate + " (Israel time)";
-        }
-        // Where the numbers came from (worker/analyticsAeReport.ts). Gameplay telemetry read
-        // from Analytics Engine is the full stream; read from the DO it is a 10% sample since
-        // 25 Sep - so a reader must be able to tell which one they are looking at.
-        var src = report.sources;
-        if (src && src.mode === "hybrid") {
-          label += src.telemetryDoDates && src.telemetryDoDates.length
-            ? " · Gameplay telemetry: full (Analytics Engine) from " + src.telemetryAeDates[0] + ", sampled before · installs, purchases and ads: exact ledger"
-            : " · Gameplay telemetry: full (Analytics Engine) · installs, purchases and ads: exact ledger";
-        } else if (src) {
-          label += " · Gameplay telemetry: stored counts (a 10% sample since 25 Sep)";
-        }
-        byId("range-label").textContent = label;
-      }
-
-      function setStatus(text) {
-        var status = byId("status");
-        if (text) {
-          status.textContent = text;
-          status.hidden = false;
-        } else {
-          status.hidden = true;
-        }
-      }
-
-      function hideDataCards() {
-        byId("kpi-card").hidden = true;
-        byId("charts-card").hidden = true;
-        byId("gametype-card").hidden = true;
-        byId("usage-card").hidden = true;
-        byId("attribution-card").hidden = true;
-        byId("platform-card").hidden = true;
-        byId("adsummary-card").hidden = true;
-        byId("topcontent-card").hidden = true;
-        byId("economy-card").hidden = true;
-        clear(byId("economy-body"));
-      }
-
-      // --- Coin economy (opt-in: /report ... &economy=1) ---
-      function economyTable(title, rows, headers) {
-        var body = byId("economy-body");
-        body.appendChild(el("h4", "", title));
-        if (!rows.length) {
-          body.appendChild(el("p", "footnote", "No data yet."));
-          return;
-        }
-        var wrap = el("div", "table-scroll");
-        wrap.appendChild(makeTable(headers, rows));
-        body.appendChild(wrap);
-      }
-      function ordered(map, order) {
-        var keys = Object.keys(map || {});
-        if (order) keys.sort(function (a, b) { return order.indexOf(a.split("|").pop()) - order.indexOf(b.split("|").pop()) || (a < b ? -1 : 1); });
-        return keys;
-      }
-      function funnelRows(map, order) {
-        return ordered(map, order).map(function (k) {
-          var r = map[k];
-          return [k, fmtInt(r.offers), fmtInt(r.offersWithAd), fmtInt(r.startsWithAd), fmtInt(r.completionsWithAd), r.startRate == null ? "—" : fmtRate(r.startRate), r.completionRate == null ? "—" : fmtRate(r.completionRate), r.skipRate == null ? "—" : fmtRate(r.skipRate)];
-        });
-      }
-      var FUNNEL_HEADERS = [{ label: "State" }, { label: "Offers", num: true }, { label: "With ad", num: true }, { label: "Started", num: true }, { label: "Completed", num: true }, { label: "Start rate", num: true }, { label: "Completion rate", num: true }, { label: "Skip rate", num: true }];
-      function renderEconomy(e) {
-        var body = byId("economy-body");
-        clear(body);
-        var b = e.buckets || {};
-        var sinkRows = ordered(e.spend.bySink).map(function (sink) {
-          var o = (e.spend.ordinalBySink || {})[sink] || {};
-          return [sink, fmtInt(e.spend.bySink[sink].count), fmtInt(e.spend.bySink[sink].coins), fmtInt(o.first || 0), fmtInt((o["2_3"] || 0) + (o["4_plus"] || 0)), fmtInt(o.unknown || 0)];
-        });
-        economyTable("Coin spend by sink (exact)", sinkRows, [{ label: "Sink" }, { label: "Purchases", num: true }, { label: "Coins", num: true }, { label: "First", num: true }, { label: "Repeat", num: true }, { label: "Unknown", num: true }]);
-        var ms = e.milestones;
-        economyTable("Progression milestones (exact)", ordered(ms.counts).map(function (m) {
-          var g = (ms.byGames || {})[m] || {};
-          return [m, fmtInt(ms.counts[m])].concat((b.games || []).map(function (k) { return fmtInt(g[k] || 0); }));
-        }), [{ label: "Milestone" }, { label: "Players", num: true }].concat((b.games || []).map(function (k) { return { label: "games " + k, num: true }; })));
-        economyTable("Milestones by days playing (exact)", ordered(ms.byAge).map(function (m) {
-          return [m].concat((b.playerAge || []).map(function (k) { return fmtInt(ms.byAge[m][k] || 0); }));
-        }), [{ label: "Milestone" }].concat((b.playerAge || []).map(function (k) { return { label: k, num: true }; })));
-        var t = e.telemetry;
-        if (!t) {
-          body.appendChild(el("p", "footnote", "Telemetry part unavailable: " + (e.telemetryReason || "unknown")));
-          return;
-        }
-        var rf = t.rewardFunnel;
-        economyTable("Rewarded ×2/×3 offers by balance", funnelRows(rf.byBalance, b.balance), FUNNEL_HEADERS);
-        economyTable("Rewarded offers by next target | shortfall", funnelRows(rf.byTargetShortfall, b.shortfall), FUNNEL_HEADERS);
-        economyTable("Rewarded offers by multiplier | base reward", funnelRows(rf.byMultiplierRewardSize, b.rewardSize), FUNNEL_HEADERS);
-        economyTable("Rewarded offers: would the ad close the gap to the next unlock?", funnelRows(rf.byAdClosesGap), FUNNEL_HEADERS);
-        economyTable("Rewarded offers by games played", funnelRows(rf.byGames, b.games), FUNNEL_HEADERS);
-        economyTable("Balance at game completion", ordered(t.balanceAtGameCompleted, b.balance).map(function (k) { return [k, fmtInt(t.balanceAtGameCompleted[k])]; }), [{ label: "Balance" }, { label: "Games", num: true }]);
-        economyTable("Coin source mix", ordered(t.sourceMix).map(function (k) { return [k, fmtInt(t.sourceMix[k].events), fmtInt(t.sourceMix[k].coins)]; }), [{ label: "Source" }, { label: "Events", num: true }, { label: "Coins", num: true }]);
-      }
-      function loadEconomy() {
-        var tab = TABS.filter(function (x) { return x.id === activeTab; })[0];
-        var body = byId("economy-body");
-        clear(body);
-        if (!tab || tab.id === "alltime") {
-          body.appendChild(el("p", "footnote", "Pick a dated range (not All time) to load the economy view."));
-          return;
-        }
-        var params = reportParamsForTab(tab);
-        delete params.series;
-        params.economy = "1";
-        body.appendChild(el("p", "footnote", "Loading…"));
-        fetchReport(params)
-          .then(function (report) {
-            if (report.economy) renderEconomy(report.economy);
-            else { clear(body); body.appendChild(el("p", "footnote", "No economy block in the report.")); }
-          })
-          .catch(function (err) {
+      const key = keyOf(params);
+      const forReport = current.key;
+      clear(body);
+      body.appendChild(note("Loading…"));
+      byId("economy-load").disabled = true;
+      cache
+        .load(key, params, force)
+        .then((res) => {
+          if (!current || current.key !== forReport) return; // the range changed meanwhile
+          if (!res.data.economy) {
             clear(body);
-            body.appendChild(el("p", "footnote", "Could not load the economy view: " + (err && err.message ? err.message : "unknown error")));
-          });
-      }
+            body.appendChild(note("The server returned no economy block for this range."));
+            return;
+          }
+          currentEconomy = res.data.economy;
+          renderEconomy(currentEconomy);
+          renderRewarded(current.report, currentEconomy);
+          renderLoadMeta(res, "economy");
+        })
+        .catch((err) => {
+          if (err && err.unauthorized) return handleUnauthorized();
+          clear(body);
+          body.appendChild(note("Could not load the economy view: " + (err && err.message ? err.message : "unknown error")));
+        })
+        .finally(syncEconomyButton);
+    }
 
-      function loadTab(tabId) {
-        var tab = TABS.filter(function (t) {
-          return t.id === tabId;
-        })[0];
-        if (!tab) return;
-        activeTab = tabId;
-        renderTabs();
-        var seq = ++loadSeq;
+    // ------------------------------------------------------------ page state ----
+    function setStatus(text, isError) {
+      const status = byId("status");
+      status.textContent = text || "";
+      status.className = "status-line" + (isError ? " error" : "");
+      status.hidden = !text;
+    }
+    function hideDataCards() {
+      ["context-card", "kpi-card", "charts-card", "versions-card", "rewarded-card", "interstitial-card", "acquisition-card", "engagement-card", "economy-card", "topcontent-card"].forEach((id) => (byId(id).hidden = true));
+      clear(byId("economy-body"));
+    }
+    function renderLoadMeta(res, what) {
+      const t = M.israelTimeLabel(res.loadedAt);
+      byId("load-meta").textContent =
+        (what === "economy" ? "Economy " : "Report ") + (res.cached ? "from this session's cache (loaded " + t + ") — no request made" : "loaded " + t + " Israel time") + " · report requests this session: " + cache.requests;
+    }
+    function handleUnauthorized() {
+      clearToken();
+      cache.clear();
+      showLogin("Invalid or expired token. Enter it again.");
+    }
+
+    function renderAll(report) {
+      const exact = M.exactEventSet(report);
+      const ctx = renderContext(report);
+      renderKpis(report, exact);
+      renderCharts(report, ctx, exact);
+      renderVersions(report);
+      renderRewarded(report, currentEconomy);
+      renderInterstitial(report);
+      renderAcquisition(report);
+      renderEngagement(report);
+      renderTopContent(report);
+      byId("economy-card").hidden = false;
+    }
+
+    function loadTab(tabId, force) {
+      const tab = TABS.find((t) => t.id === tabId);
+      if (!tab) return;
+      activeTab = tabId;
+      renderTabs();
+      byId("custom-range").hidden = tabId !== "custom";
+      const params = paramsForTab(tab);
+      if (!params) {
+        // Custom range not chosen yet: nothing to fetch.
+        hideDataCards();
+        setStatus("Choose a range of up to " + MAX_RANGE_DAYS + " days.");
+        return;
+      }
+      const key = keyOf(params);
+      const seq = ++loadSeq;
+      const cached = !force && cache.peek(key);
+      if (!cached) {
         setStatus("Loading…");
         hideDataCards();
-        byId("range-label").textContent = "";
-        fetchReport(reportParamsForTab(tab))
-          .then(function (report) {
-            if (seq !== loadSeq) return;
-            setStatus("");
-            renderRangeLabel(tab, report);
-            renderKpis(report);
-            renderCharts(report);
-            renderGameTypes(report);
-            renderUsage(report);
-            renderAttribution(report);
-            renderPlatforms(report);
-            renderAdSummary(report);
-            renderTopContent(report);
-            byId("economy-card").hidden = false;
-          })
-          .catch(function (err) {
-            if (seq !== loadSeq) return;
-            if (err && err.unauthorized) {
-              clearToken();
-              showLogin("Invalid or expired token. Enter it again.");
-              return;
-            }
-            setStatus("Could not load the report: " + (err && err.message ? err.message : "unknown error"));
-          });
       }
-
-      function renderTabs() {
-        var nav = byId("tabs");
-        clear(nav);
-        TABS.forEach(function (tab) {
-          var btn = el("button", "", tab.label);
-          btn.type = "button";
-          btn.setAttribute("aria-selected", tab.id === activeTab ? "true" : "false");
-          btn.addEventListener("click", function () {
-            loadTab(tab.id);
-          });
-          nav.appendChild(btn);
+      cache
+        .load(key, params, force)
+        .then((res) => {
+          if (seq !== loadSeq) return;
+          setStatus("");
+          const sameRange = current && current.key === key;
+          current = { key, report: res.data };
+          if (!sameRange) {
+            // A new range: reuse its economy block only if this session already loaded it.
+            const ep = economyParams();
+            const hit = ep && cache.peek(keyOf(ep));
+            currentEconomy = hit ? hit.data.economy : null;
+            clear(byId("economy-body"));
+            if (currentEconomy) renderEconomy(currentEconomy);
+          }
+          renderAll(res.data);
+          syncEconomyButton();
+          renderLoadMeta(res, "report");
+        })
+        .catch((err) => {
+          if (seq !== loadSeq) return;
+          if (err && err.unauthorized) return handleUnauthorized();
+          setStatus("Could not load the report: " + (err && err.message ? err.message : "unknown error"), true);
         });
-      }
+    }
 
-      // --- Wiring ---
-      byId("login-form").addEventListener("submit", function (event) {
-        event.preventDefault();
-        var token = byId("token-input").value.trim();
-        if (!token) {
-          byId("login-error").textContent = "Enter a token first.";
-          return;
-        }
-        setToken(token);
-        byId("token-input").value = "";
-        byId("login-error").textContent = "";
-        showDashboard();
-        loadTab(activeTab);
+    function renderTabs() {
+      const nav = byId("tabs");
+      clear(nav);
+      TABS.forEach((tab) => {
+        const btn = el("button", "", tab.label);
+        btn.type = "button";
+        btn.setAttribute("aria-selected", tab.id === activeTab ? "true" : "false");
+        btn.addEventListener("click", () => loadTab(tab.id, false));
+        nav.appendChild(btn);
       });
+    }
 
-      byId("economy-load").addEventListener("click", loadEconomy);
-
-      byId("logout-btn").addEventListener("click", function () {
-        clearToken();
-        showLogin("");
-      });
-
-      if (getToken()) {
-        showDashboard();
-        loadTab(activeTab);
-      } else {
-        showLogin("");
+    // ---------------------------------------------------------------- wiring ----
+    byId("login-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const token = byId("token-input").value.trim();
+      if (!token) {
+        byId("login-error").textContent = "Enter a token first.";
+        return;
       }
-    })();
+      setToken(token);
+      byId("token-input").value = "";
+      byId("login-error").textContent = "";
+      showDashboard();
+      loadTab(activeTab, false);
+    });
+    byId("custom-range").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const start = byId("custom-start").value;
+      const end = byId("custom-end").value;
+      const today = M.israelDateKey(Date.now());
+      const err = byId("custom-error");
+      if (!start || !end || start > end) return void (err.textContent = "Pick a start on or before the end.");
+      if (end > today) return void (err.textContent = "The end cannot be after today.");
+      if (M.datesBetween(start, end).length > MAX_RANGE_DAYS) return void (err.textContent = "At most " + MAX_RANGE_DAYS + " days.");
+      err.textContent = "";
+      customRange = { start, end };
+      loadTab("custom", false);
+    });
+    byId("reload-btn").addEventListener("click", () => loadTab(activeTab, true));
+    byId("economy-load").addEventListener("click", () => loadEconomy(Boolean(currentEconomy)));
+    byId("logout-btn").addEventListener("click", () => {
+      clearToken();
+      cache.clear();
+      showLogin("");
+    });
+    {
+      const today = M.israelDateKey(Date.now());
+      byId("custom-end").max = today;
+      byId("custom-start").max = today;
+      byId("custom-end").value = today;
+      byId("custom-start").value = M.addDays(today, -6);
+    }
+
+    if (getToken()) {
+      showDashboard();
+      loadTab(activeTab, false);
+    } else showLogin("");
   </script>
 </body>
 </html>

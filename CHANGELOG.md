@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.55.2 - 2026-09-29
+
+Web and Worker only - nothing changes for players, and Android (0.55.0 / vc53) needs no
+release. The private analytics dashboard (`/admin/analytics`) is rebuilt on the report it
+already loaded, and it now costs less to use.
+
+- **Reading the numbers correctly:** a context banner names the range, whether today is
+  still running, and which store each day came from (exact ledger, Analytics Engine, or
+  the older sampled Durable Object days), with the analytics changes the range crosses.
+- **New views from existing data:** versions & rollout (platform x app version), a
+  rewarded funnel with explicit denominators (rates on full-data days only) and the x3 vs
+  +100 arms, an interstitial funnel, acquisition split into website traffic and Android
+  installs, a coin-economy summary, and release markers on the daily trend.
+- **Cheaper:** each range is loaded once per session (Reload refetches), and Load economy
+  asks for the economy block alone - 8 Analytics Engine queries instead of 14. A normal
+  page load is unchanged at one report request.
+- **Report fixes (read path only):** the website's visit sources are now separated from
+  Android installations, which the old "where visits came from" table mixed in.
+
 ## 0.55.1 - 2026-09-29
 
 Web only - Android is unchanged (0.55.0 / vc53 stays the Play release) and needs no

@@ -37,6 +37,7 @@ const {
   _analyticsQueueStateForTests,
   _analyticsOutboxForTests,
   _resetAnalyticsQueueForTests,
+  _setAnalyticsQueueCoordinatedForTests,
   OUTBOX_MAX_AGE_MS,
 } = await import("./analyticsQueue.ts");
 const { applyConfigHeader, getClientConfig, SAFE_DEFAULTS, _resetClientConfigForTests, CONFIG_HEADER } = await import("./analyticsClientConfig.ts");
@@ -61,6 +62,7 @@ const exact = (n: number) => ({ eventName: "app_open", params: {}, seq: n });
 test.beforeEach(() => {
   _resetAnalyticsQueueForTests();
   _resetClientConfigForTests();
+  _setAnalyticsQueueCoordinatedForTests(undefined);
 });
 test.after(() => {
   _resetAnalyticsQueueForTests();
@@ -141,7 +143,10 @@ test("a lifecycle flush sends everything at once with keepalive and forgets exac
 
 // ---------------------------------------------------------------- reliability ----
 
-test("an exact event queued when the app is killed goes out on the next launch - once", async () => {
+test("an exact event queued when the app is killed goes out on the next launch - once (Android: one page, so the next launch owns everything)", async () => {
+  // The web handles a killed page differently - it cannot tell a dead page from a live one
+  // until ORPHAN_GRACE_MS has passed; see analyticsQueueConcurrency.test.ts.
+  _setAnalyticsQueueCoordinatedForTests(false);
   capture();
   enqueueAnalyticsEvent(exact(1)); // queued, never sent...
   _resetAnalyticsQueueForTests({ keepStorage: true }); // ...app killed (memory gone, storage kept)

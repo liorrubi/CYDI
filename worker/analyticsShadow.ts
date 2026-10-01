@@ -81,6 +81,16 @@
 //   double6  offerNumber       reward_* funnel + reward_continuation rows: the offer's number in the session
 //   double10 bonusCoins        reward_* funnel rows: coins the ad adds (x3: base x 2; plus100: 100)
 //   double16 multiplier        1 = flat bonus (the "plus100" arm; see double10)
+//   --- 0.56 ad-readiness diagnostics (no new columns, schema stays 3: these slots are never
+//   used by an ad row for their original meaning, so they carry the diagnostics on rewarded_ad_*
+//   and interstitial_* rows only; always filter on blob1 first) ---
+//   double2  code + 2     numeric GMA error code of the failed load (so -1 -> 1, 0 -> 2; 0 = no code)
+//   double3  attempt      interstitial attempt number for this opportunity, 1 | 2 (0 = none)
+//   double4  latency      1-based position in AD_LATENCY_BUCKETS (lt5s .. gt45s; 0 = none)
+//   double7  source       1 preload | 2 click (rewarded_ad_loaded / rewarded_ad_unavailable)
+//   double8  stateAtTap   1-based position in REWARDED_TAP_STATES (rewarded_ad_requested / _unavailable)
+//   blob20   detail       cause:<failed|loading|not_attempted|blocked|expired> (rewarded `cause`,
+//                         interstitial `notReadyCause`)
 // coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
 // balance BUCKET is ever written - never a balance.
 // Booleans are 1/0 and absent numbers are 0, so always filter on blob1 before reading
@@ -88,6 +98,7 @@
 // time even at low volume (the probe stored 21 rows for a 200-point burst).
 
 import { canonicalEventName, normalizeCountry } from "./analyticsDO";
+import { AD_LATENCY_BUCKETS, AD_LOAD_SOURCES, REWARDED_TAP_STATES, enumPosition } from "../src/services/ads/adDiagnostics";
 import { normalizeAnalyticsPlatform, normalizeAppVersion, normalizeAppVersionCode } from "../src/services/analyticsSchema";
 import { checkedEnvelopes, parseIngest, type CheckedEnvelope, type ParsedIngest } from "./analyticsIngest";
 import { normalizeAttribution } from "../src/services/analyticsAttribution";
@@ -118,7 +129,7 @@ type ShadowPath = "/event" | "/events";
 export type ShadowDataPoint = { blobs: string[]; doubles: number[]; indexes: string[] };
 
 /** Bounded enum params, first match wins. Every one is a closed set in analyticsSchema. */
-const DETAIL_PARAMS = ["difficulty", "phase", "tutorialType", "productType", "rarity", "surface", "installAge", "newRank", "coinSink", "coinSource", "milestone"] as const;
+const DETAIL_PARAMS = ["difficulty", "phase", "tutorialType", "productType", "rarity", "surface", "installAge", "newRank", "coinSink", "coinSource", "milestone", "cause", "notReadyCause"] as const;
 
 /** The schema-2 doubles (14..20) for one accepted envelope's params: economy context (0 when absent) + the reserved sampleWeight (1). */
 export function economyDoubles(params: Record<string, unknown>): number[] {
@@ -204,15 +215,15 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
     ],
     doubles: [
       AE_SCHEMA_VERSION,
-      num(params.starRating),
-      num(params.passed),
-      num(params.isNewBest),
+      num(params.starRating ?? (typeof params.code === "number" ? params.code + 2 : undefined)),
+      num(params.passed ?? params.attempt),
+      num(params.isNewBest ?? enumPosition(AD_LATENCY_BUCKETS, params.latency)),
       // Schema 3: sessionGames / offerNumber / bonusCoins share these slots on reward rows,
       // which never carry roundCount / roundIndex / amount (see the SCHEMA block above).
       num(params.roundCount ?? params.sessionGames),
       num(params.roundIndex ?? params.offerNumber),
-      num(params.playerCount),
-      num(params.price),
+      num(params.playerCount ?? enumPosition(AD_LOAD_SOURCES, params.source)),
+      num(params.price ?? enumPosition(REWARDED_TAP_STATES, params.stateAtTap)),
       num(params.gamesBetweenAds),
       num(params.amount ?? params.bonusCoins),
       num(params.submitted),

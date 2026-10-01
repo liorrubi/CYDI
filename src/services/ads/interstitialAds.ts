@@ -4,9 +4,18 @@
 // can each hold a loaded ad and neither can wedge the other.
 //
 //   idle -> loading -> ready -> showing -> (release) -> idle
+//              |           '-> expired (a loaded ad outlived READY_TTL_MS)
+//              '-> failed (SDK failure, or the hard load expiry)
+//
+// 0.56 readiness lifecycle: one native load at a time (a new load never starts while the
+// previous one is still active), every load tagged with a generation so a stale callback -
+// abandoned at the hard expiry, or belonging to an opportunity that has since been
+// consumed/cancelled/changed session (invalidateInterstitial) - changes nothing, and a load
+// that finishes late but while its opportunity is still pending IS accepted: the ad is as
+// good as one that finished early, and nothing waits for it.
 //
 // Contracts this file exists to keep:
-//   - A load NEVER shows anything. A Loaded that arrives after we gave up on it is
+//   - A load NEVER shows anything. A Loaded that arrives for a stale generation is
 //     ignored, and a Loaded that arrives in time only makes the state "ready". The
 //     one show call site is present(), which only interstitialController.ts calls,
 //     only at a valid checkpoint.
@@ -27,6 +36,7 @@
 import { getAdUnitId, isAdFormatEnabled } from "./adConfig";
 import type { AdPlatform } from "./adTypes";
 import type { InterstitialFailureReason } from "./interstitialConfigSchema";
+import type { AdNotReadyCause } from "./adDiagnostics";
 
 // --- Adapter seam -------------------------------------------------------------------
 
@@ -52,9 +62,9 @@ export type InterstitialAdapter = {
 // --- Lifecycle output (analytics bridge / QA) ---------------------------------------
 
 export type InterstitialLifecycleEvent =
-  | { type: "load_started" }
-  | { type: "loaded"; latencyMs: number }
-  | { type: "load_failed"; reason: InterstitialFailureReason }
+  | { type: "load_started"; attempt: 1 | 2 }
+  | { type: "loaded"; latencyMs: number; attempt: 1 | 2 }
+  | { type: "load_failed"; reason: InterstitialFailureReason; attempt: 1 | 2; code?: number; latencyMs: number }
   | { type: "showed"; latencyMs: number }
   | { type: "dismissed" };
 
@@ -104,9 +114,13 @@ const browserEnv: InterstitialEnv = {
 
 /**
  * A load nobody is waiting for still needs a ceiling, or a wedged SDK would hold
- * the state at "loading" and block every later preload. No player ever waits on it.
+ * the state at "loading" and block every later preload. No player ever waits on it. Long
+ * enough that a slow-but-successful load still counts (the old 30 s cutoff threw those
+ * away); the checkpoint never waits for it either way.
  */
-const LOAD_TIMEOUT_MS = 30_000;
+const LOAD_TIMEOUT_MS = 120_000;
+/** A loaded ad is used only within this long (GMA interstitials expire after about an hour). */
+const READY_TTL_MS = 50 * 60_000;
 /**
  * How long present() waits for ANY evidence of the ad (Showed, FailedToShow, a
  * rejection, or the page going hidden) before failing safe and continuing. Short on
@@ -122,6 +136,7 @@ const DECISION_TIMEOUT_MS = 2_500;
 const RELEASE_SAFETY_TIMEOUT_MS = 120_000;
 
 let loadTimeoutMs = LOAD_TIMEOUT_MS;
+let readyTtlMs = READY_TTL_MS;
 let decisionTimeoutMs = DECISION_TIMEOUT_MS;
 let releaseSafetyTimeoutMs = RELEASE_SAFETY_TIMEOUT_MS;
 
@@ -149,13 +164,19 @@ export function registerInterstitialGates(next: Partial<InterstitialGates>): voi
 
 // --- State --------------------------------------------------------------------------
 
-export type InterstitialState = "idle" | "loading" | "ready" | "showing";
+export type InterstitialState = "idle" | "loading" | "ready" | "failed" | "expired" | "showing";
 
 let env: InterstitialEnv = browserEnv;
 let adapter: InterstitialAdapter | null = null;
 let state: InterstitialState = "idle";
-/** Increments per load; a completion from an older load (timed out, superseded) is ignored. */
+/** Increments per load; a completion from an older load (hard-expired, superseded) is ignored. */
 let loadGeneration = 0;
+/** Bumped when the opportunity a load was for stops being the current one (see invalidateInterstitial). */
+let opportunityGeneration = 0;
+/** True from the native load call until THAT call settles or is abandoned at the hard expiry. */
+let nativeLoadActive = false;
+let readyAt = 0;
+let lastFailure: { reason: InterstitialFailureReason; code?: number } | null = null;
 /** The show currently in progress, if any; receives native callbacks. */
 let activeShow: ShowSession | null = null;
 /** An ad that reached Showed and whose Dismissed has not arrived yet - so a late Dismissed is still reported once. */
@@ -186,12 +207,45 @@ export function registerInterstitialAdapter(next: InterstitialAdapter): void {
   next.setListener(handleNativeEvent);
 }
 
+/**
+ * Time-based transition, evaluated lazily whenever the state is read - a WebView frozen in
+ * the background still lands in the right state the moment anyone looks.
+ */
+function refreshLifecycle(): void {
+  if (state === "ready" && env.now() - readyAt >= readyTtlMs) state = "expired";
+}
+
 export function getInterstitialState(): InterstitialState {
+  refreshLifecycle();
   return state;
 }
 
 export function isInterstitialReady(): boolean {
+  refreshLifecycle();
   return state === "ready";
+}
+
+/**
+ * The opportunity this load/ad was for is gone (consumed, cancelled, or the analytics
+ * session changed): nothing loaded stays presentable, and a load still in flight can no
+ * longer make anything ready. The native call itself cannot be cancelled, so it keeps
+ * `nativeLoadActive` set until it settles (or the hard expiry) - which is what stops the
+ * next preload from overlapping it.
+ */
+export function invalidateInterstitial(): void {
+  opportunityGeneration++;
+  if (state === "loading" || state === "ready" || state === "expired" || state === "failed") state = "idle";
+}
+
+/** What the controller reads for a checkpoint's diagnostics and the retry decision. */
+export function getInterstitialReadiness(): {
+  state: InterstitialState;
+  nativeLoadActive: boolean;
+  lastFailure: { reason: InterstitialFailureReason; code?: number } | null;
+  loadLatencyMs: number | null;
+} {
+  refreshLifecycle();
+  return { state, nativeLoadActive, lastFailure, loadLatencyMs: lastLoadLatencyMs };
 }
 
 /** Null when an interstitial could be requested right now. */
@@ -229,33 +283,50 @@ export function classifyInterstitialLoadError(error: unknown): InterstitialFailu
 }
 
 /**
- * Start ONE load, if nothing is loading/loaded/showing and every gate is open.
- * Fire-and-forget: returns whether a load actually started, never rejects. The
- * controller decides WHEN (one attempt per upcoming opportunity); this decides
- * WHETHER it may.
+ * Start ONE load, if nothing is loading/loaded/showing, no earlier native load is still
+ * active, and every gate is open. Fire-and-forget: returns whether a load actually
+ * started, never rejects. The controller decides WHEN (at most two attempts per upcoming
+ * opportunity, on a schedule); this decides WHETHER it may - and is what makes two
+ * overlapping loads impossible.
  */
-export function preloadInterstitial(): boolean {
-  if (state !== "idle") return false;
+export function preloadInterstitial(attempt: 1 | 2 = 1): boolean {
+  refreshLifecycle();
+  if (state === "loading" || state === "ready" || state === "showing" || nativeLoadActive) return false;
   const blocked = blockReason();
   if (blocked === "not_configured") {
-    emit({ type: "load_failed", reason: "not_configured" });
+    lastFailure = { reason: "not_configured" };
+    state = "failed";
+    emit({ type: "load_failed", reason: "not_configured", attempt, latencyMs: 0 });
     return false;
   }
   if (blocked !== null) return false;
 
   const generation = ++loadGeneration;
+  const opportunity = opportunityGeneration;
   const startedAt = env.now();
   state = "loading";
-  emit({ type: "load_started" });
+  nativeLoadActive = true;
+  lastFailure = null;
+  emit({ type: "load_started", attempt });
 
   let settled = false;
-  const timer = env.setTimeout(() => {
-    if (settled || generation !== loadGeneration) return;
+  const finish = (): void => {
     settled = true;
-    state = "idle";
-    // Bumping the generation is what makes a Loaded that arrives after this a no-op.
+    env.clearTimeout(timer);
+  };
+  // The hard expiry: the load is abandoned for good. Bumping the generation is what makes
+  // a Loaded that arrives after this a no-op.
+  const timer = env.setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    nativeLoadActive = false;
+    const current = generation === loadGeneration && opportunity === opportunityGeneration && state === "loading";
     loadGeneration++;
-    emit({ type: "load_failed", reason: "timeout" });
+    if (current) {
+      state = "failed";
+      lastFailure = { reason: "timeout" };
+      emit({ type: "load_failed", reason: "timeout", attempt, latencyMs: env.now() - startedAt });
+    }
   }, loadTimeoutMs);
 
   let pending: Promise<void>;
@@ -267,24 +338,32 @@ export function preloadInterstitial(): boolean {
   pending.then(
     () => {
       if (settled || generation !== loadGeneration) return;
-      settled = true;
-      env.clearTimeout(timer);
-      // The emergency switch may have flipped off while loading: keep nothing
-      // presentable around (the SDK may hold it, but state never says "ready").
+      finish();
+      nativeLoadActive = false;
+      // A late success is fine while its opportunity is still pending; one for an
+      // opportunity that has since ended is dropped (the SDK may hold the ad, but our
+      // state never says "ready" for it).
+      if (opportunity !== opportunityGeneration) return;
+      // The emergency switch may have flipped off while loading: keep nothing presentable.
       if (!gates.interstitialEnabled()) {
         state = "idle";
         return;
       }
       state = "ready";
-      lastLoadLatencyMs = env.now() - startedAt;
-      emit({ type: "loaded", latencyMs: lastLoadLatencyMs });
+      readyAt = env.now();
+      lastLoadLatencyMs = readyAt - startedAt;
+      emit({ type: "loaded", latencyMs: lastLoadLatencyMs, attempt });
     },
     (err) => {
       if (settled || generation !== loadGeneration) return;
-      settled = true;
-      env.clearTimeout(timer);
-      state = "idle";
-      emit({ type: "load_failed", reason: classifyInterstitialLoadError(err) });
+      finish();
+      nativeLoadActive = false;
+      if (opportunity !== opportunityGeneration) return;
+      const reason = classifyInterstitialLoadError(err);
+      const code = (err as InterstitialLoadError | null)?.code;
+      state = "failed";
+      lastFailure = { reason, ...(typeof code === "number" ? { code } : {}) };
+      emit({ type: "load_failed", reason, attempt, ...(typeof code === "number" ? { code } : {}), latencyMs: env.now() - startedAt });
     },
   );
   return true;
@@ -293,7 +372,7 @@ export function preloadInterstitial(): boolean {
 // --- Show ---------------------------------------------------------------------------
 
 export type PresentOutcome =
-  | { outcome: "not_ready" }
+  | { outcome: "not_ready"; cause: AdNotReadyCause }
   | { outcome: "shown" }
   | { outcome: "show_failed"; reason: InterstitialFailureReason };
 
@@ -329,6 +408,21 @@ function handleNativeEvent(event: InterstitialNativeEvent): void {
   activeShow?.handle(event);
 }
 
+/** Why nothing can be presented right now - for the checkpoint's diagnostics. */
+function notReadyCause(): AdNotReadyCause {
+  if (blockReason() !== null || adapter === null) return "blocked";
+  switch (state) {
+    case "loading":
+      return "loading";
+    case "failed":
+      return "failed";
+    case "expired":
+      return "expired";
+    default:
+      return "not_attempted";
+  }
+}
+
 /**
  * Present the loaded ad at a checkpoint. When nothing is ready (or a gate - including
  * the live emergency switch - is closed), `onOutcome` fires synchronously with
@@ -337,8 +431,9 @@ function handleNativeEvent(event: InterstitialNativeEvent): void {
  * rejects.
  */
 export function presentInterstitial(callbacks: PresentCallbacks): Promise<InterstitialRelease> | null {
+  refreshLifecycle();
   if (state !== "ready" || blockReason() !== null || adapter === null) {
-    callbacks.onOutcome({ outcome: "not_ready" });
+    callbacks.onOutcome({ outcome: "not_ready", cause: notReadyCause() });
     return null;
   }
 
@@ -483,6 +578,10 @@ export function _resetInterstitialAdsForTests(testEnv?: InterstitialEnv): void {
   adapter = null;
   state = "idle";
   loadGeneration = 0;
+  opportunityGeneration = 0;
+  nativeLoadActive = false;
+  readyAt = 0;
+  lastFailure = null;
   activeShow = null;
   awaitingDismissed = false;
   lastShowedLatencyMs = null;
@@ -490,12 +589,14 @@ export function _resetInterstitialAdsForTests(testEnv?: InterstitialEnv): void {
   lifecycleListeners.clear();
   gates = CLOSED_GATES;
   loadTimeoutMs = LOAD_TIMEOUT_MS;
+  readyTtlMs = READY_TTL_MS;
   decisionTimeoutMs = DECISION_TIMEOUT_MS;
   releaseSafetyTimeoutMs = RELEASE_SAFETY_TIMEOUT_MS;
 }
 
-export function _setInterstitialTimeoutsForTests(timeouts: { load?: number; decision?: number; safety?: number }): void {
+export function _setInterstitialTimeoutsForTests(timeouts: { load?: number; ttl?: number; decision?: number; safety?: number }): void {
   if (timeouts.load !== undefined) loadTimeoutMs = timeouts.load;
+  if (timeouts.ttl !== undefined) readyTtlMs = timeouts.ttl;
   if (timeouts.decision !== undefined) decisionTimeoutMs = timeouts.decision;
   if (timeouts.safety !== undefined) releaseSafetyTimeoutMs = timeouts.safety;
 }

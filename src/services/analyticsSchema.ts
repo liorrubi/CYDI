@@ -22,6 +22,18 @@ import { CATEGORIES, type CategoryId } from "../engine/shapeLibrary";
 import { isRewardedAdPlacement, type RewardedAdPlacement } from "./ads/adPlacements";
 import { isAdFailureReason, type AdFailureReason } from "./ads/adTypes";
 import {
+  isAdAttempt,
+  isAdErrorCode,
+  isAdLatencyBucket,
+  isAdLoadSource,
+  isAdNotReadyCause,
+  isRewardedTapState,
+  type AdLatencyBucket,
+  type AdLoadSource,
+  type AdNotReadyCause,
+  type RewardedTapState,
+} from "./ads/adDiagnostics";
+import {
   isInterstitialArm,
   isInterstitialCadence,
   isInterstitialFailureReason,
@@ -307,13 +319,15 @@ export type EventParamsMap = {
   // Rewarded ad lifecycle (emitted only by src/services/ads/adAnalytics.ts).
   // `placement` and `reason` are closed unions owned by the ads module - never
   // free text, so no SDK error detail or sensitive info can reach analytics.
-  rewarded_ad_requested: { placement: RewardedAdPlacement };
-  rewarded_ad_loaded: { placement: RewardedAdPlacement };
+  // 0.56: the optional fields are bounded diagnostics (ads/adDiagnostics.ts), carried on the
+  // events that already existed - never a new event. All absent from an older client.
+  rewarded_ad_requested: { placement: RewardedAdPlacement; stateAtTap?: RewardedTapState };
+  rewarded_ad_loaded: { placement: RewardedAdPlacement; source?: AdLoadSource; latency?: AdLatencyBucket };
   rewarded_ad_shown: { placement: RewardedAdPlacement };
   rewarded_ad_completed: { placement: RewardedAdPlacement };
   rewarded_ad_dismissed: { placement: RewardedAdPlacement };
-  rewarded_ad_unavailable: { placement: RewardedAdPlacement; reason: AdFailureReason };
-  rewarded_ad_failed: { placement: RewardedAdPlacement; reason: AdFailureReason };
+  rewarded_ad_unavailable: RewardedAdFailureParams;
+  rewarded_ad_failed: RewardedAdFailureParams;
   // Interstitial A/B experiment (emitted only by src/services/ads/interstitialController.ts).
   // Android-only, Shape Challenge only. Every value is a closed set from
   // ads/interstitialConfigSchema.ts; no opportunity id, no SDK message.
@@ -324,7 +338,7 @@ export type EventParamsMap = {
   /** Rewarded experiment: the next Classic game_started in the same session after an offer (absence = abandonment after the offer). */
   reward_continuation: { arm: RewardExperimentArm; offerNumber: number; outcome: RewardOfferOutcome };
   /** A background interstitial load that produced no ad, with the bounded reason (from the GMA numeric code). */
-  interstitial_load_failed: { reason: InterstitialFailureReason };
+  interstitial_load_failed: { reason: InterstitialFailureReason; attempt?: 1 | 2; code?: number; latency?: AdLatencyBucket };
   /** The SDK's own Dismissed callback - never inferred from the page becoming visible. */
   interstitial_dismissed: Record<string, never>;
   // Reward-offer UX funnel (emitted only by src/components/DoubleCoinsOffer.tsx).
@@ -403,10 +417,27 @@ export type EventParamsMap = {
  * Control records only `control` (or `suppressed`); treatment never records `control`.
  * show_failed is the one outcome that carries a reason.
  */
+/**
+ * 0.56 readiness diagnostics on a treatment checkpoint (all optional, all bounded): the attempt
+ * count for this opportunity (1|2, absent = none was made), the numeric GMA code of the last
+ * failed load, why nothing was ready (not_ready only), and the loaded ad's load latency.
+ */
+export type InterstitialCheckpointDiag = { attempt?: 1 | 2; code?: number; notReadyCause?: AdNotReadyCause; latency?: AdLatencyBucket };
+
+export type RewardedAdFailureParams = {
+  placement: RewardedAdPlacement;
+  reason: AdFailureReason;
+  source?: AdLoadSource;
+  code?: number;
+  stateAtTap?: RewardedTapState;
+  cause?: AdNotReadyCause;
+  latency?: AdLatencyBucket;
+};
+
 export type InterstitialCheckpointParams =
   | { arm: "control"; outcome: "control" | "suppressed"; gamesBetweenAds: InterstitialCadence }
-  | { arm: "treatment"; outcome: "not_ready" | "shown" | "suppressed"; gamesBetweenAds: InterstitialCadence }
-  | { arm: "treatment"; outcome: "show_failed"; gamesBetweenAds: InterstitialCadence; reason: InterstitialFailureReason };
+  | ({ arm: "treatment"; outcome: "not_ready" | "shown" | "suppressed"; gamesBetweenAds: InterstitialCadence } & InterstitialCheckpointDiag)
+  | ({ arm: "treatment"; outcome: "show_failed"; gamesBetweenAds: InterstitialCadence; reason: InterstitialFailureReason } & InterstitialCheckpointDiag);
 
 export type AnalyticsEventName = keyof EventParamsMap;
 
@@ -678,8 +709,8 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     if (!isSafeString(contentKey) || !isSafeString(substituteKey) || !isBoolean(hadCache)) return { valid: false };
     return { valid: true, params: { contentKey, substituteKey, hadCache } };
   },
-  rewarded_ad_requested: (p) => validateAdEvent(p),
-  rewarded_ad_loaded: (p) => validateAdEvent(p),
+  rewarded_ad_requested: (p) => validateRewardedRequested(p),
+  rewarded_ad_loaded: (p) => validateRewardedLoaded(p),
   rewarded_ad_shown: (p) => validateAdEvent(p),
   rewarded_ad_completed: (p) => validateAdEvent(p),
   rewarded_ad_dismissed: (p) => validateAdEvent(p),
@@ -700,9 +731,18 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     return { valid: true, params: { arm, offerNumber, outcome } };
   },
   interstitial_load_failed: (p) => {
-    if (!isRecord(p) || !hasExactKeys(p, ["reason"])) return { valid: false };
+    if (!isRecord(p) || !hasKeysWithin(p, ["reason"], ["attempt", "code", "latency"])) return { valid: false };
     if (!isInterstitialFailureReason(p.reason)) return { valid: false };
-    return { valid: true, params: { reason: p.reason } };
+    if (!optionalField(p, "attempt", isAdAttempt) || !optionalField(p, "code", isAdErrorCode) || !optionalField(p, "latency", isAdLatencyBucket)) return { valid: false };
+    return {
+      valid: true,
+      params: {
+        reason: p.reason,
+        ...("attempt" in p ? { attempt: p.attempt as 1 | 2 } : {}),
+        ...("code" in p ? { code: p.code as number } : {}),
+        ...("latency" in p ? { latency: p.latency as AdLatencyBucket } : {}),
+      },
+    };
   },
   interstitial_dismissed: (p) => validateNoParams(p),
   reward_offer_shown: (p) => validateRewardOfferEvent(p),
@@ -789,6 +829,17 @@ function validateNoParams<E extends AnalyticsEventName>(p: unknown): ValidationR
   return { valid: true, params: {} as EventParamsMap[E] };
 }
 
+/** Every key of `p` is in `required` or `optional`, and every `required` key is present. */
+function hasKeysWithin(p: Record<string, unknown>, required: readonly string[], optional: readonly string[]): boolean {
+  const keys = Object.keys(p);
+  return required.every((k) => keys.includes(k)) && keys.every((k) => required.includes(k) || optional.includes(k));
+}
+
+/** An optional bounded field: absent is fine, present must satisfy `ok`. */
+function optionalField(p: Record<string, unknown>, key: string, ok: (v: unknown) => boolean): boolean {
+  return !(key in p) || ok(p[key]);
+}
+
 function validateAdEvent<
   E extends
     | "rewarded_ad_requested"
@@ -816,12 +867,48 @@ function validateAdEvent<
   return { valid: true, params: { placement: p.placement } as EventParamsMap[E] };
 }
 
+const REWARDED_DIAG_OPTIONAL_KEYS = ["source", "code", "stateAtTap", "cause", "latency"] as const;
+
+function validateRewardedRequested(p: unknown): ValidationResult<"rewarded_ad_requested"> {
+  if (!isRecord(p) || !hasKeysWithin(p, ["placement"], ["stateAtTap"])) return { valid: false };
+  if (!isRewardedAdPlacement(p.placement) || !optionalField(p, "stateAtTap", isRewardedTapState)) return { valid: false };
+  return { valid: true, params: { placement: p.placement, ...("stateAtTap" in p ? { stateAtTap: p.stateAtTap as RewardedTapState } : {}) } };
+}
+
+function validateRewardedLoaded(p: unknown): ValidationResult<"rewarded_ad_loaded"> {
+  if (!isRecord(p) || !hasKeysWithin(p, ["placement"], ["source", "latency"])) return { valid: false };
+  if (!isRewardedAdPlacement(p.placement) || !optionalField(p, "source", isAdLoadSource) || !optionalField(p, "latency", isAdLatencyBucket)) return { valid: false };
+  return {
+    valid: true,
+    params: {
+      placement: p.placement,
+      ...("source" in p ? { source: p.source as AdLoadSource } : {}),
+      ...("latency" in p ? { latency: p.latency as AdLatencyBucket } : {}),
+    },
+  };
+}
+
 function validateAdFailureEvent<E extends "rewarded_ad_unavailable" | "rewarded_ad_failed">(
   p: unknown,
 ): ValidationResult<E> {
-  if (!isRecord(p) || !hasExactKeys(p, ["placement", "reason"])) return { valid: false };
+  if (!isRecord(p) || !hasKeysWithin(p, ["placement", "reason"], REWARDED_DIAG_OPTIONAL_KEYS)) return { valid: false };
   if (!isRewardedAdPlacement(p.placement) || !isAdFailureReason(p.reason)) return { valid: false };
-  return { valid: true, params: { placement: p.placement, reason: p.reason } as EventParamsMap[E] };
+  if (
+    !optionalField(p, "source", isAdLoadSource) ||
+    !optionalField(p, "code", isAdErrorCode) ||
+    !optionalField(p, "stateAtTap", isRewardedTapState) ||
+    !optionalField(p, "cause", isAdNotReadyCause) ||
+    !optionalField(p, "latency", isAdLatencyBucket)
+  ) {
+    return { valid: false };
+  }
+  const params: RewardedAdFailureParams = { placement: p.placement, reason: p.reason };
+  if ("source" in p) params.source = p.source as AdLoadSource;
+  if ("code" in p) params.code = p.code as number;
+  if ("stateAtTap" in p) params.stateAtTap = p.stateAtTap as RewardedTapState;
+  if ("cause" in p) params.cause = p.cause as AdNotReadyCause;
+  if ("latency" in p) params.latency = p.latency as AdLatencyBucket;
+  return { valid: true, params: params as EventParamsMap[E] };
 }
 
 /** Which outcomes each arm can produce - an impossible pair is a bug, and is rejected rather than counted. */
@@ -830,18 +917,38 @@ function isArmOutcomePair(arm: InterstitialArm, outcome: InterstitialOutcome): b
   return arm === "control" ? outcome === "control" : outcome !== "control";
 }
 
+const CHECKPOINT_DIAG_KEYS = ["attempt", "code", "notReadyCause", "latency"] as const;
+
 function validateInterstitialCheckpoint(p: unknown): ValidationResult<"interstitial_checkpoint"> {
   if (!isRecord(p)) return { valid: false };
   const { arm, outcome, gamesBetweenAds } = p;
   if (!isInterstitialArm(arm) || !isInterstitialOutcome(outcome) || !isInterstitialCadence(gamesBetweenAds)) return { valid: false };
   if (!isArmOutcomePair(arm, outcome)) return { valid: false };
-  if (outcome === "show_failed") {
-    if (!hasExactKeys(p, ["arm", "outcome", "gamesBetweenAds", "reason"])) return { valid: false };
-    if (!isInterstitialFailureReason(p.reason)) return { valid: false };
-    return { valid: true, params: { arm: "treatment", outcome, gamesBetweenAds, reason: p.reason } };
+  const base = ["arm", "outcome", "gamesBetweenAds"];
+  const failed = outcome === "show_failed";
+  // Diagnostics belong to the treatment arm only (a control opportunity loads and shows nothing).
+  const optional: readonly string[] = arm === "treatment" ? CHECKPOINT_DIAG_KEYS : [];
+  if (!hasKeysWithin(p, failed ? [...base, "reason"] : base, optional)) return { valid: false };
+  if (
+    !optionalField(p, "attempt", isAdAttempt) ||
+    !optionalField(p, "code", isAdErrorCode) ||
+    !optionalField(p, "notReadyCause", isAdNotReadyCause) ||
+    !optionalField(p, "latency", isAdLatencyBucket)
+  ) {
+    return { valid: false };
   }
-  if (!hasExactKeys(p, ["arm", "outcome", "gamesBetweenAds"])) return { valid: false };
-  return { valid: true, params: { arm, outcome, gamesBetweenAds } as InterstitialCheckpointParams };
+  // A not-ready cause explains exactly the not_ready outcome.
+  if ("notReadyCause" in p && outcome !== "not_ready") return { valid: false };
+  const diag: InterstitialCheckpointDiag = {};
+  if ("attempt" in p) diag.attempt = p.attempt as 1 | 2;
+  if ("code" in p) diag.code = p.code as number;
+  if ("notReadyCause" in p) diag.notReadyCause = p.notReadyCause as AdNotReadyCause;
+  if ("latency" in p) diag.latency = p.latency as AdLatencyBucket;
+  if (failed) {
+    if (!isInterstitialFailureReason(p.reason)) return { valid: false };
+    return { valid: true, params: { arm: "treatment", outcome, gamesBetweenAds, reason: p.reason, ...diag } };
+  }
+  return { valid: true, params: { arm, outcome, gamesBetweenAds, ...diag } as InterstitialCheckpointParams };
 }
 
 /** shape_completed and its SEO-practice twin: one contract, so the two can never drift apart. */

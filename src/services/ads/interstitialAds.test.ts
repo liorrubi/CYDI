@@ -10,7 +10,9 @@ import {
   _resetInterstitialAdsForTests,
   _setInterstitialTimeoutsForTests,
   classifyInterstitialLoadError,
+  getInterstitialReadiness,
   getInterstitialState,
+  invalidateInterstitial,
   preloadInterstitial,
   presentInterstitial,
   registerInterstitialAdapter,
@@ -147,13 +149,16 @@ test("idle -> loading -> ready; a second preload while loading or ready starts n
   assert.equal(ad.calls.show, 0, "a load never shows anything");
 });
 
-test("a failed load returns to idle and reports a bounded reason from the numeric code", async () => {
+test("a failed load moves to failed and reports a bounded reason, attempt and the numeric code", async () => {
   const ad = fakeAdapter();
-  preloadInterstitial();
+  preloadInterstitial(2);
+  clock.advance(7000);
   ad.rejectLoad(3);
   await flush();
-  assert.equal(getInterstitialState(), "idle");
-  assert.deepEqual(events.at(-1), { type: "load_failed", reason: "no_fill" });
+  assert.equal(getInterstitialState(), "failed");
+  assert.deepEqual(events.at(-1), { type: "load_failed", reason: "no_fill", attempt: 2, code: 3, latencyMs: 7000 });
+  assert.equal(getInterstitialReadiness().lastFailure?.code, 3);
+  assert.equal(preloadInterstitial(2), true, "a failed load may be retried (the controller bounds the attempts)");
 });
 
 test("numeric GMA error codes map onto the bounded vocabulary; no code means sdk_error", () => {
@@ -168,16 +173,16 @@ test("numeric GMA error codes map onto the bounded vocabulary; no code means sdk
   assert.equal(classifyInterstitialLoadError(undefined), "sdk_error");
 });
 
-test("a load that times out is reported once, and its late Loaded never makes anything ready or shown", async () => {
+test("a load past the hard expiry is reported once, and its later Loaded never makes anything ready or shown", async () => {
   _setInterstitialTimeoutsForTests({ load: 1000 });
   const ad = fakeAdapter();
   preloadInterstitial();
   clock.advance(1000);
-  assert.equal(getInterstitialState(), "idle");
-  assert.deepEqual(events.at(-1), { type: "load_failed", reason: "timeout" });
+  assert.equal(getInterstitialState(), "failed");
+  assert.deepEqual(events.at(-1), { type: "load_failed", reason: "timeout", attempt: 1, latencyMs: 1000 });
   ad.resolveLoad();
   await flush();
-  assert.equal(getInterstitialState(), "idle", "late Loaded ignored");
+  assert.equal(getInterstitialState(), "failed", "Loaded after the hard expiry ignored");
   assert.equal(ad.calls.show, 0, "late Loaded never auto-shows");
   assert.equal(events.filter((e) => e.type === "load_failed").length, 1);
 });
@@ -197,7 +202,7 @@ test("not_ready is decided synchronously and returns null - nothing to wait for"
   fakeAdapter();
   const { outcomes, release } = present();
   assert.equal(release, null);
-  assert.deepEqual(outcomes, [{ outcome: "not_ready" }]);
+  assert.deepEqual(outcomes, [{ outcome: "not_ready", cause: "not_attempted" }]);
 });
 
 test("not_ready while a load is still in flight does not wait for it either", () => {
@@ -205,7 +210,7 @@ test("not_ready while a load is still in flight does not wait for it either", ()
   preloadInterstitial();
   const { outcomes, release } = present();
   assert.equal(release, null);
-  assert.deepEqual(outcomes, [{ outcome: "not_ready" }]);
+  assert.deepEqual(outcomes, [{ outcome: "not_ready", cause: "loading" }]);
   assert.equal(getInterstitialState(), "loading", "the load itself is left alone");
 });
 
@@ -384,7 +389,7 @@ test("the emergency switch flipping off means a cached ad is never presented", a
   registerInterstitialGates({ interstitialEnabled: () => false });
   const p = present();
   assert.equal(p.release, null);
-  assert.deepEqual(p.outcomes, [{ outcome: "not_ready" }]);
+  assert.deepEqual(p.outcomes, [{ outcome: "not_ready", cause: "blocked" }]);
   assert.equal(ad.calls.show, 0);
 });
 
@@ -397,4 +402,82 @@ test("a load that completes after the switch went off never becomes ready", asyn
   ad.resolveLoad();
   await flush();
   assert.equal(getInterstitialState(), "idle");
+});
+
+// --- 0.56 readiness lifecycle ------------------------------------------------------------
+
+test("a late success inside the hard expiry is accepted while its opportunity is still pending", async () => {
+  const ad = fakeAdapter();
+  preloadInterstitial();
+  clock.advance(45_000); // far past the old 30 s cutoff, well inside the hard expiry
+  assert.equal(getInterstitialState(), "loading");
+  ad.resolveLoad();
+  await flush();
+  assert.equal(getInterstitialState(), "ready");
+  assert.deepEqual(events.at(-1), { type: "loaded", latencyMs: 45_000, attempt: 1 });
+});
+
+test("a success for an opportunity that has ended (invalidated) is dropped - nothing ready, nothing shown", async () => {
+  const ad = fakeAdapter();
+  preloadInterstitial();
+  invalidateInterstitial(); // consumed / cancelled / session change
+  ad.resolveLoad();
+  await flush();
+  assert.equal(getInterstitialState(), "idle");
+  assert.equal(events.some((e) => e.type === "loaded"), false);
+  assert.equal(present().outcomes[0].outcome, "not_ready");
+  assert.equal(ad.calls.show, 0);
+});
+
+test("an invalidated load that is still active is never joined by a second native load", async () => {
+  const ad = fakeAdapter();
+  preloadInterstitial();
+  invalidateInterstitial();
+  assert.equal(getInterstitialReadiness().nativeLoadActive, true);
+  assert.equal(preloadInterstitial(), false, "no overlap while the previous native call is unsettled");
+  assert.equal(ad.calls.load, 1);
+  ad.resolveLoad();
+  await flush();
+  assert.equal(getInterstitialReadiness().nativeLoadActive, false);
+  assert.equal(preloadInterstitial(), true, "free again once it settled");
+});
+
+test("invalidating a loaded ad makes it unpresentable", async () => {
+  const ad = await readyAd();
+  invalidateInterstitial();
+  const p = present();
+  assert.equal(p.release, null);
+  assert.deepEqual(p.outcomes, [{ outcome: "not_ready", cause: "not_attempted" }]);
+  assert.equal(ad.calls.show, 0);
+});
+
+test("a loaded ad expires after its TTL: not presentable, cause expired, and a refresh may start", async () => {
+  _setInterstitialTimeoutsForTests({ ttl: 5000 });
+  const ad = await readyAd();
+  clock.advance(5000);
+  assert.equal(getInterstitialState(), "expired");
+  const p = present();
+  assert.equal(p.release, null);
+  assert.deepEqual(p.outcomes, [{ outcome: "not_ready", cause: "expired" }]);
+  assert.equal(ad.calls.show, 0);
+  assert.equal(preloadInterstitial(2), true);
+});
+
+test("not_ready after a failed load names the cause failed", async () => {
+  const ad = fakeAdapter();
+  preloadInterstitial();
+  ad.rejectLoad(3);
+  await flush();
+  assert.deepEqual(present().outcomes, [{ outcome: "not_ready", cause: "failed" }]);
+});
+
+test("a stale rejection (after the hard expiry, or after invalidation) changes nothing", async () => {
+  _setInterstitialTimeoutsForTests({ load: 1000 });
+  const ad = fakeAdapter();
+  preloadInterstitial();
+  clock.advance(1000);
+  const failedEvents = events.filter((e) => e.type === "load_failed").length;
+  ad.rejectLoad(0);
+  await flush();
+  assert.equal(events.filter((e) => e.type === "load_failed").length, failedEvents, "no second report");
 });

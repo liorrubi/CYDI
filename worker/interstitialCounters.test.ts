@@ -48,7 +48,21 @@ test("continuation, load_failed and dismissed validators are closed", () => {
   assert.equal(v("interstitial_continuation", { arm: "control", outcome: "not_ready", gamesBetweenAds: 7 }).valid, false);
   for (const reason of INTERSTITIAL_FAILURE_REASONS) assert.equal(v("interstitial_load_failed", { reason }).valid, true, reason);
   assert.equal(v("interstitial_load_failed", { reason: "consent_blocked" }).valid, false);
-  assert.equal(v("interstitial_load_failed", { reason: "no_fill", code: 3 }).valid, false);
+  // 0.56 diagnostics: bounded optional fields only.
+  assert.equal(v("interstitial_load_failed", { reason: "no_fill", code: 3, attempt: 2, latency: "5to10s" }).valid, true);
+  assert.equal(v("interstitial_load_failed", { reason: "no_fill", code: 3.5 }).valid, false);
+  assert.equal(v("interstitial_load_failed", { reason: "no_fill", code: 100 }).valid, false);
+  assert.equal(v("interstitial_load_failed", { reason: "no_fill", attempt: 3 }).valid, false, "two attempts at most");
+  assert.equal(v("interstitial_load_failed", { reason: "no_fill", latency: "slow" }).valid, false);
+  assert.equal(v("interstitial_load_failed", { reason: "no_fill", message: "No fill." }).valid, false, "no SDK text");
+  const cp = (p: unknown) => v("interstitial_checkpoint", p).valid;
+  const T = { arm: "treatment", gamesBetweenAds: 7 };
+  assert.equal(cp({ ...T, outcome: "not_ready", attempt: 2, code: 3, notReadyCause: "failed" }), true);
+  assert.equal(cp({ ...T, outcome: "not_ready", notReadyCause: "loading" }), true);
+  assert.equal(cp({ ...T, outcome: "shown", attempt: 1, latency: "lt5s" }), true);
+  assert.equal(cp({ ...T, outcome: "shown", notReadyCause: "failed" }), false, "a cause explains not_ready only");
+  assert.equal(cp({ ...T, outcome: "not_ready", notReadyCause: "nope" }), false);
+  assert.equal(cp({ arm: "control", outcome: "control", gamesBetweenAds: 7, attempt: 1 }), false, "control carries no diagnostics");
   assert.equal(v("interstitial_dismissed", {}).valid, true);
   assert.equal(v("interstitial_dismissed", { latencyMs: 5 }).valid, false);
 });

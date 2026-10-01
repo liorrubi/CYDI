@@ -11,6 +11,7 @@
 
 import {
   INTERSTITIAL_MAX_ROLLOUT_PERCENT,
+  INTERSTITIAL_MAX_ROLLOUT_PERCENT_V2,
   isInterstitialArm,
   isInterstitialCadence,
   isInterstitialOutcome,
@@ -47,18 +48,44 @@ export function assignmentBucket(installationId: string): number {
  * same arm, and the two arms are always the same size. Everything else is
  * "unassigned" and takes no part at all.
  *
+ * Above 50 (0.56+, the full 0-100 range) the holdback shrinks instead of growing: treatment
+ * is [0, p) and control the remainder [p, 100%), so at 100 everyone is in treatment and no
+ * control remains. It continues the p = 50 split exactly (treatment [0, 50), control
+ * [50, 100)); installations in [50, p) move from control to treatment as p rises, which is
+ * the point of rolling the experiment out. 50 or below behaves exactly as before.
+ *
  * A null id (no stable persisted installationId) is always unassigned: an id that
  * changes on every launch would move the same person between arms.
  */
 export function assignArm(installationId: string | null, rolloutPercent: number): InterstitialAssignment {
   if (installationId === null) return "unassigned";
-  const percent = Math.max(0, Math.min(INTERSTITIAL_MAX_ROLLOUT_PERCENT, Math.floor(rolloutPercent)));
+  const percent = Math.max(0, Math.min(INTERSTITIAL_MAX_ROLLOUT_PERCENT_V2, Math.floor(rolloutPercent)));
   const width = percent * BUCKETS_PER_PERCENT;
   const bucket = assignmentBucket(installationId);
   if (bucket < width) return "treatment";
   const controlStart = INTERSTITIAL_MAX_ROLLOUT_PERCENT * BUCKETS_PER_PERCENT;
-  if (bucket >= controlStart && bucket < controlStart + width) return "control";
-  return "unassigned";
+  if (percent <= INTERSTITIAL_MAX_ROLLOUT_PERCENT) {
+    if (bucket >= controlStart && bucket < controlStart + width) return "control";
+    return "unassigned";
+  }
+  return bucket >= width ? "control" : "unassigned";
+}
+
+// --- Second opportunity ---------------------------------------------------------------
+
+/** Independent of the arm hash, so each arm gets the same share of second-opportunity installations. */
+const SECOND_OPPORTUNITY_SALT = "cydi-interstitial-second-v1";
+
+/**
+ * Whether this installation may have a SECOND (or later) opportunity in a session, for a
+ * `secondOpportunityRolloutPercent` of 0-100. Stable per installation and monotonic as the
+ * percentage grows. The first opportunity of a session is never gated by this.
+ */
+export function isSecondOpportunityEligible(installationId: string | null, percent: number): boolean {
+  if (percent >= 100) return true;
+  if (installationId === null || percent <= 0) return false;
+  const bucket = fnv1a(`${SECOND_OPPORTUNITY_SALT}:${installationId}`) % BUCKETS;
+  return bucket < Math.floor(percent) * BUCKETS_PER_PERCENT;
 }
 
 // --- Persisted state ----------------------------------------------------------------
@@ -186,17 +213,21 @@ export function recordEligibleCompletion(
   sessionCap: number,
   sessionId: string,
   arm: InterstitialArm,
+  secondOpportunityEligible = true,
 ): CompletionDecision {
   const since = Math.min(state.eligibleGamesSinceLastOpportunity + 1, MAX_SINCE_LAST);
   const next: InterstitialPersistedState = { ...state, eligibleGamesSinceLastOpportunity: since };
-  const sessionOpen = opportunitiesInSession(next, sessionId) < sessionCap;
+  const used = opportunitiesInSession(next, sessionId);
+  // The session cap, and - past the first opportunity - the second-opportunity rollout.
+  const sessionOpen = used < sessionCap && (used === 0 || secondOpportunityEligible);
   return {
     state: next,
     due: sessionOpen && since >= cadence,
-    // From cadence-1 on: the preferred trigger is exactly cadence-1 (the ad loads while
-    // the next game is played); being already at/over cadence covers a run that
-    // started past that point, so the upcoming opportunity still gets its one attempt.
-    preload: arm === "treatment" && sessionOpen && since >= cadence - 1,
+    // From cadence-2 on: attempt 1 at cadence-2, the retry opportunity at cadence-1, the
+    // checkpoint at cadence. Being already past that point (a run that started late, or a
+    // shortened cadence) still gives the upcoming opportunity its attempts; the controller
+    // bounds them at two per opportunity.
+    preload: arm === "treatment" && sessionOpen && since >= cadence - 2,
   };
 }
 

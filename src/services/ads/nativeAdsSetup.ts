@@ -31,7 +31,7 @@
 import { Capacitor } from "@capacitor/core";
 import { createAdMobAdapter } from "./admobAdapter";
 import { isAdTestingEnvironment } from "./adConfig";
-import { registerAdAdapter, registerAdConsentGate, registerRemoteAdsGate } from "./rewardedAds";
+import { registerAdAdapter, registerAdConsentGate, registerRemoteAdsGate, registerRewardedLifecycleGate } from "./rewardedAds";
 import { getConsentState, initializeConsent } from "./consent";
 import { isRemoteAdsEnabled, refreshRemoteAdsKillSwitch } from "./remoteKillSwitch";
 import { createAdMobInterstitialAdapter } from "./admobAdapter";
@@ -39,6 +39,7 @@ import { registerInterstitialAdapter, registerInterstitialGates, getInterstitial
 import {
   INTERSTITIAL_QA_OVERRIDE_KEY,
   isInterstitialLiveEnabled,
+  isRewardedLifecycleV2Enabled,
   refreshInterstitialConfig,
   refreshInterstitialConfigIfStale,
 } from "./interstitialConfig";
@@ -97,6 +98,8 @@ export async function initializeNativeAds(): Promise<void> {
     const [consentState] = await Promise.all([initializeConsent(AdMob), refreshRemoteAdsKillSwitch()]);
     registerAdConsentGate(() => getConsentState().canRequestAds);
     registerRemoteAdsGate(isRemoteAdsEnabled);
+    // The rewarded lifecycle v2 remote kill switch (read live from the interstitial config answer).
+    registerRewardedLifecycleGate(isRewardedLifecycleV2Enabled);
     registerInterstitialGates({
       consent: () => getConsentState().canRequestAds,
       remoteAds: isRemoteAdsEnabled,

@@ -25,7 +25,7 @@ import {
   type InterstitialNativeEvent,
 } from "./interstitialAds";
 import { _resetInterstitialConfigForTests, refreshInterstitialConfig } from "./interstitialConfig";
-import { assignArm, parseInterstitialState, type InterstitialStorage } from "./interstitialExperiment";
+import { assignArm, isSecondOpportunityEligible, parseInterstitialState, type InterstitialStorage } from "./interstitialExperiment";
 import type { InterstitialClientConfig } from "./interstitialConfigSchema";
 import {
   _resetRewardedAdsForTests,
@@ -231,7 +231,7 @@ test("suppressed consumes the opportunity", async () => {
   completeRound();
   await showRewardedAd("shape_challenge_double_reward");
   assert.equal(runInterstitialCheckpoint(), null);
-  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "suppressed", gamesBetweenAds: 7 }]);
+  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "suppressed", gamesBetweenAds: 7, attempt: 1 }]);
   assert.equal(persisted().session?.opportunities, 1);
   playRounds(7);
   assert.equal(checkpoints().length, 1, "consumed: no second opportunity this session");
@@ -247,26 +247,100 @@ test("show_failed consumes the opportunity", async () => {
   assert.ok(pending);
   ad.fire({ type: "failedToShow", code: 0 });
   await pending;
-  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "show_failed", gamesBetweenAds: 7, reason: "sdk_error" }]);
+  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "show_failed", gamesBetweenAds: 7, reason: "sdk_error", attempt: 1, latency: "lt5s" }]);
   assert.equal(persisted().session?.opportunities, 1);
 });
 
 // --- Preload ------------------------------------------------------------------------
 
-test("exactly one preload per upcoming opportunity - a failed one is not retried before the checkpoint", async () => {
-  playRounds(5);
-  assert.equal(ad.calls.load, 0, "nothing before cadence-1");
-  completeRound(); // 6th = cadence - 1
+test("at most two attempts per opportunity: game 5 -> attempt 1, game 6 -> retry if it failed, game 7 -> checkpoint, no third", async () => {
+  playRounds(4);
+  assert.equal(ad.calls.load, 0, "nothing before cadence-2");
+  completeRound(); // 5th = cadence - 2: attempt 1
   runInterstitialCheckpoint();
   assert.equal(ad.calls.load, 1);
   ad.rejectLoad(3);
   await flush();
-  completeRound(); // 7th - due, would also qualify for a preload
-  assert.equal(ad.calls.load, 1, "no aggressive retry");
+  completeRound(); // 6th = cadence - 1: attempt 1 definitively failed -> the retry
+  runInterstitialCheckpoint();
+  assert.equal(ad.calls.load, 2, "the retry opportunity");
+  ad.rejectLoad(2);
+  await flush();
+  completeRound(); // 7th - due: never a third attempt, never an immediate loop
+  assert.equal(ad.calls.load, 2, "two attempts, no more");
   assert.equal(runInterstitialCheckpoint(), null, "not ready -> no waiting");
-  assert.equal(checkpoints()[0].outcome, "not_ready");
+  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "not_ready", gamesBetweenAds: 7, attempt: 2, code: 2, notReadyCause: "failed" }]);
   const failures = tracked.filter((t) => t.name === "interstitial_load_failed");
-  assert.deepEqual(failures.map((f) => f.params), [{ reason: "no_fill" }]);
+  assert.deepEqual(
+    failures.map((f) => f.params),
+    [
+      { reason: "no_fill", attempt: 1, code: 3, latency: "lt5s" },
+      { reason: "network_error", attempt: 2, code: 2, latency: "lt5s" },
+    ],
+  );
+  for (const f of failures) assert.equal(validateEventParams("interstitial_load_failed", f.params).valid, true);
+  assert.equal(validateEventParams("interstitial_checkpoint", checkpoints()[0]).valid, true);
+});
+
+test("attempt 1 still loading at game 6: no overlapping attempt 2; the checkpoint reports cause loading and continues at once", () => {
+  playRounds(5);
+  assert.equal(ad.calls.load, 1);
+  completeRound(); // 6th
+  runInterstitialCheckpoint();
+  assert.equal(ad.calls.load, 1, "never two loads in flight");
+  completeRound(); // 7th
+  assert.equal(runInterstitialCheckpoint(), null, "no spinner, no waiting");
+  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "not_ready", gamesBetweenAds: 7, attempt: 1, notReadyCause: "loading" }]);
+});
+
+test("a load that succeeds late - after game 6, before the checkpoint - is used", async () => {
+  playRounds(6);
+  assert.equal(ad.calls.load, 1);
+  ad.resolveLoad(); // slow, but still inside the opportunity
+  await flush();
+  completeRound();
+  const pending = runInterstitialCheckpoint();
+  assert.ok(pending, "the late ad is presented");
+  ad.fire({ type: "showed" });
+  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "shown", gamesBetweenAds: 7, attempt: 1, latency: "lt5s" }]);
+});
+
+test("a success that lands after the opportunity was consumed is dropped, and the next opportunity starts clean", async () => {
+  playRounds(5); // attempt 1 in flight
+  playRounds(2); // game 7 checkpoint consumes the opportunity (not_ready: loading)
+  assert.equal(checkpoints()[0].outcome, "not_ready");
+  ad.resolveLoad(); // stale: belongs to the consumed opportunity
+  await flush();
+  assert.equal(getInterstitialState(), "idle", "stale success never becomes ready");
+  session = "sess00000002"; // the per-session cap (1) is spent in this session
+  playRounds(4);
+  assert.equal(ad.calls.load, 1, "no load before the next window");
+  playRounds(1);
+  assert.equal(ad.calls.load, 2, "the next opportunity gets its own attempt 1");
+});
+
+test("a session change throws away the previous session's attempts and ad", async () => {
+  playRounds(5);
+  ad.resolveLoad();
+  await flush();
+  assert.equal(getInterstitialState(), "ready");
+  session = "sess00000002";
+  completeRound(); // 6th, new session: the stale ad is invalidated and a fresh attempt 1 starts
+  assert.equal(ad.calls.load, 2);
+  assert.equal(getInterstitialState(), "loading");
+});
+
+test("a loaded ad does not carry over when its opportunity is consumed by suppression", async () => {
+  registerAdAdapter({ name: "rw", initialize: async () => {}, loadRewarded: async () => {}, showRewarded: async () => null });
+  playRounds(5);
+  ad.resolveLoad();
+  await flush();
+  playRounds(1);
+  completeRound();
+  await showRewardedAd("shape_challenge_double_reward");
+  assert.equal(runInterstitialCheckpoint(), null);
+  assert.equal(checkpoints()[0].outcome, "suppressed");
+  assert.equal(getInterstitialState(), "idle", "consumed: the loaded ad is invalidated");
 });
 
 test("after an opportunity is consumed the next upcoming one gets its own preload", async () => {
@@ -274,8 +348,8 @@ test("after an opportunity is consumed the next upcoming one gets its own preloa
   session = "sess00000002";
   ad.rejectLoad(2);
   await flush();
-  playRounds(5);
-  assert.equal(ad.calls.load, 1, "the counter restarted at 0 - five rounds is not yet cadence-1");
+  playRounds(4);
+  assert.equal(ad.calls.load, 1, "the counter restarted at 0 - four rounds is not yet cadence-2");
   playRounds(1);
   assert.equal(ad.calls.load, 2);
 });
@@ -297,7 +371,7 @@ test("the next game cannot start behind the ad: continuation waits for release, 
   await flush();
   assert.equal(checkpoints().length, 0, "hidden alone records nothing");
   ad.fire({ type: "showed" });
-  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "shown", gamesBetweenAds: 7 }]);
+  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "shown", gamesBetweenAds: 7, attempt: 1, latency: "lt5s" }]);
   // The marker is already persisted while the ad is still on screen...
   assert.equal(persisted().marker?.outcome, "shown");
   await flush();
@@ -421,10 +495,11 @@ test("a config change alone cannot trigger an opportunity", async () => {
 
 test("enabled:false from a later refresh stops counting, preloads and checkpoints", async () => {
   playRounds(5);
+  const loadsBefore = ad.calls.load;
   await setConfig({ enabled: false }, false);
   playRounds(10);
   assert.equal(checkpoints().length, 0);
-  assert.equal(ad.calls.load, 0);
+  assert.equal(ad.calls.load, loadsBefore, "no further loads while off");
   assert.equal(persisted().eligibleGamesSinceLastOpportunity, 5, "nothing counted while off");
 });
 
@@ -526,7 +601,7 @@ test("lane 1: due + loaded -> the screen is reserved for the interstitial, which
   const pending = runInterstitialCheckpoint();
   assert.ok(pending, "the interstitial is presented");
   ad.fire({ type: "showed" });
-  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "shown", gamesBetweenAds: 7 }]);
+  assert.deepEqual(checkpoints(), [{ arm: "treatment", outcome: "shown", gamesBetweenAds: 7, attempt: 1, latency: "lt5s" }]);
 });
 
 test("lane 2: due + loaded, player leaves via Back to Map -> next paying result renders rewarded", async () => {
@@ -591,4 +666,78 @@ test("lane: control arm never reserves a screen", async () => {
   playRounds(6);
   completeRound();
   assert.equal(claimResultAdLane(), "rewarded");
+});
+
+// --- 0.56 remote controls: full rollout range, second opportunity, session snapshot -----------
+
+function findSecondId(eligible: boolean, percent: number): string {
+  for (let i = 0; i < 100_000; i++) {
+    const id = i.toString(16).padStart(12, "0");
+    if (assignArm(id, 100) === "treatment" && isSecondOpportunityEligible(id, percent) === eligible) return id;
+  }
+  throw new Error("no id found");
+}
+
+test("max/session 2 with the default second-opportunity rollout: a second opportunity in the same session", () => {
+  return setConfig({ maxOpportunitiesPerSession: 2 }).then(() => {
+    playRounds(7 * 3);
+    assert.equal(checkpoints().length, 2, "capped at two, not unlimited");
+  });
+});
+
+test("secondOpportunityRolloutPercent: an installation outside it gets only the first opportunity, one inside gets both", async () => {
+  installation = findSecondId(false, 20);
+  await setConfig({ rolloutPercent: 100, maxOpportunitiesPerSession: 2, secondOpportunityRolloutPercent: 20 });
+  playRounds(7 * 3);
+  assert.equal(checkpoints().length, 1, "first opportunity only");
+  tracked = [];
+  storage = memoryStorage();
+  installation = findSecondId(true, 20);
+  _resetInterstitialControllerForTests({
+    track: (name, params) => tracked.push({ name, params: params as Record<string, unknown> }),
+    storage,
+    sessionId: () => session,
+    installationId: () => installation,
+  });
+  playRounds(7 * 3);
+  assert.equal(checkpoints().length, 2, "inside the second-opportunity rollout");
+});
+
+test("rollout above 50 puts everyone in treatment at 100 and never loads for nobody at 0", async () => {
+  await setConfig({ rolloutPercent: 100 });
+  installation = CONTROL_ID; // a control id at 5% is treatment at 100%
+  playRounds(7);
+  assert.equal(checkpoints()[0].arm, "treatment");
+  tracked = [];
+  storage = memoryStorage();
+  _resetInterstitialControllerForTests({
+    track: (name, params) => tracked.push({ name, params: params as Record<string, unknown> }),
+    storage,
+    sessionId: () => session,
+    installationId: () => installation,
+  });
+  await setConfig({ rolloutPercent: 0 });
+  playRounds(14);
+  assert.equal(checkpoints().length, 0, "0% = nobody takes part");
+});
+
+test("the monetization rules are a session snapshot: a later remote change moves only the live switch", async () => {
+  playRounds(3);
+  await setConfig({ gamesBetweenAds: 5, maxOpportunitiesPerSession: 2, rolloutPercent: 100, secondOpportunityRolloutPercent: 0 }, false);
+  playRounds(4);
+  assert.equal(checkpoints().length, 1, "still the launch cadence of 7");
+  assert.equal(checkpoints()[0].gamesBetweenAds, 7);
+  playRounds(14);
+  assert.equal(checkpoints().length, 1, "still max 1 per session");
+});
+
+test("lane: a due interstitial that is still LOADING does not reserve the Result screen - the rewarded offer renders", () => {
+  playRounds(6); // attempt 1 in flight, never resolved
+  completeRound(); // 7th: due, but nothing loaded
+  assert.equal(isInterstitialDueThisCycle(), true);
+  assert.equal(getInterstitialState(), "loading");
+  assert.equal(claimResultAdLane(), "rewarded");
+  markRewardedOfferRenderedThisCycle();
+  assert.equal(runInterstitialCheckpoint(), null);
+  assert.equal(checkpoints()[0].outcome, "suppressed");
 });

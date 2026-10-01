@@ -98,7 +98,9 @@ test("PUT needs the content admin token and a fully valid body", async () => {
   assert.equal((await put(STORED)).status, 401);
   assert.equal((await put(STORED, "wrong")).status, 401);
   for (const bad of [
-    { ...STORED, rolloutPercent: 51 },
+    { ...STORED, rolloutPercent: 101 },
+    { ...STORED, secondOpportunityRolloutPercent: 101 },
+    { ...STORED, rewardedLifecycleV2: "off" },
     { ...STORED, gamesBetweenAds: 8 },
     { ...STORED, maxOpportunitiesPerSession: 4 },
     { ...STORED, blockedCountries: ["ir"] },
@@ -121,4 +123,47 @@ test("/api/config/ads is untouched: same key, same exact { enabled } shape relea
   assert.deepEqual(body, { enabled: true });
   assert.equal(isValidRemoteAdsConfig(body), true);
   assert.notEqual(ADS_CONFIG_KV_KEY, INTERSTITIAL_CONFIG_KV_KEY);
+});
+
+// --- 0.56: full range + optional keys, without ever breaking a released client ------------------
+
+const { isValidLegacyInterstitialClientConfig } = await import("../src/services/ads/interstitialConfigSchema.ts");
+
+test("a stored rollout above 50 (and the optional keys) is accepted, and a released client still gets a config it validates", async () => {
+  const { kv, env } = makeEnv();
+  const wide = { ...STORED, enabled: true, rolloutPercent: 100, secondOpportunityRolloutPercent: 20, rewardedLifecycleV2: false };
+  const put = await worker.fetch(
+    request("/api/config/ads/interstitial", { method: "PUT", headers: { authorization: `Bearer ${CONTENT_TOKEN}` }, body: JSON.stringify(wide) }),
+    env,
+  );
+  assert.equal(put.status, 200);
+  assert.ok(kv.store.has(INTERSTITIAL_CONFIG_KV_KEY));
+
+  // Released clients ask for the plain path: exactly five keys, rollout capped at their schema maximum of 50.
+  const legacy = await (await worker.fetch(request("/api/config/ads/interstitial", {}, "DE"), env)).json();
+  assert.deepEqual(legacy, { enabled: true, rolloutPercent: 50, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true });
+  assert.equal(isValidLegacyInterstitialClientConfig(legacy), true, "an installed 0.53-0.55 client keeps working");
+
+  // 0.56 clients ask for ?v=2 and get the whole shape.
+  const v2 = await (await worker.fetch(request("/api/config/ads/interstitial?v=2", {}, "DE"), env)).json();
+  assert.deepEqual(v2, {
+    enabled: true,
+    rolloutPercent: 100,
+    gamesBetweenAds: 7,
+    maxOpportunitiesPerSession: 1,
+    countryEligible: true,
+    secondOpportunityRolloutPercent: 20,
+    rewardedLifecycleV2: false,
+  });
+  assert.equal(isValidInterstitialClientConfig(v2), true);
+  assert.equal(isValidLegacyInterstitialClientConfig(v2), false, "the v2 shape is for v2 clients only");
+});
+
+test("the launch configuration (50 / cadence 7 / max 1, no optional keys) serves byte-identical bodies on both paths", async () => {
+  const { kv, env } = makeEnv();
+  kv.store.set(INTERSTITIAL_CONFIG_KV_KEY, JSON.stringify({ ...STORED, enabled: true, rolloutPercent: 50 }));
+  const a = await (await worker.fetch(request("/api/config/ads/interstitial", {}, "DE"), env)).text();
+  const b = await (await worker.fetch(request("/api/config/ads/interstitial?v=2", {}, "DE"), env)).text();
+  assert.equal(a, b);
+  assert.deepEqual(JSON.parse(a), { enabled: true, rolloutPercent: 50, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true });
 });

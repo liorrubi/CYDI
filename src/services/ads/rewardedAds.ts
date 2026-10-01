@@ -17,6 +17,7 @@
 
 import { isAdFormatEnabled, getAdUnitId } from "./adConfig";
 import { isRewardedAdPlacement, type RewardedAdPlacement } from "./adPlacements";
+import { adLatencyBucket, isAdErrorCode, type AdLoadSource, type AdNotReadyCause, type RewardedTapState } from "./adDiagnostics";
 import type {
   AdAdapter,
   AdFailureReason,
@@ -27,14 +28,29 @@ import type {
   RewardedAdResult,
 } from "./adTypes";
 
-// Hard ceilings so a wedged SDK can never stall gameplay: a show request gives a
-// non-ready ad this long to finish loading before resolving "unavailable", and an
-// on-screen ad this long before we report an error (the ad may still be visible -
-// the OS owns that surface - but game code regains control).
-const LOAD_TIMEOUT_MS = 8000;
+// Time budgets. A wedged SDK can never stall gameplay or hold a load open forever:
+//  - a background LOAD is allowed to finish late (an opportunity-aware window, not the old
+//    8 s JS cutoff that discarded loads the SDK was about to deliver) but is abandoned at a
+//    hard safety expiry;
+//  - the player's TAP waits at most TAP_WAIT_MS for a load that is still in flight;
+//  - a loaded ad is used only within READY_TTL_MS (GMA ads expire after about an hour);
+//  - an on-screen ad gets SHOW_TIMEOUT_MS before we report an error (the ad may still be
+//    visible - the OS owns that surface - but game code regains control).
+// With the lifecycle kill switch off (registerRewardedLifecycleGate -> false) the 0.55
+// numbers apply instead: an 8 s load window, the tap waits for it, no expiry, no cooldown.
+const HARD_LOAD_EXPIRY_MS = 75_000;
+const LEGACY_LOAD_TIMEOUT_MS = 8000;
+const TAP_WAIT_MS = 4000;
+const READY_TTL_MS = 50 * 60_000;
+/** After a failed load, an automatic preload waits this long before asking again (no churn on no_fill). */
+const FAILED_COOLDOWN_MS = 15_000;
 const SHOW_TIMEOUT_MS = 90_000;
-let loadTimeoutMs = LOAD_TIMEOUT_MS;
+let hardLoadExpiryMs = HARD_LOAD_EXPIRY_MS;
+let tapWaitMs = TAP_WAIT_MS;
+let readyTtlMs = READY_TTL_MS;
+let failedCooldownMs = FAILED_COOLDOWN_MS;
 let showTimeoutMs = SHOW_TIMEOUT_MS;
+let now: () => number = () => Date.now();
 
 // Keyed by adapter name so re-registering (HMR, StrictMode double-effects)
 // replaces rather than duplicates. Only one adapter is ever used: the last
@@ -80,6 +96,24 @@ export function registerRemoteAdsGate(gate: () => boolean): void {
   remoteAdsGate = gate;
 }
 
+// The rewarded lifecycle v2 kill switch (see the state machine below). Defaults to ON - v2
+// is the shipped behavior - and nativeAdsSetup.ts registers the live remote flag, so a
+// native-lifecycle regression can be backed out without another APK. Off = the 0.55 timing.
+let lifecycleV2Gate: () => boolean = () => true;
+
+/** Register the live remote switch for the rewarded lifecycle v2 (true = v2, false = 0.55 timing). */
+export function registerRewardedLifecycleGate(gate: () => boolean): void {
+  lifecycleV2Gate = gate;
+}
+
+function lifecycleV2(): boolean {
+  try {
+    return lifecycleV2Gate();
+  } catch {
+    return true;
+  }
+}
+
 // --- Lifecycle event fan-out ---------------------------------------------------
 
 // Keyed by listener name for the same HMR/StrictMode replace-not-duplicate
@@ -94,13 +128,16 @@ export function subscribeRewardedAdEvents(name: string, listener: RewardedAdList
   };
 }
 
+type DetailExtras = Omit<RewardedAdEventDetail, "placement" | "reason">;
+
 function emit(
   event: RewardedAdLifecycleEvent,
   placement: RewardedAdPlacement,
   reason: AdFailureReason | undefined,
   onEvent: RewardedAdListener | undefined,
+  extras: DetailExtras = {},
 ): void {
-  const detail: RewardedAdEventDetail = reason ? { placement, reason } : { placement };
+  const detail: RewardedAdEventDetail = reason ? { placement, reason, ...extras } : { placement, ...extras };
   for (const listener of listeners.values()) {
     try {
       listener(event, detail);
@@ -145,15 +182,43 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-// --- Rewarded flow state ---------------------------------------------------------
+// --- Rewarded lifecycle state machine ---------------------------------------------
+//
+//   idle -> loading -> ready -> showing -> idle
+//              |         '-> expired (a loaded ad outlived READY_TTL_MS)
+//              '-> failed (SDK failure, or the hard load expiry)
+//
+// One native load at a time: a load is never started while `nativeLoadActive`. Every load
+// carries a generation (`loadSeq`); a callback from an older load (abandoned at the hard
+// expiry, superseded, or from before a lifecycle reset) finds a different generation and
+// changes nothing. A load that finishes late but inside the hard expiry is accepted -
+// the ad is as good as one that finished early, and the next offer can use it.
 
-type RewardedState = "idle" | "loading" | "ready" | "showing";
+type RewardedState = "idle" | "loading" | "ready" | "failed" | "expired" | "showing";
 let state: RewardedState = "idle";
-let initialized = false;
-// The in-flight load, shared so preload + a concurrent show await the same request.
-let loadPromise: Promise<void> | null = null;
+// Bumped whenever the current load stops being the one that counts.
+let loadSeq = 0;
+// True from the native prepare call until THAT call settles or is abandoned at the hard expiry.
+let nativeLoadActive = false;
+let loadStartedAt = 0;
+let loadPlacement: RewardedAdPlacement | null = null;
+let loadSource: AdLoadSource = "preload";
+let loadReported = false;
+// The per-call UI callback of the call that started the load, so its spinner hears "loaded".
+let loadOnEvent: RewardedAdListener | undefined;
+let hardExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+let readyAt = 0;
+let failedAt = -Infinity;
 // Why the last load attempt failed - reported if a show then finds nothing loaded.
 let lastLoadFailure: AdFailureReason = "load_failed";
+let lastLoadCode: number | undefined;
+let lastLoadLatencyMs = 0;
+// Taps waiting (bounded) on the load in flight.
+const waiters = new Set<() => void>();
+
+function settleWaiters(): void {
+  for (const wake of [...waiters]) wake();
+}
 
 /** The blocking reason right now, or null when a rewarded ad could actually be served. */
 function rewardedBlockReason(): AdFailureReason | null {
@@ -170,94 +235,190 @@ export function isRewardedAdAvailable(): boolean {
   return rewardedBlockReason() === null;
 }
 
+/**
+ * Time-based transitions, evaluated lazily whenever the state is read - so a WebView that
+ * was suspended in the background (its timers frozen) still lands in the right state the
+ * moment anyone looks. A load past the hard expiry is abandoned, a loaded ad past its TTL
+ * is expired.
+ */
+function refreshLifecycle(): void {
+  if (state === "loading" && now() - loadStartedAt >= (lifecycleV2() ? hardLoadExpiryMs : LEGACY_LOAD_TIMEOUT_MS)) {
+    failLoad("timeout", undefined, true);
+  } else if (state === "ready" && lifecycleV2() && now() - readyAt >= readyTtlMs) {
+    state = "expired";
+  }
+}
+
 /** A rewarded ad is loaded and can be shown immediately (use to decide whether to render a "watch ad" button). */
 export function isRewardedAdReady(): boolean {
+  refreshLifecycle();
   return state === "ready";
 }
 
-async function ensureInitialized(adapter: AdAdapter): Promise<void> {
-  if (initialized) return;
-  await adapter.initialize();
-  initialized = true;
+/** The current lifecycle state, for the tap's diagnostics and QA. */
+export function getRewardedLifecycleState(): RewardedTapState {
+  refreshLifecycle();
+  return state;
 }
 
 /**
- * Classify a rejected LOAD. The AdMob plugin rejects with the Google Mobile Ads
- * SDK's own localized message and surfaces no numeric code (its Android side calls
- * `call.reject(ex.getLocalizedMessage(), ex)`, where the second argument is a
- * Throwable, not a code), so the message text is the only signal that reaches us.
- * "No fill." is that SDK's wording for ERROR_CODE_NO_FILL (3) - verified on a real
- * device against the production ad unit - and it is by far the most common outcome
- * for a low-volume app. Matching it keeps an empty auction out of "sdk_error",
- * where it used to masquerade as a broken SDK.
- *
- * Deliberately load-only: showRewardedAd() shows an ad that has already loaded, so
- * a no-fill can never surface from a show. That catch keeps the timeout/sdk_error
- * pair unchanged.
+ * Classify a rejected LOAD. The numeric GMA code (from the plugin's FailedToLoad event,
+ * carried on the rejection) is authoritative: 3 NO_FILL and 9 MEDIATION_NO_FILL are an
+ * empty auction, not a fault. Without a code the message text is the fallback - "No fill."
+ * is that SDK's wording for NO_FILL, verified on a real device - so an empty auction never
+ * masquerades as a broken SDK. Load-only: a show can never surface a no-fill.
  */
-function classifyLoadFailure(err: unknown): AdFailureReason {
-  if (!(err instanceof Error)) return "sdk_error";
-  // Our own withTimeout wording is checked first - a load we abandoned is a timeout
-  // no matter what the SDK would eventually have said.
-  if (err.message.includes("timed out")) return "timeout";
-  if (/no fill/i.test(err.message)) return "no_fill";
-  return "sdk_error";
+function classifyLoadFailure(err: unknown): { reason: AdFailureReason; code: number | undefined } {
+  const code = (err as { code?: unknown } | null)?.code;
+  const numeric = isAdErrorCode(code) ? code : undefined;
+  if (numeric === 3 || numeric === 9) return { reason: "no_fill", code: numeric };
+  if (numeric !== undefined) return { reason: "sdk_error", code: numeric };
+  if (!(err instanceof Error)) return { reason: "sdk_error", code: undefined };
+  if (err.message.includes("timed out")) return { reason: "timeout", code: undefined };
+  if (/no fill/i.test(err.message)) return { reason: "no_fill", code: undefined };
+  return { reason: "sdk_error", code: undefined };
+}
+
+function clearHardExpiry(): void {
+  if (hardExpiryTimer !== null) clearTimeout(hardExpiryTimer);
+  hardExpiryTimer = null;
 }
 
 /**
- * `reportFailure` decides who owns the analytics record for a failed load, so one
- * failure is never counted twice. A background preload owns its own failure (nobody
- * else will ever hear about it - that path used to fail completely silently, leaving
- * fill failures invisible). A load started by showRewardedAd does NOT, because that
- * call already emits its own "unavailable" with the same reason once it finds no ad
- * ready.
+ * The current load ended without an ad. `abandon` = the hard expiry: the generation is
+ * bumped so a native callback that arrives later is ignored (nothing can revive state).
+ * A background preload owns its failure report - nobody else will ever hear about it; a
+ * load a tap is waiting on is reported by that tap (one failure, one record).
  */
-function startLoad(
-  adapter: AdAdapter,
-  placement: RewardedAdPlacement,
-  onEvent?: RewardedAdListener,
-  reportFailure = false,
-): Promise<void> {
+function failLoad(reason: AdFailureReason, code: number | undefined, abandon: boolean): void {
+  const placement = loadPlacement;
+  clearHardExpiry();
+  if (abandon) {
+    loadSeq++;
+    nativeLoadActive = false;
+  }
+  state = "failed";
+  failedAt = now();
+  lastLoadFailure = reason;
+  lastLoadCode = code;
+  lastLoadLatencyMs = now() - loadStartedAt;
+  if (loadSource === "preload" && placement && !loadReported) {
+    loadReported = true;
+    emit("unavailable", placement, reason, loadOnEvent, {
+      source: "preload",
+      ...(code !== undefined ? { code } : {}),
+      latency: adLatencyBucket(lastLoadLatencyMs),
+    });
+  }
+  settleWaiters();
+}
+
+function startLoad(adapter: AdAdapter, placement: RewardedAdPlacement, source: AdLoadSource, onEvent?: RewardedAdListener): void {
+  const seq = ++loadSeq;
   state = "loading";
+  nativeLoadActive = true;
+  loadStartedAt = now();
+  loadPlacement = placement;
+  loadSource = source;
+  loadReported = false;
+  loadOnEvent = onEvent;
   emit("loading", placement, undefined, onEvent);
-  loadPromise = (async () => {
-    try {
-      await ensureInitialized(adapter);
-      await withTimeout(adapter.loadRewarded(getAdUnitId("rewarded", detectPlatform())), loadTimeoutMs, "rewarded load");
+
+  clearHardExpiry();
+  hardExpiryTimer = setTimeout(
+    () => {
+      if (seq === loadSeq && state === "loading") failLoad("timeout", undefined, true);
+    },
+    lifecycleV2() ? hardLoadExpiryMs : LEGACY_LOAD_TIMEOUT_MS,
+  );
+  // Never keep a (test) process alive for a safety timer; browsers have no unref.
+  (hardExpiryTimer as { unref?: () => void }).unref?.();
+
+  let pending: Promise<void>;
+  try {
+    pending = adapter.loadRewarded(getAdUnitId("rewarded", detectPlatform()));
+  } catch (err) {
+    pending = Promise.reject(err);
+  }
+  pending.then(
+    () => {
+      if (seq !== loadSeq) return; // abandoned or superseded: a stale success changes nothing
+      nativeLoadActive = false;
+      clearHardExpiry();
       state = "ready";
-      emit("loaded", placement, undefined, onEvent);
-    } catch (err) {
-      state = "idle";
-      lastLoadFailure = classifyLoadFailure(err);
-      if (reportFailure) emit("unavailable", placement, lastLoadFailure, onEvent);
-    } finally {
-      loadPromise = null;
-    }
-  })();
-  return loadPromise;
+      readyAt = now();
+      lastLoadLatencyMs = readyAt - loadStartedAt;
+      emit("loaded", placement, undefined, loadOnEvent, { source, latency: adLatencyBucket(lastLoadLatencyMs) });
+      settleWaiters();
+    },
+    (err) => {
+      if (seq !== loadSeq) return;
+      nativeLoadActive = false;
+      const { reason, code } = classifyLoadFailure(err);
+      failLoad(reason, code, false);
+    },
+  );
 }
 
 /**
  * Pre-cache a rewarded ad so a later showRewardedAd() is instant. Fire-and-forget
- * safe: resolves quietly (no throw, no game impact) whether it loads or not.
+ * safe: resolves quietly (no throw, no game impact) whether it loads or not, and never
+ * waits for the load - it returns as soon as the request is on its way.
  * `placement` names the trigger point this preload is for (lifecycle/analytics
  * attribution) and must be one of the closed REWARDED_AD_PLACEMENTS values.
  *
- * A failure here still resolves silently to the caller, but is now REPORTED to the
- * lifecycle stream (and so to analytics) - otherwise ad requests that never fill
- * leave no trace anywhere, and fill-rate problems are invisible until revenue drops.
+ * Starts a load only when nothing is loaded or loading, no native load is still active,
+ * and (after a failure) the cooldown has passed - so callers can invoke it freely without
+ * ever creating overlapping or churning requests. A failure is REPORTED to the lifecycle
+ * stream (and so to analytics) - otherwise requests that never fill leave no trace.
  */
 export async function preloadRewardedAd(placement: RewardedAdPlacement, onEvent?: RewardedAdListener): Promise<void> {
   if (!isRewardedAdPlacement(placement)) return;
-  if (rewardedBlockReason() !== null || state !== "idle") return loadPromise ?? Promise.resolve();
-  return startLoad(activeAdapter()!, placement, onEvent, true);
+  if (rewardedBlockReason() !== null) return;
+  refreshLifecycle();
+  if (state === "loading" || state === "ready" || state === "showing" || nativeLoadActive) return;
+  if (state === "failed" && lifecycleV2() && now() - failedAt < failedCooldownMs) return;
+  startLoad(activeAdapter()!, placement, "preload", onEvent);
+  // Callers fire and forget (nothing in the game awaits this); the returned promise only
+  // settles when the load does, bounded by the hard expiry, for callers that want to know.
+  await waitForLoad((lifecycleV2() ? hardLoadExpiryMs : LEGACY_LOAD_TIMEOUT_MS) + 1000);
+}
+
+function notReadyCause(at: RewardedTapState): AdNotReadyCause {
+  switch (at) {
+    case "failed":
+      return "failed";
+    case "loading":
+      return "loading";
+    case "expired":
+      return "expired";
+    default:
+      return "not_attempted";
+  }
+}
+
+/** Resolves when the in-flight load settles, or after `ms` (whichever is first). Never rejects. */
+function waitForLoad(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      waiters.delete(done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    (timer as unknown as { unref?: () => void }).unref?.();
+    waiters.add(done);
+  });
 }
 
 /**
  * Show a rewarded ad and resolve with the outcome. Never rejects - see
- * RewardedAdResult for the contract. If no ad is preloaded, one load attempt is
- * made first (bounded by the load timeout), so callers may skip preloading at
- * the cost of a short wait.
+ * RewardedAdResult for the contract. The tap never makes the player wait long:
+ *  - ready: shown at once;
+ *  - loading (or nothing attempted yet): a short bounded wait, then "unavailable" - the load
+ *    keeps going in the background for the next offer;
+ *  - failed / expired / blocked: "unavailable" immediately, with the cause.
+ * With the lifecycle kill switch off the 0.55 behavior applies: wait for the (8 s) load.
  *
  * `onEvent` is optional: pass it only if the UI wants lifecycle moments
  * (loading spinner etc.). Analytics is recorded automatically either way.
@@ -270,19 +431,48 @@ export async function showRewardedAd(
   // to flow into lifecycle events or analytics.
   if (!isRewardedAdPlacement(placement)) return { status: "unavailable", reason: "invalid_placement" };
 
-  emit("requested", placement, undefined, onEvent);
+  refreshLifecycle();
+  const stateAtTap: RewardedTapState = state;
+  emit("requested", placement, undefined, onEvent, { stateAtTap });
 
   const blocked = rewardedBlockReason() ?? (state === "showing" ? "already_showing" : null);
   if (blocked) {
-    emit("unavailable", placement, blocked, onEvent);
+    emit("unavailable", placement, blocked, onEvent, { stateAtTap, cause: "blocked" });
     return { status: "unavailable", reason: blocked };
   }
 
-  if (!isRewardedAdReady()) {
-    await (loadPromise ?? startLoad(activeAdapter()!, placement, onEvent));
-    if (!isRewardedAdReady()) {
-      emit("unavailable", placement, lastLoadFailure, onEvent);
-      return { status: "unavailable", reason: lastLoadFailure };
+  const v2 = lifecycleV2();
+  if (state !== "ready") {
+    if (v2 && (state === "failed" || state === "expired")) {
+      // Fail fast. A failure already reported by its preload is not repeated at the tap.
+      const reason: AdFailureReason = state === "failed" ? lastLoadFailure : "load_failed";
+      const repeat = state === "failed" && !loadReported && lastLoadCode !== undefined;
+      emit("unavailable", placement, reason, onEvent, {
+        stateAtTap,
+        cause: notReadyCause(stateAtTap),
+        ...(repeat ? { code: lastLoadCode } : {}),
+      });
+      return { status: "unavailable", reason };
+    }
+    if (state === "idle" || state === "failed" || state === "expired") startLoad(activeAdapter()!, placement, "click", onEvent);
+    // v2: a short bounded wait. Legacy: wait for the load itself, which is bounded at 8 s.
+    await waitForLoad(v2 ? tapWaitMs : LEGACY_LOAD_TIMEOUT_MS + 1000);
+    refreshLifecycle();
+    // `state` moved while we awaited (a callback ran), which the compiler cannot see.
+    const after = state as RewardedState;
+    if (after !== "ready") {
+      const failedNow = after === "failed";
+      const reason: AdFailureReason = failedNow ? lastLoadFailure : "timeout";
+      const own = failedNow && !loadReported;
+      if (failedNow) loadReported = true;
+      emit("unavailable", placement, reason, onEvent, {
+        stateAtTap,
+        cause: failedNow ? "failed" : stateAtTap === "idle" ? "not_attempted" : "loading",
+        source: "click",
+        ...(own && lastLoadCode !== undefined ? { code: lastLoadCode } : {}),
+        ...(own ? { latency: adLatencyBucket(lastLoadLatencyMs) } : {}),
+      });
+      return { status: "unavailable", reason };
     }
   }
 
@@ -309,24 +499,71 @@ export async function showRewardedAd(
   }
 }
 
+/**
+ * App returned to the foreground: re-evaluate time-based state (a load that outlived the
+ * hard expiry while the WebView was frozen, an ad that aged out). Nothing else - no new
+ * load, no request. An old callback that fires after this still hits the generation check.
+ */
+export function handleRewardedForeground(): void {
+  refreshLifecycle();
+}
+
+let foregroundHookInstalled = false;
+function installForegroundHook(): void {
+  if (foregroundHookInstalled) return;
+  foregroundHookInstalled = true;
+  try {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") handleRewardedForeground();
+    });
+  } catch {
+    // no document - nothing to hook
+  }
+}
+installForegroundHook();
+
 // --- Test hooks -------------------------------------------------------------------
 
 /** Test-only: reset module state between test cases. */
 export function _resetRewardedAdsForTests(): void {
   adapters.clear();
   listeners.clear();
+  waiters.clear();
+  clearHardExpiry();
   state = "idle";
-  initialized = false;
-  loadPromise = null;
+  loadSeq = 0;
+  nativeLoadActive = false;
+  loadStartedAt = 0;
+  loadPlacement = null;
+  loadSource = "preload";
+  loadReported = false;
+  loadOnEvent = undefined;
+  readyAt = 0;
+  failedAt = -Infinity;
   lastLoadFailure = "load_failed";
-  loadTimeoutMs = LOAD_TIMEOUT_MS;
+  lastLoadCode = undefined;
+  lastLoadLatencyMs = 0;
+  hardLoadExpiryMs = HARD_LOAD_EXPIRY_MS;
+  tapWaitMs = TAP_WAIT_MS;
+  readyTtlMs = READY_TTL_MS;
+  failedCooldownMs = FAILED_COOLDOWN_MS;
   showTimeoutMs = SHOW_TIMEOUT_MS;
+  now = () => Date.now();
   consentGate = () => true;
   remoteAdsGate = () => true;
+  lifecycleV2Gate = () => true;
 }
 
-/** Test-only: shrink timeouts so timeout paths run in milliseconds. */
-export function _setAdTimeoutsForTests(loadMs: number, showMs: number): void {
-  loadTimeoutMs = loadMs;
-  showTimeoutMs = showMs;
+/** Test-only: shrink the time budgets so timeout paths run in milliseconds. */
+export function _setAdTimeoutsForTests(timeouts: { hardLoad?: number; tapWait?: number; readyTtl?: number; failedCooldown?: number; show?: number }): void {
+  if (timeouts.hardLoad !== undefined) hardLoadExpiryMs = timeouts.hardLoad;
+  if (timeouts.tapWait !== undefined) tapWaitMs = timeouts.tapWait;
+  if (timeouts.readyTtl !== undefined) readyTtlMs = timeouts.readyTtl;
+  if (timeouts.failedCooldown !== undefined) failedCooldownMs = timeouts.failedCooldown;
+  if (timeouts.show !== undefined) showTimeoutMs = timeouts.show;
+}
+
+/** Test-only: a controllable clock for the lazy (suspend-proof) expiry checks. */
+export function _setRewardedClockForTests(clock: () => number): void {
+  now = clock;
 }

@@ -9,7 +9,7 @@
 // ...in native startup code only. The web build never registers an adapter and
 // keeps its zero-dependency no-op behavior.
 
-import type { AdAdapter, AdReward } from "./adTypes";
+import type { AdAdapter, AdReward, RewardedLoadError } from "./adTypes";
 import type { InterstitialAdapter, InterstitialNativeEvent } from "./interstitialAds";
 
 // Minimal structural slice of @capacitor-community/admob's AdMob object - just
@@ -18,9 +18,39 @@ export type AdMobPluginLike = {
   initialize(options?: { initializeForTesting?: boolean }): Promise<unknown>;
   prepareRewardVideoAd(options: { adId: string }): Promise<unknown>;
   showRewardVideoAd(): Promise<{ type?: string; amount?: number } | undefined>;
+  /** Optional: when present, the rewarded FailedToLoad event supplies the numeric GMA code. */
+  addListener?(eventName: string, listener: (info: unknown) => void): Promise<unknown>;
 };
 
+/** The plugin's RewardAdPluginEvents.FailedToLoad value (that enum is not importable under plain-Node tests). */
+export const REWARDED_PLUGIN_FAILED_TO_LOAD = "onRewardedVideoAdFailedToLoad";
+
+/**
+ * How long a rejected prepare call waits for the FailedToLoad event that carries the
+ * numeric code. The plugin posts the event and then the rejection (see
+ * RewardedAdCallbackAndListeners.kt), so this is normally already settled.
+ */
+const REWARDED_CODE_GRACE_MS = 300;
+
+function pluginErrorCode(info: unknown): number | undefined {
+  const code = (info as { code?: unknown } | null)?.code;
+  return typeof code === "number" && Number.isInteger(code) ? code : undefined;
+}
+
 export function createAdMobAdapter(admob: AdMobPluginLike, options?: { testing?: boolean }): AdAdapter {
+  // FailedToLoad is the only place the numeric code surfaces. The plugin also fires it
+  // (code -1) when showRewardVideoAd() finds nothing prepared; with no load pending that
+  // one is simply ignored here.
+  let lastFailureCode: number | undefined;
+  let loadPending = false;
+  try {
+    void admob.addListener?.(REWARDED_PLUGIN_FAILED_TO_LOAD, (info) => {
+      if (loadPending) lastFailureCode = pluginErrorCode(info);
+    });
+  } catch {
+    // no listener support: failures simply carry no code
+  }
+
   return {
     name: "admob-capacitor",
 
@@ -29,7 +59,16 @@ export function createAdMobAdapter(admob: AdMobPluginLike, options?: { testing?:
     },
 
     async loadRewarded(adUnitId: string): Promise<void> {
-      await admob.prepareRewardVideoAd({ adId: adUnitId });
+      lastFailureCode = undefined;
+      loadPending = true;
+      try {
+        await admob.prepareRewardVideoAd({ adId: adUnitId });
+      } catch {
+        if (lastFailureCode === undefined) await new Promise((resolve) => setTimeout(resolve, REWARDED_CODE_GRACE_MS));
+        throw { code: lastFailureCode } satisfies RewardedLoadError;
+      } finally {
+        loadPending = false;
+      }
     },
 
     // The plugin resolves showRewardVideoAd() with the reward item when earned.

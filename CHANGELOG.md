@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.56.0 - 2026-10-01
+
+Android 0.56.0 (versionCode 55) and web 0.56.0. Ads load more reliably; nobody sees more ads.
+
+- **Rewarded ads are ready more often:** the ad now loads in the background with a proper
+  lifecycle (one load at a time, late loads accepted while still useful, expired ads
+  refreshed, app background/foreground handled). Tapping Watch Ad shows a ready ad at once,
+  waits only a few seconds for one that is still loading, and otherwise says so straight away.
+  The x3 / +100 offer, its timing and its reward values are unchanged.
+- **Interstitial ads are ready more often:** the load starts two games before the break, gets
+  one retry if it failed, and the break itself never waits for it. How often an ad can appear
+  is unchanged (same share of players, one break after every 7 games, at most one per session).
+- **Privacy cap fix:** the ad content-rating limit (Teen) is now set once at startup and no
+  longer reset by the first rewarded load.
+- **Better ad diagnostics:** a few extra bounded fields on existing ad events (error code,
+  load time bucket, why an ad was not ready). No new events, identifiers or requests.
+- **Remote controls (no new APK needed later):** interstitial share of players 0-100%,
+  sessions cap, a separate share for a second break, and a switch to fall back to the previous
+  rewarded loading behaviour. Launch values stay at 50% / every 7 games / 1 per session.
+
 ## 0.55.3 - 2026-09-29
 
 Web only - nothing changes for players, and Android (0.55.0 / vc53) needs no release.

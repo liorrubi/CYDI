@@ -317,8 +317,8 @@ android {
         // (arms x3 / +100, first offer after 3 games then every 5, interstitial priority,
         // exposure on render), the Android SEO-block takeover and round-start scroll reset.
         // Its reward events carry new experiment keys: DEPLOY THE WORKER (master) FIRST.
-        versionCode 53
-        versionName "0.55.0"
+        versionCode 55
+        versionName "0.56.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

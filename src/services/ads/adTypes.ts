@@ -9,6 +9,7 @@
 // reason list from here.
 
 import type { RewardedAdPlacement } from "./adPlacements";
+import type { AdLatencyBucket, AdLoadSource, AdNotReadyCause, RewardedTapState } from "./adDiagnostics";
 
 /** Every ad format we may ever serve. Config/flag rows in adConfig.ts are keyed by this. */
 export type AdFormat = "rewarded" | "rewardedInterstitial" | "interstitial" | "banner" | "appOpen";
@@ -93,7 +94,21 @@ export type RewardedAdEventDetail = {
   placement: RewardedAdPlacement;
   /** Present only on "unavailable"/"error". */
   reason?: AdFailureReason;
+  /** 0.56 diagnostics (all optional, all bounded - see adDiagnostics.ts). */
+  /** "loaded"/"unavailable": who started the load this concerns. */
+  source?: AdLoadSource;
+  /** Numeric Google Mobile Ads error code of the failed load, when the plugin reported one. */
+  code?: number;
+  /** "requested"/"unavailable": the lifecycle state the tap found. */
+  stateAtTap?: RewardedTapState;
+  /** "unavailable": why nothing could be shown at the tap. */
+  cause?: AdNotReadyCause;
+  /** "loaded"/"unavailable" (failed load): request-to-callback latency bucket. */
+  latency?: AdLatencyBucket;
 };
+
+/** A rejected rewarded load: the numeric GMA code when the plugin reported one, never an SDK message. */
+export type RewardedLoadError = { code?: number };
 
 /** Observer of lifecycle events. Must never throw (the service guards anyway). */
 export type RewardedAdListener = (event: RewardedAdLifecycleEvent, detail: RewardedAdEventDetail) => void;
@@ -108,7 +123,7 @@ export type AdAdapter = {
   name: string;
   /** One-time SDK init (consent, config). Called lazily before the first load. May reject; the service catches. */
   initialize(): Promise<void>;
-  /** Load (pre-cache) a rewarded ad for the given ad unit. Resolves when ready to show. May reject; the service catches. */
+  /** Load (pre-cache) a rewarded ad for the given ad unit. Resolves when ready to show. May reject (optionally with a RewardedLoadError); the service catches. */
   loadRewarded(adUnitId: string): Promise<void>;
   /** Show the loaded rewarded ad. Resolves with the reward, or null if dismissed early. May reject; the service catches. */
   showRewarded(): Promise<AdReward | null>;

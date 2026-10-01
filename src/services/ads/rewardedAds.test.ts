@@ -11,12 +11,16 @@ import { test, beforeEach, afterEach } from "node:test";
 import {
   _resetRewardedAdsForTests,
   _setAdTimeoutsForTests,
+  _setRewardedClockForTests,
+  getRewardedLifecycleState,
+  handleRewardedForeground,
   isRewardedAdAvailable,
   isRewardedAdReady,
   preloadRewardedAd,
   registerAdAdapter,
   registerAdConsentGate,
   registerRemoteAdsGate,
+  registerRewardedLifecycleGate,
   showRewardedAd,
   subscribeRewardedAdEvents,
 } from "./rewardedAds";
@@ -240,7 +244,7 @@ test("no-fill matching survives the plugin's own punctuation and casing", async 
 
 test("a load we abandon is still a timeout, never no_fill", async () => {
   _setAdFlagsForTests(flags(true, true));
-  _setAdTimeoutsForTests(30, 30);
+  _setAdTimeoutsForTests({ hardLoad: 30, show: 30 });
   registerAdAdapter({
     name: "hung-load",
     initialize: async () => {},
@@ -454,7 +458,7 @@ test("SDK exception during show resolves as a safe error result", async () => {
 
 test("a hung SDK load resolves as unavailable via timeout, never hangs the game", async () => {
   _setAdFlagsForTests(flags(true, true));
-  _setAdTimeoutsForTests(30, 30);
+  _setAdTimeoutsForTests({ hardLoad: 30, tapWait: 20, show: 30 });
   registerAdAdapter({
     name: "hung",
     initialize: async () => undefined,
@@ -467,7 +471,7 @@ test("a hung SDK load resolves as unavailable via timeout, never hangs the game"
 
 test("a hung SDK show resolves as a timeout error, never hangs the game", async () => {
   _setAdFlagsForTests(flags(true, true));
-  _setAdTimeoutsForTests(50, 30);
+  _setAdTimeoutsForTests({ show: 30 });
   registerAdAdapter({
     name: "hung-show",
     initialize: async () => undefined,
@@ -572,7 +576,9 @@ test("two preloads for one round issue exactly one adapter load", async () => {
   await preloadRewardedAd(PLACEMENT);
   await preloadRewardedAd(PLACEMENT);
   assert.deepEqual(calls.filter((c) => c.startsWith("load:")).length, 1);
-  assert.equal(calls.filter((c) => c === "initialize").length, 1);
+  // The SDK is initialized exactly once, by nativeAdsSetup, BEFORE the adapter is registered
+  // (with the Teen content-rating cap) - the service never calls adapter.initialize() again.
+  assert.equal(calls.filter((c) => c === "initialize").length, 0);
 });
 
 test("concurrent preloads share one in-flight request", async () => {
@@ -627,7 +633,7 @@ test("on web (no adapter registered) the early preload is a silent no-op", async
   assert.equal(isRewardedAdReady(), false);
 });
 
-test("when the early preload fails, the offer's own show still attempts its own load", async () => {
+test("when the early preload fails, the offer's tap fails fast; the next preload (after the cooldown) tries again", async () => {
   let attempt = 0;
   const calls: string[] = [];
   registerAdAdapter({
@@ -649,10 +655,17 @@ test("when the early preload fails, the offer's own show still attempts its own 
   await preloadRewardedAd(PLACEMENT);
   assert.equal(isRewardedAdReady(), false, "the early preload failed");
 
-  // The fallback path: DoubleCoinsOffer's Watch Ad still loads and shows.
+  // v2: a failed preload means the tap fails fast (clean UX, no 20-30 s wait), without a new request.
+  const fast = await showRewardedAd(PLACEMENT);
+  assert.deepEqual(fast, { status: "unavailable", reason: "no_fill" });
+  assert.deepEqual(calls, ["load:1"], "the tap started no load");
+
+  // The offer's own preload runs again once the cooldown has passed, and then the tap succeeds.
+  _setAdTimeoutsForTests({ failedCooldown: 0 });
+  await preloadRewardedAd(PLACEMENT);
   const result = await showRewardedAd(PLACEMENT);
   assert.equal(result.status, "rewarded");
-  assert.deepEqual(calls, ["initialize", "load:1", "load:2", "show"]);
+  assert.deepEqual(calls, ["load:1", "load:2", "show"]);
 });
 
 test("a failed early preload is reported once, not swallowed and not double-counted", async () => {
@@ -674,4 +687,351 @@ test("preload never shows an ad by itself", async () => {
   const { calls } = makeSpyAdapter(async () => ({ type: "coins", amount: 1 }));
   await preloadRewardedAd(PLACEMENT);
   assert.equal(calls.includes("show"), false);
+});
+
+// --- 0.56 rewarded lifecycle v2 -------------------------------------------------------------------
+
+type PendingLoad = { resolve: () => void; reject: (err: unknown) => void };
+
+/** An adapter whose every load stays pending until the test settles it - the way to drive races. */
+function controlledAdapter(showResult: () => Promise<AdReward | null> = async () => ({ type: "coins", amount: 3 })) {
+  const loads: PendingLoad[] = [];
+  const calls: string[] = [];
+  registerAdAdapter({
+    name: "controlled",
+    initialize: async () => {
+      calls.push("initialize");
+    },
+    loadRewarded: () => {
+      calls.push("load");
+      return new Promise<void>((resolve, reject) => {
+        loads.push({ resolve, reject });
+      });
+    },
+    showRewarded: () => {
+      calls.push("show");
+      return showResult();
+    },
+  });
+  return { loads, calls };
+}
+
+const tick = (ms = 0) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+type Seen = { event: RewardedAdLifecycleEvent; detail: Record<string, unknown> };
+function recordFull(): Seen[] {
+  const seen: Seen[] = [];
+  subscribeRewardedAdEvents("test-recorder", (event, detail) => seen.push({ event, detail: { ...detail } }));
+  return seen;
+}
+
+test("idle -> loading -> ready -> show: the preload never blocks, a ready tap shows at once", async () => {
+  const { loads, calls } = controlledAdapter();
+  const seen = recordFull();
+  assert.equal(getRewardedLifecycleState(), "idle");
+  const preload = preloadRewardedAd(PLACEMENT);
+  assert.equal(getRewardedLifecycleState(), "loading");
+  assert.equal(isRewardedAdReady(), false);
+  loads[0].resolve();
+  await preload;
+  assert.equal(getRewardedLifecycleState(), "ready");
+  const result = await showRewardedAd(PLACEMENT);
+  assert.equal(result.status, "rewarded");
+  assert.deepEqual(calls, ["load", "show"]);
+  assert.equal(getRewardedLifecycleState(), "idle", "the ad is consumed");
+  const requested = seen.find((e) => e.event === "requested")!;
+  assert.equal(requested.detail.stateAtTap, "ready");
+  const loaded = seen.find((e) => e.event === "loaded")!;
+  assert.equal(loaded.detail.source, "preload");
+  assert.equal(loaded.detail.latency, "lt5s");
+});
+
+test("a failed preload is reported once with source, numeric code and latency; the tap then fails fast without repeating it", async () => {
+  const { loads, calls } = controlledAdapter();
+  const seen = recordFull();
+  const preload = preloadRewardedAd(PLACEMENT);
+  loads[0].reject({ code: 3 });
+  await preload;
+  assert.equal(getRewardedLifecycleState(), "failed");
+  const failure = seen.filter((e) => e.event === "unavailable");
+  assert.equal(failure.length, 1);
+  assert.deepEqual(failure[0].detail, { placement: PLACEMENT, reason: "no_fill", source: "preload", code: 3, latency: "lt5s" });
+
+  const started = Date.now();
+  const result = await showRewardedAd(PLACEMENT);
+  assert.deepEqual(result, { status: "unavailable", reason: "no_fill" });
+  assert.ok(Date.now() - started < 50, "fail fast - no wait");
+  assert.deepEqual(calls, ["load"], "the tap started no new load");
+  const tap = seen.filter((e) => e.event === "unavailable")[1];
+  assert.deepEqual(tap.detail, { placement: PLACEMENT, reason: "no_fill", stateAtTap: "failed", cause: "failed" });
+});
+
+test("numeric GMA codes drive the classification: 3 and 9 are no_fill, any other code is sdk_error, and the code is kept", async () => {
+  for (const [code, reason] of [[3, "no_fill"], [9, "no_fill"], [2, "sdk_error"], [0, "sdk_error"]] as const) {
+    _resetRewardedAdsForTests();
+    const { loads } = controlledAdapter();
+    const seen = recordFull();
+    const preload = preloadRewardedAd(PLACEMENT);
+    loads[0].reject({ code });
+    await preload;
+    const e = seen.find((s) => s.event === "unavailable")!;
+    assert.equal(e.detail.reason, reason, `code ${code}`);
+    assert.equal(e.detail.code, code);
+  }
+});
+
+test("a late success - after the old 8 s boundary but inside the hard expiry - is accepted and usable by the next tap", async () => {
+  _setAdTimeoutsForTests({ hardLoad: 2000, tapWait: 20 });
+  const { loads } = controlledAdapter();
+  const preload = preloadRewardedAd(PLACEMENT);
+  // A tap that cannot wait gives up quickly but must not cancel the load.
+  const early = await showRewardedAd(PLACEMENT);
+  assert.deepEqual(early, { status: "unavailable", reason: "timeout" });
+  assert.equal(getRewardedLifecycleState(), "loading", "the load keeps going");
+  await tick(60);
+  loads[0].resolve();
+  await preload;
+  assert.equal(getRewardedLifecycleState(), "ready", "accepted late");
+  assert.equal((await showRewardedAd(PLACEMENT)).status, "rewarded");
+});
+
+test("a success after the hard expiry is rejected: the state stays failed and nothing is revived", async () => {
+  _setAdTimeoutsForTests({ hardLoad: 30 });
+  const { loads } = controlledAdapter();
+  const seen = recordFull();
+  await preloadRewardedAd(PLACEMENT); // resolves when the hard expiry abandons the load
+  assert.equal(getRewardedLifecycleState(), "failed");
+  loads[0].resolve();
+  await tick();
+  assert.equal(getRewardedLifecycleState(), "failed", "stale success ignored");
+  assert.equal(seen.filter((e) => e.event === "loaded").length, 0);
+  assert.deepEqual(seen.filter((e) => e.event === "unavailable").map((e) => e.detail.reason), ["timeout"], "reported once");
+});
+
+test("stale callbacks from an abandoned load can not touch the next load's state", async () => {
+  _setAdTimeoutsForTests({ hardLoad: 30, failedCooldown: 0 });
+  const { loads } = controlledAdapter();
+  await preloadRewardedAd(PLACEMENT); // load 0 abandoned at the hard expiry
+  const second = preloadRewardedAd(PLACEMENT);
+  assert.equal(getRewardedLifecycleState(), "loading");
+  loads[0].reject({ code: 3 }); // stale rejection
+  loads[0].resolve(); // and a stale success
+  await tick();
+  assert.equal(getRewardedLifecycleState(), "loading", "still the second load's state");
+  loads[1].resolve();
+  await second;
+  assert.equal(getRewardedLifecycleState(), "ready");
+});
+
+test("never two loads in flight: repeated preloads and a tap while loading start nothing new", async () => {
+  _setAdTimeoutsForTests({ tapWait: 10 });
+  const { loads, calls } = controlledAdapter();
+  void preloadRewardedAd(PLACEMENT);
+  void preloadRewardedAd(PLACEMENT);
+  await showRewardedAd(PLACEMENT); // loading: waits briefly, then gives up
+  void preloadRewardedAd(PLACEMENT);
+  assert.equal(calls.filter((c) => c === "load").length, 1);
+  loads[0].resolve();
+  await tick();
+  assert.equal(getRewardedLifecycleState(), "ready");
+  void preloadRewardedAd(PLACEMENT);
+  assert.equal(calls.filter((c) => c === "load").length, 1, "no refresh while an ad is loaded");
+});
+
+test("tap while loading: a short bounded wait, then it shows if the ad arrived and gives up cleanly if not", async () => {
+  _setAdTimeoutsForTests({ tapWait: 200 });
+  const { loads } = controlledAdapter();
+  void preloadRewardedAd(PLACEMENT);
+  const tap = showRewardedAd(PLACEMENT);
+  await tick(10);
+  loads[0].resolve();
+  assert.equal((await tap).status, "rewarded", "arrived inside the wait");
+
+  _resetRewardedAdsForTests();
+  _setAdTimeoutsForTests({ tapWait: 25 });
+  controlledAdapter();
+  const seen = recordFull();
+  void preloadRewardedAd(PLACEMENT);
+  const started = Date.now();
+  assert.deepEqual(await showRewardedAd(PLACEMENT), { status: "unavailable", reason: "timeout" });
+  assert.ok(Date.now() - started < 200, "bounded");
+  const e = seen.filter((s) => s.event === "unavailable").at(-1)!;
+  assert.equal(e.detail.stateAtTap, "loading");
+  assert.equal(e.detail.cause, "loading");
+  assert.equal(e.detail.source, "click");
+});
+
+test("tap with nothing attempted: one load is started for it, the wait is bounded, the cause is not_attempted", async () => {
+  _setAdTimeoutsForTests({ tapWait: 20 });
+  const { calls } = controlledAdapter();
+  const seen = recordFull();
+  assert.deepEqual(await showRewardedAd(PLACEMENT), { status: "unavailable", reason: "timeout" });
+  assert.equal(calls.filter((c) => c === "load").length, 1);
+  const e = seen.filter((s) => s.event === "unavailable").at(-1)!;
+  assert.deepEqual([e.detail.stateAtTap, e.detail.cause], ["idle", "not_attempted"]);
+});
+
+test("blocked at the tap (consent): immediate unavailable with cause blocked, nothing reaches the SDK", async () => {
+  const { calls } = controlledAdapter();
+  registerAdConsentGate(() => false);
+  const seen = recordFull();
+  assert.deepEqual(await showRewardedAd(PLACEMENT), { status: "unavailable", reason: "consent_blocked" });
+  assert.deepEqual(calls, []);
+  assert.equal(seen.find((s) => s.event === "unavailable")!.detail.cause, "blocked");
+});
+
+test("a loaded ad expires after its TTL: not ready, tap fails fast with cause expired, the next preload refreshes it", async () => {
+  let clock = 1_000_000;
+  _setRewardedClockForTests(() => clock);
+  _setAdTimeoutsForTests({ readyTtl: 60_000 });
+  const { loads, calls } = controlledAdapter();
+  const seen = recordFull();
+  const preload = preloadRewardedAd(PLACEMENT);
+  loads[0].resolve();
+  await preload;
+  assert.equal(isRewardedAdReady(), true);
+  clock += 59_999;
+  assert.equal(isRewardedAdReady(), true);
+  clock += 1;
+  assert.equal(isRewardedAdReady(), false);
+  assert.equal(getRewardedLifecycleState(), "expired");
+  assert.deepEqual(await showRewardedAd(PLACEMENT), { status: "unavailable", reason: "load_failed" });
+  assert.equal(calls.includes("show"), false, "an expired ad is never shown");
+  const e = seen.filter((s) => s.event === "unavailable").at(-1)!;
+  assert.deepEqual([e.detail.stateAtTap, e.detail.cause], ["expired", "expired"]);
+  void preloadRewardedAd(PLACEMENT);
+  assert.equal(calls.filter((c) => c === "load").length, 2, "one refresh, only when asked to preload");
+});
+
+test("foreground: a load that outlived the hard expiry while the app was away is abandoned, and its later callback is ignored", async () => {
+  let clock = 5_000;
+  _setRewardedClockForTests(() => clock);
+  _setAdTimeoutsForTests({ hardLoad: 75_000 });
+  const { loads } = controlledAdapter();
+  void preloadRewardedAd(PLACEMENT);
+  assert.equal(getRewardedLifecycleState(), "loading");
+  clock += 80_000; // the WebView was frozen: its timers never fired
+  handleRewardedForeground();
+  assert.equal(getRewardedLifecycleState(), "failed");
+  loads[0].resolve();
+  await tick();
+  assert.equal(getRewardedLifecycleState(), "failed", "the old callback does not revive it");
+});
+
+test("foreground does not start any request by itself", () => {
+  const { calls } = controlledAdapter();
+  handleRewardedForeground();
+  assert.deepEqual(calls, []);
+});
+
+test("an automatic preload waits out the failure cooldown (no churn on no_fill)", async () => {
+  let clock = 1000;
+  _setRewardedClockForTests(() => clock);
+  const { loads, calls } = controlledAdapter();
+  const first = preloadRewardedAd(PLACEMENT);
+  loads[0].reject({ code: 3 });
+  await first;
+  void preloadRewardedAd(PLACEMENT);
+  assert.equal(calls.filter((c) => c === "load").length, 1, "inside the cooldown");
+  clock += 15_000;
+  void preloadRewardedAd(PLACEMENT);
+  assert.equal(calls.filter((c) => c === "load").length, 2, "after the cooldown");
+});
+
+test("kill switch off = the 0.55 behavior: a failed state does not fail fast, the tap loads and waits for it", async () => {
+  registerRewardedLifecycleGate(() => false);
+  let attempt = 0;
+  registerAdAdapter({
+    name: "legacy",
+    initialize: async () => {},
+    loadRewarded: async () => {
+      attempt += 1;
+      if (attempt === 1) throw { code: 3 };
+    },
+    showRewarded: async () => ({ type: "coins", amount: 3 }),
+  });
+  await preloadRewardedAd(PLACEMENT);
+  assert.equal(isRewardedAdReady(), false);
+  const result = await showRewardedAd(PLACEMENT);
+  assert.equal(result.status, "rewarded", "the tap made its own load, as in 0.55");
+  assert.equal(attempt, 2);
+});
+
+test("kill switch off: the old 8 s load window applies (checked with a scaled clock)", async () => {
+  registerRewardedLifecycleGate(() => false);
+  let clock = 0;
+  _setRewardedClockForTests(() => clock);
+  controlledAdapter();
+  void preloadRewardedAd(PLACEMENT);
+  clock += 7_999;
+  assert.equal(getRewardedLifecycleState(), "loading");
+  clock += 1;
+  assert.equal(getRewardedLifecycleState(), "failed", "8 s, as in 0.55");
+});
+
+test("the lifecycle has no notion of the experiment arm: identical scenarios give identical events whatever the placement", async () => {
+  const runScenario = async (placement: RewardedAdPlacement) => {
+    _resetRewardedAdsForTests();
+    const { loads } = controlledAdapter();
+    const seen: string[] = [];
+    subscribeRewardedAdEvents("t", (event, detail) => seen.push(`${event}:${detail.reason ?? ""}:${detail.stateAtTap ?? ""}:${detail.source ?? ""}`));
+    const preload = preloadRewardedAd(placement);
+    loads[0].resolve();
+    await preload;
+    await showRewardedAd(placement);
+    return seen;
+  };
+  assert.deepEqual(await runScenario("shape_challenge_double_reward"), await runScenario("daily_retry"));
+});
+
+test("source guard: rewardedAds.ts knows nothing about the x3 / +100 experiment, and only nativeAdsSetup registers an adapter after initialize", async () => {
+  const { readFileSync, readdirSync } = await import("node:fs");
+  const dir = new URL(".", import.meta.url);
+  const source = readFileSync(new URL("rewardedAds.ts", dir), "utf8");
+  assert.equal(/plus100|x3|rewardedOfferCadence|experiment/i.test(source.replace(/\/\/.*$/gm, "")), false, "no experiment knowledge in the lifecycle code");
+  assert.equal(/adapter\.initialize\(/.test(source), false, "the service never initializes the SDK a second time");
+  const code = (text: string) => text.replace(/\/\/.*$/gm, "");
+  const callers = readdirSync(new URL("..", dir), { recursive: true } as never)
+    .map((f) => String(f).split("\\").join("/"))
+    .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\./.test(f) && f !== "ads/rewardedAds.ts")
+    .filter((f) => /registerAdAdapter\(/.test(code(readFileSync(new URL(`../${f}`, dir), "utf8"))));
+  assert.deepEqual(callers, ["ads/nativeAdsSetup.ts"]);
+  const setup = readFileSync(new URL("nativeAdsSetup.ts", dir), "utf8");
+  assert.ok(setup.indexOf("await AdMob.initialize(") < setup.indexOf("registerAdAdapter(createAdMobAdapter"), "SDK init precedes any adapter registration");
+});
+
+test("the diagnostics ride on existing events and are schema-valid", async () => {
+  const { loads } = controlledAdapter();
+  const tracked: { eventName: AnalyticsEventName; params: unknown }[] = [];
+  connectAdAnalytics((eventName, params) => tracked.push({ eventName, params }));
+  const preload = preloadRewardedAd(PLACEMENT);
+  loads[0].reject({ code: 3 });
+  await preload;
+  await showRewardedAd(PLACEMENT);
+  assert.deepEqual(
+    tracked.map((t) => t.eventName),
+    ["rewarded_ad_unavailable", "rewarded_ad_requested", "rewarded_ad_unavailable"],
+    "no new event names; one failure record per failed load plus the tap's own",
+  );
+  for (const t of tracked) assert.equal(validateEventParams(t.eventName, t.params).valid, true, `${t.eventName} invalid: ${JSON.stringify(t.params)}`);
+});
+
+test("the AdMob adapter carries the numeric FailedToLoad code on a rejected load, and ignores a show-time FailedToLoad", async () => {
+  const listeners = new Map<string, (info: unknown) => void>();
+  const plugin = {
+    initialize: async () => undefined,
+    prepareRewardVideoAd: async () => {
+      listeners.get("onRewardedVideoAdFailedToLoad")?.({ code: 3, message: "No fill." });
+      throw new Error("No fill.");
+    },
+    showRewardVideoAd: async () => undefined,
+    addListener: async (name: string, fn: (info: unknown) => void) => {
+      listeners.set(name, fn);
+    },
+  };
+  const adapter = createAdMobAdapter(plugin);
+  await assert.rejects(adapter.loadRewarded("unit"), (e: { code?: number }) => e.code === 3);
+  // A FailedToLoad with no load pending (the plugin sends code -1 when a show finds nothing prepared) changes nothing.
+  listeners.get("onRewardedVideoAdFailedToLoad")?.({ code: -1 });
+  const noEvent = createAdMobAdapter({ ...plugin, prepareRewardVideoAd: async () => { throw new Error("x"); }, addListener: async () => undefined });
+  await assert.rejects(noEvent.loadRewarded("unit"), (e: { code?: number }) => e.code === undefined);
 });

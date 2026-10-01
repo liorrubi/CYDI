@@ -8,6 +8,7 @@ import {
   assignArm,
   assignmentBucket,
   consumeOpportunity,
+  isSecondOpportunityEligible,
   opportunitiesInSession,
   parseInterstitialState,
   recordEligibleCompletion,
@@ -90,7 +91,7 @@ test("normal cadence 7: the 7th, 14th and 21st completions are due", () => {
   assert.deepEqual(play(fresh(), 21, 7).dueAt, [7, 14, 21]);
 });
 
-test("preload is requested from cadence-1, for treatment only", () => {
+test("preload window opens at cadence-2 (attempt 1 at 5, retry at 6, checkpoint at 7), for treatment only", () => {
   let s = fresh();
   const preloadAt: number[] = [];
   for (let i = 1; i <= 7; i++) {
@@ -98,7 +99,7 @@ test("preload is requested from cadence-1, for treatment only", () => {
     s = d.state;
     if (d.preload) preloadAt.push(i);
   }
-  assert.deepEqual(preloadAt, [6, 7]);
+  assert.deepEqual(preloadAt, [5, 6, 7]);
   const control = recordEligibleCompletion({ ...fresh(), eligibleGamesSinceLastOpportunity: 5 }, 7, 1, S1, "control");
   assert.equal(control.preload, false);
 });
@@ -176,4 +177,48 @@ test("corrupt persisted state falls back field by field", () => {
   assert.equal(partial.eligibleGamesSinceLastOpportunity, 0);
   assert.deepEqual(partial.session, { sessionId: S1, opportunities: 2 });
   assert.equal(partial.marker, null);
+});
+
+// --- 0.56: full rollout range and the second opportunity ----------------------------------
+
+test("assignment up to 50 is exactly what it always was; above 50 the holdback shrinks and 100 has no control", () => {
+  const ids = Array.from({ length: 4000 }, (_, i) => `inst-${i}`);
+  const count = (percent: number, arm: string) => ids.filter((id) => assignArm(id, percent) === arm).length;
+  // 50: the historical even split, nobody unassigned.
+  assert.equal(count(50, "unassigned"), 0);
+  for (const id of ids) {
+    const bucket = assignmentBucket(id);
+    assert.equal(assignArm(id, 50), bucket < 5000 ? "treatment" : "control");
+  }
+  // 100: everyone is treatment.
+  assert.equal(count(100, "treatment"), ids.length);
+  // 75: treatment [0,75%) and control the remainder; installations only ever move control -> treatment.
+  for (const id of ids) {
+    const at50 = assignArm(id, 50);
+    const at75 = assignArm(id, 75);
+    assert.notEqual(at75, "unassigned");
+    if (at50 === "treatment") assert.equal(at75, "treatment", "treatment never shrinks");
+  }
+  assert.equal(count(0, "treatment") + count(0, "control"), 0, "0 = nobody");
+});
+
+test("second-opportunity eligibility: 0 = none, 100 = all, stable and monotonic in between", () => {
+  const ids = Array.from({ length: 3000 }, (_, i) => `inst-${i}`);
+  assert.equal(ids.every((id) => isSecondOpportunityEligible(id, 100)), true);
+  assert.equal(ids.some((id) => isSecondOpportunityEligible(id, 0)), false);
+  assert.equal(isSecondOpportunityEligible(null, 50), false, "no stable id, no second opportunity");
+  const share = ids.filter((id) => isSecondOpportunityEligible(id, 20)).length / ids.length;
+  assert.ok(share > 0.15 && share < 0.25, `about 20%, got ${share}`);
+  for (const id of ids) {
+    if (isSecondOpportunityEligible(id, 20)) assert.equal(isSecondOpportunityEligible(id, 40), true, "monotonic");
+  }
+});
+
+test("the session cap still bounds opportunities; the second-opportunity gate only applies past the first", () => {
+  const s1 = { ...fresh(), eligibleGamesSinceLastOpportunity: 6, session: { sessionId: S1, opportunities: 1 } };
+  assert.equal(recordEligibleCompletion(s1, 7, 2, S1, "treatment", true).due, true);
+  assert.equal(recordEligibleCompletion(s1, 7, 2, S1, "treatment", false).due, false, "not eligible for a second one");
+  assert.equal(recordEligibleCompletion(s1, 7, 1, S1, "treatment", true).due, false, "cap 1 reached");
+  const first = { ...fresh(), eligibleGamesSinceLastOpportunity: 6 };
+  assert.equal(recordEligibleCompletion(first, 7, 2, S1, "treatment", false).due, true, "the first is never gated");
 });

@@ -27,6 +27,12 @@ export type InterstitialSessionCap = (typeof INTERSTITIAL_SESSION_CAPS)[number];
  * makes 5 -> 20 -> 50 keep every earlier assignment.
  */
 export const INTERSTITIAL_MAX_ROLLOUT_PERCENT = 50;
+/**
+ * The full range a 0.56+ client and Worker accept (0-100). Above 50 the control holdback
+ * shrinks (see assignArm). Clients older than 0.56 reject anything above 50 as malformed
+ * and fail closed, so the Worker serves them min(rollout, 50) - see toClientConfig.
+ */
+export const INTERSTITIAL_MAX_ROLLOUT_PERCENT_V2 = 100;
 
 export const INTERSTITIAL_ARMS = ["control", "treatment"] as const;
 export type InterstitialArm = (typeof INTERSTITIAL_ARMS)[number];
@@ -61,8 +67,14 @@ export function isInterstitialSessionCap(value: unknown): value is InterstitialS
   return typeof value === "number" && (INTERSTITIAL_SESSION_CAPS as readonly number[]).includes(value);
 }
 
+/** Legacy (pre-0.56) range, 0-50: what an older client still validates. */
 export function isInterstitialRolloutPercent(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= INTERSTITIAL_MAX_ROLLOUT_PERCENT;
+}
+
+/** The full 0-100 range (0.56+). */
+export function isInterstitialRolloutPercentV2(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= INTERSTITIAL_MAX_ROLLOUT_PERCENT_V2;
 }
 
 export function isInterstitialArm(value: unknown): value is InterstitialArm {
@@ -92,6 +104,11 @@ function hasExactKeys(obj: Record<string, unknown>, keys: readonly string[]): bo
  * The response of GET /api/config/ads/interstitial. `countryEligible` is the ONLY
  * country information a client ever sees: the server decides it from the network
  * country Cloudflare observed, and the client never sends or learns a country code.
+ *
+ * The two optional keys exist since 0.56 and are sent ONLY to a client that asks for the
+ * v2 shape (`?v=2`) - a released client validates exact keys and would fail closed on them.
+ * Absent = the default: every installation may have a second opportunity (up to the
+ * session cap) and the rewarded lifecycle v2 is on.
  */
 export type InterstitialClientConfig = {
   enabled: boolean;
@@ -99,12 +116,46 @@ export type InterstitialClientConfig = {
   gamesBetweenAds: InterstitialCadence;
   maxOpportunitiesPerSession: InterstitialSessionCap;
   countryEligible: boolean;
+  /** 0-100: the share of installations that may have a 2nd+ opportunity in a session. */
+  secondOpportunityRolloutPercent?: number;
+  /** false = back out the rewarded lifecycle v2 to the 0.55 timing (a remote kill switch). */
+  rewardedLifecycleV2?: boolean;
 };
 
 const CLIENT_KEYS = ["enabled", "rolloutPercent", "gamesBetweenAds", "maxOpportunitiesPerSession", "countryEligible"] as const;
+const CLIENT_OPTIONAL_KEYS = ["secondOpportunityRolloutPercent", "rewardedLifecycleV2"] as const;
 
-/** Strict, all-or-nothing: exact keys, every value from its closed set. Anything else fails closed. */
+function hasKeysWithin(obj: Record<string, unknown>, required: readonly string[], optional: readonly string[]): boolean {
+  const keys = Object.keys(obj);
+  return required.every((k) => keys.includes(k)) && keys.every((k) => required.includes(k) || optional.includes(k));
+}
+
+function optionalFieldsValid(value: Record<string, unknown>): boolean {
+  return (
+    (!("secondOpportunityRolloutPercent" in value) || isInterstitialRolloutPercentV2(value.secondOpportunityRolloutPercent)) &&
+    (!("rewardedLifecycleV2" in value) || typeof value.rewardedLifecycleV2 === "boolean")
+  );
+}
+
+/**
+ * Strict, all-or-nothing: the five required keys (plus, since 0.56, the two optional ones),
+ * every value from its closed set. Anything else fails closed. The rollout is 0-100 here;
+ * the Worker never sends a legacy client more than 50 (toClientConfig).
+ */
 export function isValidInterstitialClientConfig(value: unknown): value is InterstitialClientConfig {
+  if (!isRecord(value) || !hasKeysWithin(value, CLIENT_KEYS, CLIENT_OPTIONAL_KEYS)) return false;
+  return (
+    typeof value.enabled === "boolean" &&
+    isInterstitialRolloutPercentV2(value.rolloutPercent) &&
+    isInterstitialCadence(value.gamesBetweenAds) &&
+    isInterstitialSessionCap(value.maxOpportunitiesPerSession) &&
+    typeof value.countryEligible === "boolean" &&
+    optionalFieldsValid(value)
+  );
+}
+
+/** What a PRE-0.56 client accepts, for compatibility tests: exact keys, rollout 0-50. */
+export function isValidLegacyInterstitialClientConfig(value: unknown): value is InterstitialClientConfig {
   if (!isRecord(value) || !hasExactKeys(value, CLIENT_KEYS)) return false;
   return (
     typeof value.enabled === "boolean" &&
@@ -123,11 +174,16 @@ export function isValidInterstitialClientConfig(value: unknown): value is Inters
  */
 export type InterstitialStoredConfig = {
   enabled: boolean;
+  /** 0-100 (0.56+). Above 50 the control holdback shrinks; a pre-0.56 client is served min(rollout, 50). */
   rolloutPercent: number;
   gamesBetweenAds: InterstitialCadence;
   maxOpportunitiesPerSession: InterstitialSessionCap;
   /** Upper-case ISO 3166-1 alpha-2 codes. Unknown/unsupported codes are ALWAYS ineligible on top of this list. */
   blockedCountries: string[];
+  /** Optional (0.56+): see InterstitialClientConfig. */
+  secondOpportunityRolloutPercent?: number;
+  /** Optional (0.56+): see InterstitialClientConfig. */
+  rewardedLifecycleV2?: boolean;
 };
 
 const STORED_KEYS = ["enabled", "rolloutPercent", "gamesBetweenAds", "maxOpportunitiesPerSession", "blockedCountries"] as const;
@@ -135,11 +191,12 @@ const COUNTRY_CODE = /^[A-Z]{2}$/;
 const MAX_BLOCKED_COUNTRIES = 250;
 
 export function isValidInterstitialStoredConfig(value: unknown): value is InterstitialStoredConfig {
-  if (!isRecord(value) || !hasExactKeys(value, STORED_KEYS)) return false;
+  if (!isRecord(value) || !hasKeysWithin(value, STORED_KEYS, CLIENT_OPTIONAL_KEYS)) return false;
   const blocked = value.blockedCountries;
   return (
     typeof value.enabled === "boolean" &&
-    isInterstitialRolloutPercent(value.rolloutPercent) &&
+    isInterstitialRolloutPercentV2(value.rolloutPercent) &&
+    optionalFieldsValid(value) &&
     isInterstitialCadence(value.gamesBetweenAds) &&
     isInterstitialSessionCap(value.maxOpportunitiesPerSession) &&
     Array.isArray(blocked) &&
@@ -177,12 +234,24 @@ export function isCountryEligible(config: InterstitialStoredConfig, country: unk
   return !config.blockedCountries.includes(country);
 }
 
-export function toClientConfig(config: InterstitialStoredConfig, country: unknown): InterstitialClientConfig {
-  return {
+/**
+ * `v2` = the client asked for the 0.56 shape (`?v=2`). Without it the response is exactly the
+ * five keys a released client validates, with the rollout capped at 50 (its schema maximum) -
+ * so storing a value above 50, or either optional key, can never turn a released client's
+ * interstitial off.
+ */
+export function toClientConfig(config: InterstitialStoredConfig, country: unknown, v2 = false): InterstitialClientConfig {
+  const base: InterstitialClientConfig = {
     enabled: config.enabled,
-    rolloutPercent: config.rolloutPercent,
+    rolloutPercent: v2 ? config.rolloutPercent : Math.min(config.rolloutPercent, INTERSTITIAL_MAX_ROLLOUT_PERCENT),
     gamesBetweenAds: config.gamesBetweenAds,
     maxOpportunitiesPerSession: config.maxOpportunitiesPerSession,
     countryEligible: isCountryEligible(config, country),
+  };
+  if (!v2) return base;
+  return {
+    ...base,
+    ...(config.secondOpportunityRolloutPercent !== undefined ? { secondOpportunityRolloutPercent: config.secondOpportunityRolloutPercent } : {}),
+    ...(config.rewardedLifecycleV2 !== undefined ? { rewardedLifecycleV2: config.rewardedLifecycleV2 } : {}),
   };
 }

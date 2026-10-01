@@ -18,21 +18,32 @@
 //     -> (shown only) wait for release -> navigate -> next game_started -> continuation
 
 import { trackEvent } from "../analytics";
-import type { AnalyticsEventName, EventParamsMap, GameType, InterstitialCheckpointParams } from "../analyticsSchema";
+import type { AnalyticsEventName, EventParamsMap, GameType, InterstitialCheckpointDiag, InterstitialCheckpointParams } from "../analyticsSchema";
 import { getPersistedInstallationId, getSessionId } from "../analyticsIdentity";
 import { subscribeRewardedAdEvents } from "./rewardedAds";
 import { getFrozenInterstitialConfig, getQaForcedArm, isInterstitialLiveEnabled } from "./interstitialConfig";
 import type { InterstitialArm, InterstitialCadence, InterstitialFailureReason } from "./interstitialConfigSchema";
+import type { AdNotReadyCause } from "./adDiagnostics";
+import { adLatencyBucket } from "./adDiagnostics";
 import {
   assignArm,
   consumeOpportunity,
+  isSecondOpportunityEligible,
   loadState,
   localInterstitialStorage,
   recordEligibleCompletion,
   saveState,
   type InterstitialStorage,
 } from "./interstitialExperiment";
-import { getInterstitialState, preloadInterstitial, presentInterstitial, subscribeInterstitialLifecycle, type PresentOutcome } from "./interstitialAds";
+import {
+  getInterstitialReadiness,
+  getInterstitialState,
+  invalidateInterstitial,
+  preloadInterstitial,
+  presentInterstitial,
+  subscribeInterstitialLifecycle,
+  type PresentOutcome,
+} from "./interstitialAds";
 
 const ELIGIBLE_GAME_TYPE: GameType = "shapeChallenge";
 
@@ -60,8 +71,16 @@ let rewardedRenderedThisCycle = false;
  * Cleared when the opportunity is consumed at a checkpoint.
  */
 let laneReservedForOpportunity = false;
-/** One preload attempt per upcoming opportunity; reset when an opportunity is consumed. */
-let preloadAttemptedForUpcoming = false;
+/**
+ * Load attempts made for the upcoming opportunity (0-2); reset when an opportunity is consumed
+ * or its session changes. Attempt 1 at cadence-2, a retry at a LATER completion (cadence-1)
+ * only if that attempt has definitively failed - never an immediate loop, never overlapping.
+ */
+let attemptsForUpcoming = 0;
+/** The cadence progress (`eligibleGamesSinceLastOpportunity`) when the last attempt started. */
+let lastAttemptSince = -1;
+/** The analytics session the upcoming opportunity's attempts belong to. */
+let attemptSessionId: string | null = null;
 /** A checkpoint is running; a second tap cannot start another. */
 let checkpointInFlight = false;
 
@@ -71,6 +90,8 @@ type Participation = {
   arm: InterstitialArm;
   cadence: InterstitialCadence;
   sessionCap: number;
+  /** This installation may have a 2nd+ opportunity in a session (always true unless the remote second-opportunity rollout is below 100). */
+  secondOpportunityEligible: boolean;
 };
 
 /**
@@ -83,7 +104,12 @@ function participation(): Participation | null {
   if (config === null || !isInterstitialLiveEnabled() || !config.countryEligible) return null;
   const assigned = getQaForcedArm() ?? assignArm(installationIdSource(), config.rolloutPercent);
   if (assigned === "unassigned") return null;
-  return { arm: assigned, cadence: config.gamesBetweenAds, sessionCap: config.maxOpportunitiesPerSession };
+  return {
+    arm: assigned,
+    cadence: config.gamesBetweenAds,
+    sessionCap: config.maxOpportunitiesPerSession,
+    secondOpportunityEligible: isSecondOpportunityEligible(installationIdSource(), config.secondOpportunityRolloutPercent),
+  };
 }
 
 /**
@@ -110,15 +136,39 @@ export function recordInterstitialGameCompleted(gameType: GameType): void {
   if (gameType !== ELIGIBLE_GAME_TYPE) return;
   const who = participation();
   if (who === null) return;
-  const decision = recordEligibleCompletion(loadState(storage), who.cadence, who.sessionCap, sessionIdSource(), who.arm);
+  const decision = recordEligibleCompletion(loadState(storage), who.cadence, who.sessionCap, sessionIdSource(), who.arm, who.secondOpportunityEligible);
   saveState(storage, decision.state);
   dueThisCycle = decision.due;
   dueArmThisCycle = decision.due ? who.arm : null;
-  if (decision.preload && !preloadAttemptedForUpcoming) {
-    // preloadInterstitial() itself refuses when something is already loading/ready,
-    // so this can never become a second concurrent load.
-    preloadAttemptedForUpcoming = true;
-    preloadInterstitial();
+  if (decision.preload) scheduleLoadAttempt(decision.state.eligibleGamesSinceLastOpportunity, who.cadence);
+}
+
+/**
+ * The 0.56 preload schedule for the upcoming opportunity, called once per completed treatment
+ * game from cadence-2 on (cadence 7: games 5, 6, then the checkpoint at 7):
+ *   - attempt 1 as soon as the window opens;
+ *   - attempt 2 at a later completion, only while the checkpoint is still ahead (`since` < cadence),
+ *     and only if attempt 1 has definitively failed (or its ad expired) - a load still in flight
+ *     is never joined by a second one;
+ *   - never more than two attempts per opportunity; a session change throws the stale ones away.
+ * preloadInterstitial() additionally refuses while any native load is active.
+ */
+function scheduleLoadAttempt(since: number, cadence: InterstitialCadence): void {
+  const sessionId = sessionIdSource();
+  if (attemptSessionId !== null && attemptSessionId !== sessionId) {
+    invalidateInterstitial();
+    attemptsForUpcoming = 0;
+    lastAttemptSince = -1;
+  }
+  attemptSessionId = sessionId;
+  if (attemptsForUpcoming >= 2) return;
+  const ready = getInterstitialReadiness();
+  if (ready.state === "ready" || ready.state === "loading" || ready.state === "showing") return;
+  if (attemptsForUpcoming === 1 && (since <= lastAttemptSince || since >= cadence)) return;
+  const attempt = (attemptsForUpcoming + 1) as 1 | 2;
+  if (preloadInterstitial(attempt)) {
+    attemptsForUpcoming = attempt;
+    lastAttemptSince = since;
   }
 }
 
@@ -163,12 +213,28 @@ export function markRewardedOfferRenderedThisCycle(): void {
   rewardedRenderedThisCycle = true;
 }
 
-function checkpointParams(arm: InterstitialArm, result: PresentOutcome | { outcome: "control" | "suppressed" }, cadence: InterstitialCadence): InterstitialCheckpointParams {
-  if (result.outcome === "show_failed") {
-    return { arm: "treatment", outcome: "show_failed", gamesBetweenAds: cadence, reason: (result as { reason: InterstitialFailureReason }).reason };
-  }
+/** What the readiness machinery knew when the checkpoint ran (captured before anything is presented). */
+type ReadinessAtCheckpoint = ReturnType<typeof getInterstitialReadiness> & { attempts: number };
+
+function checkpointParams(
+  arm: InterstitialArm,
+  result: PresentOutcome | { outcome: "control" | "suppressed" },
+  cadence: InterstitialCadence,
+  readiness: ReadinessAtCheckpoint,
+): InterstitialCheckpointParams {
   if (arm === "control") return { arm, outcome: result.outcome === "suppressed" ? "suppressed" : "control", gamesBetweenAds: cadence };
-  return { arm, outcome: result.outcome as "not_ready" | "shown" | "suppressed", gamesBetweenAds: cadence };
+  // Treatment diagnostics: bounded fields only (see adDiagnostics.ts) - how many attempts this
+  // opportunity made, the numeric code of the last failed load, how long the loaded ad took,
+  // and (not_ready only) why nothing was ready. Nothing waits on any of it.
+  const diag: InterstitialCheckpointDiag = {};
+  if (readiness.attempts === 1 || readiness.attempts === 2) diag.attempt = readiness.attempts;
+  if (readiness.lastFailure?.code !== undefined) diag.code = readiness.lastFailure.code;
+  if (readiness.state === "ready" && readiness.loadLatencyMs !== null) diag.latency = adLatencyBucket(readiness.loadLatencyMs);
+  if (result.outcome === "show_failed") {
+    return { arm: "treatment", outcome: "show_failed", gamesBetweenAds: cadence, reason: (result as { reason: InterstitialFailureReason }).reason, ...diag };
+  }
+  if (result.outcome === "not_ready") diag.notReadyCause = (result as { cause: AdNotReadyCause }).cause;
+  return { arm, outcome: result.outcome as "not_ready" | "shown" | "suppressed", gamesBetweenAds: cadence, ...diag };
 }
 
 /**
@@ -187,13 +253,22 @@ export function runInterstitialCheckpoint(): Promise<boolean> | null {
   if (who === null) return null;
 
   const sessionId = sessionIdSource();
+  // An ad loaded under another analytics session does not belong to this opportunity.
+  if (attemptSessionId !== null && attemptSessionId !== sessionId) {
+    invalidateInterstitial();
+    attemptsForUpcoming = 0;
+  }
+  // What the checkpoint knows, captured BEFORE it consumes the opportunity or presents anything.
+  const readiness: ReadinessAtCheckpoint = { ...getInterstitialReadiness(), attempts: attemptsForUpcoming };
   // Consumed before anything else, so a crash or kill mid-ad still counts it once.
   saveState(storage, consumeOpportunity(loadState(storage), sessionId));
-  preloadAttemptedForUpcoming = false;
+  attemptsForUpcoming = 0;
+  lastAttemptSince = -1;
+  attemptSessionId = null;
   laneReservedForOpportunity = false;
 
   const record = (result: PresentOutcome | { outcome: "control" | "suppressed" }) => {
-    const params = checkpointParams(who.arm, result, who.cadence);
+    const params = checkpointParams(who.arm, result, who.cadence, readiness);
     // The marker is written synchronously the moment the outcome is known, BEFORE
     // any navigation - and never before the outcome is known.
     const state = loadState(storage);
@@ -206,15 +281,21 @@ export function runInterstitialCheckpoint(): Promise<boolean> | null {
   // same moments. Rewarded rendered -> never an interstitial from the same Result screen.
   if (rewardedShownThisCycle || rewardedRenderedThisCycle) {
     record({ outcome: "suppressed" });
+    invalidateInterstitial(); // the opportunity is consumed; a loaded ad does not carry over
     return null;
   }
   if (who.arm === "control") {
     record({ outcome: "control" });
+    invalidateInterstitial();
     return null;
   }
 
   checkpointInFlight = true;
   const release = presentInterstitial({ onOutcome: record });
+  // The opportunity is consumed whether or not anything was presented: a loaded ad does not
+  // carry over, and a load still in flight can no longer make anything ready. (A showing ad is
+  // untouched - invalidation only resets states that hold an unused load.)
+  invalidateInterstitial();
   if (release === null) {
     // not_ready: decided synchronously - nothing to wait for, no spinner, no retry.
     checkpointInFlight = false;
@@ -253,8 +334,14 @@ function connectObservers(): void {
     if (event === "shown") rewardedShownThisCycle = true;
   });
   subscribeInterstitialLifecycle("interstitial-analytics", (event) => {
-    if (event.type === "load_failed") track("interstitial_load_failed", { reason: event.reason });
-    else if (event.type === "dismissed") track("interstitial_dismissed", {});
+    if (event.type === "load_failed") {
+      track("interstitial_load_failed", {
+        reason: event.reason,
+        attempt: event.attempt,
+        ...(event.code !== undefined ? { code: event.code } : {}),
+        latency: adLatencyBucket(event.latencyMs),
+      });
+    } else if (event.type === "dismissed") track("interstitial_dismissed", {});
   });
 }
 
@@ -267,14 +354,14 @@ export function getInterstitialControllerDebugInfo(): {
   state: ReturnType<typeof loadState>;
   dueThisCycle: boolean;
   rewardedShownThisCycle: boolean;
-  preloadAttemptedForUpcoming: boolean;
+  attemptsForUpcoming: number;
 } {
   return {
     participation: participation(),
     state: loadState(storage),
     dueThisCycle,
     rewardedShownThisCycle,
-    preloadAttemptedForUpcoming,
+    attemptsForUpcoming,
   };
 }
 
@@ -293,7 +380,9 @@ export function _resetInterstitialControllerForTests(options: {
   laneReservedForOpportunity = false;
   dueThisCycle = false;
   dueArmThisCycle = null;
-  preloadAttemptedForUpcoming = false;
+  attemptsForUpcoming = 0;
+  lastAttemptSince = -1;
+  attemptSessionId = null;
   checkpointInFlight = false;
   connectObservers();
 }

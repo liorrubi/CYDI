@@ -603,7 +603,11 @@ export async function handleInterstitialConfigGet(request: Request, env: Env): P
   const config = parseInterstitialStoredConfig(raw);
   if (!config) return json({ error: "stored interstitial config failed validation" }, 500);
   const country = (request as { cf?: { country?: unknown } }).cf?.country;
-  return new Response(JSON.stringify(toClientConfig(config, country)), {
+  // `?v=2` = a 0.56+ client: it gets the full shape. Anyone else gets exactly the five keys (and
+  // a rollout capped at 50) a released client validates, so nothing stored here can switch an
+  // older install's interstitial off.
+  const v2 = new URL(request.url).searchParams.get("v") === "2";
+  return new Response(JSON.stringify(toClientConfig(config, country, v2)), {
     headers: {
       "content-type": "application/json",
       // Short for the same reason as the ads switch: `enabled` is an emergency lever.
@@ -624,8 +628,9 @@ export async function handleInterstitialConfigPut(request: Request, env: Env): P
     return jsonNoStore(
       {
         error:
-          "body must be exactly { enabled: boolean, rolloutPercent: 0-50, gamesBetweenAds: 5|7|10|12|15|20, " +
-          "maxOpportunitiesPerSession: 1|2|3, blockedCountries: string[] }",
+          "body must be { enabled: boolean, rolloutPercent: 0-100, gamesBetweenAds: 5|7|10|12|15|20, " +
+          "maxOpportunitiesPerSession: 1|2|3, blockedCountries: string[] } plus optionally " +
+          "secondOpportunityRolloutPercent: 0-100 and rewardedLifecycleV2: boolean",
       },
       400,
     );

@@ -10,9 +10,11 @@ import {
   getFrozenInterstitialConfig,
   getQaForcedArm,
   isInterstitialLiveEnabled,
+  isRewardedLifecycleV2Enabled,
   refreshInterstitialConfig,
   refreshInterstitialConfigIfStale,
 } from "./interstitialConfig";
+import { isValidInterstitialClientConfig } from "./interstitialConfigSchema";
 import type { ApiResponse } from "../nativeApi";
 
 const store = new Map<string, string>();
@@ -55,7 +57,7 @@ test("fail-closed before any answer", () => {
 test("a valid answer freezes the run's values and sets the live switch", async () => {
   next = respond(200, GOOD);
   assert.equal(await refreshInterstitialConfig(), true);
-  assert.deepEqual(getFrozenInterstitialConfig(), { rolloutPercent: 5, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true });
+  assert.deepEqual(getFrozenInterstitialConfig(), { rolloutPercent: 5, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true, secondOpportunityRolloutPercent: 100 });
   assert.equal(isInterstitialLiveEnabled(), true);
 });
 
@@ -65,7 +67,7 @@ test("later refreshes move ONLY enabled - cadence, rollout, cap and country stay
   next = respond(200, { ...GOOD, enabled: false, rolloutPercent: 50, gamesBetweenAds: 5, maxOpportunitiesPerSession: 3, countryEligible: false });
   await refreshInterstitialConfig();
   assert.equal(isInterstitialLiveEnabled(), false, "the emergency switch is live");
-  assert.deepEqual(getFrozenInterstitialConfig(), { rolloutPercent: 5, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true });
+  assert.deepEqual(getFrozenInterstitialConfig(), { rolloutPercent: 5, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true, secondOpportunityRolloutPercent: 100 });
   next = respond(200, GOOD);
   await refreshInterstitialConfig();
   assert.equal(isInterstitialLiveEnabled(), true);
@@ -134,4 +136,41 @@ test("a debuggable build honours the QA override instead of the network", async 
   await refreshInterstitialConfig();
   assert.equal(isInterstitialLiveEnabled(), false);
   assert.equal(calls, 0);
+});
+
+// --- 0.56 remote controls ---------------------------------------------------------------
+
+test("the 0.56 client asks the Worker for the v2 shape", async () => {
+  let asked = "";
+  _resetInterstitialConfigForTests(async (path) => {
+    asked = path;
+    return respond(200, GOOD);
+  });
+  await refreshInterstitialConfig();
+  assert.equal(asked, "/api/config/ads/interstitial?v=2");
+});
+
+test("rollout 0-100 and the two optional keys are accepted; 101, bad types and unknown keys are not", () => {
+  const ok = (v: unknown) => isValidInterstitialClientConfig(v);
+  assert.equal(ok({ ...GOOD, rolloutPercent: 0 }), true);
+  assert.equal(ok({ ...GOOD, rolloutPercent: 100 }), true);
+  assert.equal(ok({ ...GOOD, rolloutPercent: 101 }), false);
+  assert.equal(ok({ ...GOOD, rolloutPercent: -1 }), false);
+  assert.equal(ok({ ...GOOD, secondOpportunityRolloutPercent: 20, rewardedLifecycleV2: false }), true);
+  assert.equal(ok({ ...GOOD, secondOpportunityRolloutPercent: 101 }), false);
+  assert.equal(ok({ ...GOOD, secondOpportunityRolloutPercent: 2.5 }), false);
+  assert.equal(ok({ ...GOOD, rewardedLifecycleV2: "no" }), false);
+  assert.equal(ok({ ...GOOD, somethingElse: 1 }), false);
+});
+
+test("secondOpportunityRolloutPercent freezes with the run; rewardedLifecycleV2 is live and defaults ON", async () => {
+  assert.equal(isRewardedLifecycleV2Enabled(), true, "default: v2 on");
+  next = respond(200, { ...GOOD, secondOpportunityRolloutPercent: 20, rewardedLifecycleV2: false });
+  await refreshInterstitialConfig();
+  assert.equal(getFrozenInterstitialConfig()?.secondOpportunityRolloutPercent, 20);
+  assert.equal(isRewardedLifecycleV2Enabled(), false, "the kill switch reaches a running app");
+  next = respond(200, { ...GOOD, secondOpportunityRolloutPercent: 80 });
+  await refreshInterstitialConfig();
+  assert.equal(getFrozenInterstitialConfig()?.secondOpportunityRolloutPercent, 20, "frozen for the run");
+  assert.equal(isRewardedLifecycleV2Enabled(), true, "an answer without the key means the default (on)");
 });

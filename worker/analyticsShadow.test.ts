@@ -212,3 +212,31 @@ test("breaker disabled: nothing reaches the DO or AE", async () => {
   assert.equal(r.calls.length, 0);
   assert.equal(written.length, 0);
 });
+
+// --- 0.56 ad-readiness diagnostics ride existing slots on ad rows only -----------------------------
+
+test("rewarded + interstitial diagnostics map onto the documented AE slots (no new columns, schema stays 3)", () => {
+  const point = (name: string, params: unknown) => buildShadowDataPoints("/event", JSON.stringify(envelope(name, params)), "de", () => 0.5)[0];
+  const rw = point("rewarded_ad_unavailable", { placement: PLACEMENT, reason: "no_fill", source: "click", code: 3, stateAtTap: "failed", cause: "failed", latency: "10to20s" });
+  assert.equal(rw.doubles[1], 5, "double2 = code + 2");
+  assert.equal(rw.doubles[3], 3, "double4 = latency bucket position (10to20s)");
+  assert.equal(rw.doubles[6], 2, "double7 = source click");
+  assert.equal(rw.doubles[7], 4, "double8 = stateAtTap failed");
+  assert.equal(rw.blobs[19], "cause:failed");
+  assert.equal(rw.doubles[0], AE_SCHEMA_VERSION);
+  assert.equal(AE_SCHEMA_VERSION, 3);
+  assert.equal(rw.doubles.length, 20);
+
+  const cp = point("interstitial_checkpoint", { arm: "treatment", outcome: "not_ready", gamesBetweenAds: 7, attempt: 2, code: 0, notReadyCause: "loading" });
+  assert.equal(cp.doubles[2], 2, "double3 = attempt");
+  assert.equal(cp.doubles[1], 2, "code 0 is distinguishable from no code");
+  assert.equal(cp.doubles[8], 7);
+  assert.equal(cp.blobs[19], "notReadyCause:loading");
+
+  // An older client's row (no diagnostics) maps exactly as before: all those slots are 0.
+  const old = point("rewarded_ad_unavailable", { placement: PLACEMENT, reason: "no_fill" });
+  assert.deepEqual([old.doubles[1], old.doubles[2], old.doubles[3], old.doubles[6], old.doubles[7], old.blobs[19]], [0, 0, 0, 0, 0, ""]);
+  // Non-ad rows are untouched by the reuse.
+  const game = point("game_started", GAME);
+  assert.equal(game.doubles[1], 0);
+});

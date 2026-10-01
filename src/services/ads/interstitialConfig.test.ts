@@ -64,7 +64,7 @@ test("a valid answer freezes the run's values and sets the live switch", async (
 test("later refreshes move ONLY enabled - cadence, rollout, cap and country stay frozen", async () => {
   next = respond(200, GOOD);
   await refreshInterstitialConfig();
-  next = respond(200, { ...GOOD, enabled: false, rolloutPercent: 50, gamesBetweenAds: 5, maxOpportunitiesPerSession: 3, countryEligible: false });
+  next = respond(200, { ...GOOD, enabled: false, rolloutPercent: 50, gamesBetweenAds: 5, maxOpportunitiesPerSession: 2, countryEligible: false });
   await refreshInterstitialConfig();
   assert.equal(isInterstitialLiveEnabled(), false, "the emergency switch is live");
   assert.deepEqual(getFrozenInterstitialConfig(), { rolloutPercent: 5, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true, secondOpportunityRolloutPercent: 100 });
@@ -173,4 +173,23 @@ test("secondOpportunityRolloutPercent freezes with the run; rewardedLifecycleV2 
   await refreshInterstitialConfig();
   assert.equal(getFrozenInterstitialConfig()?.secondOpportunityRolloutPercent, 20, "frozen for the run");
   assert.equal(isRewardedLifecycleV2Enabled(), true, "an answer without the key means the default (on)");
+});
+
+test("the hard session-cap bound is 1-2: 3 is rejected (0.56 approved bound)", () => {
+  assert.equal(isValidInterstitialClientConfig({ ...GOOD, maxOpportunitiesPerSession: 2 }), true);
+  assert.equal(isValidInterstitialClientConfig({ ...GOOD, maxOpportunitiesPerSession: 3 }), false);
+  assert.equal(isValidInterstitialClientConfig({ ...GOOD, maxOpportunitiesPerSession: 0 }), false);
+});
+
+test("rewardedLifecycleV2: v2 is ON before any answer and when the key is absent; only an explicit false rolls back", async () => {
+  assert.equal(isRewardedLifecycleV2Enabled(), true, "before any answer");
+  next = respond(200, GOOD); // no rewardedLifecycleV2 key at all
+  await refreshInterstitialConfig();
+  assert.equal(isRewardedLifecycleV2Enabled(), true, "absent = enabled");
+  next = respond(200, { ...GOOD, rewardedLifecycleV2: true });
+  await refreshInterstitialConfig();
+  assert.equal(isRewardedLifecycleV2Enabled(), true);
+  next = respond(200, { ...GOOD, rewardedLifecycleV2: false });
+  await refreshInterstitialConfig();
+  assert.equal(isRewardedLifecycleV2Enabled(), false, "explicit false = live rollback");
 });

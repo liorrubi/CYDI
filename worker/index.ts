@@ -629,7 +629,7 @@ export async function handleInterstitialConfigPut(request: Request, env: Env): P
       {
         error:
           "body must be { enabled: boolean, rolloutPercent: 0-100, gamesBetweenAds: 5|7|10|12|15|20, " +
-          "maxOpportunitiesPerSession: 1|2|3, blockedCountries: string[] } plus optionally " +
+          "maxOpportunitiesPerSession: 1|2, blockedCountries: string[] } plus optionally " +
           "secondOpportunityRolloutPercent: 0-100 and rewardedLifecycleV2: boolean",
       },
       400,

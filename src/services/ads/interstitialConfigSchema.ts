@@ -17,7 +17,7 @@ export const INTERSTITIAL_CADENCES = [5, 7, 10, 12, 15, 20] as const;
 export type InterstitialCadence = (typeof INTERSTITIAL_CADENCES)[number];
 
 /** Opportunities per analytics session - symmetric across arms, NOT "ads shown". */
-export const INTERSTITIAL_SESSION_CAPS = [1, 2, 3] as const;
+export const INTERSTITIAL_SESSION_CAPS = [1, 2] as const;
 export type InterstitialSessionCap = (typeof INTERSTITIAL_SESSION_CAPS)[number];
 
 /**

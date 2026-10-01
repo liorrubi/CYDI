@@ -102,6 +102,7 @@ test("PUT needs the content admin token and a fully valid body", async () => {
     { ...STORED, secondOpportunityRolloutPercent: 101 },
     { ...STORED, rewardedLifecycleV2: "off" },
     { ...STORED, gamesBetweenAds: 8 },
+    { ...STORED, maxOpportunitiesPerSession: 3 },
     { ...STORED, maxOpportunitiesPerSession: 4 },
     { ...STORED, blockedCountries: ["ir"] },
     { ...STORED, extra: true },
@@ -166,4 +167,24 @@ test("the launch configuration (50 / cadence 7 / max 1, no optional keys) serves
   const b = await (await worker.fetch(request("/api/config/ads/interstitial?v=2", {}, "DE"), env)).text();
   assert.equal(a, b);
   assert.deepEqual(JSON.parse(a), { enabled: true, rolloutPercent: 50, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true });
+});
+
+test("optional v2 keys alone never change the legacy response: still the exact five keys, byte-identical to the key-less config", async () => {
+  const { kv, env } = makeEnv();
+  kv.store.set(INTERSTITIAL_CONFIG_KV_KEY, JSON.stringify({ ...STORED, enabled: true, rolloutPercent: 50 }));
+  const plain = await (await worker.fetch(request("/api/config/ads/interstitial", {}, "DE"), env)).text();
+  kv.store.set(INTERSTITIAL_CONFIG_KV_KEY, JSON.stringify({ ...STORED, enabled: true, rolloutPercent: 50, rewardedLifecycleV2: false, secondOpportunityRolloutPercent: 0 }));
+  const withKeys = await (await worker.fetch(request("/api/config/ads/interstitial", {}, "DE"), env)).text();
+  assert.equal(withKeys, plain);
+  const v2 = await (await worker.fetch(request("/api/config/ads/interstitial?v=2", {}, "DE"), env)).json();
+  assert.equal(v2.rewardedLifecycleV2, false);
+});
+
+test("a PUT that omits the optional keys replaces the object: an existing value is NOT preserved (send them every time)", async () => {
+  const { kv, env } = makeEnv();
+  const put = (body: unknown) =>
+    worker.fetch(request("/api/config/ads/interstitial", { method: "PUT", headers: { authorization: `Bearer ${CONTENT_TOKEN}` }, body: JSON.stringify(body) }), env);
+  await put({ ...STORED, rewardedLifecycleV2: false });
+  await put(STORED);
+  assert.equal("rewardedLifecycleV2" in JSON.parse(kv.store.get(INTERSTITIAL_CONFIG_KV_KEY)!), false);
 });

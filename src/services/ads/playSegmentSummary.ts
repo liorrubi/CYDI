@@ -43,9 +43,13 @@
 //   - `rewardedShown` counts every rewarded ad shown in the segment, whatever its placement.
 //   - Telemetry sampling (a remote keep percent below 100) keeps or drops a whole analytics session's events,
 //     summaries included.
+//   - NO SESSION SIDE EFFECT: a summary is dropped (not emitted) when the analytics session has already
+//     expired by the time the segment ends (foreground idle > SESSION_IDLE_TIMEOUT_MS after the last event),
+//     because emitting would start a phantom one-event session. Checked read-only via isSessionActive().
 
 import { Capacitor } from "@capacitor/core";
 import { trackEvent } from "../analytics";
+import { isSessionActive } from "../analyticsIdentity";
 import { registerBeforeLifecycleFlush } from "../analyticsQueue";
 import { SESSION_SUMMARY_MAX_COUNT, type SessionSummaryParams } from "../analyticsSchema";
 import { getInterstitialState, subscribeInterstitialLifecycle } from "./interstitialAds";
@@ -94,6 +98,8 @@ let isNative: () => boolean = () => {
   }
 };
 let track: (eventName: "session_summary", params: SessionSummaryParams) => void = trackEvent;
+/** Read-only: is the analytics session still live? (never starts or refreshes one) */
+let sessionActive: () => boolean = () => isSessionActive(now());
 /** Last interstitial / rewarded ad lifecycle moment, for the grace window. */
 let lastAdActivityAt = Number.NEGATIVE_INFINITY;
 
@@ -161,6 +167,11 @@ function endSegment(): void {
   const taken = counters;
   counters = emptyCounters();
   if (taken.classicGames < 1) return;
+  // No session side effects: emitting is an event like any other and would REVIVE or START the analytics
+  // session. If the foreground sat idle past the session timeout after the last event, that would open a
+  // phantom one-event session (and persist a new snapshot for it), so this rare summary is dropped instead.
+  // The check is read-only and runs BEFORE anything below can touch the session (the context provider does).
+  if (!sessionActive()) return;
   const ctx = contextProvider();
   if (ctx === null) return;
   const params: SessionSummaryParams = {
@@ -197,12 +208,13 @@ connect();
 // --- Tests -----------------------------------------------------------------------------
 
 export function _resetPlaySegmentSummaryForTests(
-  options: { track?: typeof track; now?: () => number; isNative?: () => boolean; context?: () => SegmentContext | null } = {},
+  options: { track?: typeof track; now?: () => number; isNative?: () => boolean; context?: () => SegmentContext | null; sessionActive?: () => boolean } = {},
 ): void {
   counters = emptyCounters();
   lastAdActivityAt = Number.NEGATIVE_INFINITY;
   track = options.track ?? trackEvent;
   now = options.now ?? (() => Date.now());
+  sessionActive = options.sessionActive ?? (() => isSessionActive(now()));
   isNative = options.isNative ?? (() => {
     try {
       return Capacitor.isNativePlatform();

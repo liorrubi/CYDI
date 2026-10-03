@@ -1019,9 +1019,17 @@ const summaries = () => eventsNamed("session_summary");
 
 let clock = 0;
 /** The segment summary in "Android, with a controllable clock" mode, reporting into the same `tracked` list. */
+let sessionLive = true;
 function androidSegments() {
   clock = 1_000_000;
-  _resetPlaySegmentSummaryForTests({ track: (name, params) => tracked.push({ name, params: params as unknown as Record<string, unknown> }), now: () => clock, isNative: () => true });
+  sessionLive = true;
+  _resetPlaySegmentSummaryForTests({
+    track: (name, params) => tracked.push({ name, params: params as unknown as Record<string, unknown> }),
+    now: () => clock,
+    isNative: () => true,
+    // the analytics session is live unless a test says otherwise (the real check reads the stored session read-only)
+    sessionActive: () => sessionLive,
+  });
 }
 
 /** A participant of cell `cellId` (cadence/cap as given); version 1. */
@@ -1378,4 +1386,18 @@ test("segment summary: persists nothing (memory only) and starts clean after a c
   assert.deepEqual({ s: storage.raw(), i: ifxStore.raw() }, before);
   onLifecycleFlush();
   assert.equal(summaries().length, 0, "the killed process's final segment is lost - documented");
+});
+
+test("segment summary: dropped, not emitted, when the analytics session already expired (no phantom session)", () => {
+  androidSegments();
+  playRounds(3);
+  sessionLive = false; // the foreground sat idle past the session timeout after the last event
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0, "an expired session means the summary is dropped");
+  // the counters were taken: the next segment starts from zero and emits once the session is live
+  sessionLive = true;
+  playRounds(2);
+  onLifecycleFlush();
+  assert.equal(summaries().length, 1);
+  assert.equal(summaries()[0].classicGames, 2, "the dropped segment's games are not carried over");
 });

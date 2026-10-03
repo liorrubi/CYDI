@@ -30,6 +30,7 @@ const {
   applyInternalFlagFromUrl,
   getInstallationId,
   getSessionId,
+  isSessionActive,
   isAnalyticsId,
   isInternalDevice,
   isQaBuild,
@@ -220,4 +221,19 @@ test("isInternalDevice keeps its old meaning - the stored flag and nothing else"
     assert.equal(isInternalDevice(), false);
     assert.equal(shouldReportAsInternal(), true, "a QA build cannot opt out - by design");
   });
+});
+
+test("isSessionActive is READ-ONLY: it never starts, refreshes or writes a session", () => {
+  store.clear();
+  assert.equal(isSessionActive(1_000), false, "no session yet is not active, and asking does not create one");
+  assert.equal(store.has("cydi.analyticsSession.v1"), false, "no session was written");
+
+  const id = getSessionId(1_000);
+  const stamp = store.get("cydi.analyticsSession.v1");
+  assert.equal(isSessionActive(1_000 + SESSION_IDLE_TIMEOUT_MS), true, "within the idle timeout (inclusive)");
+  assert.equal(store.get("cydi.analyticsSession.v1"), stamp, "asking did not refresh the activity stamp");
+  assert.equal(isSessionActive(1_000 + SESSION_IDLE_TIMEOUT_MS + 1), false, "past the idle timeout");
+  assert.equal(store.get("cydi.analyticsSession.v1"), stamp, "an expired session is not rotated by the check");
+  assert.equal(getSessionId(1_000 + SESSION_IDLE_TIMEOUT_MS + 1) === id, false, "getSessionId (not the check) is what rotates it");
+  assert.equal(isSessionActive(0), false, "a stamp in the future (clock moved back) is not active, as in getSessionId");
 });

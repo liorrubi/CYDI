@@ -123,6 +123,31 @@ export function getSessionId(now: number = Date.now()): string {
   return session.id;
 }
 
+/**
+ * Is there a session whose last activity is within SESSION_IDLE_TIMEOUT_MS? READ-ONLY: unlike getSessionId
+ * it never starts a session, never refreshes the activity stamp and never writes (same parse and same
+ * activity rule). For callers that must not create or revive a session as a side effect - the play-segment
+ * summary, which would otherwise open a phantom one-event session when a foreground segment ends after a
+ * long idle.
+ */
+export function isSessionActive(now: number = Date.now()): boolean {
+  let current = memorySession;
+  const raw = readLocal(SESSION_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as { id?: unknown; lastActivity?: unknown };
+      if (isAnalyticsId(parsed.id) && typeof parsed.lastActivity === "number" && Number.isFinite(parsed.lastActivity)) {
+        current = { id: parsed.id, lastActivity: parsed.lastActivity };
+      }
+    } catch {
+      // corrupt value: same as getSessionId, which falls back to the in-memory session.
+    }
+  }
+  if (current === null) return false;
+  const elapsed = now - current.lastActivity;
+  return elapsed >= 0 && elapsed <= SESSION_IDLE_TIMEOUT_MS;
+}
+
 /** True on a device/browser marked as ours (QA, development, demos). The server keeps those events in a separate bucket so they never land in the real-player numbers. */
 export function isInternalDevice(): boolean {
   return readLocal(INTERNAL_KEY) === "1";

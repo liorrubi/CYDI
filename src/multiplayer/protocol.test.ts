@@ -6,6 +6,10 @@ import {
   isRoomCode,
   MP_LIMITS,
   MP_TIMINGS,
+  DEFAULT_ROUND_COUNT,
+  ROUND_COUNT_ACCEPTED,
+  ROUND_COUNT_OPTIONS_UI,
+  isRoundCount,
   parseClientFrame,
   parseWirePath,
   sanitizeNickname,
@@ -184,8 +188,25 @@ test("parseClientFrame rejects a join without a usable identity", () => {
   assert.equal(parseClientFrame({ type: "join", nickname: "Lior", playerId: "abc", playerToken: 5 }), null);
 });
 
+test("round lengths: the UI offers 3, 5, 10 (default 5); the protocol still accepts 15 from installed clients", () => {
+  assert.deepEqual([...ROUND_COUNT_OPTIONS_UI], [3, 5, 10]);
+  assert.deepEqual([...ROUND_COUNT_ACCEPTED], [3, 5, 10, 15]);
+  assert.equal(DEFAULT_ROUND_COUNT, 5);
+  assert.ok(ROUND_COUNT_OPTIONS_UI.every((n) => ROUND_COUNT_ACCEPTED.includes(n)), "every UI option is accepted");
+  assert.ok(ROUND_COUNT_OPTIONS_UI.includes(DEFAULT_ROUND_COUNT));
+  assert.equal(isRoundCount(3), true);
+  assert.equal(isRoundCount(15), true);
+  assert.equal(isRoundCount(7), false);
+  for (const rounds of [3, 5, 10, 15]) {
+    assert.deepEqual(parseClientFrame({ type: "configure", rounds, difficulty: "mixed" }), { type: "configure", rounds, difficulty: "mixed" }, `${rounds} parses`);
+  }
+});
+
 test("parseClientFrame rejects out-of-range configuration", () => {
   assert.equal(parseClientFrame({ type: "configure", rounds: 7, difficulty: "hard" }), null, "7 is not an offered round count");
+  for (const rounds of [0, 1, 2, 4, 20, -3, 3.5, null, undefined]) {
+    assert.equal(parseClientFrame({ type: "configure", rounds, difficulty: "hard" }), null, `${String(rounds)} is not accepted`);
+  }
   assert.equal(parseClientFrame({ type: "configure", rounds: 10, difficulty: "extreme" }), null);
   assert.equal(parseClientFrame({ type: "configure", rounds: "10", difficulty: "hard" }), null);
 });

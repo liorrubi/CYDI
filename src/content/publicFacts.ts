@@ -29,7 +29,7 @@
 // cannot be imported, it needs a line in publicFacts.test.ts.
 
 import { CATEGORIES, SHAPE_LIBRARY, shapesForCategory, type CategoryId } from "../engine/shapeLibrary";
-import { MP_LIMITS, MP_TIMINGS, ROUND_COUNT_OPTIONS } from "../multiplayer/protocol";
+import { MP_LIMITS, MP_TIMINGS } from "../multiplayer/protocol";
 import {
   RESAMPLE_POINT_COUNT,
   SCORE_WEIGHTS,
@@ -129,7 +129,14 @@ export const DAILY_PRIZE_COINS = DAILY_CHALLENGE_PRIZE_COINS;
 export const MP_MIN_PLAYERS = MP_LIMITS.MIN_PLAYERS_TO_START;
 export const MP_MAX_PLAYERS = MP_LIMITS.MAX_PLAYERS;
 export const MP_ROOM_CODE_LENGTH = MP_LIMITS.ROOM_CODE_LENGTH;
-export const MP_ROUND_OPTIONS = ROUND_COUNT_OPTIONS;
+/**
+ * FROZEN public copy: the round lengths the public pages state ("5, 10 or 15"). Deliberately NOT derived
+ * from the in-app list (ROUND_COUNT_OPTIONS_UI in multiplayer/protocol.ts, 3 / 5 / 10 since 0.57.0):
+ * public SEO / landing text must not change while the AdSense review is pending. Switch this to the UI
+ * list after the review resolves.
+ */
+export const LEGACY_PUBLIC_ROUND_OPTIONS = [5, 10, 15] as const;
+export const MP_ROUND_OPTIONS = LEGACY_PUBLIC_ROUND_OPTIONS;
 export const MP_SHOW_SHAPE_SECONDS = MP_TIMINGS.SHOW_SHAPE_MS / 1000;
 export const MP_DRAWING_SECONDS = MP_TIMINGS.DRAWING_MS / 1000;
 export const MP_ROOM_IDLE_MINUTES = MP_LIMITS.IDLE_TTL_MS / 60_000;

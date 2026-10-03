@@ -23,6 +23,7 @@ import {
   MP_MAX_PLAYERS,
   MP_MIN_PLAYERS,
   MP_ROOM_CODE_LENGTH,
+  LEGACY_PUBLIC_ROUND_OPTIONS,
   MP_ROUND_OPTIONS,
   SCORE_WEIGHT_PERCENTS,
   SHAPE_COUNT,
@@ -45,6 +46,7 @@ import {
   spellNumber,
   BUILD_CATALOG_COUNTS,
 } from "./siteContent";
+import { ROUND_COUNT_OPTIONS_UI } from "../multiplayer/protocol";
 
 test("the player range is built from the real multiplayer limits", () => {
   assert.equal(PLAYER_RANGE, `${MP_MIN_PLAYERS}–${MP_MAX_PLAYERS}`);
@@ -55,6 +57,15 @@ test("the round options text lists every configurable round count", () => {
     assert.ok(ROUND_OPTIONS_TEXT.includes(String(option)), `missing round option ${option}`);
   }
   assert.equal(ROUND_OPTIONS_TEXT, formatOptionList(MP_ROUND_OPTIONS));
+});
+
+test("FROZEN public copy: round lengths stay \"5, 10 or 15\" while the AdSense review is pending, independent of the in-app 3 / 5 / 10 list", () => {
+  assert.deepEqual([...LEGACY_PUBLIC_ROUND_OPTIONS], [5, 10, 15]);
+  assert.deepEqual([...MP_ROUND_OPTIONS], [5, 10, 15]);
+  assert.equal(ROUND_OPTIONS_TEXT, "5, 10 or 15");
+  assert.ok(MULTIPLAYER_FACTS.some((fact) => fact.label === "Room length" && fact.value === "5, 10 or 15 rounds"));
+  // The in-app list is a separate constant and may differ; changing it must not move public text.
+  assert.deepEqual([...ROUND_COUNT_OPTIONS_UI], [3, 5, 10]);
 });
 
 test("formatOptionList reads correctly however many options there are", () => {

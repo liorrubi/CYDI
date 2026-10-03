@@ -65,7 +65,7 @@ export function isAdFailureReason(value: unknown): value is AdFailureReason {
  * the promise NEVER rejects, so call sites need no try/catch and gameplay can
  * never be broken by an ad failure:
  * - "rewarded":    user watched through (SDK-verified reward event); grant the reward.
- * - "dismissed":   user closed the ad early; no reward, no error.
+ * - "dismissed":   user closed the ad without earning the reward; no reward, no error.
  * - "unavailable": ads disabled, no adapter, not configured, or nothing loaded.
  * - "error":       the SDK failed to show; treat exactly like unavailable.
  */
@@ -107,8 +107,12 @@ export type RewardedAdEventDetail = {
   latency?: AdLatencyBucket;
 };
 
-/** A rejected rewarded load: the numeric GMA code when the plugin reported one, never an SDK message. */
-export type RewardedLoadError = { code?: number };
+/**
+ * A rejected rewarded load or show: the numeric GMA code when the plugin reported one, plus the
+ * plugin's rejection message (bounded). The message exists ONLY so the service can classify a
+ * no-fill when no numeric code arrived; it is never forwarded to analytics or stored anywhere.
+ */
+export type RewardedLoadError = { code?: number; message?: string };
 
 /** Observer of lifecycle events. Must never throw (the service guards anyway). */
 export type RewardedAdListener = (event: RewardedAdLifecycleEvent, detail: RewardedAdEventDetail) => void;
@@ -125,6 +129,11 @@ export type AdAdapter = {
   initialize(): Promise<void>;
   /** Load (pre-cache) a rewarded ad for the given ad unit. Resolves when ready to show. May reject (optionally with a RewardedLoadError); the service catches. */
   loadRewarded(adUnitId: string): Promise<void>;
-  /** Show the loaded rewarded ad. Resolves with the reward, or null if dismissed early. May reject; the service catches. */
+  /**
+   * Show the loaded rewarded ad. Resolves with the reward once it is earned, or null when the ad was
+   * dismissed without one (a dismiss, not a failure - nothing is granted). Must settle on the ad
+   * closing, not only on a reward: the plugin's own call resolves on a reward alone. Rejects (optionally
+   * with a RewardedLoadError) when the ad could not be shown; the service catches.
+   */
   showRewarded(): Promise<AdReward | null>;
 };

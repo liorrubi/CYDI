@@ -13,6 +13,8 @@ const store = new Map<string, string>();
 
 const {
   assignRewardedArm,
+  getRewardedArm,
+  getLegacyRewardedAssignment,
   decideResultOffer,
   rewardedFinalAmount,
   rewardedBonusCoins,
@@ -129,7 +131,27 @@ test("the arms differ only in reward value", () => {
   assert.equal(rewardedBonusCoins("plus100", 40), 100);
 });
 
-test("assignment is stable per installation and splits roughly 50/50", () => {
+test("+100 is retired: every installation resolves to x3, whatever the legacy hash would say", () => {
+  const seen = new Set<string>();
+  for (let i = 0; i < 200; i++) {
+    _resetRewardedCadenceForTests({ sessionId: () => session, installationId: () => `id-${i}` });
+    seen.add(getRewardedArm());
+  }
+  assert.deepEqual([...seen], ["x3"]);
+  _resetRewardedCadenceForTests({ sessionId: () => session, installationId: () => null });
+  assert.equal(getRewardedArm(), "x3");
+  assert.equal(getRewardedCadenceDebugInfo().arm, "x3");
+  // Find an installation the legacy hash put in the plus100 arm: it is still x3 now.
+  let plusId: string | null = null;
+  for (let i = 0; i < 100 && plusId === null; i++) if (assignRewardedArm(`id-${i}`) === "plus100") plusId = `id-${i}`;
+  assert.ok(plusId);
+  _resetRewardedCadenceForTests({ sessionId: () => session, installationId: () => plusId });
+  assert.equal(getLegacyRewardedAssignment(), "plus100", "the legacy assignment function is kept for history");
+  assert.equal(getRewardedArm(), "x3", "but nothing live uses it");
+  reset();
+});
+
+test("the legacy assignment function stays stable per installation and splits roughly 50/50 (history only)", () => {
   assert.equal(assignRewardedArm("abc"), assignRewardedArm("abc"));
   assert.equal(assignRewardedArm(null), "x3");
   let plus = 0;

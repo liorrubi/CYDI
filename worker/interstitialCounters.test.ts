@@ -37,7 +37,10 @@ test("interstitial_checkpoint accepts exactly the valid arm/outcome pairs", () =
   assert.equal(ok({ arm: "treatment", outcome: "pending", gamesBetweenAds: 7 }), false, "no public pending outcome");
   assert.equal(ok({ arm: "treatment", outcome: "capped", gamesBetweenAds: 7 }), false, "no capped outcome");
   assert.equal(ok({ arm: "unassigned", outcome: "control", gamesBetweenAds: 7 }), false);
-  assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: 8 }), false);
+  // 0.57: the effective cadence is any integer 5..20 (a multi-cell experiment cell may run 6/2).
+  assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: 6 }), true);
+  for (let c = 5; c <= 20; c++) assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: c }), true, `cadence ${c}`);
+  for (const bad of [4, 21, 0, 7.5, "7", null]) assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: bad }), false, `cadence ${String(bad)}`);
   assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: 7, opportunityId: "x" }), false, "no opportunity id");
 });
 
@@ -91,6 +94,16 @@ test("checkpoint and continuation get byArmOutcome and byCadence; checkpoint get
   assert.deepEqual(cont.interstitial_continuation?.byArmOutcome, { "treatment|not_ready": 1 });
   assert.deepEqual(cont.interstitial_continuation?.byCadence, { "7": 1 });
   assert.equal(cont.interstitial_continuation?.byCountry, undefined, "continuation is not country-crossed");
+});
+
+test("byCadence is bounded by the 5..20 range: at most 16 keys per event, hostile values open no key", () => {
+  let c: Record<string, unknown> = {};
+  for (let g = 0; g <= 40; g++) c = checkpoint(c, { arm: "treatment", outcome: "shown", gamesBetweenAds: g }) as Record<string, unknown>;
+  const keys = Object.keys((c as { interstitial_checkpoint: { byCadence: Record<string, number> } }).interstitial_checkpoint.byCadence);
+  assert.equal(keys.length, 16, "exactly 5..20");
+  assert.deepEqual(keys.map(Number).sort((a, b) => a - b), Array.from({ length: 16 }, (_, i) => i + 5));
+  const cont = incrementEvent({}, "interstitial_continuation", { arm: "treatment", outcome: "shown", gamesBetweenAds: 6 }, "android");
+  assert.deepEqual(cont.interstitial_continuation?.byCadence, { "6": 1 });
 });
 
 test("load_failed gets byInterstitialReason only; hostile values open no key", () => {

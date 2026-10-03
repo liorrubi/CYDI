@@ -28,7 +28,7 @@ import { AD_FLAGS, _setAdFlagsForTests, getAdUnitId, isAdFormatEnabled, type AdF
 import { REWARDED_AD_PLACEMENTS, isRewardedAdPlacement, type RewardedAdPlacement } from "./adPlacements";
 import type { AdFailureReason, AdFormat, AdReward, RewardedAdLifecycleEvent } from "./adTypes";
 import { connectAdAnalytics, mapLifecycleToAnalytics } from "./adAnalytics";
-import { createAdMobAdapter } from "./admobAdapter";
+import { REWARDED_POST_DISMISS_GRACE_MS, createAdMobAdapter } from "./admobAdapter";
 import { validateEventParams, type AnalyticsEventName } from "../analyticsSchema";
 
 const ALL_FORMATS: AdFormat[] = ["rewarded", "rewardedInterstitial", "interstitial", "banner", "appOpen"];
@@ -278,25 +278,34 @@ test("any other load rejection is still sdk_error", async () => {
   }
 });
 
-test("a non-Error rejection cannot crash the classifier", async () => {
-  _setAdFlagsForTests(flags(true, true));
-  registerAdAdapter({
-    name: "throws-string",
-    initialize: async () => {},
-    loadRewarded: async () => {
-      throw "No fill."; // eslint-disable-line no-throw-literal -- a rogue adapter may do this
-    },
-    showRewarded: async () => null,
-  });
-  const seen = recordDetailed();
-
-  await preloadRewardedAd(PLACEMENT);
-
-  assert.deepEqual(
-    seen.filter((e) => e.event === "unavailable").map((e) => e.reason),
-    ["sdk_error"],
-    "only a real Error carries a message we may read",
-  );
+test("a non-Error rejection cannot crash the classifier; only an object's string message is read", async () => {
+  const reasonFor = async (thrown: unknown): Promise<unknown> => {
+    _resetRewardedAdsForTests();
+    _setAdFlagsForTests(flags(true, true));
+    registerAdAdapter({
+      name: "throws-odd",
+      initialize: async () => {},
+      loadRewarded: async () => {
+        throw thrown; // eslint-disable-line no-throw-literal -- a rogue adapter may do this
+      },
+      showRewarded: async () => null,
+    });
+    const seen = recordDetailed();
+    await preloadRewardedAd(PLACEMENT);
+    return seen.filter((e) => e.event === "unavailable").map((e) => e.reason);
+  };
+  // The adapter throws {code, message}: with no numeric code the message still classifies a no-fill.
+  assert.deepEqual(await reasonFor({ message: "No fill." }), ["no_fill"]);
+  assert.deepEqual(await reasonFor({ code: undefined, message: "no fill" }), ["no_fill"]);
+  assert.deepEqual(await reasonFor({ message: "Internal error" }), ["sdk_error"]);
+  assert.deepEqual(await reasonFor({ message: 42 }), ["sdk_error"], "a non-string message is not read");
+  // The numeric code stays authoritative over the text.
+  assert.deepEqual(await reasonFor({ code: 0, message: "No fill." }), ["sdk_error"]);
+  assert.deepEqual(await reasonFor({ code: 3, message: "boom" }), ["no_fill"]);
+  // A bare string, null, or an object with no message is not read.
+  assert.deepEqual(await reasonFor("No fill."), ["sdk_error"], "a bare string is not read");
+  assert.deepEqual(await reasonFor(null), ["sdk_error"]);
+  assert.deepEqual(await reasonFor({}), ["sdk_error"]);
 });
 
 test("reclassifying changes the reason only - event counts and analytics shape hold", async () => {
@@ -555,12 +564,277 @@ test("AdMob adapter maps plugin results to the reward contract", async () => {
   });
   assert.deepEqual(await adapter.showRewarded(), { type: "coins", amount: 5 });
 
-  const dismissed = createAdMobAdapter({
+  // Without listener support, a show call that resolves with no usable reward item is a dismiss.
+  const noItem = createAdMobAdapter({
     initialize: async () => undefined,
     prepareRewardVideoAd: async () => undefined,
     showRewardVideoAd: async () => undefined,
   });
-  assert.equal(await dismissed.showRewarded(), null);
+  assert.equal(await noItem.showRewarded(), null);
+  const zero = createAdMobAdapter({
+    initialize: async () => undefined,
+    prepareRewardVideoAd: async () => undefined,
+    showRewardVideoAd: async () => ({ type: "coins", amount: 0 }),
+  });
+  assert.equal(await zero.showRewarded(), null);
+});
+
+// --- Rewarded show settlement from the plugin's events --------------------------------
+//
+// The real plugin resolves showRewardVideoAd() ONLY on the Reward event; Showed /
+// FailedToShow / Dismissed are events and nothing else. A fake plugin below reproduces
+// exactly that: the show call stays pending until reward() is called.
+
+const EV = {
+  reward: "onRewardedVideoAdReward",
+  dismissed: "onRewardedVideoAdDismissed",
+  failedToShow: "onRewardedVideoAdFailedToShow",
+  failedToLoad: "onRewardedVideoAdFailedToLoad",
+} as const;
+
+function fakeRewardedPlugin() {
+  const listeners = new Map<string, (info: unknown) => void>();
+  let resolveShow: ((item: { type?: string; amount?: number } | undefined) => void) | null = null;
+  let rejectShow: ((err: unknown) => void) | null = null;
+  let showCalls = 0;
+  const plugin = {
+    initialize: async () => undefined,
+    prepareRewardVideoAd: async () => undefined,
+    showRewardVideoAd: () => {
+      showCalls++;
+      return new Promise<{ type?: string; amount?: number } | undefined>((resolve, reject) => {
+        resolveShow = resolve;
+        rejectShow = reject;
+      });
+    },
+    addListener: async (name: string, fn: (info: unknown) => void) => {
+      listeners.set(name, fn);
+    },
+  };
+  return {
+    plugin,
+    emit: (name: string, info?: unknown) => listeners.get(name)?.(info),
+    /** What the plugin does on a real reward: the Reward event, then the call resolves with the item. */
+    reward: (amount = 5) => {
+      listeners.get(EV.reward)?.({ type: "coins", amount });
+      resolveShow?.({ type: "coins", amount });
+    },
+    rejectCall: (err: unknown) => rejectShow?.(err),
+    showCalls: () => showCalls,
+  };
+}
+
+/** Track what a show promise settled with, without awaiting it. */
+function trackShow(p: Promise<AdReward | null>) {
+  const out: { settled: number; value?: AdReward | null; error?: unknown } = { settled: 0 };
+  p.then(
+    (value) => {
+      out.settled++;
+      out.value = value;
+    },
+    (error) => {
+      out.settled++;
+      out.error = error;
+    },
+  );
+  return out;
+}
+
+const terminalEvents = (seen: { event: RewardedAdLifecycleEvent }[]) =>
+  seen.filter((e) => e.event === "rewarded" || e.event === "dismissed" || e.event === "error").map((e) => e.event);
+
+test("the post-dismiss grace is a single exported constant, 1500 ms by default (unvalidated on device)", () => {
+  assert.equal(REWARDED_POST_DISMISS_GRACE_MS, 1500);
+});
+
+test("dismissed without a reward settles as dismissed (null) after the grace, and the plugin call never settles", async () => {
+  const fake = fakeRewardedPlugin();
+  const adapter = createAdMobAdapter(fake.plugin, { postDismissGraceMs: 20 });
+  const show = trackShow(adapter.showRewarded());
+  fake.emit(EV.dismissed);
+  await tick(5);
+  assert.equal(show.settled, 0, "waits the grace for a late reward");
+  await tick(40);
+  assert.equal(show.settled, 1);
+  assert.equal(show.value, null);
+});
+
+test("reward then dismissed: exactly one reward, the later Dismissed is ignored", async () => {
+  const fake = fakeRewardedPlugin();
+  const adapter = createAdMobAdapter(fake.plugin, { postDismissGraceMs: 20 });
+  const show = trackShow(adapter.showRewarded());
+  fake.reward(5);
+  fake.emit(EV.dismissed);
+  await tick(40);
+  assert.equal(show.settled, 1);
+  assert.deepEqual(show.value, { type: "coins", amount: 5 });
+  fake.emit(EV.reward, { type: "coins", amount: 5 }); // a duplicate reward event
+  await tick(5);
+  assert.equal(show.settled, 1);
+});
+
+test("dismissed then a late reward inside the grace window grants the reward", async () => {
+  const fake = fakeRewardedPlugin();
+  const adapter = createAdMobAdapter(fake.plugin, { postDismissGraceMs: 50 });
+  const show = trackShow(adapter.showRewarded());
+  fake.emit(EV.dismissed);
+  await tick(10);
+  fake.emit(EV.reward, { type: "coins", amount: 7 });
+  await tick(5);
+  assert.equal(show.settled, 1);
+  assert.deepEqual(show.value, { type: "coins", amount: 7 });
+  await tick(70);
+  assert.equal(show.settled, 1, "the grace timer must not settle a second time");
+});
+
+test("a reward arriving after the grace window is ignored", async () => {
+  const fake = fakeRewardedPlugin();
+  const adapter = createAdMobAdapter(fake.plugin, { postDismissGraceMs: 15 });
+  const show = trackShow(adapter.showRewarded());
+  fake.emit(EV.dismissed);
+  await tick(40);
+  assert.equal(show.value, null);
+  fake.reward(5);
+  await tick(5);
+  assert.equal(show.settled, 1);
+  assert.equal(show.value, null, "too late: the show already ended as dismissed");
+});
+
+test("FailedToShow rejects with the code and message, once", async () => {
+  const fake = fakeRewardedPlugin();
+  const adapter = createAdMobAdapter(fake.plugin, { postDismissGraceMs: 10 });
+  const show = trackShow(adapter.showRewarded());
+  fake.emit(EV.failedToShow, { code: 0, message: "Internal error" });
+  await tick(5);
+  assert.equal(show.settled, 1);
+  assert.deepEqual(show.error, { code: 0, message: "Internal error" });
+  fake.emit(EV.dismissed);
+  fake.emit(EV.failedToShow, { code: 1 });
+  await tick(30);
+  assert.equal(show.settled, 1);
+});
+
+test("a rejected show call (nothing prepared) rejects, but not once the ad was already dismissed", async () => {
+  const noAd = fakeRewardedPlugin();
+  const adapter = createAdMobAdapter(noAd.plugin, { postDismissGraceMs: 10 });
+  const show = trackShow(adapter.showRewarded());
+  noAd.rejectCall(new Error("No Reward Video Ad can be shown."));
+  await tick(5);
+  assert.equal(show.settled, 1);
+  assert.equal((show.error as { message?: string }).message, "No Reward Video Ad can be shown.");
+
+  const dismissedFirst = fakeRewardedPlugin();
+  const adapter2 = createAdMobAdapter(dismissedFirst.plugin, { postDismissGraceMs: 10 });
+  const show2 = trackShow(adapter2.showRewarded());
+  dismissedFirst.emit(EV.dismissed);
+  dismissedFirst.rejectCall(new Error("late"));
+  await tick(30);
+  assert.equal(show2.settled, 1);
+  assert.equal(show2.value, null, "a dismiss is not turned into a failure");
+});
+
+test("events with no pending show, after settlement, or from an older show are ignored", async () => {
+  const fake = fakeRewardedPlugin();
+  const adapter = createAdMobAdapter(fake.plugin, { postDismissGraceMs: 10 });
+  // Before any show: nothing is pending, nothing throws.
+  fake.emit(EV.reward, { type: "coins", amount: 5 });
+  fake.emit(EV.dismissed);
+  fake.emit(EV.failedToShow, { code: 3 });
+  await tick(20);
+  // The first show ends as dismissed; the pre-show stragglers above did not touch it.
+  const first = trackShow(adapter.showRewarded());
+  await tick(5);
+  assert.equal(first.settled, 0, "stale events from before the show changed nothing");
+  fake.emit(EV.dismissed);
+  await tick(30);
+  assert.equal(first.value, null);
+  // A late Reward from that finished show finds no pending show...
+  fake.emit(EV.reward, { type: "coins", amount: 5 });
+  const second = trackShow(adapter.showRewarded());
+  await tick(5);
+  assert.equal(second.settled, 0, "...and so cannot settle the next show");
+  fake.emit(EV.failedToShow, { code: 2 }); // genuinely the second show's own failure
+  await tick(5);
+  assert.equal(second.settled, 1);
+  assert.equal(first.settled, 1);
+  // A show started while an older one is still pending closes the older one out as dismissed.
+  const third = trackShow(adapter.showRewarded());
+  const fourth = trackShow(adapter.showRewarded());
+  await tick(5);
+  assert.equal(third.settled, 1);
+  assert.equal(third.value, null);
+  fake.reward(9);
+  await tick(5);
+  assert.deepEqual(fourth.value, { type: "coins", amount: 9 });
+});
+
+test("through the service: a dismissed ad ends promptly as 'dismissed' (not error) with exactly one terminal event", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  const fake = fakeRewardedPlugin();
+  registerAdAdapter(createAdMobAdapter(fake.plugin, { postDismissGraceMs: 10 }));
+  const seen = recordFull();
+  await preloadRewardedAd(PLACEMENT);
+  const resultPromise = showRewardedAd(PLACEMENT);
+  await tick(5);
+  fake.emit(EV.dismissed);
+  const result = await resultPromise;
+  assert.deepEqual(result, { status: "dismissed" });
+  assert.deepEqual(terminalEvents(seen), ["dismissed"], "one terminal outcome");
+  assert.equal(getRewardedLifecycleState(), "idle", "state is released");
+  // The plugin call is still pending forever (that is the real plugin) - nothing later may add events.
+  fake.emit(EV.reward, { type: "coins", amount: 5 });
+  await tick(20);
+  assert.deepEqual(terminalEvents(seen), ["dismissed"]);
+});
+
+test("through the service: reward-then-dismissed grants once; FailedToShow is an error", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  const rewarded = fakeRewardedPlugin();
+  registerAdAdapter(createAdMobAdapter(rewarded.plugin, { postDismissGraceMs: 10 }));
+  const seen = recordFull();
+  await preloadRewardedAd(PLACEMENT);
+  const p = showRewardedAd(PLACEMENT);
+  await tick(5);
+  rewarded.reward(5);
+  rewarded.emit(EV.dismissed);
+  assert.deepEqual(await p, { status: "rewarded", reward: { type: "coins", amount: 5 } });
+  await tick(20);
+  assert.deepEqual(terminalEvents(seen), ["rewarded"]);
+
+  _resetRewardedAdsForTests();
+  _setAdFlagsForTests(flags(true, true));
+  const failing = fakeRewardedPlugin();
+  registerAdAdapter(createAdMobAdapter(failing.plugin, { postDismissGraceMs: 10 }));
+  const seen2 = recordFull();
+  await preloadRewardedAd(PLACEMENT);
+  const p2 = showRewardedAd(PLACEMENT);
+  await tick(5);
+  failing.emit(EV.failedToShow, { code: 0, message: "Internal error" });
+  assert.deepEqual(await p2, { status: "error", reason: "sdk_error" });
+  assert.deepEqual(terminalEvents(seen2), ["error"]);
+});
+
+test("the AdMob adapter keeps the plugin's rejection message on a failed load (classification only) and the service reads it", async () => {
+  _setAdFlagsForTests(flags(true, true));
+  const plugin = {
+    initialize: async () => undefined,
+    prepareRewardVideoAd: async () => {
+      throw new Error("No fill.");
+    },
+    showRewardVideoAd: async () => undefined,
+    addListener: async () => undefined, // FailedToLoad never fires
+  };
+  const adapter = createAdMobAdapter(plugin);
+  await assert.rejects(adapter.loadRewarded("unit"), (e: { code?: number; message?: string }) => e.code === undefined && e.message === "No fill.");
+  registerAdAdapter(adapter);
+  const seen = recordDetailed();
+  const tracked: { eventName: AnalyticsEventName; params: unknown }[] = [];
+  connectAdAnalytics((eventName, params) => tracked.push({ eventName, params }));
+  await preloadRewardedAd(PLACEMENT);
+  assert.deepEqual(seen.filter((e) => e.event === "unavailable").map((e) => e.reason), ["no_fill"]);
+  assert.equal(JSON.stringify(tracked).includes("No fill"), false, "the message is never sent to analytics");
+  const long = createAdMobAdapter({ ...plugin, prepareRewardVideoAd: async () => { throw new Error("x".repeat(5000)); } });
+  await assert.rejects(long.loadRewarded("unit"), (e: { message?: string }) => (e.message ?? "").length <= 200);
 });
 
 // --- Early preload (ShapeChallengeScreen warms the ad at drawing start) --------------

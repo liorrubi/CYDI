@@ -240,3 +240,24 @@ test("rewarded + interstitial diagnostics map onto the documented AE slots (no n
   const game = point("game_started", GAME);
   assert.equal(game.doubles[1], 0);
 });
+
+// --- 0.57 mpDailyOrdinal rides double9 on mp_game_started rows only --------------------------------
+
+test("mp_game_started mpDailyOrdinal lands in double9; the base form and old rows keep 0", () => {
+  const point = (name: string, params: unknown) => buildShadowDataPoints("/event", JSON.stringify(envelope(name, params)), "de", () => 0.5)[0];
+  const base = { playerCount: 4, roundCount: 5, difficulty: "hard" };
+  const withOrdinal = point("mp_game_started", { ...base, mpDailyOrdinal: 3 });
+  assert.equal(withOrdinal.doubles[8], 3, "double9 = mpDailyOrdinal");
+  assert.equal(withOrdinal.doubles[4], 5, "roundCount stays in double5");
+  assert.equal(withOrdinal.doubles[6], 4, "playerCount stays in double7");
+  assert.equal(withOrdinal.doubles.length, 20);
+  assert.equal(withOrdinal.doubles[0], AE_SCHEMA_VERSION);
+  assert.equal(point("mp_game_started", { ...base, mpDailyOrdinal: 7 }).doubles[8], 7);
+  // Older client / repeat of a counted game: the field is absent, so the slot is 0 as before.
+  assert.equal(point("mp_game_started", base).doubles[8], 0);
+  // The slot's other meaning is untouched.
+  assert.equal(point("interstitial_checkpoint", { arm: "treatment", outcome: "not_ready", gamesBetweenAds: 7, attempt: 1, code: 0, notReadyCause: "loading" }).doubles[8], 7);
+  // Out-of-range or extra keys never reach AE.
+  assert.deepEqual(buildShadowDataPoints("/event", JSON.stringify(envelope("mp_game_started", { ...base, mpDailyOrdinal: 8 })), "US"), []);
+  assert.deepEqual(buildShadowDataPoints("/event", JSON.stringify(envelope("mp_game_started", { ...base, mpDailyOrdinal: 1, roomCode: "ABCDEF" })), "US"), []);
+});

@@ -347,6 +347,21 @@ test("byRoundCount is kept for the three events that carry roundCount", () => {
   assert.deepEqual(quit.pp_abandoned?.byRoundCount, { "15": 1 });
 });
 
+test("byRoundCount buckets 3 (new in 0.57.0) and still buckets 15 (installed 0.55/0.56 clients); roundIndex 14 still buckets", () => {
+  const three = incrementEvent({}, "pp_game_started", { playerCount: 2, roundCount: 3, difficulty: "mixed" }, "android", "0.57.0", "abc1234");
+  const fifteen = incrementEvent({}, "pp_game_started", { playerCount: 2, roundCount: 15, difficulty: "mixed" }, "android", "0.56.0", "abc1234");
+  assert.deepEqual(three.pp_game_started?.byRoundCount, { "3": 1 });
+  assert.deepEqual(fifteen.pp_game_started?.byRoundCount, { "15": 1 });
+  const late = incrementEvent({}, "pp_round_completed", { roundIndex: 14, playerCount: 2, submitted: true }, "android", "0.56.0", "abc1234");
+  assert.deepEqual(late.pp_round_completed?.byRoundIndex, { "14": 1 });
+  const past = incrementEvent({}, "pp_round_completed", { roundIndex: 15, playerCount: 2, submitted: true }, "android", "0.56.0", "abc1234");
+  assert.equal(past.pp_round_completed?.byRoundIndex, undefined, "there is still no round 16");
+  // mp_game_started carrying mpDailyOrdinal is counted like before and gains no new breakout.
+  const mp = incrementEvent({}, "mp_game_started", { playerCount: 3, roundCount: 5, difficulty: "mixed", mpDailyOrdinal: 2 }, "android", "0.57.0", "abc1234");
+  assert.equal(mp.mp_game_started?.total, 1);
+  assert.equal(mp.mp_game_started?.byRoundCount, undefined);
+});
+
 test("byRoundIndex is kept for the two events that carry roundIndex", () => {
   const round = incrementEvent({}, "pp_round_completed", { roundIndex: 0, playerCount: 2, submitted: true }, "android", "0.50.0", "abc1234");
   const quit = incrementEvent({}, "pp_abandoned", { roundIndex: 3, playerCount: 2, roundCount: 10 }, "android", "0.50.0", "abc1234");

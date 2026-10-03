@@ -91,6 +91,32 @@
 //   double8  stateAtTap   1-based position in REWARDED_TAP_STATES (rewarded_ad_requested / _unavailable)
 //   blob20   detail       cause:<failed|loading|not_attempted|blocked|expired> (rewarded `cause`,
 //                         interstitial `notReadyCause`)
+//   --- 0.57 (no new columns, schema stays 3) ---
+//   double9  mpDailyOrdinal   mp_game_started rows only: this device's Nth multiplayer game of the local
+//                             day, 1..7 (7 = 7+); 0 = absent (repeat of a counted game, or an older build).
+//                             Reuses gamesBetweenAds' slot, which mp rows never carry; no report reads double9.
+//   blob20   skipStage        reward_skipped / reward_bonus_skipped rows only: "skipStage:offer" | "skipStage:ad"
+//                             (ad = an ad was shown and closed without the reward before the offer was skipped).
+//                             Reuses the free detail slot; absent (empty) on older builds.
+//   --- 0.57 experiment context + segment summary (no new columns, schema stays 3). The three ifx*
+//   fields share ONE slot per field on every row family that carries them, chosen among doubles that
+//   none of those families uses for another meaning (always filter on blob1 first):
+//   double10 ifxCap           interstitial_checkpoint / _continuation rows: the participant's session cap (1..3; 0 = not a participant)
+//   double11 ifxVersion       the same rows + session_summary: the experiment version (1..1000000; 0 = not a participant)
+//   double12 ifxCell          1-based position in INTERSTITIAL_CELL_IDS (A=1 .. F=6; 0 = not a participant) on
+//                             interstitial_checkpoint / _continuation, the reward_* offer funnel (Classic result
+//                             offer experiment block), game_completed and session_summary rows
+//   blob19   nextOutcome      game_completed rows only (Classic game after a checkpoint): shown | not_ready |
+//                             show_failed | suppressed | control | control_suppressed; "" = no context.
+//                             Reuses the outcome slot, which a game_completed row never carries.
+//   session_summary rows (one per foreground play segment with >= 1 completed Classic game; Android only):
+//   blob18 arm                treatment | control            (generic arm slot)
+//   double2  classicGames     1..99                          double3  checkpoints   0..99
+//   double4  shown            0..99                          double5  notReady      0..99
+//   double6  secondReached    0 | 1                          double7  rewardedShown 0..99
+//   double8  rewardedDeferred 0..99                          double9  cadence       5..20 (effective; gamesBetweenAds' slot)
+//   double10 cap              1..3 (effective; ifxCap's slot) double11 ifxVersion / double12 ifxCell as above
+//   double13 batchSize, double14..19 = 0 (no economy context), double20 = 1 - the generic slots 1 / 13 / 20 are unchanged.
 // coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
 // balance BUCKET is ever written - never a balance.
 // Booleans are 1/0 and absent numbers are 0, so always filter on blob1 before reading
@@ -99,6 +125,7 @@
 
 import { canonicalEventName, normalizeCountry } from "./analyticsDO";
 import { AD_LATENCY_BUCKETS, AD_LOAD_SOURCES, REWARDED_TAP_STATES, enumPosition } from "../src/services/ads/adDiagnostics";
+import { INTERSTITIAL_CELL_IDS } from "../src/services/ads/interstitialConfigSchema";
 import { normalizeAnalyticsPlatform, normalizeAppVersion, normalizeAppVersionCode } from "../src/services/analyticsSchema";
 import { checkedEnvelopes, parseIngest, type CheckedEnvelope, type ParsedIngest } from "./analyticsIngest";
 import { normalizeAttribution } from "../src/services/analyticsAttribution";
@@ -129,7 +156,7 @@ type ShadowPath = "/event" | "/events";
 export type ShadowDataPoint = { blobs: string[]; doubles: number[]; indexes: string[] };
 
 /** Bounded enum params, first match wins. Every one is a closed set in analyticsSchema. */
-const DETAIL_PARAMS = ["difficulty", "phase", "tutorialType", "productType", "rarity", "surface", "installAge", "newRank", "coinSink", "coinSource", "milestone", "cause", "notReadyCause"] as const;
+const DETAIL_PARAMS = ["difficulty", "phase", "tutorialType", "productType", "rarity", "surface", "installAge", "newRank", "coinSink", "coinSource", "milestone", "cause", "notReadyCause", "skipStage"] as const;
 
 /** The schema-2 doubles (14..20) for one accepted envelope's params: economy context (0 when absent) + the reserved sampleWeight (1). */
 export function economyDoubles(params: Record<string, unknown>): number[] {
@@ -166,7 +193,7 @@ function modeFor(eventName: string, params: Record<string, unknown>): string {
   if (eventName === "game_mode_selected") return str(params.mode);
   if (eventName.startsWith("social_")) return str(params.source);
   if (FUNNEL.has(eventName)) return params.gameType === "playTogether" ? "multiplayer" : "classic";
-  if (eventName.startsWith("shape_") || eventName.startsWith("interstitial_")) return "classic";
+  if (eventName.startsWith("shape_") || eventName.startsWith("interstitial_") || eventName === "session_summary") return "classic";
   return "";
 }
 
@@ -189,7 +216,7 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
   const contentKey = FUNNEL.has(eventName) && gameType !== "customChallenge" ? str(params.contentKey) : "";
   const bucket = Math.min(AE_INDEX_BUCKETS - 1, Math.floor(random() * AE_INDEX_BUCKETS));
 
-  return {
+  const point: ShadowDataPoint = {
     blobs: [
       canonicalEventName(eventName),
       route,
@@ -210,7 +237,8 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       str(params.reason),
       str(params.arm),
       // Schema 3: reward funnel rows carry no outcome, so this slot holds their interstitialArm.
-      str(params.outcome ?? params.interstitialArm),
+      // 0.57: game_completed rows carry the next-game context's nextOutcome here (no other row has both).
+      str(params.outcome ?? params.interstitialArm ?? params.nextOutcome),
       detailFor(params),
     ],
     doubles: [
@@ -224,15 +252,40 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       num(params.roundIndex ?? params.offerNumber),
       num(params.playerCount ?? enumPosition(AD_LOAD_SOURCES, params.source)),
       num(params.price ?? enumPosition(REWARDED_TAP_STATES, params.stateAtTap)),
-      num(params.gamesBetweenAds),
-      num(params.amount ?? params.bonusCoins),
-      num(params.submitted),
-      num(params.hadCache),
+      // 0.57: mp_game_started rows carry mpDailyOrdinal here (no other event has both params).
+      num(params.gamesBetweenAds ?? params.mpDailyOrdinal),
+      // 0.57: ifxCap on interstitial rows, which carry neither amount nor bonusCoins.
+      num(params.amount ?? params.bonusCoins ?? params.ifxCap),
+      // 0.57: ifxVersion (interstitial rows, session_summary) - submitted belongs to mp_/pp_round rows only.
+      num(params.submitted ?? params.ifxVersion),
+      // 0.57: ifxCell as a 1-based position - hadCache belongs to daily_shape_fallback only.
+      num(params.hadCache ?? enumPosition(INTERSTITIAL_CELL_IDS, params.ifxCell)),
       batchSize,
       ...economyDoubles(params),
     ],
     indexes: [`b${String(bucket).padStart(2, "0")}`],
   };
+  if (eventName === "session_summary") applySessionSummaryDoubles(point.doubles, params);
+  return point;
+}
+
+/**
+ * session_summary has its own explicit double layout (see the SCHEMA block): the generic mapping reads
+ * params by the names OTHER events use, none of which a summary carries. Slots 1, 13 and 14..20 are left as
+ * the generic code wrote them (schema version, batch size, no economy context, sampleWeight 1).
+ */
+function applySessionSummaryDoubles(doubles: number[], params: Record<string, unknown>): void {
+  doubles[1] = num(params.classicGames);
+  doubles[2] = num(params.checkpoints);
+  doubles[3] = num(params.shown);
+  doubles[4] = num(params.notReady);
+  doubles[5] = num(params.secondReached);
+  doubles[6] = num(params.rewardedShown);
+  doubles[7] = num(params.rewardedDeferred);
+  doubles[8] = num(params.cadence);
+  doubles[9] = num(params.cap);
+  doubles[10] = num(params.ifxVersion);
+  doubles[11] = enumPosition(INTERSTITIAL_CELL_IDS, params.ifxCell);
 }
 
 /**

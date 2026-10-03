@@ -32,6 +32,7 @@ class MemoryStorage {
 const {
   enqueueAnalyticsEvent,
   flushAnalyticsQueue,
+  registerBeforeLifecycleFlush,
   WORKER_MAX_BATCH_EVENTS,
   _setAnalyticsSenderForTests,
   _analyticsQueueStateForTests,
@@ -139,6 +140,56 @@ test("a lifecycle flush sends everything at once with keepalive and forgets exac
   assert.equal(sent[0].keepalive, true);
   assert.equal(_analyticsQueueStateForTests().outbox, 0, "removed before the possibly-dying request");
   assert.equal(_analyticsQueueStateForTests().timerArmed, false);
+});
+
+test("a pre-flush hook's event rides in the SAME lifecycle request (enqueued before the queue is taken), never waits for the timer", () => {
+  const sent = capture();
+  enqueueAnalyticsEvent(tel(1));
+  const off = registerBeforeLifecycleFlush("test-summary", () => enqueueAnalyticsEvent({ eventName: "session_summary", params: {}, seq: 99 }));
+  flushAnalyticsQueue("lifecycle");
+  off();
+  assert.equal(sent.length, 1, "one request");
+  assert.deepEqual(sent[0].events.map((e) => e.seq), [1, 99], "the hook's event is in the lifecycle batch, after what was queued");
+  assert.equal(sent[0].keepalive, true);
+  assert.equal(_analyticsQueueStateForTests().queued, 0);
+  assert.equal(_analyticsQueueStateForTests().timerArmed, false, "no 120 s timer is left holding a summary");
+});
+
+test("a pre-flush hook runs on lifecycle flushes only, a throwing hook cannot stop the flush or the other hooks, and unregistering works", () => {
+  const sent = capture();
+  let calls = 0;
+  const offBad = registerBeforeLifecycleFlush("test-bad", () => {
+    throw new Error("boom");
+  });
+  const offGood = registerBeforeLifecycleFlush("test-good", () => {
+    calls++;
+  });
+  enqueueAnalyticsEvent(tel(1));
+  flushAnalyticsQueue("manual");
+  flushAnalyticsQueue("timer");
+  flushAnalyticsQueue("size");
+  assert.equal(calls, 0, "not for manual / timer / size flushes");
+  enqueueAnalyticsEvent(tel(2));
+  flushAnalyticsQueue("lifecycle");
+  assert.equal(calls, 1, "the second hook still ran after the first threw");
+  assert.equal(sent.length, 2, "and the flush itself went ahead");
+  offBad();
+  offGood();
+  enqueueAnalyticsEvent(tel(3));
+  flushAnalyticsQueue("lifecycle");
+  assert.equal(calls, 1, "unregistered");
+});
+
+test("re-registering a hook under the same name replaces it (HMR / double init cannot double-fire it)", () => {
+  capture();
+  let a = 0;
+  let b = 0;
+  registerBeforeLifecycleFlush("test-same", () => a++);
+  const off = registerBeforeLifecycleFlush("test-same", () => b++);
+  enqueueAnalyticsEvent(tel(1));
+  flushAnalyticsQueue("lifecycle");
+  off();
+  assert.deepEqual([a, b], [0, 1]);
 });
 
 // ---------------------------------------------------------------- reliability ----

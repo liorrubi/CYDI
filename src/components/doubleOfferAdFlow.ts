@@ -5,8 +5,8 @@
 // confirmed-completion callback, never merely opening the ad.
 //
 // Watching an ad is the ONLY route to the double in a user-facing build. Nothing here
-// ever routes to the math quiz: a dismissal returns to the offer (nothing granted, the
-// player may try again), and unavailable/error (which also covers consent-blocked,
+// ever routes to the math quiz: a dismissal returns to the offer (nothing granted, flagged
+// `dismissed` so the component records a skip rather than a failure; the player may try again), and unavailable/error (which also covers consent-blocked,
 // since that surfaces as an "unavailable" status with reason "consent_blocked") returns
 // to the offer with `adUnavailable` set, so the component can show a short "ads aren't
 // available right now" note instead of granting anything.
@@ -16,6 +16,8 @@ import type { RewardedAdResult } from "../services/ads";
 export type AdOfferOutcome = {
   nextPhase: "feedback" | "offer";
   grantSource?: "ad";
+  /** The ad was shown and closed without the reward. A skip, never a failure: no failed event, no "ads aren't available" notice. */
+  dismissed?: boolean;
   /** The ad could not be served at all - the caller shows an unobtrusive notice. Never implies a grant. */
   adUnavailable?: boolean;
 };
@@ -25,7 +27,7 @@ export function resolveAdOutcome(result: RewardedAdResult): AdOfferOutcome {
     case "rewarded":
       return { nextPhase: "feedback", grantSource: "ad" };
     case "dismissed":
-      return { nextPhase: "offer" };
+      return { nextPhase: "offer", dismissed: true };
     case "unavailable":
     case "error":
       return { nextPhase: "offer", adUnavailable: true };

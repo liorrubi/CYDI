@@ -12,6 +12,7 @@ import {
   opportunitiesInSession,
   parseInterstitialState,
   recordEligibleCompletion,
+  stableBucket,
   type InterstitialPersistedState,
 } from "./interstitialExperiment";
 import type { InterstitialCadence } from "./interstitialConfigSchema";
@@ -221,4 +222,36 @@ test("the session cap still bounds opportunities; the second-opportunity gate on
   assert.equal(recordEligibleCompletion(s1, 7, 1, S1, "treatment", true).due, false, "cap 1 reached");
   const first = { ...fresh(), eligibleGamesSinceLastOpportunity: 6 };
   assert.equal(recordEligibleCompletion(first, 7, 2, S1, "treatment", false).due, true, "the first is never gated");
+});
+
+// --- Regression pin: the LIVE arm assignment may never shift ------------------------------------
+
+test("assignmentBucket is bit-identical to the 0.56 value for fixed ids (salt cydi-interstitial-v1)", () => {
+  // Captured from the pre-0.57 implementation. If this ever fails, live installations would change arm.
+  const pinned: Record<string, number> = {
+    "0123456789ab": 8607,
+    "000000000000": 7511,
+    ffffffffffff: 7655,
+    "install-abc-123": 4266,
+    "a1b2c3d4-e5f6-4711-8899-aabbccddeeff": 3926,
+    "00000000-0000-4000-8000-000000000001": 2940,
+    "": 3799,
+    cydi: 4216,
+  };
+  for (const [id, bucket] of Object.entries(pinned)) {
+    assert.equal(assignmentBucket(id), bucket, JSON.stringify(id));
+    assert.equal(stableBucket("cydi-interstitial-v1", id), bucket);
+  }
+  assert.equal(assignArm("install-abc-123", 5), "unassigned");
+  assert.equal(assignArm("a1b2c3d4-e5f6-4711-8899-aabbccddeeff", 50), "treatment"); // 3926 < 5000
+  assert.equal(assignArm("install-abc-123", 100), "treatment");
+});
+
+test("stableBucket: deterministic, salt-sensitive, always inside 0..9999", () => {
+  assert.equal(stableBucket("s", "id"), stableBucket("s", "id"));
+  assert.notEqual(stableBucket("s1", "0123456789ab"), stableBucket("s2", "0123456789ab"));
+  for (const id of ids(200)) {
+    const b = stableBucket("x", id);
+    assert.ok(Number.isInteger(b) && b >= 0 && b < 10_000);
+  }
 });

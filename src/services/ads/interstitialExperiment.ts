@@ -13,11 +13,10 @@ import {
   INTERSTITIAL_MAX_ROLLOUT_PERCENT,
   INTERSTITIAL_MAX_ROLLOUT_PERCENT_V2,
   isInterstitialArm,
-  isInterstitialCadence,
+  isEffectiveInterstitialCadence,
   isInterstitialOutcome,
   type InterstitialArm,
   type InterstitialAssignment,
-  type InterstitialCadence,
   type InterstitialOutcome,
 } from "./interstitialConfigSchema";
 
@@ -38,8 +37,18 @@ function fnv1a(input: string): number {
   return hash >>> 0;
 }
 
+/**
+ * The one bucketing primitive: fnv1a(`${salt}:${id}`) mod 10,000. Every salted bucket in the
+ * interstitial experiments (arm, second opportunity, cell gate, cell pick) goes through it, and
+ * assignmentBucket() below is pinned bit-identical by a regression test - a live installation's
+ * arm must never move.
+ */
+export function stableBucket(salt: string, id: string): number {
+  return fnv1a(`${salt}:${id}`) % BUCKETS;
+}
+
 export function assignmentBucket(installationId: string): number {
-  return fnv1a(`${ASSIGNMENT_SALT}:${installationId}`) % BUCKETS;
+  return stableBucket(ASSIGNMENT_SALT, installationId);
 }
 
 /**
@@ -84,7 +93,7 @@ const SECOND_OPPORTUNITY_SALT = "cydi-interstitial-second-v1";
 export function isSecondOpportunityEligible(installationId: string | null, percent: number): boolean {
   if (percent >= 100) return true;
   if (installationId === null || percent <= 0) return false;
-  const bucket = fnv1a(`${SECOND_OPPORTUNITY_SALT}:${installationId}`) % BUCKETS;
+  const bucket = stableBucket(SECOND_OPPORTUNITY_SALT, installationId);
   return bucket < Math.floor(percent) * BUCKETS_PER_PERCENT;
 }
 
@@ -97,7 +106,8 @@ export type ContinuationMarker = {
   sessionId: string;
   arm: InterstitialArm;
   outcome: InterstitialOutcome;
-  gamesBetweenAds: InterstitialCadence;
+  /** The EFFECTIVE cadence of the session (any integer 5..20). */
+  gamesBetweenAds: number;
 };
 
 export type InterstitialPersistedState = {
@@ -120,7 +130,7 @@ function parseMarker(value: unknown): ContinuationMarker | null {
   if (!isRecord(value)) return null;
   const { sessionId, arm, outcome, gamesBetweenAds } = value;
   if (typeof sessionId !== "string" || sessionId.length === 0 || sessionId.length > 32) return null;
-  if (!isInterstitialArm(arm) || !isInterstitialOutcome(outcome) || !isInterstitialCadence(gamesBetweenAds)) return null;
+  if (!isInterstitialArm(arm) || !isInterstitialOutcome(outcome) || !isEffectiveInterstitialCadence(gamesBetweenAds)) return null;
   return { sessionId, arm, outcome, gamesBetweenAds };
 }
 
@@ -209,7 +219,7 @@ export type CompletionDecision = {
  */
 export function recordEligibleCompletion(
   state: InterstitialPersistedState,
-  cadence: InterstitialCadence,
+  cadence: number,
   sessionCap: number,
   sessionId: string,
   arm: InterstitialArm,

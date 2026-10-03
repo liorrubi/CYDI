@@ -373,7 +373,7 @@ const HOW_TO_PLAY: ContentPage = {
           `${MP_DRAWING_SECONDS} seconds to draw.`,
         "Scoring runs on the server, not on any player's device, so every drawing in the room is judged by the " +
           "same code under the same rules. Finishing faster earns a speed bonus on top of accuracy.",
-        // Still read straight off ROUND_COUNT_OPTIONS - a new length appears in
+        // Read off MP_ROUND_OPTIONS (frozen legacy public list, see publicFacts.ts) - a new length appears in
         // the sentence by itself, with the "or" landing before whichever is last.
         `A game can be ${MP_ROUND_OPTIONS.slice(0, -1).join(", ")}, or ${MP_ROUND_OPTIONS[MP_ROUND_OPTIONS.length - 1]} rounds; ` +
           "scores add up and the highest total wins.",

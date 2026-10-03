@@ -4,14 +4,13 @@
  */
 // Rewarded Ads Experiment v1 - WHEN the Classic result offer appears, and WHAT it is worth.
 //
-// ONE SYSTEM, TWO ARMS. Every player gets the same placement (the Shape Challenge result
-// screen), the same timing, the same UI and the same availability/collision rules. The only
-// difference is the reward value:
-//   A "x3"      (control) - watching the ad triples the round's coins
-//   B "plus100" (variant) - watching the ad adds a flat 100 coins
-// Assignment is a stable hash of the persisted installation id (same FNV-1a bucketing as the
-// interstitial experiment, with its own salt), so a device stays in one arm for the whole
-// experiment and the arms are independent of the interstitial arms.
+// RETIRED IN 0.57.0: the +100 arm. The experiment had two arms that differed only in reward value:
+//   A "x3"      - watching the ad triples the round's coins
+//   B "plus100" - watching the ad adds a flat 100 coins
+// Every player is now on "x3" (getRewardedArm always returns it). assignRewardedArm, the "plus100"
+// arm value, the salt and the analytics validators/enum stay exactly as they were so history (and
+// builds still in the field that report "plus100") keeps decoding; nothing live assigns that arm.
+// The hash assignment is kept as getLegacyRewardedAssignment() for reference and tests only.
 //
 // CADENCE (identical for both arms - this is NOT a frequency experiment):
 //   first offer after 3 completed Classic games in the session, then after every 5 more.
@@ -58,7 +57,7 @@ function fnv1a(input: string): number {
   return hash >>> 0;
 }
 
-/** Stable 50/50 split. A device with no persisted installation id gets the control arm (never switches arms mid-session). */
+/** Retired 50/50 split (see the header): stable per installation, null -> "x3". No longer used to assign anything. */
 export function assignRewardedArm(installationId: string | null): RewardedArm {
   if (installationId === null) return "x3";
   return fnv1a(`${ASSIGNMENT_SALT}:${installationId}`) % 2 === 0 ? "x3" : "plus100";
@@ -179,7 +178,13 @@ function save(state: CadenceState): void {
   storage.set(JSON.stringify(state));
 }
 
+/** The arm the Classic offer runs on. Always "x3": the +100 arm was retired in 0.57.0. */
 export function getRewardedArm(): RewardedArm {
+  return "x3";
+}
+
+/** What the retired 50/50 hash assignment would give this installation. Reference/tests only - nothing live calls it. */
+export function getLegacyRewardedAssignment(): RewardedArm {
   return assignRewardedArm(installationIdSource());
 }
 

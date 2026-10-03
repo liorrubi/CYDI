@@ -26,9 +26,14 @@ test("rewarded ad grants the double and never anything else", () => {
   assert.deepEqual(resolveAdOutcome(result), { nextPhase: "feedback", grantSource: "ad" });
 });
 
-test("dismissed ad returns to the offer with no reward and no notice", () => {
+test("dismissed ad returns to the offer with no reward and no notice, flagged as a dismissal (a skip, not a failure)", () => {
   const result: RewardedAdResult = { status: "dismissed" };
-  assert.deepEqual(resolveAdOutcome({ ...result }), { nextPhase: "offer" });
+  const outcome = resolveAdOutcome({ ...result });
+  assert.deepEqual(outcome, { nextPhase: "offer", dismissed: true });
+  assert.equal(outcome.adUnavailable, undefined, "no \"ads aren't available\" notice");
+  assert.equal(outcome.grantSource, undefined);
+  // Only a dismissal is flagged: a failure must never read as a skip.
+  for (const result of EVERY_RESULT) assert.equal(resolveAdOutcome(result).dismissed === true, result.status === "dismissed", result.status);
 });
 
 test("unavailable ad returns to the offer flagged unavailable - never a substitute route", () => {

@@ -18,17 +18,34 @@
 //     -> (shown only) wait for release -> navigate -> next game_started -> continuation
 
 import { trackEvent } from "../analytics";
-import type { AnalyticsEventName, EventParamsMap, GameType, InterstitialCheckpointDiag, InterstitialCheckpointParams } from "../analyticsSchema";
+import type {
+  AnalyticsEventName,
+  EventParamsMap,
+  GameType,
+  InterstitialCheckpointDiag,
+  InterstitialCheckpointParams,
+  InterstitialIfxContext,
+  NextGameContext,
+  NextGameOutcome,
+} from "../analyticsSchema";
 import { getPersistedInstallationId, getSessionId } from "../analyticsIdentity";
 import { subscribeRewardedAdEvents } from "./rewardedAds";
-import { getFrozenInterstitialConfig, getQaForcedArm, isInterstitialLiveEnabled } from "./interstitialConfig";
-import type { InterstitialArm, InterstitialCadence, InterstitialFailureReason } from "./interstitialConfigSchema";
+import { getFrozenInterstitialConfig, getInterstitialExperimentSpec, getQaForcedArm, isInterstitialLiveEnabled } from "./interstitialConfig";
+import type { InterstitialArm, InterstitialCellId, InterstitialFailureReason, InterstitialOutcome } from "./interstitialConfigSchema";
+import { isSecondOpportunityAllowed, localIfxStorage, resolveSessionSnapshot, type SessionSnapshot } from "./interstitialCells";
 import type { AdNotReadyCause } from "./adDiagnostics";
+import {
+  _resetPlaySegmentSummaryForTests,
+  configurePlaySegmentSummary,
+  recordSegmentCheckpoint,
+  recordSegmentClassicGame,
+  recordSegmentOpportunityDue,
+  recordSegmentRewardedDeferred,
+} from "./playSegmentSummary";
 import { adLatencyBucket } from "./adDiagnostics";
 import {
   assignArm,
   consumeOpportunity,
-  isSecondOpportunityEligible,
   loadState,
   localInterstitialStorage,
   recordEligibleCompletion,
@@ -51,6 +68,14 @@ type TrackFn = <E extends AnalyticsEventName>(eventName: E, params: EventParamsM
 
 let track: TrackFn = trackEvent;
 let storage: InterstitialStorage = localInterstitialStorage;
+/** The experiment's own persisted record (assignment + session snapshot); cydi.interstitial.v1 is never touched by it. */
+let ifxStorage: InterstitialStorage = localIfxStorage;
+/**
+ * This analytics session's snapshot of an experiment PARTICIPANT, cached in memory as well as persisted, so
+ * a failing storage write can never let a remote change reshape a session in progress. Non-participants are
+ * resolved from storage on every call: their numbers are the frozen base config's (see resolveSessionSnapshot).
+ */
+let snapshotCache: SessionSnapshot | null = null;
 let sessionIdSource: () => string = () => getSessionId();
 let installationIdSource: () => string | null = getPersistedInstallationId;
 
@@ -83,13 +108,25 @@ let lastAttemptSince = -1;
 let attemptSessionId: string | null = null;
 /** A checkpoint is running; a second tap cannot start another. */
 let checkpointInFlight = false;
+/**
+ * One-shot, MEMORY-ONLY context for the next Classic game's completion: set when the game_started that
+ * consumes a checkpoint marker fires, taken (and cleared) by that game's game_completed. Never persisted - a
+ * kill or an abandoned game simply loses it, which is the intended "continued but did not complete" signal.
+ * No id, no nonce: only the analytics session it belongs to, the outcome and (participants) the cell.
+ */
+let nextGameContext: { sessionId: string; outcome: NextGameOutcome; ifxCell: InterstitialIfxContext["ifxCell"] | null } | null = null;
 
 // --- Participation ------------------------------------------------------------------
 
 type Participation = {
   arm: InterstitialArm;
-  cadence: InterstitialCadence;
+  /** The EFFECTIVE cadence of this analytics session (a cell's, or the frozen base config's). */
+  cadence: number;
+  /** The EFFECTIVE session cap of this analytics session. */
   sessionCap: number;
+  /** Multi-cell experiment context of this session; null/null for everyone outside it. No ids or buckets. */
+  experimentVersion: number | null;
+  cellId: InterstitialCellId | null;
   /** This installation may have a 2nd+ opportunity in a session (always true unless the remote second-opportunity rollout is below 100). */
   secondOpportunityEligible: boolean;
 };
@@ -102,15 +139,69 @@ type Participation = {
 function participation(): Participation | null {
   const config = getFrozenInterstitialConfig();
   if (config === null || !isInterstitialLiveEnabled() || !config.countryEligible) return null;
-  const assigned = getQaForcedArm() ?? assignArm(installationIdSource(), config.rolloutPercent);
+  const installationId = installationIdSource();
+  const assigned = getQaForcedArm() ?? assignArm(installationId, config.rolloutPercent);
   if (assigned === "unassigned") return null;
+  // Cadence and cap come from the session snapshot, never straight from the config: a participant gets
+  // its cell's values, everyone else exactly the frozen base values (0.56 behaviour).
+  const sessionId = sessionIdSource();
+  let snapshot = snapshotCache !== null && snapshotCache.sessionId === sessionId ? snapshotCache : null;
+  if (snapshot === null) {
+    snapshot = resolveSessionSnapshot(ifxStorage, {
+      sessionId,
+      installationId,
+      arm: assigned,
+      base: { cadence: config.gamesBetweenAds, cap: config.maxOpportunitiesPerSession },
+      spec: getInterstitialExperimentSpec(),
+    });
+    snapshotCache = snapshot.cellId !== null ? snapshot : null;
+  }
   return {
     arm: assigned,
-    cadence: config.gamesBetweenAds,
-    sessionCap: config.maxOpportunitiesPerSession,
-    secondOpportunityEligible: isSecondOpportunityEligible(installationIdSource(), config.secondOpportunityRolloutPercent),
+    cadence: snapshot.cadence,
+    sessionCap: snapshot.cap,
+    experimentVersion: snapshot.experimentVersion,
+    cellId: snapshot.cellId,
+    // Experiment participants bypass the legacy second-opportunity gate (see isSecondOpportunityAllowed).
+    secondOpportunityEligible: isSecondOpportunityAllowed(snapshot, installationId, config.secondOpportunityRolloutPercent),
   };
 }
+
+/**
+ * The effective interstitial context right now - the hook for session-depth / next-game telemetry.
+ * Synchronous, local, no ids or buckets: the experiment version and cell (null/null outside the
+ * multi-cell experiment) and the cadence and cap actually in force. `cadence` and `cap` are the
+ * snapshot's when this installation takes part, otherwise the frozen base config's; null only before
+ * any config answer at all. Reading it may take (and persist) this session's snapshot - idempotent.
+ */
+export type EffectiveInterstitialContext = {
+  experimentVersion: number | null;
+  cellId: InterstitialCellId | null;
+  cadence: number;
+  cap: number;
+};
+
+export function getEffectiveInterstitialContext(): EffectiveInterstitialContext | null {
+  const who = participation();
+  if (who !== null) return { experimentVersion: who.experimentVersion, cellId: who.cellId, cadence: who.cadence, cap: who.sessionCap };
+  const config = getFrozenInterstitialConfig();
+  if (config === null) return null;
+  return { experimentVersion: null, cellId: null, cadence: config.gamesBetweenAds, cap: config.maxOpportunitiesPerSession };
+}
+
+/** The multi-cell experiment context of a participant (all three keys), or {} for everyone else. Never an id or bucket. */
+function ifxContextOf(who: Participation): InterstitialIfxContext {
+  return who.cellId !== null && who.experimentVersion !== null
+    ? { ifxCell: who.cellId, ifxVersion: who.experimentVersion, ifxCap: who.sessionCap }
+    : {};
+}
+
+/** The summary's view of this installation (see playSegmentSummary.ts); null = takes no part, no summary. */
+configurePlaySegmentSummary(() => {
+  const who = participation();
+  if (who === null) return null;
+  return { arm: who.arm, cadence: who.cadence, cap: who.sessionCap, ifxCell: who.cellId, ifxVersion: who.experimentVersion };
+});
 
 /**
  * This installation's interstitial arm right now, for stratifying the Rewarded experiment:
@@ -119,6 +210,11 @@ function participation(): Participation | null {
  */
 export function getInterstitialArmForAnalytics(): InterstitialArm | "none" {
   return participation()?.arm ?? "none";
+}
+
+/** The multi-cell experiment cell of this installation's current session, or null for a non-participant (no id, no bucket). */
+export function getInterstitialCellForAnalytics(): InterstitialCellId | null {
+  return participation()?.cellId ?? null;
 }
 
 // --- Gameplay hooks -----------------------------------------------------------------
@@ -138,6 +234,8 @@ export function recordInterstitialGameCompleted(gameType: GameType): void {
   if (who === null) return;
   const decision = recordEligibleCompletion(loadState(storage), who.cadence, who.sessionCap, sessionIdSource(), who.arm, who.secondOpportunityEligible);
   saveState(storage, decision.state);
+  recordSegmentClassicGame();
+  if (decision.due) recordSegmentOpportunityDue();
   dueThisCycle = decision.due;
   dueArmThisCycle = decision.due ? who.arm : null;
   if (decision.preload) scheduleLoadAttempt(decision.state.eligibleGamesSinceLastOpportunity, who.cadence);
@@ -153,7 +251,7 @@ export function recordInterstitialGameCompleted(gameType: GameType): void {
  *   - never more than two attempts per opportunity; a session change throws the stale ones away.
  * preloadInterstitial() additionally refuses while any native load is active.
  */
-function scheduleLoadAttempt(since: number, cadence: InterstitialCadence): void {
+function scheduleLoadAttempt(since: number, cadence: number): void {
   const sessionId = sessionIdSource();
   if (attemptSessionId !== null && attemptSessionId !== sessionId) {
     invalidateInterstitial();
@@ -205,6 +303,14 @@ export function claimResultAdLane(): "interstitial" | "rewarded" {
 }
 
 /**
+ * The Result screen's rewarded offer was deferred because the interstitial won the ad lane (the
+ * `pending_interstitial` decision). Counted per play segment only (session_summary.rewardedDeferred); emits nothing itself.
+ */
+export function recordRewardedOfferDeferred(): void {
+  recordSegmentRewardedDeferred();
+}
+
+/**
  * The rewarded offer is on this Result screen. From this moment no interstitial may be
  * presented when leaving it - even one that finishes loading afterwards. (The older guard,
  * rewardedShownThisCycle, only covered a WATCHED rewarded ad.)
@@ -219,7 +325,7 @@ type ReadinessAtCheckpoint = ReturnType<typeof getInterstitialReadiness> & { att
 function checkpointParams(
   arm: InterstitialArm,
   result: PresentOutcome | { outcome: "control" | "suppressed" },
-  cadence: InterstitialCadence,
+  cadence: number,
   readiness: ReadinessAtCheckpoint,
 ): InterstitialCheckpointParams {
   if (arm === "control") return { arm, outcome: result.outcome === "suppressed" ? "suppressed" : "control", gamesBetweenAds: cadence };
@@ -268,7 +374,8 @@ export function runInterstitialCheckpoint(): Promise<boolean> | null {
   laneReservedForOpportunity = false;
 
   const record = (result: PresentOutcome | { outcome: "control" | "suppressed" }) => {
-    const params = checkpointParams(who.arm, result, who.cadence, readiness);
+    const params = { ...checkpointParams(who.arm, result, who.cadence, readiness), ...ifxContextOf(who) } as InterstitialCheckpointParams;
+    recordSegmentCheckpoint(params.outcome);
     // The marker is written synchronously the moment the outcome is known, BEFORE
     // any navigation - and never before the outcome is known.
     const state = loadState(storage);
@@ -314,12 +421,37 @@ export function runInterstitialCheckpoint(): Promise<boolean> | null {
  */
 export function recordInterstitialGameStarted(gameType: GameType): void {
   if (gameType !== ELIGIBLE_GAME_TYPE) return;
+  // Any Classic game_started drops the previous next-game context: only a fresh marker below can set a new one.
+  nextGameContext = null;
   const state = loadState(storage);
   const marker = state.marker;
   if (marker === null) return;
   saveState(storage, { ...state, marker: null });
-  if (marker.sessionId !== sessionIdSource()) return;
-  track("interstitial_continuation", { arm: marker.arm, outcome: marker.outcome, gamesBetweenAds: marker.gamesBetweenAds });
+  const sessionId = sessionIdSource();
+  if (marker.sessionId !== sessionId) return;
+  const who = participation();
+  const ifx = who !== null ? ifxContextOf(who) : {};
+  track("interstitial_continuation", { arm: marker.arm, outcome: marker.outcome, gamesBetweenAds: marker.gamesBetweenAds, ...ifx });
+  nextGameContext = { sessionId, outcome: nextGameOutcomeOf(marker.arm, marker.outcome), ifxCell: ifx.ifxCell ?? null };
+}
+
+function nextGameOutcomeOf(arm: InterstitialArm, outcome: InterstitialOutcome): NextGameOutcome {
+  if (arm === "control") return outcome === "suppressed" ? "control_suppressed" : "control";
+  return outcome === "control" ? "control" : outcome;
+}
+
+/**
+ * A Classic game_completed asks for the context of the checkpoint that preceded this game. Take-and-clear:
+ * it returns the context once, then nothing. Null for any other game type (which leaves it untouched), when
+ * there is no context (no checkpoint before this game, or a newer game_started cleared it), or when it
+ * belongs to another analytics session. The result is spread into game_completed's params.
+ */
+export function takeNextGameContext(gameType: GameType): NextGameContext | null {
+  if (gameType !== ELIGIBLE_GAME_TYPE) return null;
+  const ctx = nextGameContext;
+  nextGameContext = null;
+  if (ctx === null || ctx.sessionId !== sessionIdSource()) return null;
+  return { nextOutcome: ctx.outcome, ...(ctx.ifxCell !== null ? { ifxCell: ctx.ifxCell } : {}) };
 }
 
 // --- Observers ----------------------------------------------------------------------
@@ -368,11 +500,14 @@ export function getInterstitialControllerDebugInfo(): {
 export function _resetInterstitialControllerForTests(options: {
   track?: TrackFn;
   storage?: InterstitialStorage;
+  ifxStorage?: InterstitialStorage;
   sessionId?: () => string;
   installationId?: () => string | null;
 } = {}): void {
   track = options.track ?? trackEvent;
   storage = options.storage ?? localInterstitialStorage;
+  ifxStorage = options.ifxStorage ?? localIfxStorage;
+  snapshotCache = null;
   sessionIdSource = options.sessionId ?? (() => getSessionId());
   installationIdSource = options.installationId ?? getPersistedInstallationId;
   rewardedShownThisCycle = false;
@@ -384,5 +519,7 @@ export function _resetInterstitialControllerForTests(options: {
   lastAttemptSince = -1;
   attemptSessionId = null;
   checkpointInFlight = false;
+  nextGameContext = null;
+  _resetPlaySegmentSummaryForTests({ track: options.track });
   connectObservers();
 }

@@ -34,12 +34,16 @@ import {
   type RewardedTapState,
 } from "./ads/adDiagnostics";
 import {
+  IFX_MAX_CAP,
+  IFX_MAX_VERSION,
+  IFX_MIN_CAP,
+  INTERSTITIAL_CELL_IDS,
+  isEffectiveInterstitialCadence,
   isInterstitialArm,
-  isInterstitialCadence,
   isInterstitialFailureReason,
   isInterstitialOutcome,
   type InterstitialArm,
-  type InterstitialCadence,
+  type InterstitialCellId,
   type InterstitialFailureReason,
   type InterstitialOutcome,
 } from "./ads/interstitialConfigSchema";
@@ -182,6 +186,14 @@ export type RewardExperimentArm = (typeof REWARD_EXPERIMENT_ARMS)[number];
 export type RewardOfferOutcome = "completed" | "skipped" | "failed";
 const REWARD_OFFER_OUTCOMES: readonly RewardOfferOutcome[] = ["completed", "skipped", "failed"];
 /**
+ * Optional `skipStage` on reward_skipped / reward_bonus_skipped (0.57.0): where the offer was given up.
+ * "offer" = skipped before any ad was shown (the offer was declined as presented); "ad" = an ad was shown
+ * and closed without the reward, and the offer was then kept/skipped. Absent on older builds, so both the
+ * old and the new key set validate.
+ */
+export const REWARD_SKIP_STAGES = ["offer", "ad"] as const;
+export type RewardSkipStage = (typeof REWARD_SKIP_STAGES)[number];
+/**
  * Experiment context on the Classic result offer's funnel events, alongside the economy
  * block (all keys or none): the arm, the offer's number within the analytics session, the
  * session's completed Classic games so far (heavy-user analysis), the coins the ad adds, and
@@ -190,7 +202,15 @@ const REWARD_OFFER_OUTCOMES: readonly RewardOfferOutcome[] = ["completed", "skip
  */
 export const REWARD_INTERSTITIAL_ARMS = ["treatment", "control", "none"] as const;
 export type RewardInterstitialArm = (typeof REWARD_INTERSTITIAL_ARMS)[number];
-export type RewardOfferExperiment = { arm: RewardExperimentArm; offerNumber: number; sessionGames: number; bonusCoins: number; interstitialArm: RewardInterstitialArm };
+export type RewardOfferExperiment = {
+  arm: RewardExperimentArm;
+  offerNumber: number;
+  sessionGames: number;
+  bonusCoins: number;
+  interstitialArm: RewardInterstitialArm;
+  /** 0.57: the multi-cell interstitial experiment cell, present only for a participant (never with interstitialArm "none"). */
+  ifxCell?: InterstitialCellId;
+};
 export type RewardOfferParams =
   | { placement: RewardedAdPlacement }
   | ({ placement: RewardedAdPlacement } & RewardOfferEconomy)
@@ -198,6 +218,8 @@ export type RewardOfferParams =
 
 const REWARD_OFFER_ECONOMY_KEYS = ["balanceBucket", "baseReward", "multiplier", "adAvailable", "nextTarget", "shortfallBucket", "adClosesGap", "gamesBucket"] as const;
 const REWARD_OFFER_EXPERIMENT_KEYS = ["arm", "offerNumber", "sessionGames", "bonusCoins", "interstitialArm"] as const;
+/** 0.57: the one optional addition to the experiment block (the key set is exact: either these keys, or these plus ifxCell). */
+const REWARD_OFFER_IFX_KEY = "ifxCell";
 /** Bounds for the experiment context: far above any real session, a value past them is a bug. */
 const MAX_OFFER_NUMBER = 1000;
 const MAX_SESSION_GAMES = 10_000;
@@ -247,7 +269,8 @@ export type EventParamsMap = {
   mp_room_created: { roundCount: number; difficulty: MultiplayerDifficultyParam };
   /** Emitted by the joining player only, so it counts joins rather than every peer's view of them. */
   mp_player_joined: { playerCount: number };
-  mp_game_started: { playerCount: number; roundCount: number; difficulty: MultiplayerDifficultyParam };
+  /** `mpDailyOrdinal` (1..7, 7 = 7+): this device's Nth multiplayer game today (local day); absent on repeats and on older builds. */
+  mp_game_started: { playerCount: number; roundCount: number; difficulty: MultiplayerDifficultyParam; mpDailyOrdinal?: number };
   /** One per round, per client. `submitted` distinguishes a real attempt from a timed-out empty one. */
   mp_round_completed: { roundIndex: number; playerCount: number; submitted: boolean };
   mp_game_finished: { playerCount: number; roundCount: number };
@@ -310,7 +333,9 @@ export type EventParamsMap = {
   // Coin-earning modes append GameCompletedCoins (coins this game paid + resulting
   // balance BUCKET) - see economyAnalytics.ts. Optional and all-or-nothing, so every
   // older client's three-key payload stays valid.
-  game_completed: { gameType: GameType; category: CategoryOrCustom; contentKey: string } | ({ gameType: GameType; category: CategoryOrCustom; contentKey: string } & GameCompletedCoins);
+  //
+  // 0.57: a Classic game_completed may also carry NextGameContext (nextOutcome + ifxCell) - see there.
+  game_completed: GameCompletedParams;
   result_shared: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
   // Daily challenge episode referenced a shape this client couldn't resolve
   // (old cached catalog / offline) and a safe local substitute was played
@@ -333,8 +358,8 @@ export type EventParamsMap = {
   // ads/interstitialConfigSchema.ts; no opportunity id, no SDK message.
   /** One per consumed opportunity, in either arm. `reason` accompanies show_failed and nothing else. */
   interstitial_checkpoint: InterstitialCheckpointParams;
-  /** The next eligible Shape Challenge game_started in the same session after a checkpoint. */
-  interstitial_continuation: { arm: InterstitialArm; outcome: InterstitialOutcome; gamesBetweenAds: InterstitialCadence };
+  /** The next eligible Shape Challenge game_started in the same session after a checkpoint. 0.57: participant context (ifx*) rides along when present. */
+  interstitial_continuation: InterstitialContinuationParams;
   /** Rewarded experiment: the next Classic game_started in the same session after an offer (absence = abandonment after the offer). */
   reward_continuation: { arm: RewardExperimentArm; offerNumber: number; outcome: RewardOfferOutcome };
   /** A background interstitial load that produced no ad, with the bounded reason (from the GMA numeric code). */
@@ -358,7 +383,7 @@ export type EventParamsMap = {
   reward_ad_started: RewardOfferParams;
   reward_ad_completed: RewardOfferParams;
   reward_ad_failed: RewardOfferParams;
-  reward_skipped: RewardOfferParams;
+  reward_skipped: RewardOfferParams & { skipStage?: RewardSkipStage };
   reward_fallback_used: { placement: RewardedAdPlacement };
   // The SAME offer funnel, for the periodic 3× bonus round only (app/bonusRewardRound.ts).
   // Mirrored EVENT NAMES rather than a `multiplier`/`rewardType` param, because the
@@ -371,7 +396,7 @@ export type EventParamsMap = {
   reward_bonus_ad_started: RewardOfferParams;
   reward_bonus_ad_completed: RewardOfferParams;
   reward_bonus_ad_failed: RewardOfferParams;
-  reward_bonus_skipped: RewardOfferParams;
+  reward_bonus_skipped: RewardOfferParams & { skipStage?: RewardSkipStage };
   /** The one-per-session nudge after 3 consecutive skips actually rendered. */
   reward_reminder_shown: { placement: RewardedAdPlacement };
   /** The one-time "watch a short ad to double" explainer actually rendered - fires at
@@ -411,6 +436,64 @@ export type EventParamsMap = {
   play_store_cta_shown: { surface: PlayStoreSurfaceParam };
   /** The player opened the Play Store listing from that CTA. */
   play_store_click: { surface: PlayStoreSurfaceParam };
+
+  // --- 0.57: foreground play-session segment summary ----------------------------
+  /**
+   * One per foreground play segment that contained at least one completed Classic game, emitted when the app
+   * genuinely goes to the background (never for an AdMob full-screen pause). Android only. TELEMETRY class: AE
+   * only, never an exact/ledger event. Aggregate counters and the effective interstitial rules only - no
+   * identifier of any kind. See src/services/ads/playSegmentSummary.ts.
+   */
+  session_summary: SessionSummaryParams;
+};
+
+/**
+ * Optional multi-cell interstitial experiment context (0.57), present only for an experiment participant and
+ * ALL OR NOTHING (cell + version + cap together). Never an installation id, bucket or hash.
+ */
+export type InterstitialIfxContext = { ifxCell?: InterstitialCellId; ifxVersion?: number; ifxCap?: number };
+export type InterstitialContinuationParams = { arm: InterstitialArm; outcome: InterstitialOutcome; gamesBetweenAds: number } & InterstitialIfxContext;
+
+/**
+ * What the checkpoint before a Classic game ended in, carried by that NEXT game's game_completed: a Classic game
+ * that starts after an opportunity and then completes (a start that never completes = abandonment, simply no
+ * completion). Mirrors INTERSTITIAL_OUTCOMES, with the control arm's "suppressed" named apart so it stays
+ * distinguishable from a treatment one.
+ */
+export const NEXT_GAME_OUTCOMES = ["shown", "not_ready", "show_failed", "suppressed", "control", "control_suppressed"] as const;
+export type NextGameOutcome = (typeof NEXT_GAME_OUTCOMES)[number];
+/** nextOutcome and (participants only) ifxCell: both optional on the event, ifxCell only alongside nextOutcome, Classic only. */
+export type NextGameContext = { nextOutcome: NextGameOutcome; ifxCell?: InterstitialCellId };
+export type GameCompletedParams =
+  | { gameType: GameType; category: CategoryOrCustom; contentKey: string }
+  | ({ gameType: GameType; category: CategoryOrCustom; contentKey: string } & GameCompletedCoins)
+  | ({ gameType: GameType; category: CategoryOrCustom; contentKey: string } & NextGameContext)
+  | ({ gameType: GameType; category: CategoryOrCustom; contentKey: string } & GameCompletedCoins & NextGameContext);
+
+/** Per-segment counters, all capped at SESSION_SUMMARY_MAX_COUNT; see the validator for the consistency rules. */
+export const SESSION_SUMMARY_MAX_COUNT = 99;
+export type SessionSummaryParams = {
+  arm: InterstitialArm;
+  /** Completed Classic games in the segment, 1..99 (a segment with none emits nothing). */
+  classicGames: number;
+  /** Interstitial opportunities consumed in the segment (any outcome), 0..99. */
+  checkpoints: number;
+  /** Interstitials actually shown (<= checkpoints). */
+  shown: number;
+  /** Treatment opportunities with no ad ready (<= checkpoints). */
+  notReady: number;
+  /** 1 = a second opportunity became due or was reached within the segment. */
+  secondReached: 0 | 1;
+  /** Rewarded ads shown during the segment (any placement). */
+  rewardedShown: number;
+  /** Rewarded offers deferred because an interstitial won the result-screen lane. */
+  rewardedDeferred: number;
+  /** The effective cadence / session cap in force (the baseline's, or the participant's cell's). */
+  cadence: number;
+  cap: number;
+  /** Participant only, both together (the cap already travels as `cap`). */
+  ifxCell?: InterstitialCellId;
+  ifxVersion?: number;
 };
 
 /**
@@ -435,9 +518,9 @@ export type RewardedAdFailureParams = {
 };
 
 export type InterstitialCheckpointParams =
-  | { arm: "control"; outcome: "control" | "suppressed"; gamesBetweenAds: InterstitialCadence }
-  | ({ arm: "treatment"; outcome: "not_ready" | "shown" | "suppressed"; gamesBetweenAds: InterstitialCadence } & InterstitialCheckpointDiag)
-  | ({ arm: "treatment"; outcome: "show_failed"; gamesBetweenAds: InterstitialCadence; reason: InterstitialFailureReason } & InterstitialCheckpointDiag);
+  | ({ arm: "control"; outcome: "control" | "suppressed"; gamesBetweenAds: number } & InterstitialIfxContext)
+  | ({ arm: "treatment"; outcome: "not_ready" | "shown" | "suppressed"; gamesBetweenAds: number } & InterstitialCheckpointDiag & InterstitialIfxContext)
+  | ({ arm: "treatment"; outcome: "show_failed"; gamesBetweenAds: number; reason: InterstitialFailureReason } & InterstitialCheckpointDiag & InterstitialIfxContext);
 
 export type AnalyticsEventName = keyof EventParamsMap;
 
@@ -489,6 +572,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "coin_earned",
   "play_store_cta_shown",
   "play_store_click",
+  "session_summary",
   "mp_room_created",
   "mp_player_joined",
   "mp_game_started",
@@ -560,8 +644,12 @@ function isPlayerCount(value: unknown): value is number {
   return isIntInRange(value, 1, 8);
 }
 
+/**
+ * Every length ever offered. 3 is new in 0.57.0; 15 stays valid because installed 0.55/0.56 clients can still
+ * play and report 15-round games. Kept literal (no import of the multiplayer protocol) like the rest of this file.
+ */
 function isRoundCountParam(value: unknown): value is number {
-  return value === 5 || value === 10 || value === 15;
+  return value === 3 || value === 5 || value === 10 || value === 15;
 }
 
 function isDifficultyParam(value: unknown): value is MultiplayerDifficultyParam {
@@ -606,8 +694,16 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     return { valid: true, params: { playerCount: p.playerCount } };
   },
   mp_game_started: (p) => {
-    if (!isRecord(p) || !hasExactKeys(p, ["playerCount", "roundCount", "difficulty"])) return { valid: false };
+    // Two exact shapes: the original three keys (older builds, and a repeat of an already-counted game) or
+    // those plus mpDailyOrdinal. No other key combination is accepted.
+    if (!isRecord(p)) return { valid: false };
+    const withOrdinal = hasExactKeys(p, ["playerCount", "roundCount", "difficulty", "mpDailyOrdinal"]);
+    if (!withOrdinal && !hasExactKeys(p, ["playerCount", "roundCount", "difficulty"])) return { valid: false };
     if (!isPlayerCount(p.playerCount) || !isRoundCountParam(p.roundCount) || !isDifficultyParam(p.difficulty)) return { valid: false };
+    if (withOrdinal) {
+      if (!isIntInRange(p.mpDailyOrdinal, 1, 7)) return { valid: false };
+      return { valid: true, params: { playerCount: p.playerCount, roundCount: p.roundCount, difficulty: p.difficulty, mpDailyOrdinal: p.mpDailyOrdinal } };
+    }
     return { valid: true, params: { playerCount: p.playerCount, roundCount: p.roundCount, difficulty: p.difficulty } };
   },
   mp_round_completed: (p) => {
@@ -718,11 +814,13 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   rewarded_ad_failed: (p) => validateAdFailureEvent(p),
   interstitial_checkpoint: (p) => validateInterstitialCheckpoint(p),
   interstitial_continuation: (p) => {
-    if (!isRecord(p) || !hasExactKeys(p, ["arm", "outcome", "gamesBetweenAds"])) return { valid: false };
+    if (!isRecord(p) || !hasKeysWithin(p, ["arm", "outcome", "gamesBetweenAds"], IFX_CONTEXT_KEYS)) return { valid: false };
     const { arm, outcome, gamesBetweenAds } = p;
-    if (!isInterstitialArm(arm) || !isInterstitialOutcome(outcome) || !isInterstitialCadence(gamesBetweenAds)) return { valid: false };
+    if (!isInterstitialArm(arm) || !isInterstitialOutcome(outcome) || !isEffectiveInterstitialCadence(gamesBetweenAds)) return { valid: false };
     if (!isArmOutcomePair(arm, outcome)) return { valid: false };
-    return { valid: true, params: { arm, outcome, gamesBetweenAds } };
+    const ifx = validateIfxContext(p);
+    if (ifx === null) return { valid: false };
+    return { valid: true, params: { arm, outcome, gamesBetweenAds, ...ifx } };
   },
   reward_continuation: (p) => {
     if (!isRecord(p) || !hasExactKeys(p, ["arm", "offerNumber", "outcome"])) return { valid: false };
@@ -749,13 +847,13 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   reward_ad_started: (p) => validateRewardOfferEvent(p),
   reward_ad_completed: (p) => validateRewardOfferEvent(p),
   reward_ad_failed: (p) => validateRewardOfferEvent(p),
-  reward_skipped: (p) => validateRewardOfferEvent(p),
+  reward_skipped: (p) => validateRewardSkipEvent<"reward_skipped">(p),
   reward_fallback_used: (p) => validateAdEvent(p),
   reward_bonus_offer_shown: (p) => validateRewardOfferEvent(p),
   reward_bonus_ad_started: (p) => validateRewardOfferEvent(p),
   reward_bonus_ad_completed: (p) => validateRewardOfferEvent(p),
   reward_bonus_ad_failed: (p) => validateRewardOfferEvent(p),
-  reward_bonus_skipped: (p) => validateRewardOfferEvent(p),
+  reward_bonus_skipped: (p) => validateRewardSkipEvent<"reward_bonus_skipped">(p),
   reward_reminder_shown: (p) => validateAdEvent(p),
   reward_double_tutorial_shown: (p) => validateAdEvent(p),
   result_actions_tutorial_shown: (p) => validateAdEvent(p),
@@ -787,6 +885,7 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   },
   play_store_cta_shown: (p) => validatePlayStoreEvent(p),
   play_store_click: (p) => validatePlayStoreEvent(p),
+  session_summary: (p) => validateSessionSummary(p),
 };
 
 /**
@@ -918,17 +1017,57 @@ function isArmOutcomePair(arm: InterstitialArm, outcome: InterstitialOutcome): b
 }
 
 const CHECKPOINT_DIAG_KEYS = ["attempt", "code", "notReadyCause", "latency"] as const;
+const IFX_CONTEXT_KEYS = ["ifxCell", "ifxVersion", "ifxCap"] as const;
+
+/**
+ * The participant context of an interstitial event: none of the three keys, or all three, each in its closed
+ * range. A partial set, a bad value or an unknown cell is `null` (the caller fails the whole event).
+ */
+function validateIfxContext(p: Record<string, unknown>): InterstitialIfxContext | null {
+  const present = IFX_CONTEXT_KEYS.filter((k) => k in p).length;
+  if (present === 0) return {};
+  if (present !== IFX_CONTEXT_KEYS.length) return null;
+  const { ifxCell, ifxVersion, ifxCap } = p;
+  if (!isOneOf(INTERSTITIAL_CELL_IDS, ifxCell) || !isIntInRange(ifxVersion, 1, IFX_MAX_VERSION) || !isIntInRange(ifxCap, IFX_MIN_CAP, IFX_MAX_CAP)) return null;
+  return { ifxCell, ifxVersion, ifxCap };
+}
+
+const SESSION_SUMMARY_KEYS = ["arm", "classicGames", "checkpoints", "shown", "notReady", "secondReached", "rewardedShown", "rewardedDeferred", "cadence", "cap"] as const;
+
+/** session_summary: the ten exact keys, plus ifxCell + ifxVersion together or not at all. */
+function validateSessionSummary(p: unknown): ValidationResult<"session_summary"> {
+  if (!isRecord(p) || !hasKeysWithin(p, SESSION_SUMMARY_KEYS, ["ifxCell", "ifxVersion"])) return { valid: false };
+  if (("ifxCell" in p) !== ("ifxVersion" in p)) return { valid: false };
+  const { arm, classicGames, checkpoints, shown, notReady, secondReached, rewardedShown, rewardedDeferred, cadence, cap } = p;
+  if (!isInterstitialArm(arm) || !isIntInRange(classicGames, 1, SESSION_SUMMARY_MAX_COUNT)) return { valid: false };
+  if (!isIntInRange(checkpoints, 0, SESSION_SUMMARY_MAX_COUNT) || !isIntInRange(shown, 0, SESSION_SUMMARY_MAX_COUNT) || !isIntInRange(notReady, 0, SESSION_SUMMARY_MAX_COUNT)) return { valid: false };
+  if (!isIntInRange(rewardedShown, 0, SESSION_SUMMARY_MAX_COUNT) || !isIntInRange(rewardedDeferred, 0, SESSION_SUMMARY_MAX_COUNT)) return { valid: false };
+  if (secondReached !== 0 && secondReached !== 1) return { valid: false };
+  if (!isEffectiveInterstitialCadence(cadence) || !isIntInRange(cap, IFX_MIN_CAP, IFX_MAX_CAP)) return { valid: false };
+  // Every shown or not-ready outcome is a consumed opportunity; a control arm shows nothing and is never "not ready".
+  if (shown + notReady > checkpoints) return { valid: false };
+  if (arm === "control" && (shown !== 0 || notReady !== 0)) return { valid: false };
+  const params: SessionSummaryParams = { arm, classicGames, checkpoints, shown, notReady, secondReached, rewardedShown, rewardedDeferred, cadence, cap };
+  if ("ifxCell" in p) {
+    if (!isOneOf(INTERSTITIAL_CELL_IDS, p.ifxCell) || !isIntInRange(p.ifxVersion, 1, IFX_MAX_VERSION)) return { valid: false };
+    params.ifxCell = p.ifxCell;
+    params.ifxVersion = p.ifxVersion;
+  }
+  return { valid: true, params };
+}
 
 function validateInterstitialCheckpoint(p: unknown): ValidationResult<"interstitial_checkpoint"> {
   if (!isRecord(p)) return { valid: false };
   const { arm, outcome, gamesBetweenAds } = p;
-  if (!isInterstitialArm(arm) || !isInterstitialOutcome(outcome) || !isInterstitialCadence(gamesBetweenAds)) return { valid: false };
+  if (!isInterstitialArm(arm) || !isInterstitialOutcome(outcome) || !isEffectiveInterstitialCadence(gamesBetweenAds)) return { valid: false };
   if (!isArmOutcomePair(arm, outcome)) return { valid: false };
   const base = ["arm", "outcome", "gamesBetweenAds"];
   const failed = outcome === "show_failed";
   // Diagnostics belong to the treatment arm only (a control opportunity loads and shows nothing).
-  const optional: readonly string[] = arm === "treatment" ? CHECKPOINT_DIAG_KEYS : [];
+  const optional: readonly string[] = arm === "treatment" ? [...CHECKPOINT_DIAG_KEYS, ...IFX_CONTEXT_KEYS] : IFX_CONTEXT_KEYS;
   if (!hasKeysWithin(p, failed ? [...base, "reason"] : base, optional)) return { valid: false };
+  const ifx = validateIfxContext(p);
+  if (ifx === null) return { valid: false };
   if (
     !optionalField(p, "attempt", isAdAttempt) ||
     !optionalField(p, "code", isAdErrorCode) ||
@@ -946,9 +1085,9 @@ function validateInterstitialCheckpoint(p: unknown): ValidationResult<"interstit
   if ("latency" in p) diag.latency = p.latency as AdLatencyBucket;
   if (failed) {
     if (!isInterstitialFailureReason(p.reason)) return { valid: false };
-    return { valid: true, params: { arm: "treatment", outcome, gamesBetweenAds, reason: p.reason, ...diag } };
+    return { valid: true, params: { arm: "treatment", outcome, gamesBetweenAds, reason: p.reason, ...diag, ...ifx } };
   }
-  return { valid: true, params: { arm, outcome, gamesBetweenAds, ...diag } as InterstitialCheckpointParams };
+  return { valid: true, params: { arm, outcome, gamesBetweenAds, ...diag, ...ifx } as InterstitialCheckpointParams };
 }
 
 /** shape_completed and its SEO-practice twin: one contract, so the two can never drift apart. */
@@ -974,9 +1113,26 @@ function validateFunnelEvent<E extends "game_started" | "game_completed" | "resu
   return { valid: true, params: { gameType, category, contentKey } as EventParamsMap[E] };
 }
 
-/** game_completed: the three funnel keys, plus - all or nothing - the coin block (GameCompletedCoins). */
+/**
+ * game_completed: the three funnel keys, plus - all or nothing - the coin block (GameCompletedCoins), plus (0.57,
+ * independent of the coin block) the next-game context: `nextOutcome` alone or with `ifxCell`, Classic only. Every
+ * older payload (no nextOutcome / ifxCell) stays valid; `ifxCell` without `nextOutcome` is not a valid shape.
+ */
 function validateGameCompleted(p: unknown): ValidationResult<"game_completed"> {
   if (!isRecord(p)) return { valid: false };
+  const { nextOutcome, ifxCell, ...withoutNext } = p;
+  const hasNext = "nextOutcome" in p;
+  if (!hasNext && "ifxCell" in p) return { valid: false };
+  const base = validateGameCompletedCoins(withoutNext);
+  if (!base.valid) return base;
+  if (!hasNext) return base;
+  if (p.gameType !== "shapeChallenge" || !isOneOf(NEXT_GAME_OUTCOMES, nextOutcome)) return { valid: false };
+  if ("ifxCell" in p && !isOneOf(INTERSTITIAL_CELL_IDS, ifxCell)) return { valid: false };
+  return { valid: true, params: { ...base.params, nextOutcome, ...("ifxCell" in p ? { ifxCell: ifxCell as InterstitialCellId } : {}) } };
+}
+
+/** The pre-0.57 game_completed contract: the three funnel keys, plus - all or nothing - the coin block. */
+function validateGameCompletedCoins(p: Record<string, unknown>): ValidationResult<"game_completed"> {
   if (!("coinsEarned" in p) && !("balanceBucket" in p)) return validateFunnelEvent<"game_completed">(p);
   const { coinsEarned, balanceBucket, ...funnel } = p;
   const base = validateFunnelEvent<"game_completed">(funnel);
@@ -1001,7 +1157,9 @@ function validateRewardOfferEvent<
 >(p: unknown): ValidationResult<E> {
   if (!isRecord(p)) return { valid: false };
   if (Object.keys(p).length === 1) return validateAdEvent(p) as ValidationResult<E>;
-  const withExperiment = hasExactKeys(p, ["placement", ...REWARD_OFFER_ECONOMY_KEYS, ...REWARD_OFFER_EXPERIMENT_KEYS]);
+  const experimentKeys = ["placement", ...REWARD_OFFER_ECONOMY_KEYS, ...REWARD_OFFER_EXPERIMENT_KEYS];
+  const withIfxCell = hasExactKeys(p, [...experimentKeys, REWARD_OFFER_IFX_KEY]);
+  const withExperiment = withIfxCell || hasExactKeys(p, experimentKeys);
   if (!withExperiment && !hasExactKeys(p, ["placement", ...REWARD_OFFER_ECONOMY_KEYS])) return { valid: false };
   const { placement, balanceBucket, baseReward, multiplier, adAvailable, nextTarget, shortfallBucket, adClosesGap, gamesBucket } = p;
   if (!isRewardedAdPlacement(placement)) return { valid: false };
@@ -1019,7 +1177,22 @@ function validateRewardOfferEvent<
   // The multiplier must agree with the arm: x3 advertises 3, plus100 is a flat bonus (1).
   if (multiplier !== (arm === "x3" ? 3 : 1)) return { valid: false };
   if (!isIntInRange(offerNumber, 1, MAX_OFFER_NUMBER) || !isIntInRange(sessionGames, 0, MAX_SESSION_GAMES) || !isIntInRange(bonusCoins, 1, MAX_ECONOMY_COINS)) return { valid: false };
-  return { valid: true, params: { ...economy, arm, offerNumber, sessionGames, bonusCoins, interstitialArm } as EventParamsMap[E] };
+  if (withIfxCell && (!isOneOf(INTERSTITIAL_CELL_IDS, p.ifxCell) || interstitialArm === "none")) return { valid: false };
+  return { valid: true, params: { ...economy, arm, offerNumber, sessionGames, bonusCoins, interstitialArm, ...(withIfxCell ? { ifxCell: p.ifxCell as InterstitialCellId } : {}) } as EventParamsMap[E] };
+}
+
+/**
+ * reward_skipped / reward_bonus_skipped: the reward-offer funnel shape, plus an optional `skipStage`
+ * (REWARD_SKIP_STAGES). The old key sets (no skipStage) stay valid; any other skipStage value, or a
+ * skipStage on a payload that is otherwise invalid, fails the whole event.
+ */
+function validateRewardSkipEvent<E extends "reward_skipped" | "reward_bonus_skipped">(p: unknown): ValidationResult<E> {
+  if (!isRecord(p) || !("skipStage" in p)) return validateRewardOfferEvent<E>(p);
+  const { skipStage, ...rest } = p;
+  if (!isOneOf(REWARD_SKIP_STAGES, skipStage)) return { valid: false };
+  const base = validateRewardOfferEvent<E>(rest);
+  if (!base.valid) return base;
+  return { valid: true, params: { ...base.params, skipStage } as EventParamsMap[E] };
 }
 
 /** All-or-nothing: an unknown event name or any single invalid/extra/missing param fails the whole event. */

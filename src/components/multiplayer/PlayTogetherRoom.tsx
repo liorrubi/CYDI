@@ -28,6 +28,7 @@ import { hapticRoundStart } from "../../services/haptics";
 import { ScreenWakeLock } from "../../services/wakeLock";
 import { trackEvent } from "../../services/analytics";
 import { awardSocialPoints } from "../../services/socialPointsStore";
+import { multiplayerGameKey, recordMultiplayerGame } from "../../multiplayer/dailyOrdinalStore";
 import { multiplayerAwardId, multiplayerAwards } from "../../social/socialRewards";
 import { crossedRanks } from "../../social/socialRank";
 import type { SocialRankParam } from "../../services/analyticsSchema";
@@ -38,7 +39,7 @@ import {
   DIFFICULTY_OPTIONS,
   MP_LIMITS,
   MP_TIMINGS,
-  ROUND_COUNT_OPTIONS,
+  ROUND_COUNT_OPTIONS_UI,
   toWirePath,
   type MultiplayerDifficulty,
 } from "../../multiplayer/protocol";
@@ -161,6 +162,7 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
   // code, a nickname, a seat, a token or any drawing data.
   const reportedRoundRef = useRef(-1);
   const reportedStartRef = useRef(false);
+  const joinedFinishedRef = useRef<boolean | null>(null);
   const reportedFinishRef = useRef(false);
   const joinReportedRef = useRef(false);
   const playerCount = snapshot?.players.length ?? 0;
@@ -176,8 +178,13 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
   useEffect(() => {
     if (!snapshot) return;
 
+    // First snapshot this mount ever sees: arriving on an already-finished game is not a game this
+    // device played, so it must not consume a daily ordinal (the event itself still fires as before).
+    if (joinedFinishedRef.current === null) joinedFinishedRef.current = snapshot.phase === "FINAL_RESULTS" || snapshot.phase === "ABANDONED";
+
     if (snapshot.phase === "LOBBY") {
       // A rematch returns to the lobby, so re-arm for the next game.
+      joinedFinishedRef.current = false;
       reportedStartRef.current = false;
       reportedFinishRef.current = false;
       reportedRoundRef.current = -1;
@@ -186,10 +193,15 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
 
     if (!reportedStartRef.current && snapshot.roundIndex >= 0) {
       reportedStartRef.current = true;
+      // mpDailyOrdinal: this device's Nth multiplayer game of the local day. Counted once per genuine game
+      // (roomCode:gameSerial, kept locally and never sent), for host and guest alike; null (a remount of a
+      // counted game, a game already over on arrival, unavailable storage) omits the field.
+      const ordinal = joinedFinishedRef.current ? null : recordMultiplayerGame(multiplayerGameKey(snapshot.roomCode, snapshot.gameSerial));
       trackEvent("mp_game_started", {
         playerCount: snapshot.players.length,
         roundCount: snapshot.rounds,
         difficulty: snapshot.difficulty,
+        ...(ordinal === null ? {} : { mpDailyOrdinal: ordinal }),
       });
     }
 
@@ -440,7 +452,7 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
               <fieldset className="mp-fieldset">
                 <legend className="mp-legend">Rounds</legend>
                 <div className="mp-chip-row">
-                  {ROUND_COUNT_OPTIONS.map((count) => (
+                  {ROUND_COUNT_OPTIONS_UI.map((count) => (
                     <button
                       key={count}
                       type="button"

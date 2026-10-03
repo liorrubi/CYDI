@@ -326,7 +326,43 @@ function pushToQueue(envelope: Envelope): void {
   if (queue.length >= maxEvents) flushAnalyticsQueue("size");
 }
 
+// ------------------------------------------------------------ lifecycle hooks ----
+
+/**
+ * Pre-flush hooks. A lifecycle flush (visibilitychange hidden, pagehide, native appStateChange inactive) is
+ * the LAST chance to send telemetry - it is never persisted and never retried - so a module that must
+ * report something at that moment (the play-session segment summary) registers here and is called
+ * synchronously, BEFORE the queue is swapped out: whatever it enqueues rides in that very request. A hook
+ * registered through a separate lifecycle listener of its own could run after the flush, and its event
+ * would wait for the 120 s timer and be lost on kill.
+ *
+ * The hook runs for EVERY lifecycle trigger (several can fire for one backgrounding, and also for a pause
+ * that is not a real exit, such as an AdMob full-screen ad), so it must decide for itself whether this is
+ * the moment it cares about and must be idempotent. Keyed by name: re-registering replaces. A throwing hook
+ * can never stop the flush or the other hooks.
+ */
+const lifecycleHooks = new Map<string, () => void>();
+
+export function registerBeforeLifecycleFlush(name: string, hook: () => void): () => void {
+  lifecycleHooks.set(name, hook);
+  return () => {
+    if (lifecycleHooks.get(name) === hook) lifecycleHooks.delete(name);
+  };
+}
+
+function runLifecycleHooks(): void {
+  for (const hook of [...lifecycleHooks.values()]) {
+    try {
+      hook();
+    } catch {
+      /* a hook never breaks the flush */
+    }
+  }
+}
+
 export function flushAnalyticsQueue(reason: FlushReason = "manual"): void {
+  // Before the queue is taken (see registerBeforeLifecycleFlush); anything the hooks enqueue is in this batch.
+  if (reason === "lifecycle") runLifecycleHooks();
   if (reason !== "size") clearTimer();
   // A page that only waits still picks up entries a dead page left behind.
   if (reason === "timer") maybeAdopt(Date.now());

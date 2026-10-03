@@ -62,8 +62,25 @@ export const MP_TIMINGS = {
   DRAWING_MS: 20_000,
 } as const;
 
-export const ROUND_COUNT_OPTIONS = [5, 10, 15] as const;
-export type RoundCount = (typeof ROUND_COUNT_OPTIONS)[number];
+/**
+ * Game lengths a player can PICK (Play Together and 2 Players), in display order.
+ * 0.57.0 offers 3, 5 and 10; the 15-round option was removed from the UI only.
+ */
+export const ROUND_COUNT_OPTIONS_UI = [3, 5, 10] as const;
+
+/** The length a new room / Pass & Play game starts on. */
+export const DEFAULT_ROUND_COUNT = 5 as const;
+
+/**
+ * Game lengths the protocol, the Worker and analytics still ACCEPT - a superset of the UI list.
+ *
+ * 15 stays here on purpose: installed 0.55 / 0.56 clients still show a 15-round option, so an old host can
+ * configure a 15-round room (parseClientFrame / RoomDO must not answer bad_frame), a new client can find
+ * itself in one ("Round x of 15"), and old pass-and-play analytics still report roundCount 15. Removing it
+ * would break those clients. Drop it only once no supported client can send it.
+ */
+export const ROUND_COUNT_ACCEPTED = [3, 5, 10, 15] as const;
+export type RoundCount = (typeof ROUND_COUNT_ACCEPTED)[number];
 
 export const DIFFICULTY_OPTIONS = ["easy", "medium", "hard", "mixed"] as const;
 export type MultiplayerDifficulty = (typeof DIFFICULTY_OPTIONS)[number];
@@ -265,7 +282,7 @@ export function sanitizeNickname(value: unknown): string {
 }
 
 export function isRoundCount(value: unknown): value is RoundCount {
-  return ROUND_COUNT_OPTIONS.includes(value as RoundCount);
+  return ROUND_COUNT_ACCEPTED.includes(value as RoundCount);
 }
 
 export function isMultiplayerDifficulty(value: unknown): value is MultiplayerDifficulty {

@@ -67,7 +67,7 @@ function response(status: number, body?: unknown): ApiResponse {
 }
 
 let served: { status: number; body?: unknown } = { status: 200, body: BASE };
-async function setConfig(config: Partial<InterstitialClientConfig> | null, freshRun = true) {
+async function setConfig(config: (Partial<InterstitialClientConfig> & { experiments?: unknown }) | null, freshRun = true) {
   served = config === null ? { status: 404 } : { status: 200, body: { ...BASE, ...config } };
   if (freshRun) _resetInterstitialConfigForTests(async () => response(served.status, served.body));
   await refreshInterstitialConfig();
@@ -136,6 +136,7 @@ const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 let tracked: Tracked[];
 let storage: ReturnType<typeof memoryStorage>;
+let ifxStore: ReturnType<typeof memoryStorage>;
 let session: string;
 let installation: string | null;
 let ad: ReturnType<typeof fakeInterstitialAdapter>;
@@ -144,6 +145,7 @@ let visibility: ReturnType<typeof manualEnv>;
 beforeEach(async () => {
   tracked = [];
   storage = memoryStorage();
+  ifxStore = memoryStorage();
   session = "sess00000001";
   installation = TREATMENT_ID;
   _resetRewardedAdsForTests();
@@ -154,6 +156,7 @@ beforeEach(async () => {
   _resetInterstitialControllerForTests({
     track: (name, params) => tracked.push({ name, params: params as Record<string, unknown> }),
     storage,
+    ifxStorage: ifxStore,
     sessionId: () => session,
     installationId: () => installation,
   });
@@ -740,4 +743,639 @@ test("lane: a due interstitial that is still LOADING does not reserve the Result
   markRewardedOfferRenderedThisCycle();
   assert.equal(runInterstitialCheckpoint(), null);
   assert.equal(checkpoints()[0].outcome, "suppressed");
+});
+
+// --- 0.57 multi-cell experiment through the controller -------------------------------------------
+
+import { getEffectiveInterstitialContext, getInterstitialControllerDebugInfo } from "./interstitialController";
+import { IFX_STATE_KEY, isInExperimentGate, parseIfxState, pickCell } from "./interstitialCells";
+import { consumeOpportunity, recordEligibleCompletion } from "./interstitialExperiment";
+import type { InterstitialExperimentSpec } from "./interstitialConfigSchema";
+
+const xcell = (id: string, cadence: number, cap: number, weight: number) => ({ id, cadence, cap, weight }) as InterstitialExperimentSpec["cells"][number];
+function xspec(over: Partial<InterstitialExperimentSpec> = {}): InterstitialExperimentSpec {
+  return {
+    enabled: true,
+    rolloutPercentInTreatment: 100,
+    version: 1,
+    cells: [xcell("A", 7, 2, 50), xcell("B", 5, 2, 50)],
+    ...over,
+  };
+}
+
+/** A TREATMENT installation (rollout 5) that lands in `cellId` under `spec` (and inside its gate). */
+function idInCell(spec: InterstitialExperimentSpec, cellId: string): string {
+  for (let i = 0; i < 200_000; i++) {
+    const id = `ifx${i.toString(16).padStart(9, "0")}`;
+    if (assignArm(id, 5) === "treatment" && isInExperimentGate(id, spec.version, spec.rolloutPercentInTreatment) && pickCell(id, spec).id === cellId) return id;
+  }
+  throw new Error("no id found");
+}
+
+/** Which round numbers (1-based) ended in a recorded checkpoint, over `n` rounds, rotating the session every `sessionEvery` rounds. */
+function checkpointRounds(n: number, sessionEvery = Infinity): number[] {
+  const rounds: number[] = [];
+  let sessionNo = 1;
+  for (let round = 1; round <= n; round++) {
+    if (round > 1 && (round - 1) % sessionEvery === 0) session = `sess${String(++sessionNo).padStart(8, "0")}`;
+    const before = checkpoints().length;
+    completeRound();
+    runInterstitialCheckpoint();
+    if (checkpoints().length > before) rounds.push(round);
+  }
+  return rounds;
+}
+
+/** Reference: the unchanged 0.56 pure functions under a base cadence and cap, same session rotation. */
+function referenceRounds(n: number, cadence: 7, cap: number, sessionEvery = Infinity): number[] {
+  const rounds: number[] = [];
+  let state = parseInterstitialState(null);
+  let sessionNo = 1;
+  for (let round = 1; round <= n; round++) {
+    if (round > 1 && (round - 1) % sessionEvery === 0) sessionNo++;
+    const sid = `sess${String(sessionNo).padStart(8, "0")}`;
+    const d = recordEligibleCompletion(state, cadence, cap, sid, "treatment", true);
+    state = d.state;
+    if (d.due) {
+      rounds.push(round);
+      state = consumeOpportunity(state, sid);
+    }
+  }
+  return rounds;
+}
+
+/** Restart the app inside the same analytics session: controller memory and the frozen config reset, storage stays. */
+function coldStart() {
+  _resetInterstitialControllerForTests({
+    track: (name, params) => tracked.push({ name, params: params as Record<string, unknown> }),
+    storage,
+    ifxStorage: ifxStore,
+    sessionId: () => session,
+    installationId: () => installation,
+  });
+}
+
+test("baseline equivalence: experiments absent, off, rollout 0, invalid or in control produce EXACTLY the 0.56 sequence (7/2 and 7/1, one and several sessions)", async () => {
+  const scenarios: [string, Record<string, unknown>, () => void][] = [
+    ["absent", {}, () => {}],
+    ["enabled:false", { experiments: { interstitial: xspec({ enabled: false }) } }, () => {}],
+    ["rollout 0 (the launch state)", { experiments: { interstitial: xspec({ rolloutPercentInTreatment: 0 }) } }, () => {}],
+    ["invalid block", { experiments: { interstitial: { ...xspec(), version: 0 } } }, () => {}],
+    ["control arm, experiment on", { experiments: { interstitial: xspec() } }, () => (installation = CONTROL_ID)],
+  ];
+  for (const [cap, sessionEvery] of [[2, Infinity], [1, Infinity], [2, 20], [1, 20]] as const) {
+    const expected = referenceRounds(60, 7, cap, sessionEvery);
+    assert.ok(expected.length >= 2 || cap === 1, "sanity: the reference has opportunities");
+    for (const [name, extra, arrange] of scenarios) {
+      tracked = [];
+      storage = memoryStorage();
+      ifxStore = memoryStorage();
+      session = "sess00000001";
+      installation = TREATMENT_ID;
+      coldStart();
+      arrange();
+      await setConfig({ maxOpportunitiesPerSession: cap, ...extra });
+      const rounds = checkpointRounds(60, sessionEvery);
+      // (control records the same moments as treatment - symmetric accounting - so it matches the reference too)
+      assert.deepEqual(rounds, expected, `${name}, cap ${cap}, session every ${sessionEvery}`);
+      assert.ok(checkpoints().every((c) => c.gamesBetweenAds === 7), `${name}: telemetry reports the baseline cadence`);
+    }
+  }
+});
+
+test("participant: the cell's cadence and cap rule, and telemetry reports the EFFECTIVE cadence", async () => {
+  const spec = xspec({ cells: [xcell("A", 5, 2, 50), xcell("B", 10, 1, 50)] });
+  installation = idInCell(spec, "A");
+  await setConfig({ maxOpportunitiesPerSession: 1, experiments: { interstitial: spec } });
+  assert.deepEqual(checkpointRounds(30), [5, 10], "cadence 5, cap 2 (and the base cap of 1 is not what applies)");
+  assert.ok(checkpoints().every((c) => c.gamesBetweenAds === 5));
+  for (const c of checkpoints()) assert.equal(validateEventParams("interstitial_checkpoint", c).valid, true, "the effective cadence is a valid analytics value");
+  const marker = persisted().marker;
+  assert.equal(marker?.gamesBetweenAds, 5);
+  recordInterstitialGameStarted("shapeChallenge");
+  assert.equal(tracked.filter((t) => t.name === "interstitial_continuation").at(-1)?.params.gamesBetweenAds, 5);
+});
+
+test("participant in a cap-1 / cadence-10 cell gets exactly one opportunity per session even if the base cap is 2", async () => {
+  const spec = xspec({ cells: [xcell("A", 5, 2, 50), xcell("B", 10, 1, 50)] });
+  installation = idInCell(spec, "B");
+  await setConfig({ maxOpportunitiesPerSession: 2, experiments: { interstitial: spec } });
+  assert.deepEqual(checkpointRounds(40), [10]);
+});
+
+test("second opportunity: a cap-2 cell is NOT reduced by secondOpportunityRolloutPercent (0 or 50); baseline still is", async () => {
+  const spec = xspec({ cells: [xcell("A", 5, 2, 50), xcell("B", 7, 2, 50)] });
+  for (const pct of [0, 50]) {
+    // Find an installation the LEGACY gate would exclude, so the bypass is what lets it through.
+    let id: string | null = null;
+    for (let i = 0; i < 200_000 && id === null; i++) {
+      const cand = `ifx${i.toString(16).padStart(9, "0")}`;
+      if (assignArm(cand, 5) === "treatment" && isInExperimentGate(cand, 1, 100) && !isSecondOpportunityEligible(cand, pct)) id = cand;
+    }
+    assert.ok(id !== null);
+    installation = id;
+    storage = memoryStorage();
+    ifxStore = memoryStorage();
+    tracked = [];
+    coldStart();
+    await setConfig({ maxOpportunitiesPerSession: 2, secondOpportunityRolloutPercent: pct, experiments: { interstitial: spec } });
+    const cellCadence = pickCell(id, spec).cadence;
+    assert.deepEqual(checkpointRounds(3 * cellCadence), [cellCadence, 2 * cellCadence], `participant, legacy gate ${pct}%: both opportunities`);
+
+    // The same excluded installation as a NON-participant (experiment off) keeps the 0.56 rule: one opportunity.
+    storage = memoryStorage();
+    ifxStore = memoryStorage();
+    tracked = [];
+    coldStart();
+    await setConfig({ maxOpportunitiesPerSession: 2, secondOpportunityRolloutPercent: pct });
+    assert.deepEqual(checkpointRounds(30), [7], `baseline, legacy gate ${pct}%: first opportunity only`);
+  }
+});
+
+test("the snapshot holds for the session: a remote change (disable, new version, new weights) and a cold start change nothing until the next session", async () => {
+  const spec = xspec({ cells: [xcell("A", 5, 2, 50), xcell("B", 10, 1, 50)] });
+  installation = idInCell(spec, "A");
+  await setConfig({ experiments: { interstitial: spec } });
+  assert.deepEqual(checkpointRounds(5), [5]);
+  const ctx = getEffectiveInterstitialContext();
+  assert.deepEqual(ctx, { experimentVersion: 1, cellId: "A", cadence: 5, cap: 2 });
+
+  // mid-session refresh: the experiment is switched off and its version bumped
+  await setConfig({ experiments: { interstitial: xspec({ enabled: false, version: 2, cells: [xcell("A", 20, 1, 50), xcell("B", 20, 1, 50)] }) } }, false);
+  assert.deepEqual(getEffectiveInterstitialContext(), ctx, "a live config change does not move a running session");
+  // cold start in the SAME session under the changed config
+  coldStart();
+  await setConfig({ experiments: { interstitial: xspec({ enabled: false, version: 2 }) } });
+  assert.deepEqual(getEffectiveInterstitialContext(), ctx, "persisted snapshot survives the cold start");
+  assert.deepEqual(parseIfxState(ifxStore.raw()).snapshot, { sessionId: session, experimentVersion: 1, cellId: "A", cadence: 5, cap: 2 });
+  let rounds: number[] = [];
+  for (let r = 1; r <= 5; r++) {
+    const before = checkpoints().length;
+    completeRound();
+    runInterstitialCheckpoint();
+    if (checkpoints().length > before) rounds.push(r);
+  }
+  assert.deepEqual(rounds, [5], "cadence 5 still rules the rest of the session (second opportunity at 5 more games)");
+
+  // next analytics session: the new (off) config applies, baseline cadence 7 / cap 1
+  session = "sess00000077";
+  assert.deepEqual(getEffectiveInterstitialContext(), { experimentVersion: null, cellId: null, cadence: 7, cap: 1 });
+});
+
+test("a failing ifx storage write cannot let a remote change reshape a participant's session", async () => {
+  const spec = xspec({ cells: [xcell("A", 5, 2, 50), xcell("B", 10, 1, 50)] });
+  installation = idInCell(spec, "A");
+  ifxStore.write = () => false;
+  await setConfig({ experiments: { interstitial: spec } });
+  assert.equal(getEffectiveInterstitialContext()?.cadence, 5);
+  await setConfig({ experiments: { interstitial: xspec({ enabled: false }) } }, false);
+  assert.equal(getEffectiveInterstitialContext()?.cadence, 5, "held in memory");
+});
+
+test("lowering the rollout or disabling returns participants to baseline at the next session; raising it adds others", async () => {
+  const spec = xspec({ rolloutPercentInTreatment: 100, cells: [xcell("A", 5, 2, 50), xcell("B", 10, 1, 50)] });
+  installation = idInCell(spec, "A");
+  await setConfig({ experiments: { interstitial: spec } });
+  assert.equal(getEffectiveInterstitialContext()?.cellId, "A");
+  session = "sess00000002";
+  await setConfig({ experiments: { interstitial: { ...spec, rolloutPercentInTreatment: 0 } } }, false);
+  assert.deepEqual(getEffectiveInterstitialContext(), { experimentVersion: null, cellId: null, cadence: 7, cap: 1 });
+  session = "sess00000003";
+  await setConfig({ experiments: { interstitial: spec } }, false);
+  assert.equal(getEffectiveInterstitialContext()?.cellId, "A", "back in: the persisted assignment is kept");
+});
+
+test("the control arm is never moved into a cell, even with the experiment fully on", async () => {
+  installation = CONTROL_ID;
+  await setConfig({ experiments: { interstitial: xspec() } });
+  assert.deepEqual(getEffectiveInterstitialContext(), { experimentVersion: null, cellId: null, cadence: 7, cap: 1 });
+  assert.equal(getInterstitialControllerDebugInfo().participation?.arm, "control");
+  assert.equal(parseIfxState(ifxStore.raw()).assignment, null);
+});
+
+test("getEffectiveInterstitialContext: null before any config answer; baseline when the installation takes no part; no ids or buckets", async () => {
+  _resetInterstitialConfigForTests(async () => response(503));
+  assert.equal(getEffectiveInterstitialContext(), null);
+  await setConfig({ countryEligible: false, experiments: { interstitial: xspec() } });
+  assert.deepEqual(getEffectiveInterstitialContext(), { experimentVersion: null, cellId: null, cadence: 7, cap: 1 });
+  await setConfig({ enabled: false });
+  assert.deepEqual(getEffectiveInterstitialContext(), { experimentVersion: null, cellId: null, cadence: 7, cap: 1 });
+
+  const spec = xspec();
+  installation = idInCell(spec, "B");
+  await setConfig({ experiments: { interstitial: spec } });
+  const ctx = getEffectiveInterstitialContext()!;
+  assert.deepEqual(Object.keys(ctx).sort(), ["cadence", "cap", "cellId", "experimentVersion"]);
+  assert.equal(JSON.stringify(ctx).includes(installation), false);
+});
+
+test("nothing handed to analytics or persisted by the experiment contains the installation id", async () => {
+  const spec = xspec({ cells: [xcell("A", 5, 2, 50), xcell("B", 7, 2, 50)] });
+  installation = idInCell(spec, "A");
+  await setConfig({ experiments: { interstitial: spec } });
+  checkpointRounds(12);
+  recordInterstitialGameStarted("shapeChallenge");
+  assert.ok(tracked.length > 0);
+  assert.equal(JSON.stringify(tracked).includes(installation), false);
+  assert.equal((ifxStore.raw() ?? "").includes(installation), false);
+  assert.equal((storage.raw() ?? "").includes(installation), false);
+  assert.equal(IFX_STATE_KEY === "cydi.interstitial.v1", false, "its own key; the v1 state parse is untouched");
+});
+
+test("the due-state machine for participants matches the pure functions under the cell's cadence/cap (lane logic untouched)", async () => {
+  const spec = xspec({ cells: [xcell("A", 5, 2, 50), xcell("B", 7, 3, 50)] });
+  installation = idInCell(spec, "B");
+  await setConfig({ experiments: { interstitial: spec } });
+  assert.deepEqual(checkpointRounds(60, 25), (() => {
+    const out: number[] = [];
+    let state = parseInterstitialState(null);
+    let sessionNo = 1;
+    for (let r = 1; r <= 60; r++) {
+      if (r > 1 && (r - 1) % 25 === 0) sessionNo++;
+      const sid = `sess${String(sessionNo).padStart(8, "0")}`;
+      const d = recordEligibleCompletion(state, 7, 3, sid, "treatment", true);
+      state = d.state;
+      if (d.due) {
+        out.push(r);
+        state = consumeOpportunity(state, sid);
+      }
+    }
+    return out;
+  })());
+});
+
+// --- 0.57 telemetry: ifx context, next-game context, play-segment summary -------------------------------
+
+import {
+  FULL_SCREEN_AD_BACKGROUND_GRACE_MS,
+  _playSegmentCountersForTests,
+  _resetPlaySegmentSummaryForTests,
+  onLifecycleFlush,
+} from "./playSegmentSummary";
+import { getInterstitialCellForAnalytics, recordRewardedOfferDeferred, takeNextGameContext } from "./interstitialController";
+
+const eventsNamed = (name: string) => tracked.filter((t) => t.name === name).map((t) => t.params);
+const summaries = () => eventsNamed("session_summary");
+
+let clock = 0;
+/** The segment summary in "Android, with a controllable clock" mode, reporting into the same `tracked` list. */
+function androidSegments() {
+  clock = 1_000_000;
+  _resetPlaySegmentSummaryForTests({ track: (name, params) => tracked.push({ name, params: params as unknown as Record<string, unknown> }), now: () => clock, isNative: () => true });
+}
+
+/** A participant of cell `cellId` (cadence/cap as given); version 1. */
+async function participantIn(cellId: string, cells: InterstitialExperimentSpec["cells"], baseOver: Partial<InterstitialClientConfig> = {}) {
+  const spec = xspec({ cells });
+  installation = idInCell(spec, cellId);
+  await setConfig({ experiments: { interstitial: spec }, ...baseOver });
+  return spec;
+}
+
+test("a cell may run cadence 6 / cap 2 (7/2 vs 6/2 vs 5/2 needs no APK): due at 6 and 12, telemetry reports 6, valid, and survives a cold start", async () => {
+  await participantIn("A", [xcell("A", 6, 2, 50), xcell("B", 7, 2, 50)]);
+  assert.deepEqual(checkpointRounds(14), [6, 12]);
+  assert.ok(checkpoints().every((c) => c.gamesBetweenAds === 6));
+  for (const c of checkpoints()) assert.equal(validateEventParams("interstitial_checkpoint", c).valid, true);
+  assert.equal(persisted().marker?.gamesBetweenAds, 6, "the continuation marker accepts a cell cadence");
+  coldStart();
+  // Same session, the experiment now switched off remotely: the persisted snapshot (cadence 6) still rules.
+  await setConfig({ experiments: { interstitial: xspec({ enabled: false, cells: [xcell("A", 6, 2, 50), xcell("B", 7, 2, 50)] }) } });
+  assert.equal(getEffectiveInterstitialContext()?.cadence, 6, "the persisted snapshot with cadence 6 is read back, not dropped");
+  assert.equal(getEffectiveInterstitialContext()?.cellId, "A");
+  recordInterstitialGameStarted("shapeChallenge");
+  const cont = eventsNamed("interstitial_continuation").at(-1)!;
+  assert.equal(cont.gamesBetweenAds, 6);
+  assert.equal(validateEventParams("interstitial_continuation", cont).valid, true);
+});
+
+test("ifx context: a participant's checkpoint and continuation carry cell / version / cap; baseline and control carry none", async () => {
+  await participantIn("B", [xcell("A", 5, 2, 50), xcell("B", 7, 2, 50)]);
+  assert.equal(getInterstitialCellForAnalytics(), "B");
+  checkpointRounds(7);
+  recordInterstitialGameStarted("shapeChallenge");
+  for (const p of [...checkpoints(), ...eventsNamed("interstitial_continuation")]) {
+    assert.equal(p.ifxCell, "B");
+    assert.equal(p.ifxVersion, 1);
+    assert.equal(p.ifxCap, 2);
+    assert.equal(p.gamesBetweenAds, 7);
+  }
+  assert.equal(checkpoints().length, 1);
+  assert.equal(eventsNamed("interstitial_continuation").length, 1);
+  assert.equal(validateEventParams("interstitial_checkpoint", checkpoints()[0]).valid, true);
+  assert.equal(validateEventParams("interstitial_continuation", eventsNamed("interstitial_continuation")[0]).valid, true);
+
+  // Baseline (no experiment): exactly the 0.56 keys.
+  tracked = [];
+  storage = memoryStorage();
+  ifxStore = memoryStorage();
+  installation = TREATMENT_ID;
+  coldStart();
+  await setConfig({});
+  assert.equal(getInterstitialCellForAnalytics(), null);
+  checkpointRounds(7);
+  recordInterstitialGameStarted("shapeChallenge");
+  for (const p of [...checkpoints(), ...eventsNamed("interstitial_continuation")]) {
+    assert.equal("ifxCell" in p || "ifxVersion" in p || "ifxCap" in p, false);
+  }
+  // Control arm with the experiment fully on: never a participant.
+  tracked = [];
+  storage = memoryStorage();
+  ifxStore = memoryStorage();
+  installation = CONTROL_ID;
+  coldStart();
+  await setConfig({ experiments: { interstitial: xspec() } });
+  checkpointRounds(7);
+  assert.deepEqual(checkpoints(), [{ arm: "control", outcome: "control", gamesBetweenAds: 7 }]);
+});
+
+test("participant context never contains an id or bucket (checkpoint, continuation, completion, summary)", async () => {
+  await participantIn("A", [xcell("A", 5, 2, 50), xcell("B", 7, 2, 50)]);
+  androidSegments();
+  checkpointRounds(5);
+  recordInterstitialGameStarted("shapeChallenge");
+  takeNextGameContext("shapeChallenge");
+  onLifecycleFlush();
+  assert.ok(summaries().length === 1);
+  assert.equal(JSON.stringify(tracked).includes(installation), false);
+});
+
+// --- Next-Classic-game completion context ----------------------------------------------------------------
+
+test("next-game context: set at the continuation's game_started, consumed ONCE by the next game_completed", async () => {
+  playRounds(7); // checkpoint (not_ready)
+  assert.equal(takeNextGameContext("shapeChallenge"), null, "nothing before the next game starts");
+  recordInterstitialGameStarted("shapeChallenge");
+  assert.deepEqual(takeNextGameContext("shapeChallenge"), { nextOutcome: "not_ready" });
+  assert.equal(takeNextGameContext("shapeChallenge"), null, "take-and-clear: a second completion gets nothing");
+});
+
+test("next-game context: every treatment outcome is mirrored, and a participant also gets ifxCell", async () => {
+  await participantIn("A", [xcell("A", 5, 2, 50), xcell("B", 7, 2, 50)]);
+  playRounds(5);
+  recordInterstitialGameStarted("shapeChallenge");
+  const ctx = takeNextGameContext("shapeChallenge");
+  assert.deepEqual(ctx, { nextOutcome: "not_ready", ifxCell: "A" });
+  assert.equal(validateEventParams("game_completed", { gameType: "shapeChallenge", category: "geometric", contentKey: "circle", ...ctx }).valid, true);
+});
+
+test("next-game context: shown and suppressed (treatment) and show_failed", async () => {
+  // shown
+  playRounds(6);
+  ad.resolveLoad();
+  await flush();
+  completeRound();
+  const pending = runInterstitialCheckpoint();
+  ad.fire({ type: "showed" });
+  ad.fire({ type: "dismissed" });
+  await pending;
+  recordInterstitialGameStarted("shapeChallenge");
+  assert.deepEqual(takeNextGameContext("shapeChallenge"), { nextOutcome: "shown" });
+  // suppressed (a rewarded ad this cycle), next session
+  session = "sess00000002";
+  registerAdAdapter({ name: "rw", initialize: async () => {}, loadRewarded: async () => {}, showRewarded: async () => null });
+  playRounds(6);
+  completeRound();
+  await showRewardedAd("shape_challenge_double_reward");
+  runInterstitialCheckpoint();
+  recordInterstitialGameStarted("shapeChallenge");
+  assert.deepEqual(takeNextGameContext("shapeChallenge"), { nextOutcome: "suppressed" });
+});
+
+test("next-game context: the control arm path (control, and control_suppressed for a suppressed control)", async () => {
+  installation = CONTROL_ID;
+  playRounds(7);
+  recordInterstitialGameStarted("shapeChallenge");
+  assert.deepEqual(takeNextGameContext("shapeChallenge"), { nextOutcome: "control" });
+  session = "sess00000002";
+  registerAdAdapter({ name: "rw", initialize: async () => {}, loadRewarded: async () => {}, showRewarded: async () => null });
+  playRounds(6);
+  completeRound();
+  await showRewardedAd("shape_challenge_double_reward");
+  runInterstitialCheckpoint();
+  recordInterstitialGameStarted("shapeChallenge");
+  assert.deepEqual(takeNextGameContext("shapeChallenge"), { nextOutcome: "control_suppressed" });
+});
+
+test("next-game context: a new game_started WITHOUT a fresh marker clears it (abandon then restart)", () => {
+  playRounds(7);
+  recordInterstitialGameStarted("shapeChallenge"); // sets it
+  recordInterstitialGameStarted("shapeChallenge"); // Try Again / a later game: no marker -> cleared
+  assert.equal(takeNextGameContext("shapeChallenge"), null);
+});
+
+test("next-game context: dropped when the analytics session changed; other game types neither take nor clear it", () => {
+  playRounds(7);
+  recordInterstitialGameStarted("shapeChallenge");
+  assert.equal(takeNextGameContext("dailyChallenge"), null, "a Daily completion does not consume it");
+  recordInterstitialGameStarted("dailyChallenge" as GameType); // a non-eligible start does not clear it either
+  session = "sess00000002";
+  assert.equal(takeNextGameContext("shapeChallenge"), null, "cross-session: dropped");
+  assert.equal(takeNextGameContext("shapeChallenge"), null, "and gone");
+  // A stale marker from another session sets no context at all.
+  session = "sess00000001";
+  playRounds(7);
+  session = "sess00000003";
+  recordInterstitialGameStarted("shapeChallenge");
+  assert.equal(takeNextGameContext("shapeChallenge"), null);
+});
+
+test("next-game context is memory only: a cold start (kill) loses it, and nothing is persisted for it", () => {
+  playRounds(7);
+  recordInterstitialGameStarted("shapeChallenge");
+  const before = { s: storage.raw(), i: ifxStore.raw() };
+  coldStart();
+  assert.equal(takeNextGameContext("shapeChallenge"), null);
+  assert.deepEqual({ s: storage.raw(), i: ifxStore.raw() }, before);
+});
+
+// --- Play-segment summary ---------------------------------------------------------------------------------
+
+test("segment summary: nothing without a completed Classic game; one per segment; a new segment after a genuine background", () => {
+  androidSegments();
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0, "no game, no summary");
+  playRounds(3);
+  onLifecycleFlush();
+  onLifecycleFlush(); // visibilitychange + pagehide + appStateChange for ONE backgrounding
+  onLifecycleFlush();
+  assert.equal(summaries().length, 1, "at most one per segment");
+  assert.deepEqual(summaries()[0], { arm: "treatment", classicGames: 3, checkpoints: 0, shown: 0, notReady: 0, secondReached: 0, rewardedShown: 0, rewardedDeferred: 0, cadence: 7, cap: 1 });
+  assert.equal(validateEventParams("session_summary", summaries()[0]).valid, true);
+  // Returning later = a NEW segment with fresh counters.
+  playRounds(2);
+  onLifecycleFlush();
+  assert.equal(summaries().length, 2);
+  assert.equal(summaries()[1].classicGames, 2);
+  // A segment without a game after that emits nothing.
+  onLifecycleFlush();
+  assert.equal(summaries().length, 2);
+});
+
+test("segment summary: web (non-native) emits nothing, and neither do non-Classic games or an ineligible installation", async () => {
+  androidSegments();
+  _resetPlaySegmentSummaryForTests({ track: (name, params) => tracked.push({ name, params: params as unknown as Record<string, unknown> }), now: () => clock, isNative: () => false });
+  playRounds(3);
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0, "web: nothing");
+  androidSegments();
+  completeRound("dailyChallenge");
+  completeRound("seoPractice");
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0, "only Classic (shapeChallenge) games count");
+  await setConfig({ countryEligible: false });
+  androidSegments();
+  playRounds(3);
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0, "an installation that takes no part has no arm and reports nothing");
+});
+
+test("segment summary: checkpoints, not-ready, secondReached and the effective cadence/cap (cap 2)", async () => {
+  await setConfig({ maxOpportunitiesPerSession: 2 });
+  androidSegments();
+  playRounds(14);
+  onLifecycleFlush();
+  assert.deepEqual(summaries()[0], { arm: "treatment", classicGames: 14, checkpoints: 2, shown: 0, notReady: 2, secondReached: 1, rewardedShown: 0, rewardedDeferred: 0, cadence: 7, cap: 2 });
+  assert.equal(validateEventParams("session_summary", summaries()[0]).valid, true);
+});
+
+test("segment summary: cap 1 never reaches a second opportunity; a second one that is merely DUE counts", async () => {
+  androidSegments();
+  playRounds(14);
+  onLifecycleFlush();
+  assert.equal(summaries()[0].checkpoints, 1);
+  assert.equal(summaries()[0].secondReached, 0);
+  tracked = [];
+  storage = memoryStorage();
+  coldStart();
+  await setConfig({ maxOpportunitiesPerSession: 2 });
+  androidSegments();
+  playRounds(7); // opportunity 1 consumed
+  for (let i = 0; i < 7; i++) completeRound(); // the 14th completion makes the second one DUE; the player never taps Next
+  onLifecycleFlush();
+  assert.equal(summaries()[0].checkpoints, 1);
+  assert.equal(summaries()[0].secondReached, 1);
+});
+
+test("segment summary: a shown interstitial is counted; control counts checkpoints but never shown", async () => {
+  androidSegments();
+  playRounds(6);
+  ad.resolveLoad();
+  await flush();
+  completeRound();
+  const pending = runInterstitialCheckpoint();
+  ad.fire({ type: "showed" });
+  ad.fire({ type: "dismissed" });
+  await pending;
+  clock += FULL_SCREEN_AD_BACKGROUND_GRACE_MS + 1;
+  onLifecycleFlush();
+  assert.deepEqual(summaries()[0], { arm: "treatment", classicGames: 7, checkpoints: 1, shown: 1, notReady: 0, secondReached: 0, rewardedShown: 0, rewardedDeferred: 0, cadence: 7, cap: 1 });
+  tracked = [];
+  storage = memoryStorage();
+  installation = CONTROL_ID;
+  coldStart();
+  await setConfig({});
+  androidSegments();
+  playRounds(7);
+  onLifecycleFlush();
+  assert.deepEqual(summaries()[0], { arm: "control", classicGames: 7, checkpoints: 1, shown: 0, notReady: 0, secondReached: 0, rewardedShown: 0, rewardedDeferred: 0, cadence: 7, cap: 1 });
+  assert.equal(validateEventParams("session_summary", summaries()[0]).valid, true);
+});
+
+test("segment summary: rewarded shown and rewarded-deferred counters", async () => {
+  registerAdAdapter({ name: "rw", initialize: async () => {}, loadRewarded: async () => {}, showRewarded: async () => null });
+  androidSegments();
+  playRounds(2);
+  await showRewardedAd("shape_challenge_double_reward");
+  await showRewardedAd("shape_challenge_double_reward");
+  recordRewardedOfferDeferred();
+  clock += FULL_SCREEN_AD_BACKGROUND_GRACE_MS + 1; // the app is left well after the last ad
+  onLifecycleFlush();
+  assert.equal(summaries()[0].rewardedShown, 2);
+  assert.equal(summaries()[0].rewardedDeferred, 1);
+  assert.equal(validateEventParams("session_summary", summaries()[0]).valid, true);
+});
+
+test("segment summary: counters are capped at 99, so the event always validates", () => {
+  androidSegments();
+  for (let i = 0; i < 150; i++) {
+    completeRound();
+    recordRewardedOfferDeferred();
+  }
+  assert.equal(_playSegmentCountersForTests().classicGames, 99);
+  onLifecycleFlush();
+  assert.equal(summaries()[0].classicGames, 99);
+  assert.equal(summaries()[0].rewardedDeferred, 99);
+  assert.equal(validateEventParams("session_summary", summaries()[0]).valid, true);
+});
+
+test("segment summary: an interstitial on screen does NOT end the segment; after its dismissal and the grace it does", async () => {
+  androidSegments();
+  playRounds(6);
+  ad.resolveLoad();
+  await flush();
+  completeRound();
+  const pending = runInterstitialCheckpoint();
+  assert.ok(pending);
+  assert.equal(getInterstitialState(), "showing");
+  onLifecycleFlush(); // the Mi 8 emits appStateChange(false) the moment the ad opens
+  ad.fire({ type: "showed" });
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0, "ad on screen: the segment goes on");
+  ad.fire({ type: "dismissed" });
+  await pending;
+  onLifecycleFlush(); // a late background event right after the dismissal: still the ad
+  assert.equal(summaries().length, 0, "within the grace after the dismissal");
+  clock += FULL_SCREEN_AD_BACKGROUND_GRACE_MS - 1;
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0);
+  clock += 2;
+  onLifecycleFlush(); // a genuine background
+  assert.equal(summaries().length, 1);
+  assert.equal(summaries()[0].classicGames, 7, "one segment spanning the ad");
+  assert.equal(summaries()[0].shown, 1);
+});
+
+test("segment summary: a rewarded ad on screen does not end the segment either", async () => {
+  let finish: (v: null) => void = () => {};
+  registerAdAdapter({
+    name: "rw",
+    initialize: async () => {},
+    loadRewarded: async () => {},
+    showRewarded: () => new Promise((resolve) => (finish = resolve as (v: null) => void)),
+  });
+  androidSegments();
+  playRounds(2);
+  const shown = showRewardedAd("shape_challenge_double_reward");
+  await flush();
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0, "rewarded showing");
+  finish(null);
+  await shown;
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0, "grace after the rewarded ad");
+  clock += FULL_SCREEN_AD_BACKGROUND_GRACE_MS + 1;
+  onLifecycleFlush();
+  assert.equal(summaries().length, 1);
+  assert.equal(summaries()[0].rewardedShown, 1);
+});
+
+test("segment summary: a participant's summary carries the cell's cadence and cap and ifxCell / ifxVersion (no ifxCap)", async () => {
+  await participantIn("A", [xcell("A", 6, 2, 50), xcell("B", 7, 2, 50)]);
+  androidSegments();
+  checkpointRounds(12);
+  onLifecycleFlush();
+  assert.deepEqual(summaries()[0], { arm: "treatment", classicGames: 12, checkpoints: 2, shown: 0, notReady: 2, secondReached: 1, rewardedShown: 0, rewardedDeferred: 0, cadence: 6, cap: 2, ifxCell: "A", ifxVersion: 1 });
+  assert.equal(validateEventParams("session_summary", summaries()[0]).valid, true);
+});
+
+test("segment summary: persists nothing (memory only) and starts clean after a cold start", () => {
+  androidSegments();
+  playRounds(3);
+  const before = { s: storage.raw(), i: ifxStore.raw() };
+  coldStart();
+  androidSegments();
+  assert.deepEqual({ s: storage.raw(), i: ifxStore.raw() }, before);
+  onLifecycleFlush();
+  assert.equal(summaries().length, 0, "the killed process's final segment is lost - documented");
 });

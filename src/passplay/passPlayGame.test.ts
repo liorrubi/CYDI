@@ -14,6 +14,7 @@ import {
   isLastRound,
   nextRound,
   rematch,
+  roundLabel,
   roundWinners,
   scoreTurn,
   showsTargetShape,
@@ -34,7 +35,7 @@ function fixedRandom(): () => number {
   return () => ((i++ * 7919) % 1000) / 1000;
 }
 
-function newGame(rounds: 5 | 10 | 15 = 5): PassPlayState {
+function newGame(rounds: 3 | 5 | 10 | 15 = 5): PassPlayState {
   return createPassPlayGame({ names: ["Maya", "Tom"], rounds, difficulty: "mixed" }, fixedRandom());
 }
 
@@ -350,6 +351,32 @@ test("a full five-round game ends on FINAL_RESULTS with a champion", () => {
   const totals = game.players.map((p) => p.totalScore);
   assert.equal(champions(game)[0].totalScore, Math.max(...totals));
   assert.equal(standings(game)[0].id, champions(game)[0].id);
+});
+
+test("a three-round game plays through, one distinct shape per round, and a rematch keeps the length", () => {
+  let game = newGame(3);
+  assert.equal(game.rounds, 3);
+  assert.equal(game.shapeSequence.length, 3);
+  assert.equal(new Set(game.shapeSequence).size, 3);
+  for (let round = 0; round < 3; round++) {
+    game = playTurn(game, perfectAttempt(game), 3_000);
+    game = playTurn(game, SCRIBBLE, 12_000);
+    assert.equal(game.phase, "ROUND_RESULTS", `round ${round + 1}`);
+    if (round < 2) game = nextRound(game);
+  }
+  assert.equal(isLastRound(game), true);
+  assert.equal(roundLabel(game.roundIndex, game.rounds), "Round 3 of 3");
+  game = finishGame(game);
+  assert.equal(game.phase, "FINAL_RESULTS");
+  assert.equal(game.roundIndex, 2);
+  assert.equal(rematch(game, () => 0.42).rounds, 3);
+});
+
+test("a 15-round game (the length installed 0.55/0.56 builds still offer) is still a valid game", () => {
+  const game = newGame(15);
+  assert.equal(game.rounds, 15);
+  assert.equal(game.shapeSequence.length, 15);
+  assert.equal(roundLabel(14, game.rounds), "Round 15 of 15");
 });
 
 test("a game where nobody ever scored has no champion rather than an arbitrary one", () => {

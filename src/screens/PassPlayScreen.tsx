@@ -11,7 +11,7 @@ import { SocialPointsBadge } from "../components/SocialPointsBadge";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { trackEvent } from "../services/analytics";
 import { getPlayerName, setPlayerName } from "../services/playerProfileStore";
-import { DIFFICULTY_OPTIONS, ROUND_COUNT_OPTIONS, type MultiplayerDifficulty, type RoundCount } from "../multiplayer/protocol";
+import { DEFAULT_ROUND_COUNT, DIFFICULTY_OPTIONS, ROUND_COUNT_OPTIONS_UI, type MultiplayerDifficulty, type RoundCount } from "../multiplayer/protocol";
 import { cleanPlayerName, duplicateNameIndex, PASS_PLAY_LIMITS, type PassPlaySetup } from "../passplay/passPlayGame";
 import { toHome, toPassPlay, toSettings, toShapeChallenge, toShop } from "../app/routes";
 import type { Screen } from "../types/GameMode";
@@ -57,7 +57,7 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
   // Seat 1 is prefilled with whatever name this device already plays under;
   // seat 2 is the guest and is nearly always somebody different.
   const [names, setNames] = useState<string[]>(() => [getPlayerName(), ""]);
-  const [rounds, setRounds] = useState<RoundCount>(10);
+  const [rounds, setRounds] = useState<RoundCount>(DEFAULT_ROUND_COUNT);
   const [difficulty, setDifficulty] = useState<MultiplayerDifficulty>("mixed");
   const [formError, setFormError] = useState<string | null>(null);
   const [progress, setProgress] = useState<PassPlayProgress | null>(null);
@@ -179,7 +179,7 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
             onNameChange={updateName}
             maxNameLength={PASS_PLAY_LIMITS.MAX_NAME_LENGTH}
             rounds={rounds}
-            roundOptions={ROUND_COUNT_OPTIONS}
+            roundOptions={ROUND_COUNT_OPTIONS_UI}
             onRounds={(count) => setRounds(count as RoundCount)}
             difficulty={difficulty}
             difficultyOptions={DIFFICULTY_OPTIONS}
@@ -236,7 +236,7 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
         <fieldset className="mp-fieldset">
           <legend className="mp-legend">Rounds</legend>
           <div className="mp-chip-row">
-            {ROUND_COUNT_OPTIONS.map((count) => (
+            {ROUND_COUNT_OPTIONS_UI.map((count) => (
               <button
                 key={count}
                 type="button"

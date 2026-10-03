@@ -213,9 +213,10 @@ one map and not the other. **Do not add the other one by guessing the length** -
 pins this asymmetry.
 
 Domains are closed and already re-validated by `validateEventParams` before the Worker
-sees them: `roundCount` is `ROUND_COUNT_OPTIONS` (5/10/15, three keys) and `roundIndex`
-is `0..MAX_ROUND_INDEX`, derived as `Math.max(...ROUND_COUNT_OPTIONS) - 1` so adding a
-new length cannot silently overflow the map. Both are in `mergeCounters`, so weekly,
+sees them: `roundCount` is `ROUND_COUNT_ACCEPTED` (3/5/10/15, four keys - 3 is new in 0.57.0,
+15 stays because installed 0.55/0.56 clients still send it) and `roundIndex`
+is `0..MAX_ROUND_INDEX`, derived as `Math.max(...ROUND_COUNT_ACCEPTED) - 1` (still 14) so adding a
+new length cannot silently overflow the map. The in-app picker is the separate `ROUND_COUNT_OPTIONS_UI` (3/5/10). Both are in `mergeCounters`, so weekly,
 range and alltime keep what the daily report shows.
 
 Worker-only: every shipped client already sends these params (an event missing them is
@@ -234,8 +235,10 @@ as a survival curve; read `pp_abandoned.byRoundIndex` as a floor on deliberate q
 
 ### What it is for
 
-The current default is **10 rounds** (`PassPlayScreen.tsx`, `useState<RoundCount>(10)`) -
-**unchanged, deliberately**. Two players draw sequentially, so 10 rounds is ~20 turns at
+Until 0.56 the default was **10 rounds** (`PassPlayScreen.tsx`, `useState<RoundCount>(10)`), kept
+deliberately to build a baseline. **From 0.57.0 the default is 5 rounds in both Pass & Play and Play
+Together** (`DEFAULT_ROUND_COUNT`; the picker offers 3, 5 or 10 - the 15-round option left the UI only,
+the Worker and analytics still accept 15 for older clients). The reasoning below is why 10 was suspect. Two players draw sequentially, so 10 rounds is ~20 turns at
 roughly 26s of forced time each (3s countdown + 3s shape + 20s drawing) plus handoffs:
 ~10-12 minutes on one shared phone with each player idle for half of it. Play Together
 draws simultaneously, so the same 10 rounds is half the wall clock - and it completes at

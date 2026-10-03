@@ -16,8 +16,9 @@ import { clearRoomToken, hasRoomToken, RoomSocket } from "../multiplayer/roomSoc
 import {
   DIFFICULTY_OPTIONS,
   isRoomCode,
+  DEFAULT_ROUND_COUNT,
   MP_LIMITS,
-  ROUND_COUNT_OPTIONS,
+  ROUND_COUNT_OPTIONS_UI,
   sanitizeNickname,
   type MultiplayerDifficulty,
   type RoundCount,
@@ -76,7 +77,7 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode, openJo
   const [view, setView] = useState<View>(initialJoinCode || openJoin ? "join" : "menu");
   const [session, setSession] = useState<RoomTransport | null>(null);
 
-  const [rounds, setRounds] = useState<RoundCount>(10);
+  const [rounds, setRounds] = useState<RoundCount>(DEFAULT_ROUND_COUNT);
   const [difficulty, setDifficulty] = useState<MultiplayerDifficulty>("mixed");
 
   const [nickname, setNickname] = useState(() => getPlayerName());
@@ -400,7 +401,7 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode, openJo
                 Accuracy and speed decide the winner. Highest total takes the crown.
               </li>
             </ol>
-            <p className="mp-hint">2–8 players · 5, 10 or 15 rounds · 20 seconds to draw</p>
+            <p className="mp-hint">2–8 players · 3, 5 or 10 rounds · 20 seconds to draw</p>
           </section>
 
           <div className="mp-entry-actions">
@@ -435,7 +436,7 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode, openJo
           <fieldset className="mp-fieldset">
             <legend className="mp-legend">Rounds</legend>
             <div className="mp-chip-row">
-              {ROUND_COUNT_OPTIONS.map((count) => (
+              {ROUND_COUNT_OPTIONS_UI.map((count) => (
                 <button
                   key={count}
                   type="button"

@@ -16,11 +16,25 @@
 
 import { apiFetch, type ApiResponse } from "../nativeApi";
 import { isQaBuild } from "../analyticsIdentity";
-import { isInterstitialArm, isValidInterstitialClientConfig, type InterstitialArm, type InterstitialClientConfig } from "./interstitialConfigSchema";
+import {
+  isInterstitialArm,
+  isValidInterstitialClientConfig,
+  parseClientInterstitialExperiment,
+  parseInterstitialV3Body,
+  type InterstitialArm,
+  type InterstitialClientConfig,
+  type InterstitialExperimentSpec,
+} from "./interstitialConfigSchema";
 
 export const INTERSTITIAL_CONFIG_PATH = "/api/config/ads/interstitial";
-/** 0.56+: asks the Worker for the v2 shape (rollout 0-100, the optional keys). A released client's plain path is untouched. */
-export const INTERSTITIAL_CONFIG_REQUEST_PATH = `${INTERSTITIAL_CONFIG_PATH}?v=2`;
+/**
+ * 0.57+: asks the Worker for the v3 shape = the v2 body (rollout 0-100, the optional keys) plus an optional
+ * `experiments` block. A released client's plain path and 0.56's `?v=2` are untouched. An OLD Worker treats any
+ * `v` other than the literal "2" as legacy and answers the five plain keys (rollout capped at 50, no optional
+ * keys): that is still a valid base here and simply means experiments OFF - which is why the Worker must be
+ * deployed BEFORE a 0.57 client reaches users.
+ */
+export const INTERSTITIAL_CONFIG_REQUEST_PATH = `${INTERSTITIAL_CONFIG_PATH}?v=3`;
 const FETCH_TIMEOUT_MS = 5000;
 /** Resume refreshes are throttled; the emergency switch reaching a running app within ~10 minutes is enough. */
 const RESUME_REFRESH_MIN_INTERVAL_MS = 10 * 60 * 1000;
@@ -39,6 +53,12 @@ let frozen: FrozenInterstitialConfig | null = null;
 let liveEnabled = false;
 /** Live like `enabled`: the rewarded-lifecycle kill switch. Defaults ON (v2 is the shipped behavior). */
 let liveRewardedLifecycleV2 = true;
+/**
+ * Live like `enabled`: the latest valid remote multi-cell experiment spec, or null (absent, invalid, no answer
+ * yet = experiments OFF). It is NOT frozen with the run: what freezes cadence and cap is the per-session
+ * snapshot taken from it (interstitialCells.ts), so lowering or disabling it takes effect at the next session.
+ */
+let liveExperiment: InterstitialExperimentSpec | null = null;
 let lastRefreshAt = -Infinity;
 let qaForcedArm: InterstitialArm | null = null;
 
@@ -47,6 +67,11 @@ let fetcher: Fetcher = apiFetch;
 
 export function getFrozenInterstitialConfig(): FrozenInterstitialConfig | null {
   return frozen;
+}
+
+/** The latest valid remote experiment spec (null = experiments OFF). Read-only; a copy of the parsed block. */
+export function getInterstitialExperimentSpec(): InterstitialExperimentSpec | null {
+  return liveExperiment;
 }
 
 export function isInterstitialLiveEnabled(): boolean {
@@ -63,9 +88,10 @@ export function getQaForcedArm(): InterstitialArm | null {
   return qaForcedArm;
 }
 
-function applyAnswer(config: InterstitialClientConfig | null): void {
+function applyAnswer(config: InterstitialClientConfig | null, experiment: InterstitialExperimentSpec | null = null): void {
   if (config === null) {
     liveEnabled = false;
+    liveExperiment = null;
     return;
   }
   // First answer freezes the run; later ones only move `enabled`.
@@ -78,6 +104,7 @@ function applyAnswer(config: InterstitialClientConfig | null): void {
   };
   liveEnabled = config.enabled;
   liveRewardedLifecycleV2 = config.rewardedLifecycleV2 ?? true;
+  liveExperiment = experiment;
 }
 
 // --- Stage-0 QA override -------------------------------------------------------------
@@ -93,9 +120,11 @@ export const INTERSTITIAL_QA_OVERRIDE_KEY = "cydi.qa.interstitialConfig.v1";
  * locally built release APK reports false too, so a shipped build can never honour it.
  *
  * Shape: the normal client config, plus an optional `qaForceArm` ("control" |
- * "treatment"). Anything malformed is treated as "off", never as "use the network".
+ * "treatment") and an optional `experiments` block (the v3 shape, to exercise the multi-cell
+ * experiment before any Worker serves it). Anything malformed is treated as "off", never as
+ * "use the network".
  */
-function readQaOverride(): { config: InterstitialClientConfig | null; arm: InterstitialArm | null } | undefined {
+function readQaOverride(): { config: InterstitialClientConfig | null; arm: InterstitialArm | null; experiment: InterstitialExperimentSpec | null } | undefined {
   if (!isQaBuild()) return undefined;
   let raw: string | null = null;
   try {
@@ -106,11 +135,11 @@ function readQaOverride(): { config: InterstitialClientConfig | null; arm: Inter
   if (raw === null) return undefined;
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const { qaForceArm, ...rest } = parsed ?? {};
+    const { qaForceArm, experiments, ...rest } = parsed ?? {};
     const arm = isInterstitialArm(qaForceArm) ? qaForceArm : null;
-    return { config: isValidInterstitialClientConfig(rest) ? rest : null, arm };
+    return { config: isValidInterstitialClientConfig(rest) ? rest : null, arm, experiment: parseClientInterstitialExperiment(experiments) };
   } catch {
-    return { config: null, arm: null };
+    return { config: null, arm: null, experiment: null };
   }
 }
 
@@ -122,7 +151,7 @@ export async function refreshInterstitialConfig(now: number = Date.now()): Promi
   const qa = readQaOverride();
   if (qa !== undefined) {
     qaForcedArm = qa.arm;
-    applyAnswer(qa.config);
+    applyAnswer(qa.config, qa.experiment);
     return true;
   }
   try {
@@ -138,7 +167,10 @@ export async function refreshInterstitialConfig(now: number = Date.now()): Promi
     } catch {
       body = null;
     }
-    applyAnswer(isValidInterstitialClientConfig(body) ? body : null);
+    // v3: the base is validated exactly as before; unknown top-level keys are tolerated and `experiments`
+    // can never invalidate it (invalid or absent = experiments OFF, base still applies).
+    const parsed = parseInterstitialV3Body(body);
+    applyAnswer(parsed?.config ?? null, parsed?.experiment ?? null);
     return true;
   } catch {
     return false;
@@ -155,6 +187,7 @@ export function _resetInterstitialConfigForTests(testFetcher?: Fetcher): void {
   frozen = null;
   liveEnabled = false;
   liveRewardedLifecycleV2 = true;
+  liveExperiment = null;
   lastRefreshAt = -Infinity;
   qaForcedArm = null;
   fetcher = testFetcher ?? apiFetch;

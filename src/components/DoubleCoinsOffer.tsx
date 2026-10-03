@@ -10,7 +10,8 @@ import {
 import { MAX_PAID_CHEST_DOUBLES_PER_DAY } from "../services/chestDoubleLimitStore";
 import { isRewardedAdAvailable, preloadRewardedAd, showRewardedAd, type RewardedAdPlacement } from "../services/ads";
 import { trackEvent } from "../services/analytics";
-import type { RewardInterstitialArm, RewardOfferEconomy } from "../services/analyticsSchema";
+import type { InterstitialCellId } from "../services/ads/interstitialConfigSchema";
+import type { RewardInterstitialArm, RewardOfferEconomy, RewardSkipStage } from "../services/analyticsSchema";
 import { rewardOfferContext } from "../services/economyAnalytics";
 import { markDoubleRewardTutorialShown, shouldShowDoubleRewardTutorial } from "../services/tutorialStore";
 import { consumesDoubleAttempt, resolveAdOutcome } from "./doubleOfferAdFlow";
@@ -29,7 +30,6 @@ import {
   shouldShowReminder,
 } from "../app/rewardOfferNudge";
 import {
-  PLUS_BONUS_COINS,
   rewardedFinalAmount,
   setRewardedContinuation,
   type RewardedArm,
@@ -37,7 +37,14 @@ import {
 } from "../app/rewardedOfferCadence";
 
 /** Rewarded Ads Experiment v1 context for the Classic result offer (src/app/rewardedOfferCadence.ts). */
-export type RewardedExperimentOffer = { arm: RewardedArm; offerNumber: number; sessionGames: number; interstitialArm: RewardInterstitialArm };
+export type RewardedExperimentOffer = {
+  arm: RewardedArm;
+  offerNumber: number;
+  sessionGames: number;
+  interstitialArm: RewardInterstitialArm;
+  /** 0.57: the multi-cell interstitial experiment cell, present only for a participant. */
+  ifxCell?: InterstitialCellId;
+};
 
 type DoubleCoinsOfferProps = {
   /** The coin reward already earned and guaranteed - doubling only ever adds on top of this, never takes it away. */
@@ -68,10 +75,10 @@ type DoubleCoinsOfferProps = {
   onSkipReporter?: (report: () => void) => void;
   /**
    * Rewarded Ads Experiment v1 (Classic result offer only). When set, the offer is worth the
-   * arm's value - "x3" triples the coins, "plus100" adds a flat 100 - instead of the ×2 /
-   * periodic ×3, the funnel events carry the experiment context, and the offer's outcome
-   * feeds reward_continuation. Everything else (layout, buttons, availability) is identical
-   * for both arms.
+   * arm's value - "x3" is the base reward x3 (the +100 arm was retired in 0.57.0, so every live
+   * offer is "x3") - instead of the ×2 / periodic ×3, the funnel events carry the experiment
+   * context, and the offer's outcome feeds reward_continuation. The copy states the concrete
+   * amounts (Keep N / Watch ad for M) rather than a multiplier.
    */
   experiment?: RewardedExperimentOffer;
   /** Called once, when the offer is genuinely on screen (same moment as its offer_shown event). */
@@ -133,6 +140,10 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   const [grantSource, setGrantSource] = useState<GrantSource>("quiz");
   const [adPending, setAdPending] = useState(false);
   const [adUnavailableNotice, setAdUnavailableNotice] = useState(false);
+  // An ad was shown and closed without the reward during this offer: the eventual skip then reports skipStage "ad".
+  const adDismissedRef = useRef(false);
+  // Set only for the instant a skip event is emitted, so funnelParams() carries skipStage on that event alone.
+  const skipStageRef = useRef<RewardSkipStage | null>(null);
   const anchorRef = useRef<HTMLDivElement | null>(null);
 
   // Frozen at mount from a PURE read, so a re-render can never flip the offer's
@@ -152,8 +163,10 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   );
   /** What this offer advertises: 3 on a bonus round, otherwise the usual 2. */
   const multiplier = rewardMultiplier(isBonusRound);
-  /** Experiment arms: "x3" -> the round's coins x3, "plus100" -> the round's coins + 100. */
+  /** Experiment arm "x3" -> the round's coins x3 (the only live arm; "plus100" is retired but still priced correctly by rewardedFinalAmount). */
   const isX3Arm = experiment?.arm === "x3";
+  /** Classic offer or periodic bonus: the copy names concrete amounts instead of a multiplier. */
+  const isExplicitAmountOffer = experiment !== undefined || isBonusRound;
   /** The total a confirmed rewarded-ad completion pays. */
   const adFinalAmount = experiment ? rewardedFinalAmount(experiment.arm, amount) : amount * multiplier;
   /** What actually gets PAID. The 3× is reserved for a confirmed rewarded-ad
@@ -218,7 +231,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   // the coins just earned. adAvailable is the capability at that moment, which is what
   // separates "an offer with no ad behind it" from a real one.
   const economyRef = useRef<RewardOfferEconomy | null>(null);
-  const funnelParams = () => {
+  const offerParams = () => {
     if (!economyRef.current) {
       economyRef.current = experiment
         ? rewardOfferContext(amount, isX3Arm ? 3 : 1, isRewardedAdAvailable(), adFinalAmount - amount)
@@ -234,15 +247,33 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       sessionGames: experiment.sessionGames,
       bonusCoins: adFinalAmount - amount,
       interstitialArm: experiment.interstitialArm,
+      ...(experiment.ifxCell !== undefined ? { ifxCell: experiment.ifxCell } : {}),
     };
   };
+  // Every funnel event of this offer; a skip additionally carries skipStage (see reportSkip).
+  const funnelParams = () => {
+    const params = offerParams();
+    return skipStageRef.current ? { ...params, skipStage: skipStageRef.current } : params;
+  };
+
+  /**
+   * The offer is given up (Keep, or the screen's exit forfeit via onSkipReporter): one skip event per
+   * offer, on this offer's own event name. skipStage says where: "ad" when an ad was shown and closed
+   * without the reward earlier in this offer, otherwise "offer" (skipped before any ad was shown).
+   */
+  function reportSkip() {
+    recordOutcome("skipped");
+    skipStageRef.current = adDismissedRef.current ? "ad" : "offer";
+    try {
+      trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", funnelParams());
+    } finally {
+      skipStageRef.current = null;
+    }
+  }
 
   useEffect(() => {
     preloadRewardedAd(placement);
-    onSkipReporter?.(() => {
-      recordOutcome("skipped");
-      trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", funnelParams());
-    });
+    onSkipReporter?.(reportSkip);
     // A ×3 round reports on its own event names so the two offer types can be compared
     // in the report; see the reward_bonus_* block in analyticsSchema.ts for why this is
     // a separate name rather than a param. Same funnel, same placement, either way.
@@ -294,8 +325,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     // away from one whose ad could not be served does not - `skipForfeitsRealDouble`
     // already draws exactly that line for the skip-streak nudge.
     resolveBonusRewardRound({ wasBonusRound: isBonusRound, granted: false, forfeitedRealOffer: skipForfeitsRealDouble });
-    recordOutcome("skipped");
-    trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", funnelParams());
+    reportSkip();
     onResolved(amount, anchorRef.current);
   }
 
@@ -327,6 +357,12 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       trackEvent(isBonusRound ? "reward_bonus_ad_completed" : "reward_ad_completed", funnelParams());
       const finalAmount = adFinalAmount;
       onRewardEarned?.(() => settlement.settle({ granted: true, finalAmount }, anchorRef.current));
+    } else if (outcome.dismissed) {
+      // The ad was shown and closed without the reward: the player declined it. That is a skip,
+      // not a failure - no reward_ad_failed, no "ads aren't available" notice. The buttons come
+      // back (Watch again / Keep); the skip event itself is reported once, when the offer is given up.
+      adDismissedRef.current = true;
+      recordOutcome("skipped");
     } else {
       recordOutcome("failed");
       trackEvent(isBonusRound ? "reward_bonus_ad_failed" : "reward_ad_failed", funnelParams());
@@ -359,11 +395,19 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     settlement.settle({ granted, finalAmount: wasCorrect ? paidAmount : amount }, anchorRef.current);
   }
 
-  // Copy. The experiment arms share every string's shape; only the value differs.
-  const offerQuestion = experiment ? (isX3Arm ? "triple it?" : `get +${PLUS_BONUS_COINS} more?`) : isBonusRound ? "triple it?" : "double it?";
-  const watchLabel = experiment ? (isX3Arm ? "🎬 Watch Ad for 3×" : `🎬 Watch Ad for +${PLUS_BONUS_COINS}`) : isBonusRound ? "🎬 Watch Ad for 3×" : "🎬 Watch Ad to Double";
-  const tutorialValue = experiment ? (isX3Arm ? "3× coins" : `+${PLUS_BONUS_COINS} coins`) : `${multiplier}× coins`;
-  const reminderText = experiment ? (isX3Arm ? "triples your coins" : `adds ${PLUS_BONUS_COINS} coins`) : `${isBonusRound ? "triples" : "doubles"} your coins`;
+  // Copy. The Classic offer (and the periodic bonus) state concrete amounts on Android AND web:
+  // "Keep N" (the base coins, already credited) and "Watch ad for M" (the whole reward, base
+  // included - the ad itself only adds M - N). No multiplier wording anywhere in that flow. Every
+  // other placement keeps its long-standing ×2 "double" copy.
+  const offerQuestion = "double it?";
+  const watchLabel = isExplicitAmountOffer ? `WATCH AD FOR ${adFinalAmount} 🪙` : "🎬 Watch Ad to Double";
+  const keepLabel = isExplicitAmountOffer ? `KEEP ${amount} 🪙` : nudgesEnabled ? `Keep ${amount}` : "Skip";
+  const tutorialText = isExplicitAmountOffer
+    ? `Watch a short ad to get ${adFinalAmount} 🪙 instead of ${amount} - completely optional.`
+    : `Watch a short ad to get ${multiplier}× coins - completely optional.`;
+  const reminderText = isExplicitAmountOffer
+    ? `Tip: one short ad gets you ${adFinalAmount} 🪙 instead of ${amount}.`
+    : "Tip: one short ad doubles your coins.";
 
   return (
     <div ref={anchorRef} className={isBonusRound ? "double-offer-banner double-offer-banner-bonus" : "double-offer-banner"}>
@@ -371,11 +415,11 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
         <>
           {/* Replaces the ×2 framing outright on a bonus round - inline in the existing
               banner, never a modal or popup over the screen. */}
-          {isBonusRound && canAttemptDouble && <p className="double-offer-bonus-badge">✨ 3× BONUS!</p>}
+          {isBonusRound && canAttemptDouble && <p className="double-offer-bonus-badge">✨ BONUS OFFER!</p>}
           {/* Android only: spell out the concrete before/after amounts, both derived
               from the real `amount` prop - never hard-coded. `nudgesEnabled` is false
               on web, so the website always renders the original line. */}
-          {nudgesEnabled && canAttemptDouble ? (
+          {(nudgesEnabled || isExplicitAmountOffer) && canAttemptDouble ? (
             <p className="double-offer-headline">
               🪙 You earned {amount} coins - watch an ad to get {adFinalAmount}
             </p>
@@ -387,14 +431,10 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
             </p>
           )}
           {showTutorial && (
-            <p className="double-offer-limit-note">
-              Watch a short ad to get {tutorialValue} - completely optional.
-            </p>
+            <p className="double-offer-limit-note">{tutorialText}</p>
           )}
           {showReminder && (
-            <p className="double-offer-limit-note">
-              Tip: one short ad {reminderText}.
-            </p>
+            <p className="double-offer-limit-note">{reminderText}</p>
           )}
           {remainingDoubles !== undefined && (
             <p className="double-offer-limit-note">
@@ -414,10 +454,11 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
                 🧮 Solve Math (dev)
               </button>
             )}
-            {/* On Android the skip button names what it keeps; the web keeps the plain
-                "Skip". Skipping stays exactly as easy either way - same button, same place. */}
+            {/* The Classic offer names what it keeps on both platforms (KEEP N 🪙); the other
+                placements keep "Keep N" on Android and the plain "Skip" on the web. Skipping stays
+                exactly as easy either way - same button, same place. */}
             <button type="button" className="double-offer-skip" onClick={handleSkip} disabled={adPending}>
-              {!canAttemptDouble ? "Continue" : nudgesEnabled ? `Keep ${amount}` : "Skip"}
+              {!canAttemptDouble ? "Continue" : keepLabel}
             </button>
           </div>
         </>
@@ -447,11 +488,9 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       {phase === "feedback" && (
         <>
           {wasCorrect && experiment ? (
-            <p className="double-offer-headline">
-              {isX3Arm ? "✅ Ad watched! You tripled your coins" : `✅ Ad watched! +${PLUS_BONUS_COINS} bonus coins`}: 🪙 +{paidAmount}
-            </p>
+            <p className="double-offer-headline">✅ Ad watched! You earned 🪙 +{paidAmount}</p>
           ) : wasCorrect && grantSource === "ad" && isBonusRound ? (
-            <p className="double-offer-headline">✨ 3× BONUS! You tripled your coins: 🪙 +{paidAmount}</p>
+            <p className="double-offer-headline">✨ Bonus! You earned 🪙 +{paidAmount}</p>
           ) : wasCorrect && grantSource === "ad" ? (
             <p className="double-offer-headline">✅ Ad watched! You doubled your coins: 🪙 +{paidAmount}</p>
           ) : wasCorrect ? (

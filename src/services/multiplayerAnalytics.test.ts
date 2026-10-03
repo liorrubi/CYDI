@@ -55,6 +55,47 @@ test("missing or extra params fail the whole event", () => {
   assert.equal(validateEventParams("mp_rematch", { playerCount: "4" }).valid, false, "strings are not counts");
 });
 
+test("round counts: 3 is valid (new in 0.57.0), 15 stays valid (installed 0.55/0.56 clients), 7 and 0 are not", () => {
+  for (const roundCount of [3, 5, 10, 15]) {
+    assert.equal(validateEventParams("mp_room_created", { roundCount, difficulty: "mixed" }).valid, true, `mp_room_created ${roundCount}`);
+    assert.equal(validateEventParams("mp_game_started", { playerCount: 3, roundCount, difficulty: "mixed" }).valid, true, `mp_game_started ${roundCount}`);
+    assert.equal(validateEventParams("mp_game_finished", { playerCount: 3, roundCount }).valid, true, `mp_game_finished ${roundCount}`);
+    assert.equal(validateEventParams("pp_game_started", { playerCount: 2, roundCount, difficulty: "mixed" }).valid, true, `pp_game_started ${roundCount}`);
+    assert.equal(validateEventParams("pp_game_finished", { playerCount: 2, roundCount }).valid, true, `pp_game_finished ${roundCount}`);
+    assert.equal(validateEventParams("pp_abandoned", { roundIndex: 0, playerCount: 2, roundCount }).valid, true, `pp_abandoned ${roundCount}`);
+  }
+  for (const roundCount of [0, 1, 2, 4, 7, 20, "3", null]) {
+    assert.equal(validateEventParams("mp_room_created", { roundCount, difficulty: "mixed" }).valid, false, `mp_room_created ${String(roundCount)}`);
+    assert.equal(validateEventParams("pp_game_started", { playerCount: 2, roundCount, difficulty: "mixed" }).valid, false, `pp_game_started ${String(roundCount)}`);
+  }
+  // A game played to round 15 on an old client still reports its index.
+  assert.equal(validateEventParams("mp_round_completed", { roundIndex: 14, playerCount: 3, submitted: true }).valid, true);
+});
+
+test("mp_game_started accepts the 3-key base form and base + mpDailyOrdinal 1..7, nothing else", () => {
+  const base = { playerCount: 4, roundCount: 5, difficulty: "hard" };
+  assert.equal(validateEventParams("mp_game_started", base).valid, true, "older builds and repeats send the base form");
+  for (const mpDailyOrdinal of [1, 2, 3, 4, 5, 6, 7]) {
+    const r = validateEventParams("mp_game_started", { ...base, mpDailyOrdinal });
+    assert.equal(r.valid, true, `ordinal ${mpDailyOrdinal}`);
+    assert.deepEqual(r.valid ? r.params : null, { ...base, mpDailyOrdinal }, "the value round-trips unchanged");
+  }
+  const baseResult = validateEventParams("mp_game_started", base);
+  assert.deepEqual(baseResult.valid ? baseResult.params : null, base, "no ordinal is invented");
+  for (const mpDailyOrdinal of [0, 8, -1, 1.5, "3", null, undefined, NaN, Infinity, true]) {
+    assert.equal(validateEventParams("mp_game_started", { ...base, mpDailyOrdinal }).valid, false, `ordinal ${String(mpDailyOrdinal)}`);
+  }
+  assert.equal(validateEventParams("mp_game_started", { ...base, mpDailyOrdinal: 2, roomCode: "TEST77" }).valid, false, "an extra key is refused");
+  assert.equal(validateEventParams("mp_game_started", { ...base, mpDailyOrdinal: 2, gameSerial: 4 }).valid, false, "the game identity is never sent");
+  assert.equal(validateEventParams("mp_game_started", { ...base, gameSerial: 4 }).valid, false);
+  assert.equal(validateEventParams("mp_game_started", { playerCount: 4, roundCount: 5, mpDailyOrdinal: 2 }).valid, false, "a missing base key is refused");
+  // No other event accepts the field.
+  assert.equal(validateEventParams("mp_game_finished", { playerCount: 4, roundCount: 5, mpDailyOrdinal: 2 }).valid, false);
+  assert.equal(validateEventParams("pp_game_started", { ...base, mpDailyOrdinal: 2 }).valid, false);
+  // The sanitiser keeps it.
+  assert.equal(sanitizeParams({ ...base, mpDailyOrdinal: 3 } as unknown as Record<string, string | number | boolean>).mpDailyOrdinal, 3);
+});
+
 test("identifying fields can never ride along on a multiplayer event", () => {
   // Two independent defences, tested together because both must hold: the
   // schema rejects unknown keys, and sanitizeParams strips identifier-shaped
@@ -133,11 +174,11 @@ test("no Pass & Play event schema accepts a drawing or a score", () => {
 test("neither mode's events carry anything but counts, settings and flags", () => {
   // A whitelist, so adding a param to one of these events is a deliberate act
   // that has to be defended here rather than something that slips in.
-  const ALLOWED_KEYS = new Set(["playerCount", "roundCount", "roundIndex", "difficulty", "submitted", "phase"]);
+  const ALLOWED_KEYS = new Set(["playerCount", "roundCount", "roundIndex", "difficulty", "submitted", "phase", "mpDailyOrdinal"]);
   const samples: Record<string, Record<string, unknown>> = {
     mp_room_created: { roundCount: 10, difficulty: "mixed" },
     mp_player_joined: { playerCount: 3 },
-    mp_game_started: { playerCount: 4, roundCount: 5, difficulty: "hard" },
+    mp_game_started: { playerCount: 4, roundCount: 5, difficulty: "hard", mpDailyOrdinal: 2 },
     mp_round_completed: { roundIndex: 0, playerCount: 4, submitted: true },
     mp_game_finished: { playerCount: 4, roundCount: 15 },
     mp_rematch: { playerCount: 4 },

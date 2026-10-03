@@ -255,3 +255,171 @@ export function toClientConfig(config: InterstitialStoredConfig, country: unknow
     ...(config.rewardedLifecycleV2 !== undefined ? { rewardedLifecycleV2: config.rewardedLifecycleV2 } : {}),
   };
 }
+
+// --- v3: remote multi-cell interstitial experiment (0.57+) -----------------------------
+//
+// Served ONLY on `?v=3` of the interstitial config route, and stored under its OWN KV key.
+// Never a new key on the stored `config:ads:interstitial` object or on the plain / `?v=2`
+// bodies: 0.56 and older clients validate those objects by exact key set and would switch the
+// interstitial off (and the live Worker would answer 500 for a stored object it does not
+// know). The v3 body is the v2 body unchanged plus an optional top-level `experiments` object.
+//
+// An `experiments` block that is missing or invalid means "experiments OFF" - it never
+// invalidates the base config next to it.
+
+export const INTERSTITIAL_EXPERIMENTS_KV_KEY = "config:ads:experiments";
+
+export const INTERSTITIAL_CELL_IDS = ["A", "B", "C", "D", "E", "F"] as const;
+export type InterstitialCellId = (typeof INTERSTITIAL_CELL_IDS)[number];
+
+/**
+ * SAFETY ENVELOPE - hard client bounds, enforced here for the client AND the Worker, so a bad
+ * remote config can never cause more ad pressure than the reviewed limits. Nothing may be
+ * more aggressive than cadence 5 / cap 2 (a 7/3 cell is the most opportunities per session
+ * the envelope allows, and only because its cadence is longer).
+ *  - cadence: any INTEGER 5..20 (isEffectiveInterstitialCadence). Analytics accepts the same range
+ *    (`gamesBetweenAds` telemetry and the Worker's per-cadence counter, at most 16 keys), so a cell such
+ *    as 6/2 or 5/2 needs no APK. Nothing below 5 games between opportunities exists. The BASE config's
+ *    cadence stays the closed legacy set INTERSTITIAL_CADENCES (v1/v2 compatibility).
+ *  - cap: 1..3 opportunities per analytics session.
+ *  - joint rule cadence >= 2 * cap: the cap must never be reachable faster than every second
+ *    cadence window (5/2 and 7/3 ok; 5/3 and 5/4 not), so a high cap cannot be combined with a
+ *    short cadence into a burst of ads.
+ *  - 2..6 cells with unique ids from A..F; integer weights summing to EXACTLY 100, at least two
+ *    cells with weight > 0 (a 0-weight cell is allowed: nobody new lands in it).
+ *  - version 1..1_000_000 (bumping it deliberately re-assigns everyone); rolloutPercentInTreatment 0..100.
+ * Any violation anywhere in the interstitial subtree turns the WHOLE experiment off - never a
+ * partially applied cell set.
+ */
+export const IFX_MIN_CADENCE = 5;
+export const IFX_MAX_CADENCE = 20;
+export const IFX_MIN_CAP = 1;
+export const IFX_MAX_CAP = 3;
+export const IFX_MIN_CELLS = 2;
+export const IFX_MAX_CELLS = 6;
+export const IFX_MAX_VERSION = 1_000_000;
+
+/**
+ * The EFFECTIVE cadence of a session (a cell's, or the base config's): any integer IFX_MIN_CADENCE..IFX_MAX_CADENCE.
+ * Wider than isInterstitialCadence (the closed legacy set the BASE config is still validated against), and the
+ * one check analytics (client + Worker) and the persisted snapshot / continuation marker use, so a cell cadence
+ * of 6 survives a reload and is accepted by telemetry. Old values 5/7/10/12/15/20 stay valid.
+ */
+export function isEffectiveInterstitialCadence(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= IFX_MIN_CADENCE && value <= IFX_MAX_CADENCE;
+}
+
+export type InterstitialExperimentCell = {
+  id: InterstitialCellId;
+  /** Any integer 5..20 (not limited to INTERSTITIAL_CADENCES). */
+  cadence: number;
+  /** Opportunities per analytics session for this cell. */
+  cap: number;
+  /** Integer share of the in-experiment population, 0-100; all cells sum to exactly 100. */
+  weight: number;
+};
+
+export type InterstitialExperimentSpec = {
+  enabled: boolean;
+  /** Share of TREATMENT-arm installations that take part (monotonic: raising it only adds participants). */
+  rolloutPercentInTreatment: number;
+  version: number;
+  cells: InterstitialExperimentCell[];
+};
+
+export type InterstitialExperiments = { interstitial: InterstitialExperimentSpec };
+
+const SPEC_KEYS = ["enabled", "rolloutPercentInTreatment", "version", "cells"] as const;
+const CELL_KEYS = ["id", "cadence", "cap", "weight"] as const;
+
+function isIntInRange(value: unknown, min: number, max: number): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
+}
+
+function isValidExperimentCell(value: unknown): value is InterstitialExperimentCell {
+  if (!isRecord(value) || !hasExactKeys(value, CELL_KEYS)) return false;
+  return (
+    typeof value.id === "string" &&
+    (INTERSTITIAL_CELL_IDS as readonly string[]).includes(value.id) &&
+    isEffectiveInterstitialCadence(value.cadence) &&
+    isIntInRange(value.cap, IFX_MIN_CAP, IFX_MAX_CAP) &&
+    value.cadence >= 2 * value.cap &&
+    isIntInRange(value.weight, 0, 100)
+  );
+}
+
+/** Strict and all-or-nothing: the exact four keys, every cell valid, the whole set inside the envelope. */
+export function isValidInterstitialExperimentSpec(value: unknown): value is InterstitialExperimentSpec {
+  if (!isRecord(value) || !hasExactKeys(value, SPEC_KEYS)) return false;
+  const cells = value.cells;
+  if (
+    typeof value.enabled !== "boolean" ||
+    !isIntInRange(value.rolloutPercentInTreatment, 0, 100) ||
+    !isIntInRange(value.version, 1, IFX_MAX_VERSION) ||
+    !Array.isArray(cells) ||
+    cells.length < IFX_MIN_CELLS ||
+    cells.length > IFX_MAX_CELLS ||
+    !cells.every(isValidExperimentCell)
+  ) {
+    return false;
+  }
+  const typed = cells as InterstitialExperimentCell[];
+  if (new Set(typed.map((c) => c.id)).size !== typed.length) return false;
+  if (typed.reduce((sum, c) => sum + c.weight, 0) !== 100) return false;
+  return typed.filter((c) => c.weight > 0).length >= 2;
+}
+
+function copySpec(spec: InterstitialExperimentSpec): InterstitialExperimentSpec {
+  return {
+    enabled: spec.enabled,
+    rolloutPercentInTreatment: spec.rolloutPercentInTreatment,
+    version: spec.version,
+    cells: spec.cells.map((c) => ({ id: c.id, cadence: c.cadence, cap: c.cap, weight: c.weight })),
+  };
+}
+
+/**
+ * Client side: the `experiments` value of a v3 body -> the interstitial spec, or null (= experiments
+ * OFF). Tolerant at this level - other keys next to `interstitial` (a future experiment) are ignored -
+ * but the interstitial subtree itself is strict. Never throws.
+ */
+export function parseClientInterstitialExperiment(experiments: unknown): InterstitialExperimentSpec | null {
+  if (!isRecord(experiments)) return null;
+  const spec = experiments.interstitial;
+  return isValidInterstitialExperimentSpec(spec) ? copySpec(spec) : null;
+}
+
+/**
+ * Worker side (stored value / PUT body): exactly `{ interstitial: <valid spec> }`. Strict at the
+ * top level too, so a typo like `interstital` is rejected on write instead of silently doing nothing.
+ */
+export function isValidStoredInterstitialExperiments(value: unknown): value is InterstitialExperiments {
+  return isRecord(value) && hasExactKeys(value, ["interstitial"]) && isValidInterstitialExperimentSpec(value.interstitial);
+}
+
+/** Parses raw JSON text (KV value or request body) without ever throwing. */
+export function parseStoredInterstitialExperiments(raw: string): InterstitialExperiments | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  return isValidStoredInterstitialExperiments(parsed) ? { interstitial: copySpec(parsed.interstitial) } : null;
+}
+
+const CLIENT_BASE_KEYS: readonly string[] = [...CLIENT_KEYS, ...CLIENT_OPTIONAL_KEYS];
+
+/**
+ * Client side: a `?v=3` body. The base keys are validated EXACTLY as before (isValidInterstitialClientConfig);
+ * what is new is that unknown top-level keys are tolerated and ignored (so a future Worker can add one without
+ * switching 0.57 clients off) and that `experiments` can never invalidate the base. A legacy-shaped body (the
+ * five plain keys - what an OLD Worker answers for `?v=3`) is a valid base with experiments OFF.
+ */
+export function parseInterstitialV3Body(body: unknown): { config: InterstitialClientConfig; experiment: InterstitialExperimentSpec | null } | null {
+  if (!isRecord(body)) return null;
+  const base: Record<string, unknown> = {};
+  for (const key of CLIENT_BASE_KEYS) if (key in body) base[key] = body[key];
+  if (!isValidInterstitialClientConfig(base)) return null;
+  return { config: base, experiment: parseClientInterstitialExperiment(body.experiments) };
+}

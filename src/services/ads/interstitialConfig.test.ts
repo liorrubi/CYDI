@@ -8,6 +8,7 @@ import {
   INTERSTITIAL_QA_OVERRIDE_KEY,
   _resetInterstitialConfigForTests,
   getFrozenInterstitialConfig,
+  getInterstitialExperimentSpec,
   getQaForcedArm,
   isInterstitialLiveEnabled,
   isRewardedLifecycleV2Enabled,
@@ -74,7 +75,7 @@ test("later refreshes move ONLY enabled - cadence, rollout, cap and country stay
 });
 
 test("malformed or missing config fails closed", async () => {
-  for (const body of [null, {}, { ...GOOD, gamesBetweenAds: 8 }, { ...GOOD, extra: 1 }, { enabled: true }, "yes"]) {
+  for (const body of [null, {}, { ...GOOD, gamesBetweenAds: 8 }, { enabled: true }, "yes", [GOOD], { ...GOOD, countryEligible: "yes" }]) {
     _resetInterstitialConfigForTests(respond(200, body));
     await refreshInterstitialConfig();
     assert.equal(isInterstitialLiveEnabled(), false, JSON.stringify(body));
@@ -140,14 +141,14 @@ test("a debuggable build honours the QA override instead of the network", async 
 
 // --- 0.56 remote controls ---------------------------------------------------------------
 
-test("the 0.56 client asks the Worker for the v2 shape", async () => {
+test("the 0.57 client asks the Worker for the v3 shape", async () => {
   let asked = "";
   _resetInterstitialConfigForTests(async (path) => {
     asked = path;
     return respond(200, GOOD);
   });
   await refreshInterstitialConfig();
-  assert.equal(asked, "/api/config/ads/interstitial?v=2");
+  assert.equal(asked, "/api/config/ads/interstitial?v=3");
 });
 
 test("rollout 0-100 and the two optional keys are accepted; 101, bad types and unknown keys are not", () => {
@@ -192,4 +193,113 @@ test("rewardedLifecycleV2: v2 is ON before any answer and when the key is absent
   next = respond(200, { ...GOOD, rewardedLifecycleV2: false });
   await refreshInterstitialConfig();
   assert.equal(isRewardedLifecycleV2Enabled(), false, "explicit false = live rollback");
+});
+
+// --- 0.57 v3 body: experiments + tolerant extras --------------------------------------------
+
+const SPEC = {
+  enabled: true,
+  rolloutPercentInTreatment: 20,
+  version: 3,
+  cells: [
+    { id: "A", cadence: 7, cap: 2, weight: 50 },
+    { id: "B", cadence: 5, cap: 2, weight: 50 },
+  ],
+};
+
+test("v3: the v2 body stays valid exactly as before (isValidInterstitialClientConfig is still strict)", () => {
+  assert.equal(isValidInterstitialClientConfig(GOOD), true);
+  assert.equal(isValidInterstitialClientConfig({ ...GOOD, experiments: SPEC }), false, "the strict v2 validator never learns about extras");
+  assert.equal(isValidInterstitialClientConfig({ ...GOOD, extra: 1 }), false);
+});
+
+test("v3: unknown top-level keys are tolerated, but the base keys stay strict", async () => {
+  next = respond(200, { ...GOOD, somethingFromTheFuture: { a: 1 } });
+  await refreshInterstitialConfig();
+  assert.equal(isInterstitialLiveEnabled(), true, "an extra key no longer switches the interstitial off");
+  assert.equal(getInterstitialExperimentSpec(), null);
+  for (const body of [
+    { ...GOOD, somethingFromTheFuture: 1, gamesBetweenAds: 8 },
+    { ...GOOD, somethingFromTheFuture: 1, rolloutPercent: 101 },
+    { ...GOOD, somethingFromTheFuture: 1, maxOpportunitiesPerSession: 3 },
+    { enabled: true, somethingFromTheFuture: 1 },
+  ]) {
+    _resetInterstitialConfigForTests(respond(200, body));
+    await refreshInterstitialConfig();
+    assert.equal(isInterstitialLiveEnabled(), false, JSON.stringify(body));
+  }
+});
+
+test("v3: a valid experiments block is exposed; the frozen base values are unchanged by it", async () => {
+  next = respond(200, { ...GOOD, experiments: { interstitial: SPEC } });
+  await refreshInterstitialConfig();
+  assert.deepEqual(getInterstitialExperimentSpec(), SPEC);
+  assert.deepEqual(getFrozenInterstitialConfig(), { rolloutPercent: 5, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true, secondOpportunityRolloutPercent: 100 });
+  assert.equal(isInterstitialLiveEnabled(), true);
+});
+
+test("v3: an invalid or missing experiments block means experiments OFF and never touches the base", async () => {
+  const bad = [
+    null,
+    "x",
+    [],
+    {},
+    { interstitial: null },
+    { interstitial: { ...SPEC, version: 0 } },
+    { interstitial: { ...SPEC, cells: [SPEC.cells[0]] } },
+    { interstitial: { ...SPEC, cells: [{ ...SPEC.cells[0], cadence: 5, cap: 3 }, SPEC.cells[1]] } },
+    { interstitial: { ...SPEC, extra: 1 } },
+  ];
+  for (const experiments of bad) {
+    _resetInterstitialConfigForTests(respond(200, { ...GOOD, experiments }));
+    await refreshInterstitialConfig();
+    assert.equal(getInterstitialExperimentSpec(), null, JSON.stringify(experiments));
+    assert.equal(isInterstitialLiveEnabled(), true, "the base still applies");
+    assert.equal(getFrozenInterstitialConfig()?.gamesBetweenAds, 7);
+  }
+});
+
+test("v3: other keys next to experiments.interstitial (a future experiment) are ignored", async () => {
+  next = respond(200, { ...GOOD, experiments: { interstitial: SPEC, inkTrial: { enabled: true } } });
+  await refreshInterstitialConfig();
+  assert.deepEqual(getInterstitialExperimentSpec(), SPEC);
+});
+
+test("v3: a legacy-shaped answer (an OLD Worker answering ?v=3 as plain) keeps the client working with experiments OFF", async () => {
+  next = respond(200, { enabled: true, rolloutPercent: 50, gamesBetweenAds: 7, maxOpportunitiesPerSession: 1, countryEligible: true });
+  assert.equal(await refreshInterstitialConfig(), true);
+  assert.equal(isInterstitialLiveEnabled(), true);
+  assert.equal(getInterstitialExperimentSpec(), null);
+  assert.equal(isRewardedLifecycleV2Enabled(), true, "absent = the default");
+});
+
+test("v3: the experiment spec is LIVE (latest answer wins; 404 and malformed bodies clear it; a network error keeps it)", async () => {
+  next = respond(200, { ...GOOD, experiments: { interstitial: SPEC } });
+  await refreshInterstitialConfig();
+  next = respond(503);
+  await refreshInterstitialConfig();
+  assert.deepEqual(getInterstitialExperimentSpec(), SPEC, "5xx is not an answer");
+  next = respond(200, { ...GOOD, experiments: { interstitial: { ...SPEC, rolloutPercentInTreatment: 0 } } });
+  await refreshInterstitialConfig();
+  assert.equal(getInterstitialExperimentSpec()?.rolloutPercentInTreatment, 0);
+  next = respond(200, GOOD);
+  await refreshInterstitialConfig();
+  assert.equal(getInterstitialExperimentSpec(), null, "an answer without the block = experiments off");
+  next = respond(200, { ...GOOD, experiments: { interstitial: SPEC } });
+  await refreshInterstitialConfig();
+  next = respond(404);
+  await refreshInterstitialConfig();
+  assert.equal(getInterstitialExperimentSpec(), null);
+});
+
+test("v3: the QA override can carry an experiments block (debug builds only)", async () => {
+  store.set(INTERSTITIAL_QA_OVERRIDE_KEY, JSON.stringify({ ...GOOD, qaForceArm: "treatment", experiments: { interstitial: SPEC } }));
+  setDebugBuild(true);
+  next = respond(404);
+  await refreshInterstitialConfig();
+  assert.deepEqual(getInterstitialExperimentSpec(), SPEC);
+  setDebugBuild(false);
+  _resetInterstitialConfigForTests(respond(200, GOOD));
+  await refreshInterstitialConfig();
+  assert.equal(getInterstitialExperimentSpec(), null, "a non-debuggable build never reads it");
 });

@@ -80,11 +80,14 @@ import { offerExitAction } from "../app/doubleOfferSettlement";
 import {
   beginInterstitialResultCycle,
   getInterstitialArmForAnalytics,
+  getInterstitialCellForAnalytics,
   claimResultAdLane,
   markRewardedOfferRenderedThisCycle,
   recordInterstitialGameCompleted,
   recordInterstitialGameStarted,
+  recordRewardedOfferDeferred,
   runInterstitialCheckpoint,
+  takeNextGameContext,
 } from "../services/ads/interstitialController";
 import {
   decideResultOffer,
@@ -1230,7 +1233,9 @@ function ShapePlay({
       });
       // Practice rounds earn nothing and are not normal play: they keep the plain payload.
       const completedBase = { gameType: roundGameType(practice), category, contentKey: shape.id };
-      trackEvent("game_completed", practice ? completedBase : withGameCoins(completedBase, offerAmount));
+      // 0.57: a Classic game that follows an interstitial checkpoint carries that checkpoint's outcome (one-shot).
+      const nextGameContext = practice ? null : takeNextGameContext(roundGameType(practice));
+      trackEvent("game_completed", practice ? completedBase : { ...withGameCoins(completedBase, offerAmount), ...nextGameContext });
       // A new result cycle (resets the rewarded-collision marker), then the completion
       // itself - the only thing that advances the interstitial cadence.
       beginInterstitialResultCycle();
@@ -1253,9 +1258,11 @@ function ShapePlay({
           canOfferAd: isRewardedAdAvailable() || isMathFallbackEnabled(),
         });
         const decision = eligible === "show" && claimResultAdLane() === "interstitial" ? "pending_interstitial" : eligible;
+        if (decision === "pending_interstitial") recordRewardedOfferDeferred();
         if (decision === "show") {
           showOffer = true;
-          setRewardedOffer({ arm: getRewardedArm(), ...upcomingOfferContext(), interstitialArm: getInterstitialArmForAnalytics() });
+          const ifxCell = getInterstitialCellForAnalytics();
+          setRewardedOffer({ arm: getRewardedArm(), ...upcomingOfferContext(), interstitialArm: getInterstitialArmForAnalytics(), ...(ifxCell !== null ? { ifxCell } : {}) });
         }
       }
       if (offerAmount > 0) {

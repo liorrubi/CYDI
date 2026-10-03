@@ -10,10 +10,10 @@
 // callback for UI (spinners, button states). Neither is required - calling
 // showRewardedAd(placement) alone is a complete integration.
 //
-// NOT ACTIVE YET: nothing in the game calls this module, and every flag in
-// adConfig.ts is false, so no ad request is ever issued. A reward is reported
-// ONLY when the SDK itself resolves with a verified reward item - an early
-// dismiss always yields "dismissed" with no reward.
+// A reward is reported ONLY when the adapter resolves with a verified reward item (the
+// SDK's own reward event). An ad closed without one resolves the adapter with null, which
+// yields "dismissed" - no reward, no error. The adapter (admobAdapter.ts) is what turns the
+// plugin's Dismissed event into that null; the plugin's own show call never settles on a close.
 
 import { isAdFormatEnabled, getAdUnitId } from "./adConfig";
 import { isRewardedAdPlacement, type RewardedAdPlacement } from "./adPlacements";
@@ -266,16 +266,26 @@ export function getRewardedLifecycleState(): RewardedTapState {
  * carried on the rejection) is authoritative: 3 NO_FILL and 9 MEDIATION_NO_FILL are an
  * empty auction, not a fault. Without a code the message text is the fallback - "No fill."
  * is that SDK's wording for NO_FILL, verified on a real device - so an empty auction never
- * masquerades as a broken SDK. Load-only: a show can never surface a no-fill.
+ * masquerades as a broken SDK. The text is read from an Error or from a plain object with a
+ * string `message` (what the adapter throws when the plugin rejects but FailedToLoad never
+ * fired); a bare string or anything else is not read. The message is used for this
+ * classification only - it never leaves this function. Load-only: a show can never surface a no-fill.
  */
+function loadFailureMessage(err: unknown): string | undefined {
+  if (err instanceof Error) return err.message;
+  const message = (err as { message?: unknown } | null)?.message;
+  return typeof message === "string" ? message : undefined;
+}
+
 function classifyLoadFailure(err: unknown): { reason: AdFailureReason; code: number | undefined } {
   const code = (err as { code?: unknown } | null)?.code;
   const numeric = isAdErrorCode(code) ? code : undefined;
   if (numeric === 3 || numeric === 9) return { reason: "no_fill", code: numeric };
   if (numeric !== undefined) return { reason: "sdk_error", code: numeric };
-  if (!(err instanceof Error)) return { reason: "sdk_error", code: undefined };
-  if (err.message.includes("timed out")) return { reason: "timeout", code: undefined };
-  if (/no fill/i.test(err.message)) return { reason: "no_fill", code: undefined };
+  const message = loadFailureMessage(err);
+  if (message === undefined) return { reason: "sdk_error", code: undefined };
+  if (message.includes("timed out")) return { reason: "timeout", code: undefined };
+  if (/no fill/i.test(message)) return { reason: "no_fill", code: undefined };
   return { reason: "sdk_error", code: undefined };
 }
 
@@ -479,7 +489,10 @@ export async function showRewardedAd(
   const adapter = activeAdapter()!;
   state = "showing";
   // "shown" is emitted when we hand control to the SDK - the closest observable
-  // moment to the ad appearing (the SDK's promise only resolves at close).
+  // moment to the ad appearing. The adapter's promise settles on the first terminal
+  // callback (reward, dismissed-without-reward, or failed-to-show), so exactly one of
+  // rewarded / dismissed / error is emitted below; the show timeout is only a last-resort
+  // backstop for an adapter that never settles.
   emit("shown", placement, undefined, onEvent);
   try {
     const reward = await withTimeout(adapter.showRewarded(), showTimeoutMs, "rewarded show");

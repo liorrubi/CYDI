@@ -198,7 +198,7 @@ async function advanceToDrawing(h: Awaited<ReturnType<typeof makeLobby>>) {
  * else, and an earlier version of this helper silently played 5-round games
  * while the test thought it had asked for 1.
  */
-async function makeDrawing(rounds: 5 | 10 | 15 = 5) {
+async function makeDrawing(rounds: 3 | 5 | 10 | 15 = 5) {
   const h = await makeLobby();
   await h.send(h.host, { type: "configure", rounds, difficulty: "mixed" });
   assert.equal(h.host.last("error"), undefined, "configure was rejected");
@@ -619,6 +619,47 @@ test("malformed frames are rejected without disturbing the room", async () => {
   // The room survived the barrage: it is still mid-game, so a new join is
   // refused for phase reasons rather than because the room fell over.
   assert.equal(fresh.last("error")?.code, "wrong_phase");
+});
+
+test("configure accepts 3, 5, 10 and 15 rounds (15 only for installed 0.55/0.56 hosts) and rejects every other length", async () => {
+  const h = await makeLobby();
+  for (const rounds of [3, 5, 10, 15]) {
+    h.host.sent.length = 0;
+    await h.send(h.host, { type: "configure", rounds, difficulty: "mixed" });
+    assert.equal(h.host.last("error"), undefined, `${rounds} rounds must not be answered with an error`);
+    assert.equal(h.host.snapshot().rounds, rounds);
+    assert.equal(h.guest.snapshot().rounds, rounds, "the guest sees the same length");
+  }
+  for (const rounds of [0, 1, 2, 4, 7, 20, -5, 3.5, "5", null]) {
+    h.host.sent.length = 0;
+    await h.send(h.host, { type: "configure", rounds, difficulty: "mixed" });
+    assert.equal(h.host.last("error")?.code, "bad_frame", `${String(rounds)} rounds must be rejected`);
+  }
+  assert.equal(h.guest.snapshot().rounds, 15, "a rejected frame leaves the last accepted length");
+});
+
+test("a fresh room defaults to 5 rounds", async () => {
+  const h = await makeLobby();
+  assert.equal(h.host.snapshot().rounds, 5);
+});
+
+test("a 3-round game ends after round 3, and a 15-round game from an old host still plays to round 15", async () => {
+  const h = await makeDrawing(3);
+  for (let i = 0; i < 3; i++) {
+    const phase = await playRound(h, i);
+    if (i < 2) {
+      assert.equal(phase, "ROUND_RESULTS", `round ${i}`);
+      await h.send(h.host, { type: "next" });
+      await advanceToDrawing(h);
+    } else {
+      assert.equal(phase, "FINAL_RESULTS");
+    }
+  }
+  assert.equal(h.host.snapshot().roundIndex, 2);
+
+  const old = await makeDrawing(15);
+  assert.equal(old.host.snapshot().rounds, 15);
+  assert.equal(old.guest.snapshot().rounds, 15, "a guest of any version just displays what the room says");
 });
 
 test("non-JSON and oversized frames are rejected", async () => {

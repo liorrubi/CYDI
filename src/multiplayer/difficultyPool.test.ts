@@ -62,7 +62,7 @@ test("each tier pool contains only shapes of that tier", () => {
 });
 
 test("pickShapeSequence returns the requested number of distinct shapes", () => {
-  for (const count of [5, 10, 15]) {
+  for (const count of [3, 5, 10, 15]) {
     const seq = pickShapeSequence("mixed", count);
     assert.equal(seq.length, count);
     assert.equal(new Set(seq).size, count, "a shape must not repeat inside one game");

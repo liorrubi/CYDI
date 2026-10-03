@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { FakeRoom, fakeRoomCode, type BotProfile } from "./fakeRoom.ts";
-import { MP_LIMITS, MP_TIMINGS, type RoomSnapshot, type ServerFrame } from "./protocol.ts";
+import { DEFAULT_ROUND_COUNT, MP_LIMITS, MP_TIMINGS, ROUND_COUNT_OPTIONS_UI, type RoomSnapshot, type RoundCount, type ServerFrame } from "./protocol.ts";
 import { canDrawNow, hostControlFor, roundLabel, showsTargetShape, showsWaitingForHost } from "./roomUiRules.ts";
 
 // The Stage 4 harness drives the whole UI, so its state machine has to be as
@@ -22,7 +22,7 @@ const BOTS: BotProfile[] = [
   { nickname: "Dana", skill: 85, pace: 0.8 },
 ];
 
-function makeHarness(mode: "create" | "join" = "create", rounds: 5 | 10 | 15 = 5): Harness {
+function makeHarness(mode: "create" | "join" = "create", rounds: RoundCount = 5): Harness {
   let now = 1_700_000_000_000;
   let nextHandle = 1;
   const pending = new Map<number, { fireAt: number; fn: () => void }>();
@@ -170,7 +170,7 @@ test("a guest cannot change the game settings", () => {
   const h = makeHarness("join");
   h.tick(2000);
   const before = h.latest().rounds;
-  h.room.send({ type: "configure", rounds: 15, difficulty: "hard" });
+  h.room.send({ type: "configure", rounds: 10, difficulty: "hard" });
   assert.equal(h.errors()[0]?.code, "not_host");
   assert.equal(h.latest().rounds, before, "settings did not change");
 });
@@ -178,14 +178,36 @@ test("a guest cannot change the game settings", () => {
 test("the host can change the settings, but only in the lobby", () => {
   const h = makeHarness("create");
   h.tick(4000);
-  h.room.send({ type: "configure", rounds: 15, difficulty: "hard" });
-  assert.equal(h.latest().rounds, 15);
+  h.room.send({ type: "configure", rounds: 3, difficulty: "hard" });
+  assert.equal(h.latest().rounds, 3);
   assert.equal(h.latest().difficulty, "hard");
 
   h.room.send({ type: "start" });
   h.frames.length = 0;
   h.room.send({ type: "configure", rounds: 5, difficulty: "easy" });
   assert.equal(h.errors()[0]?.code, "wrong_phase");
+});
+
+test("a fresh room defaults to 5 rounds, every UI option is configurable, and a 15-round room still plays as before", () => {
+  const defaulted = new FakeRoom({ nickname: "You", mode: "create", roomCode: "TEST77", bots: BOTS, now: () => 0, setTimer: () => 1, clearTimer: () => {}, random: () => 0.5 });
+  assert.equal(DEFAULT_ROUND_COUNT, 5);
+  let initial: RoomSnapshot | null = null;
+  defaulted.subscribe((f) => { if (f.type === "snapshot") initial = f; });
+  assert.equal((initial as RoomSnapshot | null)?.rounds, 5, "default room length");
+  defaulted.close();
+
+  const h = makeHarness("create");
+  h.tick(4000);
+  for (const rounds of ROUND_COUNT_OPTIONS_UI) {
+    h.room.send({ type: "configure", rounds, difficulty: "mixed" });
+    assert.equal(h.latest().rounds, rounds, `${rounds} rounds selectable`);
+  }
+  // A 15-round room (what an installed 0.55/0.56 host creates) is still a valid room for the protocol.
+  h.room.send({ type: "configure", rounds: 15, difficulty: "mixed" });
+  assert.equal(h.latest().rounds, 15);
+  assert.equal(h.errors().length, 0);
+  assert.equal(roundLabel(0, 15), "Round 1 of 15");
+  assert.equal(roundLabel(2, 3), "Round 3 of 3");
 });
 
 test("starting needs a second player", () => {

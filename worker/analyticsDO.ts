@@ -18,12 +18,12 @@ import {
 } from "../src/services/analyticsSchema";
 import { isAdFailureReason } from "../src/services/ads/adTypes";
 import {
+  isEffectiveInterstitialCadence,
   isInterstitialArm,
-  isInterstitialCadence,
   isInterstitialFailureReason,
   isInterstitialOutcome,
 } from "../src/services/ads/interstitialConfigSchema";
-import { ROUND_COUNT_OPTIONS } from "../src/multiplayer/protocol";
+import { ROUND_COUNT_ACCEPTED } from "../src/multiplayer/protocol";
 import {
   BALANCE_BUCKETS,
   COIN_SINKS,
@@ -150,16 +150,21 @@ const INSTALL_AGE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["first_open"]);
 // runs, so none of these maps can grow past its domain:
 //   byArmOutcome    "treatment|shown" - arm x outcome, at most 2 x 5 = 10 keys. Crossed
 //                   because "suppressed" occurs in both arms and must stay attributable.
-//   byCadence       "7" - the gamesBetweenAds the opportunity ran under, at most 6 keys.
+//   byCadence       "7" - the EFFECTIVE gamesBetweenAds the opportunity ran under: any integer 5..20
+//                   (0.57: a multi-cell experiment cell may use any of them), so at most 16 keys per
+//                   event (two events -> 32). This is the same existing counter map inside the same
+//                   per-day bucket value (`day:<date>`): no new storage key, no new write, no new request.
+//                   Worst case adds 10 keys x ~10 bytes x 2 events = ~200 bytes to that value (a few keys in
+//                   practice: only the cadences actually configured ever appear).
 //   byInterstitialReason  the bounded failure reason, at most 5 keys.
 // Deliberately NOT crossed with country, version or each other beyond arm|outcome.
 const ARM_OUTCOME_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["interstitial_checkpoint", "interstitial_continuation"]);
 const CADENCE_BREAKOUT_EVENTS = ARM_OUTCOME_BREAKOUT_EVENTS;
 const INTERSTITIAL_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["interstitial_load_failed", "interstitial_checkpoint"]);
 // Pass & Play length and progress. `roundCount` is the length the players CHOSE
-// (ROUND_COUNT_OPTIONS - three values), `roundIndex` how far the game got. Both are
-// closed, re-validated server-side by validateEventParams before this runs, so the
-// two maps cannot grow past 3 and 15 keys. Only events that already carry the field
+// (ROUND_COUNT_ACCEPTED - 3, 5, 10, and 15 from older clients), `roundIndex` how far the
+// game got. Both are closed, re-validated server-side by validateEventParams before this
+// runs, so the two maps cannot grow past 4 and 15 keys. Only events that already carry the field
 // are listed: pp_round_completed has a roundIndex but NO roundCount, so it appears in
 // one set and not the other.
 //
@@ -348,11 +353,15 @@ export function normalizeCountry(value: unknown): string {
   if (!/^[A-Z]{2}$/.test(code) || code === "XX" || code === "T1") return UNKNOWN_COUNTRY;
   return code;
 }
-/** Highest index any game can reach, derived from the longest option so a new length cannot silently overflow the map. */
-const MAX_ROUND_INDEX = Math.max(...ROUND_COUNT_OPTIONS) - 1;
+/**
+ * Highest index any game can reach, derived from the longest ACCEPTED length (not the UI list) so a new
+ * length cannot silently overflow the map and games from installed 0.55/0.56 clients (15 rounds -> index 14)
+ * still bucket after the 15-round option left the 0.57 UI.
+ */
+const MAX_ROUND_INDEX = Math.max(...ROUND_COUNT_ACCEPTED) - 1;
 
 function isRoundCountValue(value: unknown): value is number {
-  return typeof value === "number" && (ROUND_COUNT_OPTIONS as readonly number[]).includes(value);
+  return typeof value === "number" && (ROUND_COUNT_ACCEPTED as readonly number[]).includes(value);
 }
 
 function isRoundIndexValue(value: unknown): value is number {
@@ -459,8 +468,8 @@ type EventCounters = {
   // read it yet, and every client older than 0.53.0, counts as "unknown".
   byAppVersionCode?: Record<string, number>;
   // ROUND_COUNT_BREAKOUT_EVENTS / ROUND_INDEX_BREAKOUT_EVENTS only - the Pass & Play
-  // game length the players chose, and how far a game got. Bounded to the three ids of
-  // ROUND_COUNT_OPTIONS and to 0..MAX_ROUND_INDEX. Absent on every other event, and on
+  // game length the players chose, and how far a game got. Bounded to the ids of
+  // ROUND_COUNT_ACCEPTED and to 0..MAX_ROUND_INDEX. Absent on every other event, and on
   // day buckets recorded before these fields existed.
   byRoundCount?: Record<string, number>;
   byRoundIndex?: Record<string, number>;
@@ -719,7 +728,7 @@ export function incrementEvent(
   if (ARM_OUTCOME_BREAKOUT_EVENTS.has(eventName) && isInterstitialArm(params.arm) && isInterstitialOutcome(params.outcome)) {
     updated.byArmOutcome = incrementKeyMap(existing.byArmOutcome, `${params.arm}|${params.outcome}`);
   }
-  if (CADENCE_BREAKOUT_EVENTS.has(eventName) && isInterstitialCadence(params.gamesBetweenAds)) {
+  if (CADENCE_BREAKOUT_EVENTS.has(eventName) && isEffectiveInterstitialCadence(params.gamesBetweenAds)) {
     updated.byCadence = incrementKeyMap(existing.byCadence, String(params.gamesBetweenAds));
   }
   if (INTERSTITIAL_REASON_BREAKOUT_EVENTS.has(eventName) && isInterstitialFailureReason(params.reason)) {

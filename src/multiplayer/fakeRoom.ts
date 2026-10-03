@@ -33,6 +33,7 @@ import { pickShapeSequence } from "./difficultyPool";
 import {
   combineRoundScore,
   fromWirePath,
+  DEFAULT_ROUND_COUNT,
   MP_LIMITS,
   MP_TIMINGS,
   speedScore,
@@ -128,7 +129,7 @@ export class FakeRoom implements RoomTransport {
     this.random = options.random ?? Math.random;
 
     this.roomCode = options.roomCode;
-    this.rounds = options.rounds ?? 10;
+    this.rounds = options.rounds ?? DEFAULT_ROUND_COUNT;
     this.difficulty = options.difficulty ?? "mixed";
     this.phaseStartsAt = this.now();
 

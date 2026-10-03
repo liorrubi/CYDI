@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.57.0 - 2026-10-03
+
+Android 0.57.0 (versionCode 57) and web 0.57.0. Draft entry for the approved core scope; refined to the exact final implementation before release. Nobody sees more ads.
+
+- **Closing a Watch Ad early no longer leaves the game stuck:** if the ad is closed before the
+  reward, the offer ends straight away (no reward, no "Loading ad..." for a minute and a half,
+  no "ads aren't available" message). A reward that was earned is still paid exactly once.
+- **Coin ads are always x3, and say how many coins:** the old +100 variant is retired. The
+  buttons now read `KEEP 35` and `WATCH AD FOR 105` with the coin icon; the coins you already
+  earned stay credited and the ad adds only the difference.
+- **Sturdier ad error handling:** a "no ad available" answer is recognised even when the ad
+  SDK reports it late or only as a message.
+- **Play Together and 2 Players game lengths:** 3, 5 or 10 rounds (default 5); the 15-round
+  option is gone from the new app. Games with older app versions that still use 15 keep working.
+- **Remote controls (no new APK needed later):** the interstitial frequency can be tested in
+  several groups of players (how many games between breaks and how many breaks per session),
+  within fixed safety limits. Launch values are unchanged: same share of players, one break
+  after every 7 games, at most 2 per session; the new test is switched off.
+- **A few more bounded usage numbers on existing data:** how deep a play session went around
+  ad breaks, whether the next game after a break was finished, and which game of the day a
+  Play Together game was. No new identifiers, permissions or SDKs.
+
 ## 0.56.0 - 2026-10-01
 
 Android 0.56.0 (versionCode 55) and web 0.56.0. Ads load more reliably; nobody sees more ads.

@@ -161,7 +161,7 @@ function wire(options: { grace?: number } = {}) {
 const terminal = (events: RewardedAdLifecycleEvent[]) => events.filter((e) => e === "rewarded" || e === "dismissed" || e === "error");
 
 /** Preload, then start a show and give the adapter a tick to register its pending show. */
-async function readyAndShow(w: ReturnType<typeof wire>): Promise<{ result: ReturnType<typeof showRewardedAd> }> {
+async function readyAndShow(_w: ReturnType<typeof wire>): Promise<{ result: ReturnType<typeof showRewardedAd> }> {
   await preloadRewardedAd(PLACEMENT);
   assert.equal(getRewardedLifecycleState(), "ready");
   const result = showRewardedAd(PLACEMENT);

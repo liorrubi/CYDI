@@ -586,7 +586,10 @@ async function simulateWith(input: SimInput) {
         lastLoadCount = ad.calls.load;
         // The ad load finishes while the player looks at the Result screen (before the tap).
         if (mode === "ready") ad.resolveLoad();
-        else if (mode === "retry") loadsInWindow === 1 ? ad.rejectLoad(3) : ad.resolveLoad();
+        else if (mode === "retry") {
+          if (loadsInWindow === 1) ad.rejectLoad(3);
+          else ad.resolveLoad();
+        }
         else if (mode === "nofill") ad.rejectLoad(3);
         await flush();
       }

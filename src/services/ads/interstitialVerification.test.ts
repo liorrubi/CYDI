@@ -54,6 +54,8 @@ import {
   IFX_MAX_CELLS,
   IFX_MAX_VERSION,
   IFX_MIN_CADENCE,
+  EFFECTIVE_MAX_CADENCE,
+  EFFECTIVE_MIN_CADENCE,
   IFX_MIN_CAP,
   IFX_MIN_CELLS,
   isValidInterstitialClientConfig,
@@ -166,17 +168,21 @@ const cellsOf = (...cells: unknown[]) => (spec: Record<string, unknown>) => ({ .
 const VALID_SPEC = xspec({ cells: [xcell("A", 7, 2, 50), xcell("B", 5, 2, 50)] }) as unknown as Record<string, unknown>;
 
 const BAD_SPEC_CASES: Case[] = [
-  ["cadence 4", cellsOf(xcell("A", 4, 1, 50), xcell("B", 7, 2, 50))],
+  ["cadence 2", cellsOf(xcell("A", 2, 1, 50), xcell("B", 7, 2, 50))],
+  ["cadence 0", cellsOf(xcell("A", 0, 1, 50), xcell("B", 7, 2, 50))],
+  ["cadence 11", cellsOf(xcell("A", 11, 1, 50), xcell("B", 7, 2, 50))],
+  ["cadence 12 (a legal BASE cadence, not a cell one)", cellsOf(xcell("A", 12, 1, 50), xcell("B", 7, 2, 50))],
+  ["cadence 20", cellsOf(xcell("A", 20, 1, 50), xcell("B", 7, 2, 50))],
   ["cadence 21", cellsOf(xcell("A", 21, 1, 50), xcell("B", 7, 2, 50))],
   ["cadence 6.5 (non-integer)", cellsOf(xcell("A", 6.5, 2, 50), xcell("B", 7, 2, 50))],
   ['cadence "7" (string)', cellsOf({ ...xcell("A", 7, 2, 50), cadence: "7" }, xcell("B", 7, 2, 50))],
   ["cap 0", cellsOf(xcell("A", 7, 0, 50), xcell("B", 7, 2, 50))],
-  ["cap 4", cellsOf(xcell("A", 20, 4, 50), xcell("B", 7, 2, 50))],
-  ["cap 2.5 (non-integer)", cellsOf(xcell("A", 20, 2.5, 50), xcell("B", 7, 2, 50))],
+  ["cap 6", cellsOf(xcell("A", 7, 6, 50), xcell("B", 7, 2, 50))],
+  ["cap 2.5 (non-integer)", cellsOf(xcell("A", 7, 2.5, 50), xcell("B", 7, 2, 50))],
   ["cap -1", cellsOf(xcell("A", 7, -1, 50), xcell("B", 7, 2, 50))],
-  ["5/3 (cadence < 2 * cap)", cellsOf(xcell("A", 5, 3, 50), xcell("B", 7, 2, 50))],
-  ["5/4", cellsOf(xcell("A", 5, 4, 50), xcell("B", 7, 2, 50))],
-  ["6/4 (cap 4)", cellsOf(xcell("A", 6, 4, 50), xcell("B", 7, 2, 50))],
+  ["3/6 (cap 6 at the shortest cadence)", cellsOf(xcell("A", 3, 6, 50), xcell("B", 7, 2, 50))],
+  ["10/6 (cap 6 at the longest cadence)", cellsOf(xcell("A", 10, 6, 50), xcell("B", 7, 2, 50))],
+  ["a valid 3/5 cell next to a bad 2/1 cell (all or nothing)", cellsOf(xcell("A", 3, 5, 50), xcell("B", 2, 1, 50))],
   ["1 cell", cellsOf(xcell("A", 7, 2, 100))],
   ["0 cells", cellsOf()],
   ["7 cells", cellsOf(...["A", "B", "C", "D", "E", "F", "G"].map((id, i) => xcell(id, 7, 2, i < 2 ? 15 : 14)))],
@@ -272,17 +278,17 @@ test("E: control arm and installations outside the global rollout are untouched 
   assert.equal(ins.participation, "cell");
 });
 
-test("E: cadence 6 is accepted by the client config parser, the base-config parser keeps the closed set, and the client analytics validator takes 5..20", () => {
+test("E: cadence 6 is accepted by the client config parser, the base-config parser keeps the closed set, and the client analytics validator takes 3..20", () => {
   const six = xspec({ cells: [xcell("A", 7, 2, 34), xcell("B", 6, 2, 33), xcell("C", 5, 2, 33)] });
   assert.equal(isValidInterstitialExperimentSpec(six), true);
   assert.equal(parseClientInterstitialExperiment({ interstitial: six })?.cells[1].cadence, 6);
   // The BASE config's cadence stays the legacy closed set: a stored/served base cadence 6 is invalid.
   assert.equal(isValidInterstitialClientConfig({ ...PROD_BASE, gamesBetweenAds: 6 }), false);
-  for (let c = IFX_MIN_CADENCE; c <= IFX_MAX_CADENCE; c++) {
+  for (let c = EFFECTIVE_MIN_CADENCE; c <= EFFECTIVE_MAX_CADENCE; c++) {
     assert.equal(validateEventParams("interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: c, ifxCell: "B", ifxVersion: 1, ifxCap: 2 }).valid, true, `cadence ${c}`);
     assert.equal(validateEventParams("interstitial_continuation", { arm: "control", outcome: "control", gamesBetweenAds: c }).valid, true, `continuation ${c}`);
   }
-  for (const bad of [4, 21, 6.5, "6"]) assert.equal(validateEventParams("interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: bad }).valid, false);
+  for (const bad of [2, 21, 0, 6.5, "6"]) assert.equal(validateEventParams("interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: bad }).valid, false, `cadence ${String(bad)}`);
 });
 
 test("E: the experiment mix examples (50/50, 34/33/33, 70/30, 40/30/30 over 7/2, 6/2, 5/2) are valid specs and bounded by the documented envelope", () => {
@@ -294,10 +300,11 @@ test("E: the experiment mix examples (50/50, 34/33/33, 70/30, 40/30/30 over 7/2,
   ];
   for (const cells of examples) {
     assert.equal(isValidInterstitialExperimentSpec(xspec({ cells })), true);
-    assert.ok(cells.every((c) => c.cadence >= IFX_MIN_CADENCE && c.cap <= 2 && c.cadence >= 2 * c.cap));
+    assert.ok(cells.every((c) => c.cadence >= IFX_MIN_CADENCE && c.cadence <= IFX_MAX_CADENCE && c.cap >= IFX_MIN_CAP && c.cap <= IFX_MAX_CAP));
   }
-  // The documented bound constants (values quoted in the report).
-  assert.deepEqual([IFX_MIN_CADENCE, IFX_MAX_CADENCE, IFX_MIN_CAP, IFX_MAX_CAP, IFX_MIN_CELLS, IFX_MAX_CELLS, IFX_MAX_VERSION], [5, 20, 1, 3, 2, 6, 1_000_000]);
+  // The documented bound constants (values quoted in the report): cell cadence 3..10, cap 1..5, effective cadence 3..20.
+  assert.deepEqual([IFX_MIN_CADENCE, IFX_MAX_CADENCE, IFX_MIN_CAP, IFX_MAX_CAP, IFX_MIN_CELLS, IFX_MAX_CELLS, IFX_MAX_VERSION], [3, 10, 1, 5, 2, 6, 1_000_000]);
+  assert.deepEqual([EFFECTIVE_MIN_CADENCE, EFFECTIVE_MAX_CADENCE], [3, 20]);
 });
 
 // ===================================================================================================
@@ -328,7 +335,7 @@ const WEIGHT_SETS: [string, [string, number, number][]][] = [
   ["34/33/33", [["A", 7, 34], ["B", 6, 33], ["C", 5, 33]]],
   ["70/30", [["A", 7, 70], ["B", 5, 30]]],
   ["40/30/30", [["A", 7, 40], ["B", 6, 30], ["C", 5, 30]]],
-  ["25/25/25/25/0/0 (0-weight cells never drawn)", [["A", 7, 25], ["B", 6, 25], ["C", 5, 25], ["D", 10, 25], ["E", 12, 0], ["F", 15, 0]]],
+  ["25/25/25/25/0/0 (0-weight cells never drawn)", [["A", 7, 25], ["B", 6, 25], ["C", 5, 25], ["D", 10, 25], ["E", 8, 0], ["F", 9, 0]]],
 ];
 
 test("F: observed vs expected cell shares for several weight sets (100k ids, participants only), and the gate size tracks the rollout", () => {
@@ -466,7 +473,7 @@ test("F: no bucket value and no installationId is emitted - params of every ifx-
     assert.ok(!/bucket|installation/i.test(Object.keys(t.params).join(",")), `${t.name}: key names`);
     if (ALLOWED_KEYS[t.name]) for (const k of Object.keys(t.params)) assert.ok(ALLOWED_KEYS[t.name].includes(k), `${t.name}: unexpected key ${k}`);
     // numeric ifx values are the version / cap only, never a 0..9999 bucket
-    for (const [k, v] of Object.entries(t.params)) if (typeof v === "number" && k.startsWith("ifx")) assert.ok(v <= 3 || v === 1, `${t.name}.${k}=${v}`);
+    for (const [k, v] of Object.entries(t.params)) if (typeof v === "number" && k.startsWith("ifx")) assert.ok(v <= IFX_MAX_CAP || v === 1, `${t.name}.${k}=${v}`);
     for (const b of bucketValues) if (b > 99) assert.ok(!new RegExp(`(^|[^0-9])${b}([^0-9]|$)`).test(json), `${t.name}: bucket value ${b} present`);
     seen.add(t.name);
   }
@@ -672,7 +679,7 @@ test("G: checkpoint games, per-session maximum and 'never a third ad' for 7/2, 6
     "7/1": { s1: [7], later: [1] },
   };
   for (const [label, cadence, cap] of PARTICIPANT_CONFIGS) {
-    const spec = xspec({ cells: [xcell("A", cadence, cap, 50), xcell("B", 20, 1, 50)] });
+    const spec = xspec({ cells: [xcell("A", cadence, cap, 50), xcell("B", 10, 1, 50)] });
     const id = idInCell(spec, "A");
     const inputs: [string, SimInput][] = [
       ["cell", { installation: id, servedBody: { ...PROD_BASE, experiments: { interstitial: spec } }, sessions: [100, 100, 100] }],
@@ -701,7 +708,7 @@ test("G: checkpoint games, per-session maximum and 'never a third ad' for 7/2, 6
 test("G: many short sessions (3 games each) and mixed session lengths keep the cadence progress and reset only the cap", async () => {
   const sessions = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 25, 1, 1, 30, 2, 2, 2, 40];
   for (const [label, cadence, cap] of PARTICIPANT_CONFIGS) {
-    const spec = xspec({ cells: [xcell("A", cadence, cap, 50), xcell("B", 20, 1, 50)] });
+    const spec = xspec({ cells: [xcell("A", cadence, cap, 50), xcell("B", 10, 1, 50)] });
     const sim = await simulateWith({ installation: idInCell(spec, "A"), servedBody: { ...PROD_BASE, experiments: { interstitial: spec } }, sessions });
     assert.deepEqual(sim.opportunities.map((o) => ({ session: o.session, game: o.game })), model(cadence, cap, sessions), label);
     assert.ok(sim.perSession.every((n) => n <= cap), `${label}: ${sim.perSession.join(",")}`);
@@ -712,7 +719,7 @@ test("G: many short sessions (3 games each) and mixed session lengths keep the c
 
 test("G: load schedule - attempt 1 two games before the break, ONE retry the game before, never a third, never waiting at the break", async () => {
   for (const [label, cadence, cap] of [["7/2", 7, 2], ["6/2", 6, 2], ["5/2", 5, 2], ["10/2", 10, 2]] as const) {
-    const spec = xspec({ cells: [xcell("A", cadence, cap, 50), xcell("B", 20, 1, 50)] });
+    const spec = xspec({ cells: [xcell("A", cadence, cap, 50), xcell("B", 10, 1, 50)] });
     const id = idInCell(spec, "A");
     const run = (mode: Mode) => simulateWith({ installation: id, servedBody: { ...PROD_BASE, experiments: { interstitial: spec } }, sessions: [4 * cadence], mode });
 
@@ -765,7 +772,7 @@ test("G: second opportunity vs secondOpportunityRolloutPercent 0 / 50 / 100 - pa
 });
 
 test("G: session reset + snapshot - a config change mid-session cannot alter cadence/cap; a cold start in the same session keeps the snapshot; a new session re-snapshots", async () => {
-  const spec = xspec({ version: 1, cells: [xcell("A", 5, 2, 50), xcell("B", 20, 1, 50)] });
+  const spec = xspec({ version: 1, cells: [xcell("A", 5, 2, 50), xcell("B", 10, 1, 50)] });
   const id = idInCell(spec, "A");
   const tracked: unknown[] = [];
   const storage = memoryStorage();
@@ -782,8 +789,8 @@ test("G: session reset + snapshot - a config change mid-session cannot alter cad
   };
   await boot();
   assert.deepEqual(getEffectiveInterstitialContext(), { experimentVersion: 1, cellId: "A", cadence: 5, cap: 2 });
-  // (1) a LIVE mid-session refresh to a hostile config (version bump, 20/1 cells, then removed): nothing moves this session
-  served = { ...PROD_BASE, experiments: { interstitial: xspec({ version: 2, cells: [xcell("A", 20, 1, 50), xcell("B", 20, 1, 50)] }) } };
+  // (1) a LIVE mid-session refresh to a hostile config (version bump, 10/1 cells, then removed): nothing moves this session
+  served = { ...PROD_BASE, experiments: { interstitial: xspec({ version: 2, cells: [xcell("A", 10, 1, 50), xcell("B", 10, 1, 50)] }) } };
   await refreshInterstitialConfig();
   assert.equal(getInterstitialExperimentSpec()?.version, 2, "the live spec did change");
   assert.deepEqual(getEffectiveInterstitialContext(), { experimentVersion: 1, cellId: "A", cadence: 5, cap: 2 }, "live change: snapshot pinned");
@@ -792,7 +799,7 @@ test("G: session reset + snapshot - a config change mid-session cannot alter cad
   assert.equal(getInterstitialExperimentSpec(), null);
   assert.deepEqual(getEffectiveInterstitialContext(), { experimentVersion: 1, cellId: "A", cadence: 5, cap: 2 }, "experiments removed live: snapshot pinned");
   // (2) a cold start INSIDE the same session, under the hostile config
-  served = { ...PROD_BASE, experiments: { interstitial: xspec({ version: 2, cells: [xcell("A", 20, 1, 50), xcell("B", 20, 1, 50)] }) } };
+  served = { ...PROD_BASE, experiments: { interstitial: xspec({ version: 2, cells: [xcell("A", 10, 1, 50), xcell("B", 10, 1, 50)] }) } };
   await boot();
   assert.deepEqual(getEffectiveInterstitialContext(), { experimentVersion: 1, cellId: "A", cadence: 5, cap: 2 }, "snapshot persisted per session");
   assert.deepEqual(parseIfxState(ifxStore.raw()).snapshot, { sessionId: "sess00000001", experimentVersion: 1, cellId: "A", cadence: 5, cap: 2 });
@@ -800,10 +807,286 @@ test("G: session reset + snapshot - a config change mid-session cannot alter cad
   session = "sess00000002";
   const ctx = getEffectiveInterstitialContext()!;
   assert.equal(ctx.experimentVersion, 2);
-  assert.equal(ctx.cadence, 20);
+  assert.equal(ctx.cadence, 10);
   assert.equal(ctx.cap, 1);
   assert.equal(parseInterstitialState(storage.raw()).session, null, "the opportunity counter is untouched by snapshots");
   assert.equal(SESSION_IDLE_TIMEOUT_MS_FROM_SOURCE(), 30 * 60 * 1000);
+});
+
+// ===================================================================================================
+// K - the widened envelope (owner decision 4 Oct 2026): cell cadence 3..10, cell cap 1..5, no joint
+//     rule, effective cadence 3..20. Every new value must travel END TO END - parser, snapshot,
+//     controller, client analytics schema, Worker ingest, Analytics Engine row and DO counter - with
+//     no drop anywhere, and every out-of-range value must fail safe.
+// ===================================================================================================
+
+const ingestMod = await import("../../../worker/analyticsIngest.ts");
+const shadowMod = await import("../../../worker/analyticsShadow.ts");
+const doCounters = await import("../../../worker/analyticsDO.ts");
+
+/** Covers every new cadence (3, 4, 6, 8, 9) and every new cap (3, 4, 5), plus a few cross combinations. */
+const NEW_CELLS: [cadence: number, cap: number][] = [
+  [3, 5],
+  [4, 3],
+  [6, 4],
+  [8, 5],
+  [9, 3],
+  [4, 5],
+  [6, 3],
+  [9, 4],
+  [3, 3],
+];
+
+/** Pushes one client event through the Worker exactly as AnalyticsDO / the AE shadow see it. */
+function throughWorker(name: string, params: Record<string, unknown>) {
+  const envelope = { eventName: name, params, platform: "android", appVersion: "0.57.0", appVersionCode: 57, installationId: "a1b2c3d4e5f6", sessionId: "0123456789ab", isInternal: false };
+  const body = JSON.stringify(envelope);
+  const checked = ingestMod.checkedEnvelopes(ingestMod.parseIngest("/event", body));
+  const rows = shadowMod.buildShadowDataPoints("/event", body, "DE", () => 0.5);
+  return { accepted: checked.length === 1 && checked[0].eventName === name, rows };
+}
+
+test("K: cell cadences 3/4/6/8/9 and caps 3/4/5 travel end to end - parser, snapshot, controller, client schema, Worker ingest, AE double9/double10, DO byCadence - with no analytics drop", async () => {
+  for (const [cadence, cap] of NEW_CELLS) {
+    const tag = `${cadence}/${cap}`;
+    const spec = xspec({ cells: [xcell("A", cadence, cap, 50), xcell("B", 7, 2, 50)] });
+    // client parser
+    assert.equal(isValidInterstitialExperimentSpec(spec), true, tag);
+    assert.deepEqual(parseClientInterstitialExperiment({ interstitial: spec })?.cells[0], { id: "A", cadence, cap, weight: 50 }, tag);
+    assert.deepEqual(parseInterstitialV3Body({ ...PROD_BASE, experiments: { interstitial: spec } })?.experiment, spec, tag);
+
+    // the real controller, served on ?v=3, ads always ready, every checkpoint followed by a Classic game_started
+    const sessions = [cadence * cap + 2 * cadence, 7, cadence * (cap + 1)];
+    const sim = await simulateWith({ installation: idInCell(spec, "A"), servedBody: { ...PROD_BASE, experiments: { interstitial: spec } }, sessions, continueGames: true });
+    assert.equal(sim.participation, "cell", tag);
+    assert.deepEqual(sim.opportunities.map((o) => ({ session: o.session, game: o.game })), model(cadence, cap, sessions), `${tag}: schedule`);
+    assert.equal(sim.perSession[0], cap, `${tag}: exactly cap in a long session`);
+    assert.ok(sim.perSession.every((n) => n <= cap), `${tag}: never more than cap`);
+    // the persisted snapshot holds the cell's numbers (what a reload in the same session reads back)
+    assert.deepEqual(
+      parseIfxState(sim.ifxRaw).snapshot,
+      { sessionId: `sess${String(sessions.length).padStart(8, "0")}`, experimentVersion: 1, cellId: "A", cadence, cap },
+      `${tag}: persisted snapshot`,
+    );
+
+    const ifxEvents = sim.tracked.filter((t) => t.name === "interstitial_checkpoint" || t.name === "interstitial_continuation");
+    assert.equal(sim.checkpoints.length, sim.opportunities.length, `${tag}: one checkpoint per opportunity`);
+    assert.ok(ifxEvents.some((t) => t.name === "interstitial_continuation"), `${tag}: continuation emitted`);
+    let counters = {} as ReturnType<typeof doCounters.incrementEvent>;
+    const expectedCount: Record<string, number> = {};
+    for (const t of ifxEvents) {
+      const p = t.params;
+      assert.equal(p.gamesBetweenAds, cadence, `${tag} ${t.name}: gamesBetweenAds`);
+      assert.deepEqual([p.ifxCell, p.ifxVersion, p.ifxCap], ["A", 1, cap], `${tag} ${t.name}: ifx context`);
+      // client schema (the same validator the Worker and the DO use)
+      assert.equal(validateEventParams(t.name, p as never).valid, true, `${tag} ${t.name}: client schema`);
+      // Worker ingest + Analytics Engine row
+      const { accepted, rows } = throughWorker(t.name, p);
+      assert.equal(accepted, true, `${tag} ${t.name}: Worker ingest accepts`);
+      assert.equal(rows.length, 1, `${tag} ${t.name}: exactly one AE row`);
+      assert.equal(rows[0].doubles[8], cadence, `${tag} ${t.name}: double9 = cadence`);
+      assert.equal(rows[0].doubles[9], cap, `${tag} ${t.name}: double10 = ifxCap`);
+      assert.equal(rows[0].doubles[11], 1, `${tag} ${t.name}: double12 = cell A`);
+      // DO counter
+      counters = doCounters.incrementEvent(counters, t.name, p, "android");
+      expectedCount[t.name] = (expectedCount[t.name] ?? 0) + 1;
+    }
+    for (const name of ["interstitial_checkpoint", "interstitial_continuation"] as const) {
+      assert.deepEqual(counters[name]?.byCadence, { [String(cadence)]: expectedCount[name] }, `${tag} ${name}: DO byCadence takes the key, nothing dropped`);
+      assert.equal(counters[name]?.total, expectedCount[name], `${tag} ${name}: DO total`);
+    }
+  }
+});
+
+test("K: a cap-5 participant (3/5) gets exactly 5 opportunities per session - at completions 3, 6, 9, 12, 15 - and never a 6th", async () => {
+  const spec = xspec({ cells: [xcell("A", 3, 5, 50), xcell("B", 7, 2, 50)] });
+  for (const mode of ["ready", "nofill"] as const) {
+    const sim = await simulateWith({ installation: idInCell(spec, "A"), servedBody: { ...PROD_BASE, experiments: { interstitial: spec } }, sessions: [60, 60, 2, 40], mode });
+    const games = (s: number) => sim.opportunities.filter((o) => o.session === s).map((o) => o.game);
+    assert.deepEqual(games(0), [3, 6, 9, 12, 15], `${mode}: session 1`);
+    assert.deepEqual(games(1), [1, 4, 7, 10, 13], `${mode}: session 2 (45 games of cadence progress carried over)`);
+    assert.deepEqual(games(2), [1], `${mode}: a 2-game session`);
+    assert.deepEqual(games(3), [2, 5, 8, 11, 14], `${mode}: session 4`);
+    assert.deepEqual(sim.perSession, [5, 5, 1, 5], `${mode}: never a 6th`);
+    assert.deepEqual(sim.opportunities.map((o) => ({ session: o.session, game: o.game })), model(3, 5, [60, 60, 2, 40]));
+    if (mode === "ready") assert.equal(sim.adShows, 16);
+    else {
+      assert.ok(sim.opportunities.every((o) => o.loadGames.length >= 1 && o.loadGames.length <= 2 && o.outcome === "not_ready"), "nofill: at most two attempts per opportunity");
+      // Two attempts per opportunity, except the first one of sessions 2 and 3 (game 1): no load runs while the
+      // previous session's cap is used, and the retry is never made at the checkpoint itself (the 0.56 rule,
+      // unchanged). Session 4's window spans a boundary: session 3's stale attempt is thrown away and attempt 1
+      // restarts in session 4 - still never more than two attempts in one session.
+      assert.deepEqual(sim.opportunities.map((o) => o.loadGames.length), [2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2]);
+      assert.equal(sim.adLoads, 30, "no load once the cap is used");
+    }
+  }
+});
+
+test("K: load schedule at cadence 3 and 4 with caps 3..5 - attempt 1 at since >= 1 (cadence-2), ONE retry, never a third, the break never waits", async () => {
+  for (const [cadence, cap] of [[3, 5], [3, 3], [4, 4], [4, 5]] as const) {
+    const tag = `${cadence}/${cap}`;
+    const spec = xspec({ cells: [xcell("A", cadence, cap, 50), xcell("B", 7, 2, 50)] });
+    const id = idInCell(spec, "A");
+    const run = (mode: Mode) => simulateWith({ installation: id, servedBody: { ...PROD_BASE, experiments: { interstitial: spec } }, sessions: [cadence * (cap + 1)], mode });
+    const windows = (shift: number[]) => Array.from({ length: cap }, (_, k) => shift.map((d) => k * cadence + cadence - 2 + d));
+
+    const ready = await run("ready");
+    assert.deepEqual(ready.opportunities.map((o) => o.loadGames), windows([0]), `${tag} ready: one load per opportunity, at cadence-2`);
+    assert.ok(ready.opportunities.every((o) => o.outcome === "shown" && o.attempt === 1 && o.returnedPromise), `${tag} ready`);
+    if (cadence === 3) assert.equal(ready.opportunities[0].loadGames[0], 1, "cadence 3: the first preload starts at since = 1");
+
+    const retry = await run("retry");
+    assert.deepEqual(retry.opportunities.map((o) => o.loadGames), windows([0, 1]), `${tag} retry: attempt 1 at cadence-2, retry at cadence-1`);
+    assert.ok(retry.opportunities.every((o) => o.outcome === "shown" && o.attempt === 2), `${tag} retry`);
+
+    const nofill = await run("nofill");
+    assert.deepEqual(nofill.opportunities.map((o) => o.loadGames), windows([0, 1]), `${tag} no fill: two attempts, never a third`);
+    assert.ok(nofill.opportunities.every((o) => o.outcome === "not_ready" && o.attempt === 2 && !o.returnedPromise), `${tag}: not ready -> consumed, no wait`);
+    assert.equal(nofill.perSession[0], cap);
+    assert.equal(nofill.adLoads, 2 * cap, `${tag}: no load after the cap is used`);
+    assert.equal(nofill.adShows, 0);
+
+    const slow = await run("slow");
+    assert.deepEqual(slow.opportunities[0].loadGames, [cadence - 2], `${tag} slow: a load in flight is never joined by a second one`);
+    assert.ok(slow.opportunities.every((o) => o.outcome === "not_ready" && !o.returnedPromise), `${tag} slow: the break never waits`);
+    assert.equal(slow.adShows, 0);
+    assert.ok(slow.perSession[0] <= cap);
+  }
+});
+
+test("K: persist + reload - a cold start inside the session keeps a 3/5 cell (snapshot, schedule, cap) and the continuation marker survives with gamesBetweenAds 3 / ifxCap 5", async () => {
+  const spec = xspec({ cells: [xcell("A", 3, 5, 50), xcell("B", 7, 2, 50)] });
+  const id = idInCell(spec, "A");
+  const tracked: { name: AnalyticsEventName; params: Record<string, unknown> }[] = [];
+  const storage = memoryStorage();
+  const ifxStore = memoryStorage();
+  const session = "sess00000001";
+  let served: Record<string, unknown> = { ...PROD_BASE, experiments: { interstitial: spec } };
+  let ad = fakeAdapter();
+  const boot = async () => {
+    _resetInterstitialAdsForTests(manualEnv());
+    registerInterstitialGates({ consent: () => true, remoteAds: () => true, interstitialEnabled: () => true });
+    ad = fakeAdapter();
+    _resetInterstitialControllerForTests({
+      track: (n, p) => tracked.push({ name: n, params: p as Record<string, unknown> }),
+      storage,
+      ifxStorage: ifxStore,
+      sessionId: () => session,
+      installationId: () => id,
+    });
+    _resetInterstitialConfigForTests(async () => response(200, served));
+    await refreshInterstitialConfig();
+  };
+  let game = 0;
+  const opportunityGames: number[] = [];
+  const play = async (n: number, startNextAfterLast = true) => {
+    for (let i = 0; i < n; i++) {
+      game++;
+      beginInterstitialResultCycle();
+      recordInterstitialGameCompleted("shapeChallenge");
+      ad.resolveLoad();
+      await flush();
+      const before = tracked.filter((t) => t.name === "interstitial_checkpoint").length;
+      const pending = runInterstitialCheckpoint();
+      if (pending !== null) {
+        ad.fire({ type: "showed" });
+        ad.fire({ type: "dismissed" });
+        await pending;
+      }
+      if (tracked.filter((t) => t.name === "interstitial_checkpoint").length > before) opportunityGames.push(game);
+      if (startNextAfterLast || i < n - 1) recordInterstitialGameStarted("shapeChallenge");
+    }
+  };
+  const CTX = { experimentVersion: 1, cellId: "A", cadence: 3, cap: 5 };
+  await boot();
+  assert.deepEqual(getEffectiveInterstitialContext(), CTX);
+  await play(6, false); // opportunities at 3 and 6; the app is killed on the Result screen after game 6
+  assert.deepEqual(opportunityGames, [3, 6]);
+  assert.equal(parseInterstitialState(storage.raw()).marker?.gamesBetweenAds, 3, "the continuation marker persists cadence 3");
+
+  // cold start in the SAME session, under a config where the experiment is gone
+  served = { ...PROD_BASE };
+  await boot();
+  assert.equal(getInterstitialExperimentSpec(), null);
+  assert.deepEqual(getEffectiveInterstitialContext(), CTX, "snapshot reloaded from storage");
+  assert.deepEqual(parseIfxState(ifxStore.raw()).snapshot, { sessionId: session, ...CTX });
+  recordInterstitialGameStarted("shapeChallenge"); // Next Shape after the restart
+  const conts = tracked.filter((t) => t.name === "interstitial_continuation");
+  const cont = conts[conts.length - 1];
+  assert.deepEqual(cont.params, { arm: "treatment", outcome: "shown", gamesBetweenAds: 3, ifxCell: "A", ifxVersion: 1, ifxCap: 5 }, "continuation after the reload");
+  assert.equal(validateEventParams("interstitial_continuation", cont.params as never).valid, true);
+  assert.equal(throughWorker("interstitial_continuation", cont.params).rows[0].doubles[9], 5);
+
+  await play(30);
+  assert.deepEqual(opportunityGames, [3, 6, 9, 12, 15], "the cap of 5 holds across the cold start - no 6th, no reset");
+  const cps = tracked.filter((t) => t.name === "interstitial_checkpoint");
+  assert.ok(cps.every((t) => t.params.gamesBetweenAds === 3 && t.params.ifxCap === 5 && validateEventParams("interstitial_checkpoint", t.params as never).valid));
+});
+
+test("K: out-of-range values fail safe - cell cadence 2 / 11 / 12 / non-integer and cap 0 / 6 / non-integer turn the WHOLE experiment off (baseline 80/7/2 unchanged); analytics rejects effective cadence 2 / 21 and ifxCap / summary cap 0 / 6 end to end", async () => {
+  const id = population(2000).find((x) => assignArm(x, 80) === "treatment" && isInExperimentGate(x, 1, 100))!;
+  const bad: [string, unknown][] = [
+    ["cadence 2", xcell("A", 2, 1, 50)],
+    ["cadence 11", xcell("A", 11, 1, 50)],
+    ["cadence 12 (BASE-legal only)", xcell("A", 12, 1, 50)],
+    ["cadence 6.5", xcell("A", 6.5, 2, 50)],
+    ["cap 0", xcell("A", 5, 0, 50)],
+    ["cap 6", xcell("A", 5, 6, 50)],
+    ["cap 3.5", xcell("A", 5, 3.5, 50)],
+  ];
+  for (const [name, cell] of bad) {
+    // the bad cell sits next to a perfectly valid 3/5 cell: still nothing is applied
+    const spec = { ...xspec(), cells: [cell, xcell("B", 3, 5, 50)] };
+    assert.equal(isValidInterstitialExperimentSpec(spec), false, name);
+    assert.equal(parseClientInterstitialExperiment({ interstitial: spec }), null, name);
+    const parsed = parseInterstitialV3Body({ ...PROD_BASE, experiments: { interstitial: spec } });
+    assert.deepEqual(parsed, { config: PROD_BASE, experiment: null }, `${name}: base intact, experiments OFF`);
+    const sim = await simulateWith({ installation: id, servedBody: { ...PROD_BASE, experiments: { interstitial: spec } }, sessions: [30, 30] });
+    assert.equal(sim.participation, "baseline", name);
+    assert.deepEqual(sim.opportunities.map((o) => ({ session: o.session, game: o.game })), model(7, 2, [30, 30]), `${name}: 7/2 exactly as before`);
+    assert.deepEqual(sim.perSession, [2, 2], name);
+    assert.ok(sim.checkpoints.every((c) => c.gamesBetweenAds === 7 && c.ifxCell === undefined && c.ifxCap === undefined), name);
+  }
+
+  const cp = { arm: "treatment", outcome: "shown", gamesBetweenAds: 7, ifxCell: "A", ifxVersion: 1, ifxCap: 2 };
+  const summary = { arm: "treatment", classicGames: 9, checkpoints: 2, shown: 1, notReady: 1, secondReached: 1, rewardedShown: 0, rewardedDeferred: 0, cadence: 7, cap: 2, ifxCell: "A", ifxVersion: 1 };
+  const rejected: [AnalyticsEventName, Record<string, unknown>][] = [
+    ["interstitial_checkpoint", { ...cp, gamesBetweenAds: 2 }],
+    ["interstitial_checkpoint", { ...cp, gamesBetweenAds: 21 }],
+    ["interstitial_checkpoint", { ...cp, ifxCap: 0 }],
+    ["interstitial_checkpoint", { ...cp, ifxCap: 6 }],
+    ["interstitial_continuation", { ...cp, gamesBetweenAds: 2 }],
+    ["interstitial_continuation", { ...cp, gamesBetweenAds: 21 }],
+    ["interstitial_continuation", { ...cp, ifxCap: 0 }],
+    ["interstitial_continuation", { ...cp, ifxCap: 6 }],
+    ["session_summary", { ...summary, cadence: 2 }],
+    ["session_summary", { ...summary, cadence: 21 }],
+    ["session_summary", { ...summary, cap: 0 }],
+    ["session_summary", { ...summary, cap: 6 }],
+  ];
+  for (const [name, params] of rejected) {
+    const tag = `${name} ${JSON.stringify(params)}`;
+    assert.equal(validateEventParams(name, params as never).valid, false, tag);
+    const { accepted, rows } = throughWorker(name, params);
+    assert.equal(accepted, false, `${tag}: Worker ingest rejects`);
+    assert.equal(rows.length, 0, `${tag}: no AE row`);
+  }
+  // ...while the edges themselves are accepted and mapped (effective 3 and 20, cap 1 and 5).
+  const edges: [AnalyticsEventName, Record<string, unknown>, number, number][] = [
+    ["interstitial_checkpoint", { ...cp, gamesBetweenAds: 3, ifxCap: 5 }, 3, 5],
+    ["interstitial_continuation", { ...cp, gamesBetweenAds: 20, ifxCap: 1 }, 20, 1],
+    ["session_summary", { ...summary, cadence: 3, cap: 5 }, 3, 5],
+    ["session_summary", { ...summary, cadence: 20, cap: 1 }, 20, 1],
+  ];
+  for (const [name, params, d9, d10] of edges) {
+    const { accepted, rows } = throughWorker(name, params);
+    assert.equal(accepted, true, name);
+    assert.deepEqual([rows[0].doubles[8], rows[0].doubles[9]], [d9, d10], `${name}: double9 / double10`);
+  }
+  // DO: hostile cadences open no byCadence key.
+  for (const g of [2, 21]) {
+    assert.equal(doCounters.incrementEvent({}, "interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: g }, "android").interstitial_checkpoint?.byCadence, undefined, `cadence ${g}`);
+  }
 });
 
 function SESSION_IDLE_TIMEOUT_MS_FROM_SOURCE(): number {

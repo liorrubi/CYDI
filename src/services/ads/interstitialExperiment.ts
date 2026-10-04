@@ -106,7 +106,7 @@ export type ContinuationMarker = {
   sessionId: string;
   arm: InterstitialArm;
   outcome: InterstitialOutcome;
-  /** The EFFECTIVE cadence of the session (any integer 5..20). */
+  /** The EFFECTIVE cadence of the session (any integer 3..20). */
   gamesBetweenAds: number;
 };
 

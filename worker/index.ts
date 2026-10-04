@@ -681,7 +681,7 @@ export async function handleInterstitialExperimentsPut(request: Request, env: En
       {
         error:
           "body must be exactly { interstitial: { enabled: boolean, rolloutPercentInTreatment: 0-100, version: 1-1000000, " +
-          "cells: 2-6 x { id: A-F (unique), cadence: integer 5-20, cap: 1-3 with cadence >= 2*cap, weight: 0-100 } } }; " +
+          "cells: 2-6 x { id: A-F (unique), cadence: integer 3-10, cap: integer 1-5, weight: 0-100 } } }; " +
           "weights must sum to exactly 100 with at least two cells above 0",
       },
       400,

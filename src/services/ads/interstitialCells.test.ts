@@ -213,7 +213,7 @@ test("the snapshot is reused for the whole session, including a cold start, what
   const store = memory();
   const first = resolveSessionSnapshot(store, input({ installationId: id }));
   assert.notEqual(first.cellId, null);
-  for (const changed of [null, spec({ enabled: false }), spec({ version: 9, cells: [cell("A", 20, 1, 50), cell("B", 20, 1, 50)] }), spec({ rolloutPercentInTreatment: 0 })]) {
+  for (const changed of [null, spec({ enabled: false }), spec({ version: 9, cells: [cell("A", 10, 1, 50), cell("B", 3, 5, 50)] }), spec({ rolloutPercentInTreatment: 0 })]) {
     assert.deepEqual(resolveSessionSnapshot(store, input({ installationId: id, spec: changed })), first);
   }
 });
@@ -244,18 +244,24 @@ test("a corrupt or foreign stored record degrades to 'nothing stored' field by f
   assert.deepEqual(parseIfxState("{nope"), { assignment: null, snapshot: null });
   assert.deepEqual(parseIfxState("[]"), { assignment: null, snapshot: null });
   const good = { version: 2, cellId: "B" };
-  // 0.57: any integer cadence 5..20 survives a reload (a cell may run 6/2); outside the range the snapshot is dropped.
-  assert.deepEqual(parseIfxState(JSON.stringify({ assignment: good, snapshot: { sessionId: S1, experimentVersion: 2, cellId: "B", cadence: 6, cap: 2 } })), {
-    assignment: good,
-    snapshot: { sessionId: S1, experimentVersion: 2, cellId: "B", cadence: 6, cap: 2 },
-  });
-  for (const cadence of [4, 21, 7.5, "7"]) {
+  // 0.57: any integer EFFECTIVE cadence 3..20 survives a reload (a cell may run 3..10, the base 5/7/10/12/15/20) and
+  // any cap 1..5; outside those ranges the snapshot is dropped.
+  for (const [cadence, cap] of [[6, 2], [3, 5], [4, 3], [8, 4], [9, 1], [20, 2], [12, 1]]) {
+    assert.deepEqual(parseIfxState(JSON.stringify({ assignment: good, snapshot: { sessionId: S1, experimentVersion: 2, cellId: "B", cadence, cap } })), {
+      assignment: good,
+      snapshot: { sessionId: S1, experimentVersion: 2, cellId: "B", cadence, cap },
+    }, `${cadence}/${cap} survives`);
+  }
+  for (const cadence of [2, 21, 0, 7.5, "7"]) {
     assert.deepEqual(parseIfxState(JSON.stringify({ assignment: good, snapshot: { sessionId: S1, experimentVersion: 2, cellId: "B", cadence, cap: 2 } })), { assignment: good, snapshot: null }, `cadence ${String(cadence)}`);
+  }
+  for (const cap of [0, 6, 2.5, "2"]) {
+    assert.deepEqual(parseIfxState(JSON.stringify({ assignment: good, snapshot: { sessionId: S1, experimentVersion: 2, cellId: "B", cadence: 7, cap } })), { assignment: good, snapshot: null }, `cap ${String(cap)}`);
   }
   assert.equal(parseIfxState(JSON.stringify({ assignment: { version: 0, cellId: "B" } })).assignment, null);
   assert.equal(parseIfxState(JSON.stringify({ assignment: { version: 1, cellId: "Z" } })).assignment, null);
   assert.equal(parseIfxState(JSON.stringify({ snapshot: { sessionId: S1, experimentVersion: 2, cellId: null, cadence: 7, cap: 2 } })).snapshot, null);
-  assert.equal(parseIfxState(JSON.stringify({ snapshot: { sessionId: S1, experimentVersion: null, cellId: null, cadence: 7, cap: 4 } })).snapshot, null);
+  assert.equal(parseIfxState(JSON.stringify({ snapshot: { sessionId: S1, experimentVersion: null, cellId: null, cadence: 7, cap: 6 } })).snapshot, null);
   assert.equal(IFX_STATE_KEY, "cydi.interstitial.ifx.v1");
   assert.notEqual(IFX_STATE_KEY, "cydi.interstitial.v1");
 });

@@ -16,8 +16,8 @@ Android 0.57.0 (versionCode 57) and web 0.57.0. Nobody sees more ads: the ad fre
 - **Play Together and 2 Players game lengths:** 3, 5 or 10 rounds (default 5); the 15-round option is gone
   from the new app. Games with older app versions that still use 15 rounds keep working.
 - **Ad-frequency tests, built but switched off:** the app can now be told remotely to try several
-  break frequencies on separate groups of players (between 5 and 20 games between breaks, 1 to 3 breaks
-  per session, within fixed safety limits). It ships inactive: nothing changes until it is turned on,
+  break frequencies on separate groups of players (3 to 10 games between breaks, 1 to 5 breaks per
+  session, within fixed safety limits; these are limits, not settings in use). It ships inactive: nothing changes until it is turned on,
   and it is controlled from the server without a new app version.
 - **A few more bounded usage numbers on existing data (no new identifiers, permissions or SDKs):** a short
   summary of how deep a play session went around ad breaks, whether the game after a break was finished,

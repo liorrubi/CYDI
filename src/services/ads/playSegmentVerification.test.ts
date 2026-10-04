@@ -420,6 +420,53 @@ test("I(i) participant carries ifxCell/ifxVersion and the cell's cadence/cap; ba
   assertAccepted(summaryEnvs()[0]);
 });
 
+test("I(t) widened envelope: cells 3/5, 4/3, 6/4, 8/5, 9/3 - the summary and every checkpoint / continuation leave the REAL queue, pass the Worker ingest, map to AE double9 (cadence) / double10 (cap) and open their DO byCadence key", async () => {
+  for (const [cadence, cap] of [[3, 5], [4, 3], [6, 4], [8, 5], [9, 3]]) {
+    const tag = `${cadence}/${cap}`;
+    const spec = xspec([xcell("A", cadence, cap, 50), xcell("B", 7, 2, 50)]);
+    sent = [];
+    tracked = [];
+    lsMap.clear();
+    installation = idInCell(spec, "A");
+    lsMap.set("cydi.installationId.v1", installation);
+    controller._resetInterstitialControllerForTests({ track: pipelineTrack as never });
+    await setConfig({ experiments: { interstitial: spec } });
+    const rounds = cadence * (cap + 1) + 1; // long enough to hit the cap, then keep playing
+    foreground();
+    for (let r = 0; r < rounds; r++) {
+      completeRound();
+      controller.runInterstitialCheckpoint();
+      controller.recordInterstitialGameStarted("shapeChallenge"); // Next Shape: emits the continuation after a checkpoint
+    }
+    clock += 10_000;
+    backgroundAll();
+
+    // session_summary: the cell's cadence and cap, exactly `cap` checkpoints, accepted and mapped
+    assert.equal(summaryEnvs().length, 1, tag);
+    const p = summaryParams()[0];
+    assert.deepEqual([p.cadence, p.cap, p.ifxCell, p.ifxVersion, p.classicGames, p.checkpoints, p.secondReached], [cadence, cap, "A", 1, rounds, cap, 1], `${tag}: summary`);
+    assertAccepted(summaryEnvs()[0]);
+    const srow = shadow.buildShadowDataPoints("/events", JSON.stringify({ events: [summaryEnvs()[0]] }), "DE", () => 0.5)[0];
+    assert.deepEqual([srow.doubles[8], srow.doubles[9]], [cadence, cap], `${tag}: summary double9 / double10`);
+
+    // checkpoint + continuation, as they actually left the client queue
+    const ifxEnvs = allEvents().filter((e) => e.eventName === "interstitial_checkpoint" || e.eventName === "interstitial_continuation");
+    assert.equal(ifxEnvs.filter((e) => e.eventName === "interstitial_checkpoint").length, cap, `${tag}: exactly cap checkpoints sent`);
+    assert.equal(ifxEnvs.filter((e) => e.eventName === "interstitial_continuation").length, cap, `${tag}: one continuation per checkpoint`);
+    const body = JSON.stringify({ events: ifxEnvs });
+    const checked = ingest.checkedEnvelopes(ingest.parseIngest("/events", body));
+    assert.equal(checked.length, ifxEnvs.length);
+    assert.ok(checked.every((c) => c.eventName !== null), `${tag}: the Worker accepts every one`);
+    const rows = shadow.buildShadowDataPoints("/events", body, "DE", () => 0.5);
+    assert.equal(rows.length, ifxEnvs.length, `${tag}: one AE row each, none dropped`);
+    assert.ok(rows.every((r) => r.doubles[8] === cadence && r.doubles[9] === cap), `${tag}: double9 = cadence, double10 = ifxCap`);
+    let counters = {} as ReturnType<typeof doMod.incrementEvent>;
+    for (const c of checked) counters = doMod.incrementEvent(counters, c.eventName!, c.params!, "android");
+    assert.deepEqual(counters.interstitial_checkpoint?.byCadence, { [String(cadence)]: cap }, `${tag}: DO checkpoint byCadence`);
+    assert.deepEqual(counters.interstitial_continuation?.byCadence, { [String(cadence)]: cap }, `${tag}: DO continuation byCadence`);
+  }
+});
+
 test("I(j) web (non-native) emits nothing, but the queue still flushes", () => {
   segment._resetPlaySegmentSummaryForTests({ track: pipelineTrack as never, isNative: () => false });
   foreground();
@@ -576,7 +623,7 @@ test("I(p) telemetry sampling drops the whole summary with its session, and a ke
 });
 
 test("I(q) maximum envelope (worst participant, all counters 99, long ids/build) stays under MAX_BODY_BYTES", () => {
-  const worst = { arm: "treatment", classicGames: 99, checkpoints: 99, shown: 99, notReady: 0, secondReached: 1, rewardedShown: 99, rewardedDeferred: 99, cadence: 20, cap: 3, ifxCell: "F", ifxVersion: 1_000_000 };
+  const worst = { arm: "treatment", classicGames: 99, checkpoints: 99, shown: 99, notReady: 0, secondReached: 1, rewardedShown: 99, rewardedDeferred: 99, cadence: 20, cap: 5, ifxCell: "F", ifxVersion: 1_000_000 };
   const env = { ...analyticsMod.buildAnalyticsEnvelope("session_summary", worst as never), clientKeepPercent: 10, isInternal: true };
   const len = JSON.stringify(env).length;
   assert.ok(len < doMod.MAX_BODY_BYTES, `${len} < ${doMod.MAX_BODY_BYTES}`);
@@ -594,8 +641,13 @@ test("I(r) a hostile / invalid session_summary is rejected by the validator and 
     { ...ok, ifxCell: "A" },
     { ...ok, extra: 1 },
     { ...ok, installationId: "x" },
-    { ...ok, cadence: 4 },
-    { ...ok, cap: 4 },
+    { ...ok, cadence: 2 },
+    { ...ok, cadence: 21 },
+    { ...ok, cadence: 0 },
+    { ...ok, cadence: 6.5 },
+    { ...ok, cap: 0 },
+    { ...ok, cap: 6 },
+    { ...ok, cap: 2.5 },
   ]) {
     assert.equal(schema.validateEventParams("session_summary", bad).valid, false, JSON.stringify(bad));
     const body = JSON.stringify({ events: [{ eventName: "session_summary", params: bad, platform: "android", installationId: "a".repeat(12), sessionId: "b".repeat(12) }] });

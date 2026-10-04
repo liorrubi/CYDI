@@ -37,10 +37,11 @@ test("interstitial_checkpoint accepts exactly the valid arm/outcome pairs", () =
   assert.equal(ok({ arm: "treatment", outcome: "pending", gamesBetweenAds: 7 }), false, "no public pending outcome");
   assert.equal(ok({ arm: "treatment", outcome: "capped", gamesBetweenAds: 7 }), false, "no capped outcome");
   assert.equal(ok({ arm: "unassigned", outcome: "control", gamesBetweenAds: 7 }), false);
-  // 0.57: the effective cadence is any integer 5..20 (a multi-cell experiment cell may run 6/2).
+  // 0.57: the effective cadence is any integer 3..20 (a multi-cell experiment cell may run 3..10, e.g. 6/2 or 3/5;
+  // the base config keeps 5/7/10/12/15/20).
   assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: 6 }), true);
-  for (let c = 5; c <= 20; c++) assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: c }), true, `cadence ${c}`);
-  for (const bad of [4, 21, 0, 7.5, "7", null]) assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: bad }), false, `cadence ${String(bad)}`);
+  for (let c = 3; c <= 20; c++) assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: c }), true, `cadence ${c}`);
+  for (const bad of [2, 21, 0, 7.5, "7", null]) assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: bad }), false, `cadence ${String(bad)}`);
   assert.equal(ok({ arm: "treatment", outcome: "shown", gamesBetweenAds: 7, opportunityId: "x" }), false, "no opportunity id");
 });
 
@@ -96,12 +97,19 @@ test("checkpoint and continuation get byArmOutcome and byCadence; checkpoint get
   assert.equal(cont.interstitial_continuation?.byCountry, undefined, "continuation is not country-crossed");
 });
 
-test("byCadence is bounded by the 5..20 range: at most 16 keys per event, hostile values open no key", () => {
+test("byCadence is bounded by the 3..20 range: at most 18 keys per event, hostile values open no key", () => {
   let c: Record<string, unknown> = {};
   for (let g = 0; g <= 40; g++) c = checkpoint(c, { arm: "treatment", outcome: "shown", gamesBetweenAds: g }) as Record<string, unknown>;
   const keys = Object.keys((c as { interstitial_checkpoint: { byCadence: Record<string, number> } }).interstitial_checkpoint.byCadence);
-  assert.equal(keys.length, 16, "exactly 5..20");
-  assert.deepEqual(keys.map(Number).sort((a, b) => a - b), Array.from({ length: 16 }, (_, i) => i + 5));
+  assert.equal(keys.length, 18, "exactly 3..20");
+  assert.deepEqual(keys.map(Number).sort((a, b) => a - b), Array.from({ length: 18 }, (_, i) => i + 3));
+  // the same bound on continuation, also with fractional / string / negative hostile values in the stream
+  let k: Record<string, unknown> = {};
+  for (const g of [...Array.from({ length: 41 }, (_, i) => i), -3, 2.5, 3.5, "3", "20", null]) {
+    k = incrementEvent(k, "interstitial_continuation", { arm: "treatment", outcome: "shown", gamesBetweenAds: g }, "android") as Record<string, unknown>;
+  }
+  const contKeys = Object.keys((k as { interstitial_continuation: { byCadence: Record<string, number> } }).interstitial_continuation.byCadence);
+  assert.deepEqual(contKeys.map(Number).sort((a, b) => a - b), Array.from({ length: 18 }, (_, i) => i + 3), "continuation: exactly 3..20");
   const cont = incrementEvent({}, "interstitial_continuation", { arm: "treatment", outcome: "shown", gamesBetweenAds: 6 }, "android");
   assert.deepEqual(cont.interstitial_continuation?.byCadence, { "6": 1 });
 });

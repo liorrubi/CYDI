@@ -274,44 +274,48 @@ export type InterstitialCellId = (typeof INTERSTITIAL_CELL_IDS)[number];
 
 /**
  * SAFETY ENVELOPE - hard client bounds, enforced here for the client AND the Worker, so a bad
- * remote config can never cause more ad pressure than the reviewed limits. Nothing may be
- * more aggressive than cadence 5 / cap 2 (a 7/3 cell is the most opportunities per session
- * the envelope allows, and only because its cadence is longer).
- *  - cadence: any INTEGER 5..20 (isEffectiveInterstitialCadence). Analytics accepts the same range
- *    (`gamesBetweenAds` telemetry and the Worker's per-cadence counter, at most 16 keys), so a cell such
- *    as 6/2 or 5/2 needs no APK. Nothing below 5 games between opportunities exists. The BASE config's
- *    cadence stays the closed legacy set INTERSTITIAL_CADENCES (v1/v2 compatibility).
- *  - cap: 1..3 opportunities per analytics session.
- *  - joint rule cadence >= 2 * cap: the cap must never be reachable faster than every second
- *    cadence window (5/2 and 7/3 ok; 5/3 and 5/4 not), so a high cap cannot be combined with a
- *    short cadence into a burst of ads.
+ * remote config can never go beyond these limits (owner decision, 4 Oct 2026, before the 0.57.0 deploy).
+ * The envelope is a CAPABILITY, not an approval: production stays rollout 80 / cadence 7 / cap 2, and
+ * any aggressive cell (cap > 2, or a very low cadence such as 3) needs a separate explicit owner
+ * decision before it is ever activated.
+ *  - cell cadence: any INTEGER 3..10 (IFX_MIN_CADENCE..IFX_MAX_CADENCE), independent of the cap.
+ *  - cell cap: any INTEGER 1..5 opportunities per analytics session, independent of the cadence
+ *    (no joint rule: 3/5, 5/3, 7/4 are all inside the envelope).
+ *  - analytics and the persisted snapshot / continuation marker accept the EFFECTIVE cadence
+ *    (isEffectiveInterstitialCadence): any integer 3..20 = the cell range plus the BASE config's closed
+ *    legacy set INTERSTITIAL_CADENCES (5/7/10/12/15/20, still the v1/v2 validation), so no live value is
+ *    ever dropped; the Worker's per-cadence counter therefore has at most 18 keys.
  *  - 2..6 cells with unique ids from A..F; integer weights summing to EXACTLY 100, at least two
  *    cells with weight > 0 (a 0-weight cell is allowed: nobody new lands in it).
  *  - version 1..1_000_000 (bumping it deliberately re-assigns everyone); rolloutPercentInTreatment 0..100.
  * Any violation anywhere in the interstitial subtree turns the WHOLE experiment off - never a
  * partially applied cell set.
  */
-export const IFX_MIN_CADENCE = 5;
-export const IFX_MAX_CADENCE = 20;
+export const IFX_MIN_CADENCE = 3;
+export const IFX_MAX_CADENCE = 10;
 export const IFX_MIN_CAP = 1;
-export const IFX_MAX_CAP = 3;
+export const IFX_MAX_CAP = 5;
+/** Widest effective cadence: the cell range above plus the base config's legacy set (max 20). */
+export const EFFECTIVE_MIN_CADENCE = IFX_MIN_CADENCE;
+export const EFFECTIVE_MAX_CADENCE = 20;
 export const IFX_MIN_CELLS = 2;
 export const IFX_MAX_CELLS = 6;
 export const IFX_MAX_VERSION = 1_000_000;
 
 /**
- * The EFFECTIVE cadence of a session (a cell's, or the base config's): any integer IFX_MIN_CADENCE..IFX_MAX_CADENCE.
- * Wider than isInterstitialCadence (the closed legacy set the BASE config is still validated against), and the
- * one check analytics (client + Worker) and the persisted snapshot / continuation marker use, so a cell cadence
- * of 6 survives a reload and is accepted by telemetry. Old values 5/7/10/12/15/20 stay valid.
+ * The EFFECTIVE cadence of a session (a cell's 3..10, or the base config's 5/7/10/12/15/20): any integer
+ * EFFECTIVE_MIN_CADENCE..EFFECTIVE_MAX_CADENCE (3..20). Wider than isInterstitialCadence (the closed legacy set the
+ * BASE config is still validated against), and the one check analytics (client + Worker) and the persisted
+ * snapshot / continuation marker use, so a cell cadence of 3, 4, 6, 8 or 9 survives a reload and is accepted by
+ * telemetry. Old values 5/7/10/12/15/20 stay valid.
  */
 export function isEffectiveInterstitialCadence(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= IFX_MIN_CADENCE && value <= IFX_MAX_CADENCE;
+  return typeof value === "number" && Number.isInteger(value) && value >= EFFECTIVE_MIN_CADENCE && value <= EFFECTIVE_MAX_CADENCE;
 }
 
 export type InterstitialExperimentCell = {
   id: InterstitialCellId;
-  /** Any integer 5..20 (not limited to INTERSTITIAL_CADENCES). */
+  /** Any integer 3..10 (IFX_MIN_CADENCE..IFX_MAX_CADENCE; not limited to INTERSTITIAL_CADENCES). */
   cadence: number;
   /** Opportunities per analytics session for this cell. */
   cap: number;
@@ -341,9 +345,8 @@ function isValidExperimentCell(value: unknown): value is InterstitialExperimentC
   return (
     typeof value.id === "string" &&
     (INTERSTITIAL_CELL_IDS as readonly string[]).includes(value.id) &&
-    isEffectiveInterstitialCadence(value.cadence) &&
+    isIntInRange(value.cadence, IFX_MIN_CADENCE, IFX_MAX_CADENCE) &&
     isIntInRange(value.cap, IFX_MIN_CAP, IFX_MAX_CAP) &&
-    value.cadence >= 2 * value.cap &&
     isIntInRange(value.weight, 0, 100)
   );
 }

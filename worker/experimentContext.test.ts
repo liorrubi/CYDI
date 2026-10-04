@@ -1,5 +1,5 @@
 // 0.57 telemetry: the multi-cell experiment context (ifxCell / ifxVersion / ifxCap), the next-game
-// context on game_completed (nextOutcome + ifxCell), the effective-cadence range (any integer 5..20) and the
+// context on game_completed (nextOutcome + ifxCell), the effective-cadence range (any integer 3..20) and the
 // play-segment summary event. What is pinned here: every OLD payload (0.55 / 0.56 clients) stays valid, the new
 // optional forms validate only as complete and bounded, nothing identifying can ride along, and each new
 // field lands in its documented Analytics Engine slot without moving any other slot.
@@ -24,25 +24,29 @@ const X3 = { ...PLACEMENT, ...ECON, multiplier: 3, arm: "x3", offerNumber: 2, se
 const env = (eventName: string, params: unknown) => ({ eventName, params, platform: "android", appVersion: "0.57.0", appVersionCode: 57, installationId: "inst-SECRET-1234567890", sessionId: "sess-SECRET-1234567890", isInternal: false });
 const point = (name: string, params: unknown) => buildShadowDataPoints("/event", JSON.stringify(env(name, params)), "de", () => 0.5)[0];
 
-// --- Task 0: the effective cadence is any integer 5..20 -------------------------------------------------
+// --- Task 0: the effective cadence is any integer 3..20 (cells 3..10 + the base set 5/7/10/12/15/20) --------
 
-test("analytics accepts gamesBetweenAds 5..20 on checkpoint and continuation; old values stay valid", () => {
-  for (let c = 5; c <= 20; c++) {
+test("analytics accepts gamesBetweenAds 3..20 on checkpoint and continuation; old values stay valid", () => {
+  for (let c = 3; c <= 20; c++) {
     assert.equal(valid("interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: c }), true, `checkpoint ${c}`);
     assert.equal(valid("interstitial_continuation", { arm: "control", outcome: "control", gamesBetweenAds: c }), true, `continuation ${c}`);
   }
   for (const c of [5, 7, 10, 12, 15, 20]) assert.equal(valid("interstitial_checkpoint", { arm: "control", outcome: "control", gamesBetweenAds: c }), true);
-  for (const bad of [4, 21, 0, -7, 6.5, "6", null, undefined]) {
+  for (const bad of [2, 21, 0, -7, 6.5, "6", null, undefined]) {
     assert.equal(valid("interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: bad }), false, `checkpoint ${String(bad)}`);
     assert.equal(valid("interstitial_continuation", { arm: "treatment", outcome: "shown", gamesBetweenAds: bad }), false, `continuation ${String(bad)}`);
   }
 });
 
-test("the DO per-cadence counter takes 6 and is bounded at the 16 keys 5..20", () => {
+test("the DO per-cadence counter takes 6 and 3 and is bounded at the 18 keys 3..20", () => {
   const c = incrementEvent({}, "interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: 6 }, "android");
   assert.deepEqual(c.interstitial_checkpoint?.byCadence, { "6": 1 });
-  const hostile = incrementEvent({}, "interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: 21 }, "android");
-  assert.equal(hostile.interstitial_checkpoint?.byCadence, undefined);
+  const three = incrementEvent({}, "interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: 3 }, "android");
+  assert.deepEqual(three.interstitial_checkpoint?.byCadence, { "3": 1 });
+  for (const bad of [21, 2]) {
+    const hostile = incrementEvent({}, "interstitial_checkpoint", { arm: "treatment", outcome: "shown", gamesBetweenAds: bad }, "android");
+    assert.equal(hostile.interstitial_checkpoint?.byCadence, undefined, `cadence ${bad}`);
+  }
 });
 
 // --- Task 1: ifx context on the interstitial events ------------------------------------------------------
@@ -53,10 +57,11 @@ test("interstitial_checkpoint / _continuation: old key sets valid; ifx* valid on
     assert.equal(valid(name, base), true, `${name} old form`);
     assert.equal(valid(name, { ...base, ...IFX }), true, `${name} with ifx`);
     for (const cell of INTERSTITIAL_CELL_IDS) assert.equal(valid(name, { ...base, ...IFX, ifxCell: cell }), true, `${name} cell ${cell}`);
+    for (const ifxCap of [1, 2, 3, 4, 5]) assert.equal(valid(name, { ...base, ...IFX, ifxCap }), true, `${name} ifxCap ${ifxCap}`);
     for (const partial of [{ ifxCell: "B" }, { ifxCell: "B", ifxVersion: 3 }, { ifxVersion: 3, ifxCap: 2 }, { ifxCap: 2 }]) {
       assert.equal(valid(name, { ...base, ...partial }), false, `${name} partial ${JSON.stringify(partial)}`);
     }
-    for (const bad of [{ ifxCell: "G" }, { ifxCell: "b" }, { ifxCell: 1 }, { ifxVersion: 0 }, { ifxVersion: 1_000_001 }, { ifxVersion: 1.5 }, { ifxCap: 0 }, { ifxCap: 4 }, { ifxCap: "2" }]) {
+    for (const bad of [{ ifxCell: "G" }, { ifxCell: "b" }, { ifxCell: 1 }, { ifxVersion: 0 }, { ifxVersion: 1_000_001 }, { ifxVersion: 1.5 }, { ifxCap: 0 }, { ifxCap: 6 }, { ifxCap: 2.5 }, { ifxCap: "2" }]) {
       assert.equal(valid(name, { ...base, ...IFX, ...bad }), false, `${name} ${JSON.stringify(bad)}`);
     }
     assert.equal(valid(name, { ...base, ...IFX, installationId: "x" }), false, `${name}: no extra keys`);
@@ -111,6 +116,7 @@ test("session_summary: exact keys, bounded, consistent", () => {
   assert.equal(valid("session_summary", SUMMARY), true);
   assert.equal(valid("session_summary", { ...SUMMARY, ifxCell: "C", ifxVersion: 4 }), true);
   assert.equal(valid("session_summary", { ...SUMMARY, arm: "control", shown: 0, notReady: 0 }), true);
+  for (const [cadence, cap] of [[3, 5], [4, 3], [8, 4], [9, 1], [20, 2], [12, 1]]) assert.equal(valid("session_summary", { ...SUMMARY, cadence, cap }), true, `${cadence}/${cap}`);
   assert.equal(valid("session_summary", { ...SUMMARY, classicGames: 99, checkpoints: 99, shown: 0, notReady: 0, rewardedShown: 99, rewardedDeferred: 99 }), true);
   for (const bad of [
     { classicGames: 0 },
@@ -124,10 +130,12 @@ test("session_summary: exact keys, bounded, consistent", () => {
     { secondReached: true },
     { rewardedShown: 100 },
     { rewardedDeferred: 1.5 },
-    { cadence: 4 },
+    { cadence: 2 },
     { cadence: 21 },
+    { cadence: 6.5 },
     { cap: 0 },
-    { cap: 4 },
+    { cap: 6 },
+    { cap: 2.5 },
     { ifxCell: "C" }, // cell without version
     { ifxVersion: 4 },
     { ifxCell: "C", ifxVersion: 0 },

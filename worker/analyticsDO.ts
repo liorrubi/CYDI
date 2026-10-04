@@ -150,9 +150,9 @@ const INSTALL_AGE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["first_open"]);
 // runs, so none of these maps can grow past its domain:
 //   byArmOutcome    "treatment|shown" - arm x outcome, at most 2 x 5 = 10 keys. Crossed
 //                   because "suppressed" occurs in both arms and must stay attributable.
-//   byCadence       "7" - the EFFECTIVE gamesBetweenAds the opportunity ran under: any integer 5..20
-//                   (0.57: a multi-cell experiment cell may use any of them), so at most 16 keys per
-//                   event (two events -> 32). This is the same existing counter map inside the same
+//   byCadence       "7" - the EFFECTIVE gamesBetweenAds the opportunity ran under: any integer 3..20
+//                   (0.57: a multi-cell experiment cell may use 3..10, the base config 5/7/10/12/15/20), so at most 18 keys per
+//                   event (two events -> 36). This is the same existing counter map inside the same
 //                   per-day bucket value (`day:<date>`): no new storage key, no new write, no new request.
 //                   Worst case adds 10 keys x ~10 bytes x 2 events = ~200 bytes to that value (a few keys in
 //                   practice: only the cadences actually configured ever appear).

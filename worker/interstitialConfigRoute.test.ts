@@ -345,13 +345,16 @@ test("safety-envelope matrix: every violation is rejected on PUT (nothing writte
   const six = ["A", "B", "C", "D", "E", "F"].map((id, i) => xcell(id, 7, 1, i < 4 ? 17 : 16));
   const withCells = (cells: unknown[]) => ({ interstitial: { ...EXPERIMENT, cells } });
   const matrix: Record<string, unknown> = {
-    "cadence 4": withCells([xcell("A", 4, 1, 50), xcell("B", 7, 1, 50)]),
+    "cadence 2": withCells([xcell("A", 2, 1, 50), xcell("B", 7, 1, 50)]),
+    "cadence 11": withCells([xcell("A", 11, 1, 50), xcell("B", 7, 1, 50)]),
+    "cadence 12 (a legal BASE cadence, not a cell one)": withCells([xcell("A", 12, 1, 50), xcell("B", 7, 1, 50)]),
+    "cadence 20": withCells([xcell("A", 20, 1, 50), xcell("B", 7, 1, 50)]),
     "cadence 21": withCells([xcell("A", 21, 1, 50), xcell("B", 7, 1, 50)]),
     "cadence 7.5 (not an integer)": withCells([xcell("A", 7.5, 1, 50), xcell("B", 7, 1, 50)]),
-    "cadence 6 with cap 4 (joint rule)": withCells([xcell("A", 6, 4, 50), xcell("B", 7, 1, 50)]),
     "cap 0": withCells([xcell("A", 7, 0, 50), xcell("B", 7, 1, 50)]),
-    "cap 4": withCells([xcell("A", 20, 4, 50), xcell("B", 7, 1, 50)]),
-    "5/3": withCells([xcell("A", 5, 3, 50), xcell("B", 7, 1, 50)]),
+    "cap 6": withCells([xcell("A", 7, 6, 50), xcell("B", 7, 1, 50)]),
+    "cap 2.5 (not an integer)": withCells([xcell("A", 7, 2.5, 50), xcell("B", 7, 1, 50)]),
+    "3/6 (cap above 5 even at the shortest cadence)": withCells([xcell("A", 3, 6, 50), xcell("B", 7, 1, 50)]),
     "weights 99": withCells([xcell("A", 7, 1, 50), xcell("B", 7, 1, 49)]),
     "weights 101": withCells([xcell("A", 7, 1, 51), xcell("B", 7, 1, 50)]),
     "one cell": withCells([xcell("A", 7, 1, 100)]),
@@ -381,8 +384,11 @@ test("safety-envelope matrix: every violation is rejected on PUT (nothing writte
     { interstitial: { ...EXPERIMENT, enabled: false, rolloutPercentInTreatment: 0 } },
     { interstitial: withCells(six).interstitial },
     { interstitial: { ...EXPERIMENT, cells: [xcell("A", 5, 2, 60), xcell("B", 7, 3, 40)] } },
-    // 0.57: any integer cadence 5..20 - the 7/2 vs 6/2 vs 5/2 grid, no APK needed.
+    // 0.57: any integer cell cadence 3..10 - the 7/2 vs 6/2 vs 5/2 grid, no APK needed.
     { interstitial: { ...EXPERIMENT, cells: [xcell("A", 7, 2, 40), xcell("B", 6, 2, 30), xcell("C", 5, 2, 30)] } },
+    // no joint rule: cadence and cap are independent (owner decision, 4 Oct 2026).
+    { interstitial: { ...EXPERIMENT, cells: [xcell("A", 5, 3, 25), xcell("B", 5, 4, 25), xcell("C", 7, 4, 25), xcell("D", 3, 5, 25)] } },
+    { interstitial: { ...EXPERIMENT, cells: [xcell("A", 3, 2, 50), xcell("B", 10, 5, 50)] } },
   ]) {
     assert.equal(isValidStoredInterstitialExperiments(ok), true, JSON.stringify(ok));
   }

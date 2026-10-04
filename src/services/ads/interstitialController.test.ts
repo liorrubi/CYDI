@@ -901,7 +901,7 @@ test("the snapshot holds for the session: a remote change (disable, new version,
   assert.deepEqual(ctx, { experimentVersion: 1, cellId: "A", cadence: 5, cap: 2 });
 
   // mid-session refresh: the experiment is switched off and its version bumped
-  await setConfig({ experiments: { interstitial: xspec({ enabled: false, version: 2, cells: [xcell("A", 20, 1, 50), xcell("B", 20, 1, 50)] }) } }, false);
+  await setConfig({ experiments: { interstitial: xspec({ enabled: false, version: 2, cells: [xcell("A", 10, 1, 50), xcell("B", 10, 1, 50)] }) } }, false);
   assert.deepEqual(getEffectiveInterstitialContext(), ctx, "a live config change does not move a running session");
   // cold start in the SAME session under the changed config
   coldStart();

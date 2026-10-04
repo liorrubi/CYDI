@@ -247,7 +247,11 @@ test("v3: an invalid or missing experiments block means experiments OFF and neve
     { interstitial: null },
     { interstitial: { ...SPEC, version: 0 } },
     { interstitial: { ...SPEC, cells: [SPEC.cells[0]] } },
-    { interstitial: { ...SPEC, cells: [{ ...SPEC.cells[0], cadence: 5, cap: 3 }, SPEC.cells[1]] } },
+    { interstitial: { ...SPEC, cells: [{ ...SPEC.cells[0], cadence: 2, cap: 1 }, SPEC.cells[1]] } },
+    { interstitial: { ...SPEC, cells: [{ ...SPEC.cells[0], cadence: 11, cap: 1 }, SPEC.cells[1]] } },
+    { interstitial: { ...SPEC, cells: [{ ...SPEC.cells[0], cadence: 12, cap: 1 }, SPEC.cells[1]] } },
+    { interstitial: { ...SPEC, cells: [{ ...SPEC.cells[0], cadence: 5, cap: 6 }, SPEC.cells[1]] } },
+    { interstitial: { ...SPEC, cells: [{ ...SPEC.cells[0], cadence: 5, cap: 0 }, SPEC.cells[1]] } },
     { interstitial: { ...SPEC, extra: 1 } },
   ];
   for (const experiments of bad) {

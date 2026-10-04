@@ -101,7 +101,7 @@
 //   --- 0.57 experiment context + segment summary (no new columns, schema stays 3). The three ifx*
 //   fields share ONE slot per field on every row family that carries them, chosen among doubles that
 //   none of those families uses for another meaning (always filter on blob1 first):
-//   double10 ifxCap           interstitial_checkpoint / _continuation rows: the participant's session cap (1..3; 0 = not a participant)
+//   double10 ifxCap           interstitial_checkpoint / _continuation rows: the participant's session cap (1..5; 0 = not a participant)
 //   double11 ifxVersion       the same rows + session_summary: the experiment version (1..1000000; 0 = not a participant)
 //   double12 ifxCell          1-based position in INTERSTITIAL_CELL_IDS (A=1 .. F=6; 0 = not a participant) on
 //                             interstitial_checkpoint / _continuation, the reward_* offer funnel (Classic result
@@ -114,8 +114,8 @@
 //   double2  classicGames     1..99                          double3  checkpoints   0..99
 //   double4  shown            0..99                          double5  notReady      0..99
 //   double6  secondReached    0 | 1                          double7  rewardedShown 0..99
-//   double8  rewardedDeferred 0..99                          double9  cadence       5..20 (effective; gamesBetweenAds' slot)
-//   double10 cap              1..3 (effective; ifxCap's slot) double11 ifxVersion / double12 ifxCell as above
+//   double8  rewardedDeferred 0..99                          double9  cadence       3..20 (effective; gamesBetweenAds' slot)
+//   double10 cap              1..5 (effective; ifxCap's slot) double11 ifxVersion / double12 ifxCell as above
 //   double13 batchSize, double14..19 = 0 (no economy context), double20 = 1 - the generic slots 1 / 13 / 20 are unchanged.
 // coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
 // balance BUCKET is ever written - never a balance.

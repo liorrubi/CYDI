@@ -50,7 +50,7 @@ export type SessionSnapshot = {
   sessionId: string;
   experimentVersion: number | null;
   cellId: InterstitialCellId | null;
-  /** Any integer 5..20 (a cell's cadence need not be in the legacy INTERSTITIAL_CADENCES set). */
+  /** Effective cadence, any integer 3..20 (a cell's 3..10 need not be in the legacy INTERSTITIAL_CADENCES set). */
   cadence: number;
   cap: number;
 };

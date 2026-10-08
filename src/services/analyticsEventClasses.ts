@@ -52,6 +52,7 @@ export const CLIENT_EXACT_EVENTS: ReadonlySet<string> = new Set([
   "interstitial_dismissed",
   "result_shared",
   "mp_room_created",
+  "ink_trial",
 ]);
 
 /** Reliability/UX diagnostics - statistically useful, individually disposable. */

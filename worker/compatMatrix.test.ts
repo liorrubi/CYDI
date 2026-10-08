@@ -533,7 +533,8 @@ test("L(7): config endpoints per client generation - legacy (0.55), ?v=2 (0.56) 
   assert.deepEqual(v3.body.experiments, EXPERIMENTS);
   const { experiments: _omit, ...v3Base } = v3.body;
   assert.deepEqual(v3Base, v2.body, "v3 = v2 body + experiments, nothing else changes");
-  assert.equal(v3.reads, 2, "the only added Worker cost: one extra KV read per v3 GET");
+  // 0.57.1: v3 also reads the independent Ink Trial key (config:ads:ink) - absent here, so no `ink` key.
+  assert.equal(v3.reads, 3, "the only added Worker cost: extra KV reads per v3 GET (experiments + ink), never an extra request");
   assert.equal(v3.cache, "private, max-age=60");
   const parsed = interstitial.parseInterstitialV3Body(v3.body);
   assert.ok(parsed && parsed.experiment !== null);

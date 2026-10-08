@@ -44,6 +44,8 @@ export type RewardedExperimentOffer = {
   interstitialArm: RewardInterstitialArm;
   /** 0.57: the multi-cell interstitial experiment cell, present only for a participant. */
   ifxCell?: InterstitialCellId;
+  /** 0.57.1: what the Classic coin/ink rotation scheduled for this opportunity ("ink" here = the Ink -> Coin fallback). Absent while the rotation is off. */
+  rotationSlot?: "coin" | "ink";
 };
 
 type DoubleCoinsOfferProps = {
@@ -248,6 +250,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       bonusCoins: adFinalAmount - amount,
       interstitialArm: experiment.interstitialArm,
       ...(experiment.ifxCell !== undefined ? { ifxCell: experiment.ifxCell } : {}),
+      ...(experiment.rotationSlot !== undefined ? { rotationSlot: experiment.rotationSlot } : {}),
     };
   };
   // Every funnel event of this offer; a skip additionally carries skipStage (see reportSkip).

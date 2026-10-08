@@ -8,6 +8,11 @@ type PenColorMenuProps = {
   selected: PenColorId;
   onSelect: (id: PenColorId) => void;
   onLockedColorClick: (id: PenColorId) => void;
+  /**
+   * 0.57.1: an active Ink Trial that applies on this screen. Its ink is selectable here (with its plays left
+   * instead of a lock) - a temporary overlay only; the Shop's ownership is untouched.
+   */
+  trial?: { ink: PenColorId; usesLeft: number } | null;
 };
 
 /** Solid paint-drop glyph — sits on top of the trigger's ink-tinted swatch so the button unambiguously reads as "this changes the ink color", distinct from PenSkinMenu's pen-shaped trigger. Kept white with a soft dark outline so it stays visible against every ink color, including the light-colored ones. */
@@ -25,7 +30,7 @@ function ColorDropIcon() {
 }
 
 /** Button that opens a menu of every pen ink color, including locked ones - tapping a locked color jumps straight to its shop product. Its trigger is tinted with the actual ink color plus a paint-drop icon, so it's clearly the "change ink color" control (as opposed to PenSkinMenu's "change pen style" control next to it). */
-export default function PenColorMenu({ selected, onSelect, onLockedColorClick }: PenColorMenuProps) {
+export default function PenColorMenu({ selected, onSelect, onLockedColorClick, trial = null }: PenColorMenuProps) {
   const [open, setOpen] = useState(false);
   const selectedOption = PEN_COLORS.find((c) => c.id === selected) ?? PEN_COLORS[0];
   // Not a full trap: the dropdown is a lightweight disclosure of plain buttons, so Tab
@@ -52,7 +57,9 @@ export default function PenColorMenu({ selected, onSelect, onLockedColorClick }:
       {open && (
         <div ref={dropdownRef} className="pen-color-dropdown">
           {PEN_COLORS.map((color) => {
-            const unlocked = isColorUnlocked(color.id);
+            const owned = isColorUnlocked(color.id);
+            const onTrial = !owned && trial !== null && trial.ink === color.id;
+            const unlocked = owned || onTrial;
             const classes = ["pen-color-option"];
             if (color.id === selected) classes.push("pen-color-option-selected");
             if (!unlocked) classes.push("pen-color-option-locked");
@@ -82,6 +89,11 @@ export default function PenColorMenu({ selected, onSelect, onLockedColorClick }:
                   style={color.hex ? { background: color.hex } : undefined}
                 />
                 <span className="pen-color-option-name">{color.name}</span>
+                {onTrial && trial && (
+                  <span className="pen-color-option-trial">
+                    {trial.usesLeft} {trial.usesLeft === 1 ? "play" : "plays"}
+                  </span>
+                )}
                 {!unlocked && (
                   <span className="pen-color-option-lock" aria-hidden="true">
                     🔒

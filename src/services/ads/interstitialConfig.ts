@@ -65,6 +65,27 @@ let qaForcedArm: InterstitialArm | null = null;
 type Fetcher = (path: string, init: { timeoutMs: number }) => Promise<ApiResponse>;
 let fetcher: Fetcher = apiFetch;
 
+/**
+ * 0.57.1: another independent config may ride this same response as its own top-level key, so it costs no extra
+ * request. This module never reads such a key - it only hands every ANSWER on: the parsed body of a 200 (whatever
+ * its shape), or null for a 404 / an unreadable body. A network error, timeout or 5xx is not an answer and is not
+ * passed on (the observer keeps its last answer, exactly like this module). The observer cannot affect anything here.
+ */
+type ConfigBodyObserver = (body: unknown) => void;
+let bodyObserver: ConfigBodyObserver | null = null;
+
+export function observeConfigBody(observer: ConfigBodyObserver | null): void {
+  bodyObserver = observer;
+}
+
+function notifyBody(body: unknown): void {
+  try {
+    bodyObserver?.(body);
+  } catch {
+    // An observer's bug never reaches the interstitial config.
+  }
+}
+
 export function getFrozenInterstitialConfig(): FrozenInterstitialConfig | null {
   return frozen;
 }
@@ -158,6 +179,7 @@ export async function refreshInterstitialConfig(now: number = Date.now()): Promi
     const response = await fetcher(INTERSTITIAL_CONFIG_REQUEST_PATH, { timeoutMs: FETCH_TIMEOUT_MS });
     if (response.status === 404) {
       applyAnswer(null);
+      notifyBody(null);
       return true;
     }
     if (!response.ok) return false;
@@ -171,6 +193,7 @@ export async function refreshInterstitialConfig(now: number = Date.now()): Promi
     // can never invalidate it (invalid or absent = experiments OFF, base still applies).
     const parsed = parseInterstitialV3Body(body);
     applyAnswer(parsed?.config ?? null, parsed?.experiment ?? null);
+    notifyBody(body);
     return true;
   } catch {
     return false;
@@ -191,4 +214,5 @@ export function _resetInterstitialConfigForTests(testFetcher?: Fetcher): void {
   lastRefreshAt = -Infinity;
   qaForcedArm = null;
   fetcher = testFetcher ?? apiFetch;
+  bodyObserver = null;
 }

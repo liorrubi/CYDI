@@ -8,6 +8,7 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import PlayTogetherRoom from "../components/multiplayer/PlayTogetherRoom";
 import { SocialPointsBadge } from "../components/SocialPointsBadge";
+import PostSessionInkOffer from "../components/PostSessionInkOffer";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { registerNavigationGuard } from "../app/navigationGuard";
 import { clearActiveRoom, rememberActiveRoom } from "../multiplayer/resumeStore";
@@ -360,6 +361,11 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode, openJo
       />
 
       {!onWeb && <SocialPointsBadge />}
+
+      {/* Rewarded Ink Trial (0.57.1): the SAFE post-session surface - the player has left the room, so nobody
+          waits and no rematch is in play. Renders only when a completed session left an offer pending and an ink
+          is eligible; never opens an ad by itself. */}
+      {view === "menu" && <PostSessionInkOffer surface="playTogether" />}
 
       {/* The web gets the 3a composition; Android keeps the existing entry
           below, unchanged. Both drive the same two actions. */}

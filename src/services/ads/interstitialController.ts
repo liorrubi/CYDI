@@ -89,6 +89,8 @@ let dueThisCycle = false;
 let dueArmThisCycle: InterstitialArm | null = null;
 /** A rewarded OFFER was rendered on this result: nothing may present an interstitial from it. */
 let rewardedRenderedThisCycle = false;
+/** A non-ad card holds this Result screen (deferInterstitialThisCycle): its exit runs no checkpoint at all. */
+let deferredThisCycle = false;
 /**
  * The current (not yet consumed) opportunity has already reserved one Result screen and
  * deferred the rewarded offer there. It may do so only once: if the player left that
@@ -223,6 +225,7 @@ export function getInterstitialCellForAnalytics(): InterstitialCellId | null {
 export function beginInterstitialResultCycle(): void {
   rewardedShownThisCycle = false;
   rewardedRenderedThisCycle = false;
+  deferredThisCycle = false;
   dueThisCycle = false;
   dueArmThisCycle = null;
 }
@@ -319,6 +322,17 @@ export function markRewardedOfferRenderedThisCycle(): void {
   rewardedRenderedThisCycle = true;
 }
 
+/**
+ * 0.57.1: a NON-AD card (a purchase CTA) is on this Result screen, which claimResultAdLane() gave to it ("rewarded"
+ * - the interstitial did not claim it). Leaving this screen runs no checkpoint: the opportunity is NOT consumed, NOT
+ * recorded and NOT suppressed - it simply stays due (eligible games keep counting, `since >= cadence`) and runs at the
+ * next Result's exit. So an ad never follows the card, and the experiment loses no opportunity. Cadence, cap, arms
+ * and cells are untouched.
+ */
+export function deferInterstitialThisCycle(): void {
+  deferredThisCycle = true;
+}
+
 /** What the readiness machinery knew when the checkpoint ran (captured before anything is presented). */
 type ReadinessAtCheckpoint = ReturnType<typeof getInterstitialReadiness> & { attempts: number };
 
@@ -354,6 +368,8 @@ function checkpointParams(
  */
 export function runInterstitialCheckpoint(): Promise<boolean> | null {
   if (!dueThisCycle || checkpointInFlight) return null;
+  // Deferred (deferInterstitialThisCycle): left due for the next Result, nothing consumed or recorded.
+  if (deferredThisCycle) return null;
   dueThisCycle = false;
   const who = participation();
   if (who === null) return null;
@@ -512,6 +528,7 @@ export function _resetInterstitialControllerForTests(options: {
   installationIdSource = options.installationId ?? getPersistedInstallationId;
   rewardedShownThisCycle = false;
   rewardedRenderedThisCycle = false;
+  deferredThisCycle = false;
   laneReservedForOpportunity = false;
   dueThisCycle = false;
   dueArmThisCycle = null;

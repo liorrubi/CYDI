@@ -13,6 +13,12 @@ import MultiplayerTutorialOverlay from "./MultiplayerTutorialOverlay";
 import { CANVAS_SIZE } from "../../app/constants";
 import { getShapeById } from "../../content/contentRepository";
 import { getSelectedColor } from "../../services/penColorStore";
+import { consumeInkTrialUse, getPendingCtaInk, markInkTrialStarted, resolveEffectiveInk, setPostSessionPending } from "../../services/inkTrialStore";
+import { warmPostSessionInkAd } from "../../services/inkTrialOffers";
+import type { InkTrialInk } from "../../services/analyticsSchema";
+import type { PenColorId } from "../../app/constants";
+import InkTrialCta from "../InkTrialCta";
+import InkTrialBadge from "../InkTrialBadge";
 import {
   markGuestTutorialShown,
   markHostTutorialShown,
@@ -94,7 +100,17 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
   const [revealDone, setRevealDone] = useState(false);
   const [tutorial, setTutorial] = useState<"host" | "guest" | null>(null);
   const [coachArmed] = useState(() => shouldShowRoundCoach());
-  const penColor = useMemo(() => getSelectedColor(), []);
+  /**
+   * The ink THIS game draws with, pinned when the game starts (and re-pinned for a rematch): an Ink Trial active at
+   * the start stays on for the whole game - it never expires mid-session - and a Trial granted later applies from
+   * the next game. `trialInk` is set only when the game really draws with the Trial ink (D2).
+   */
+  const [gameInk, setGameInk] = useState<{ color: PenColorId; trialInk: InkTrialInk | null }>(() => ({ color: getSelectedColor(), trialInk: null }));
+  const gameInkRef = useRef(gameInk);
+  gameInkRef.current = gameInk;
+  const penColor = gameInk.color;
+  /** The Try -> Buy CTA when this session used the Trial's last play (not an ad - it may sit under the final actions). */
+  const [ctaInk, setCtaInk] = useState<InkTrialInk | null>(null);
 
   const phase = snapshot?.phase ?? "LOBBY";
   const you = snapshot?.you ?? null;
@@ -193,6 +209,13 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
 
     if (!reportedStartRef.current && snapshot.roundIndex >= 0) {
       reportedStartRef.current = true;
+      // Pin this game's ink (Rewarded Ink Trial, 0.57.1). A game already over on arrival is not played here.
+      if (!joinedFinishedRef.current) {
+        const effective = resolveEffectiveInk("playTogether", getSelectedColor());
+        gameInkRef.current = effective;
+        setGameInk(effective);
+        if (effective.trialInk) markInkTrialStarted(effective.trialInk, "playTogether");
+      }
       // mpDailyOrdinal: this device's Nth multiplayer game of the local day. Counted once per genuine game
       // (roomCode:gameSerial, kept locally and never sent), for host and guest alike; null (a remount of a
       // counted game, a game already over on arrival, unavailable storage) omits the field.
@@ -219,6 +242,17 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
     if (snapshot.phase === "FINAL_RESULTS" && !reportedFinishRef.current) {
       reportedFinishRef.current = true;
       trackEvent("mp_game_finished", { playerCount: snapshot.players.length, roundCount: snapshot.rounds });
+      // Rewarded Ink Trial (0.57.1). A completed session played here (any round count) uses exactly one Trial play
+      // when it drew with the Trial ink - keyed on the game, so a reconnect or a repeated final snapshot consumes
+      // nothing. It also owes one Ink offer, shown only AFTER the player leaves the room (never here, where a
+      // rematch can start and others wait); the ad is warmed now so it is likely ready by then.
+      if (!joinedFinishedRef.current) {
+        const pinned = gameInkRef.current;
+        if (pinned.trialInk) consumeInkTrialUse(pinned.trialInk, `mp:${multiplayerGameKey(snapshot.roomCode, snapshot.gameSerial)}`, "playTogether");
+        setPostSessionPending("playTogether");
+        warmPostSessionInkAd("playTogether");
+        setCtaInk(getPendingCtaInk());
+      }
     }
   }, [snapshot]);
 
@@ -421,6 +455,7 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
       {phase === "LOBBY" && (
         <div className="mp-lobby">
           <RoomCodeCard roomCode={snapshot.roomCode} />
+          <InkTrialBadge surface="playTogether" asRow />
 
           <section className="mp-panel" aria-labelledby="mp-players-heading">
             <h2 id="mp-players-heading" className="mp-panel-heading">
@@ -747,6 +782,8 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
                   <SocialProgressCard previousTotal={award.previousTotal} total={award.total} pointsAwarded={award.points} />
                 </>
               )}
+              {/* Try -> Buy after the Trial's last play: not an ad, after the actions, never in the rematch's way. */}
+              {ctaInk && <InkTrialCta ink={ctaInk} surface="playTogether" onClosed={() => setCtaInk(null)} />}
             </>
           )}
         </div>

@@ -47,6 +47,7 @@ import {
   type InterstitialFailureReason,
   type InterstitialOutcome,
 } from "./ads/interstitialConfigSchema";
+import { INK_ROTATION_SLOTS, INK_SURFACES, type InkRotationSlot, type InkSurface } from "./ads/inkTrialConfigSchema";
 import {
   BALANCE_BUCKETS,
   COIN_EARNED_SOURCES,
@@ -211,10 +212,44 @@ export type RewardOfferExperiment = {
   /** 0.57: the multi-cell interstitial experiment cell, present only for a participant (never with interstitialArm "none"). */
   ifxCell?: InterstitialCellId;
 };
+/**
+ * 0.57.1 Rewarded Ink Trial. The inks a Trial can be offered for - the two premium Shop inks, in offer order.
+ * The Shop product ids, never a new cosmetic id.
+ */
+export const INK_TRIAL_INKS = ["rainbow", "diamondBlue"] as const;
+export type InkTrialInk = (typeof INK_TRIAL_INKS)[number];
+/**
+ * The Trial lifecycle, one `ink_trial` row per stage per Trial (at most 5 rows per Trial: granted, started,
+ * completed, cta_shown, and ONE cta outcome). No per-use rows.
+ */
+export const INK_TRIAL_STAGES = ["granted", "started", "completed", "cta_shown", "cta_purchased", "cta_declined", "cta_dismissed"] as const;
+export type InkTrialStage = (typeof INK_TRIAL_STAGES)[number];
+/**
+ * An Ink Trial offer reuses the reward-offer funnel events (offer_shown / ad_started / ad_completed / ad_failed /
+ * skipped) under its own placement, with its own small context block instead of the coin economy block: the ink,
+ * the offer's number (Classic: in the session, as the coin offer; Play Together / 2 Players: this ink's lifetime
+ * render count), the session's completed games/sessions so far, and whether a rewarded ad could be offered.
+ * Classic adds the interstitial context the coin offer carries, so the two are comparable cell by cell.
+ */
+export type RewardOfferInk = {
+  ink: InkTrialInk;
+  offerNumber: number;
+  sessionGames: number;
+  adAvailable: boolean;
+  interstitialArm?: RewardInterstitialArm;
+  ifxCell?: InterstitialCellId;
+};
+/**
+ * Optional on a CLASSIC offer (coin or ink): what the coin/ink rotation SCHEDULED for this opportunity. The
+ * rendered type is the placement, so "scheduled ink, rendered coin" is the Ink -> Coin fallback.
+ */
+export type RewardRotation = { rotationSlot?: InkRotationSlot };
 export type RewardOfferParams =
   | { placement: RewardedAdPlacement }
   | ({ placement: RewardedAdPlacement } & RewardOfferEconomy)
-  | ({ placement: RewardedAdPlacement } & RewardOfferEconomy & RewardOfferExperiment);
+  | ({ placement: RewardedAdPlacement } & RewardOfferEconomy & RewardOfferExperiment & RewardRotation)
+  | ({ placement: RewardedAdPlacement } & RewardOfferInk & RewardRotation);
+export type InkTrialParams = { inkStage: InkTrialStage; ink: InkTrialInk; inkSurface: InkSurface };
 
 const REWARD_OFFER_ECONOMY_KEYS = ["balanceBucket", "baseReward", "multiplier", "adAvailable", "nextTarget", "shortfallBucket", "adClosesGap", "gamesBucket"] as const;
 const REWARD_OFFER_EXPERIMENT_KEYS = ["arm", "offerNumber", "sessionGames", "bonusCoins", "interstitialArm"] as const;
@@ -445,6 +480,14 @@ export type EventParamsMap = {
    * identifier of any kind. See src/services/ads/playSegmentSummary.ts.
    */
   session_summary: SessionSummaryParams;
+  // --- 0.57.1: Rewarded Ink Trial lifecycle ------------------------------------
+  /**
+   * One row per lifecycle stage of one Trial (granted after a completed rewarded ad, started on the first play that
+   * really draws with the Trial ink, completed after the last of its plays, the Try -> Buy CTA shown, and its one
+   * outcome). At most 5 rows per Trial, never per use. EXACT (ledger) - low volume and a business decision.
+   * `inkSurface` = where the stage happened. No identifier, no balance, no price.
+   */
+  ink_trial: InkTrialParams;
 };
 
 /**
@@ -573,6 +616,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "play_store_cta_shown",
   "play_store_click",
   "session_summary",
+  "ink_trial",
   "mp_room_created",
   "mp_player_joined",
   "mp_game_started",
@@ -886,6 +930,11 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   play_store_cta_shown: (p) => validatePlayStoreEvent(p),
   play_store_click: (p) => validatePlayStoreEvent(p),
   session_summary: (p) => validateSessionSummary(p),
+  ink_trial: (p) => {
+    if (!isRecord(p) || !hasExactKeys(p, ["inkStage", "ink", "inkSurface"])) return { valid: false };
+    if (!isOneOf(INK_TRIAL_STAGES, p.inkStage) || !isOneOf(INK_TRIAL_INKS, p.ink) || !isOneOf(INK_SURFACES, p.inkSurface)) return { valid: false };
+    return { valid: true, params: { inkStage: p.inkStage, ink: p.ink, inkSurface: p.inkSurface } };
+  },
 };
 
 /**
@@ -1157,6 +1206,17 @@ function validateRewardOfferEvent<
 >(p: unknown): ValidationResult<E> {
   if (!isRecord(p)) return { valid: false };
   if (Object.keys(p).length === 1) return validateAdEvent(p) as ValidationResult<E>;
+  // 0.57.1: the Ink Trial offer shape (its own context block, never the coin economy block).
+  if ("ink" in p) return validateInkOfferEvent<E>(p);
+  // 0.57.1: the Classic coin offer may carry what the coin/ink rotation scheduled. Optional; the old key sets stay valid.
+  if ("rotationSlot" in p) {
+    const { rotationSlot, ...rest } = p;
+    if (!isOneOf(INK_ROTATION_SLOTS, rotationSlot)) return { valid: false };
+    const base = validateRewardOfferEvent<E>(rest);
+    // Only the experiment shape (the Classic Result offer) can be scheduled by the rotation.
+    if (!base.valid || !("arm" in (base.params as Record<string, unknown>))) return { valid: false };
+    return { valid: true, params: { ...base.params, rotationSlot } as EventParamsMap[E] };
+  }
   const experimentKeys = ["placement", ...REWARD_OFFER_ECONOMY_KEYS, ...REWARD_OFFER_EXPERIMENT_KEYS];
   const withIfxCell = hasExactKeys(p, [...experimentKeys, REWARD_OFFER_IFX_KEY]);
   const withExperiment = withIfxCell || hasExactKeys(p, experimentKeys);
@@ -1179,6 +1239,29 @@ function validateRewardOfferEvent<
   if (!isIntInRange(offerNumber, 1, MAX_OFFER_NUMBER) || !isIntInRange(sessionGames, 0, MAX_SESSION_GAMES) || !isIntInRange(bonusCoins, 1, MAX_ECONOMY_COINS)) return { valid: false };
   if (withIfxCell && (!isOneOf(INTERSTITIAL_CELL_IDS, p.ifxCell) || interstitialArm === "none")) return { valid: false };
   return { valid: true, params: { ...economy, arm, offerNumber, sessionGames, bonusCoins, interstitialArm, ...(withIfxCell ? { ifxCell: p.ifxCell as InterstitialCellId } : {}) } as EventParamsMap[E] };
+}
+
+const INK_OFFER_REQUIRED_KEYS = ["placement", "ink", "offerNumber", "sessionGames", "adAvailable"] as const;
+const INK_OFFER_OPTIONAL_KEYS = ["interstitialArm", "ifxCell", "rotationSlot"] as const;
+/** The Ink offer placements - an ink block on any other placement is a bug and is rejected. */
+const INK_OFFER_PLACEMENTS: readonly RewardedAdPlacement[] = ["shape_challenge_ink_trial", "play_together_ink_trial", "two_players_ink_trial"];
+
+/** The Ink Trial offer funnel shape (RewardOfferInk). ifxCell needs a participant interstitialArm; rotationSlot is Classic-only. */
+function validateInkOfferEvent<E extends AnalyticsEventName>(p: Record<string, unknown>): ValidationResult<E> {
+  if (!hasKeysWithin(p, INK_OFFER_REQUIRED_KEYS, INK_OFFER_OPTIONAL_KEYS)) return { valid: false };
+  const { placement, ink, offerNumber, sessionGames, adAvailable } = p;
+  if (!isRewardedAdPlacement(placement) || !INK_OFFER_PLACEMENTS.includes(placement)) return { valid: false };
+  if (!isOneOf(INK_TRIAL_INKS, ink) || !isBoolean(adAvailable)) return { valid: false };
+  if (!isIntInRange(offerNumber, 1, MAX_OFFER_NUMBER) || !isIntInRange(sessionGames, 0, MAX_SESSION_GAMES)) return { valid: false };
+  const classic = placement === "shape_challenge_ink_trial";
+  if (!optionalField(p, "interstitialArm", (v) => isOneOf(REWARD_INTERSTITIAL_ARMS, v))) return { valid: false };
+  if ("ifxCell" in p && (!isOneOf(INTERSTITIAL_CELL_IDS, p.ifxCell) || p.interstitialArm === undefined || p.interstitialArm === "none")) return { valid: false };
+  if ("rotationSlot" in p && (!classic || !isOneOf(INK_ROTATION_SLOTS, p.rotationSlot))) return { valid: false };
+  const params: Record<string, unknown> = { placement, ink, offerNumber, sessionGames, adAvailable };
+  if ("interstitialArm" in p) params.interstitialArm = p.interstitialArm;
+  if ("ifxCell" in p) params.ifxCell = p.ifxCell;
+  if ("rotationSlot" in p) params.rotationSlot = p.rotationSlot;
+  return { valid: true, params: params as EventParamsMap[E] };
 }
 
 /**

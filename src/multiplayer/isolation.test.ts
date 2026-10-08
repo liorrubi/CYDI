@@ -9,6 +9,15 @@ import { join } from "node:path";
 // scan the features' own source and fail if they so much as mention one of
 // those modules. A future accidental import shows up here rather than as a coin
 // balance that moved during a multiplayer round.
+//
+// 0.57.1 (owner-approved Rewarded Ink Trial): the one sanctioned contact is the
+// Ink Trial boundary - services/inkTrialStore (the temporary ink overlay and its
+// play count), services/inkTrialOffers (warming the post-exit offer's ad) and the
+// InkTrial* / PostSessionInkOffer components. Rounds stay coin- and ad-free: the
+// Rewarded offer renders only AFTER the session (Play Together menu after leaving
+// the room, 2 Players setup), and the Try -> Buy CTA spends coins only on an
+// explicit tap through the Shop's own helper. Every rule below is unchanged and
+// still enforced on these files directly.
 
 const FORBIDDEN = [
   "coinsStore",

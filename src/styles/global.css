@@ -6121,3 +6121,257 @@ body {
 .home-ways a {
   color: var(--color-primary-fill);
 }
+
+/* ==================== REWARDED INK TRIAL (0.57.1) ====================
+   A compact premium card, deliberately NOT the coin banner's pink/purple multiplier look: a deep ink-black panel
+   whose edge carries the offered ink. In the screen's flow (never a modal or overlay), never wider than the coin
+   banner, two rows tall. One soft sheen on arrival, then still - no loops, nothing that delays a tap. */
+.ink-offer {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: 420px;
+  margin: var(--space-3) auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(150deg, #191b2e 0%, #232645 100%);
+  color: #f4f5ff;
+  box-shadow:
+    0 8px 22px rgba(20, 22, 40, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  text-align: left;
+  animation: banner-pop 360ms ease both;
+}
+
+/* The ink's own colour on the card edge: the Rainbow gradient (the swatch the pen menu uses), or Diamond Blue. */
+.ink-offer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(90deg, #f43f5e, #f59e0b, #22c55e, #3b82f6, #a855f7);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.ink-offer-diamondBlue::before {
+  background: linear-gradient(120deg, #bfe6ff, #4fb6ff 45%, #2f97e6);
+}
+
+/* One sheen sweep on arrival (transform only), then nothing. */
+.ink-offer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  transform: translateX(0);
+  animation: ink-offer-sheen 1100ms ease-out 250ms 1 both;
+  pointer-events: none;
+}
+
+@keyframes ink-offer-sheen {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ink-offer,
+  .ink-offer::after {
+    animation: none;
+  }
+  .ink-offer::after {
+    display: none;
+  }
+}
+
+.ink-offer-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ink-offer-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ink-offer-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #ffffff;
+}
+
+.ink-offer-value {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(244, 245, 255, 0.78);
+}
+
+.ink-offer-note,
+.ink-cta-shortfall {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffd27a;
+}
+
+.ink-cta-shortfall {
+  margin-top: 2px;
+}
+
+.ink-cta-price {
+  color: #ffd60a;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ink-offer-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.ink-offer-primary,
+.ink-offer-secondary {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  min-height: 44px;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ink-offer-primary {
+  flex: 1 1 auto;
+  background: #ffffff;
+  color: #191b2e;
+}
+
+.ink-offer-secondary {
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f4f5ff;
+}
+
+.ink-offer-primary:disabled,
+.ink-offer-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ink-offer-granted .ink-offer-title {
+  font-size: 15px;
+}
+
+/* A two-button row stays on one line down to ~300px; below that the secondary wraps under it. */
+@media (max-width: 340px) {
+  .ink-offer-actions {
+    flex-wrap: wrap;
+  }
+  .ink-offer-primary,
+  .ink-offer-secondary {
+    flex: 1 1 100%;
+  }
+}
+
+/* The real ink preview: the game's own stroke renderer on a small canvas, plus the game's own glitter for Diamond Blue. */
+.ink-preview {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(30, 32, 46, 0.08);
+}
+
+.ink-preview-canvas {
+  display: block;
+}
+
+.ink-preview-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+/* The base coins of a Result that shows an Ink offer: already credited, stated on their own line. */
+.ink-offer-coins {
+  margin: var(--space-3) auto 0;
+  max-width: 420px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.ink-offer-coins + .ink-offer {
+  margin-top: var(--space-2);
+}
+
+.ink-offer-slot {
+  width: 100%;
+}
+
+/* "🌈 Rainbow Ink · 4 plays left" - small, quiet, never interactive. */
+.ink-trial-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #191b2e;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1.5px #a855f7;
+}
+
+.ink-trial-badge-diamondBlue {
+  box-shadow: inset 0 0 0 1.5px #4fb6ff;
+}
+
+.ink-trial-badge-row {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-2) 0;
+}
+
+/* An active Ink Trial's ink in the pen menu: plays left where a lock would be. */
+.pen-color-option-trial {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  color: #ffffff;
+  background: #191b2e;
+  white-space: nowrap;
+}

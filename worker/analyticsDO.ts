@@ -1,5 +1,7 @@
 import {
   ANALYTICS_EVENT_NAMES,
+  INK_TRIAL_INKS,
+  INK_TRIAL_STAGES,
   datesInRange,
   isAnalyticsEventName,
   isGameType,
@@ -17,6 +19,8 @@ import {
   type AnalyticsPlatform,
 } from "../src/services/analyticsSchema";
 import { isAdFailureReason } from "../src/services/ads/adTypes";
+import { isRewardedAdPlacement } from "../src/services/ads/adPlacements";
+import { isInkSurface } from "../src/services/ads/inkTrialConfigSchema";
 import {
   isEffectiveInterstitialCadence,
   isInterstitialArm,
@@ -161,6 +165,12 @@ const INSTALL_AGE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["first_open"]);
 const ARM_OUTCOME_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["interstitial_checkpoint", "interstitial_continuation"]);
 const CADENCE_BREAKOUT_EVENTS = ARM_OUTCOME_BREAKOUT_EVENTS;
 const INTERSTITIAL_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["interstitial_load_failed", "interstitial_checkpoint"]);
+// 0.57.1 Rewarded Ink Trial. The Ink offer reuses the reward-offer funnel events, so the ledger keeps their
+// placement apart: byPlacement is the closed REWARDED_AD_PLACEMENTS id (re-validated before this runs), at most
+// 11 keys per event, inside the existing per-day bucket value - no new storage key, write or request.
+// byInkTrial is "stage|ink|surface" on ink_trial: three closed sets, at most 7 x 2 x 4 = 56 keys.
+const PLACEMENT_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["reward_ad_started", "reward_ad_completed", "reward_ad_failed", "rewarded_ad_shown", "rewarded_ad_completed"]);
+const INK_TRIAL_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["ink_trial"]);
 // Pass & Play length and progress. `roundCount` is the length the players CHOSE
 // (ROUND_COUNT_ACCEPTED - 3, 5, 10, and 15 from older clients), `roundIndex` how far the
 // game got. Both are closed, re-validated server-side by validateEventParams before this
@@ -463,6 +473,10 @@ type EventCounters = {
   byArmOutcome?: Record<string, number>;
   byCadence?: Record<string, number>;
   byInterstitialReason?: Record<string, number>;
+  // PLACEMENT_BREAKOUT_EVENTS / INK_TRIAL_BREAKOUT_EVENTS only (0.57.1) - see those sets. Absent on every other
+  // event, and on day buckets recorded before 0.57.1.
+  byPlacement?: Record<string, number>;
+  byInkTrial?: Record<string, number>;
   // app_open ONLY, like byAppBuild - the native Android versionCode, which tells two
   // APKs of one versionName apart. Web never sends one; a native client that has not
   // read it yet, and every client older than 0.53.0, counts as "unknown".
@@ -734,6 +748,18 @@ export function incrementEvent(
   if (INTERSTITIAL_REASON_BREAKOUT_EVENTS.has(eventName) && isInterstitialFailureReason(params.reason)) {
     updated.byInterstitialReason = incrementKeyMap(existing.byInterstitialReason, params.reason);
   }
+  // Rewarded Ink Trial (0.57.1) - guarded the same way, so a direct call cannot open a free-text key.
+  if (PLACEMENT_BREAKOUT_EVENTS.has(eventName) && isRewardedAdPlacement(params.placement)) {
+    updated.byPlacement = incrementKeyMap(existing.byPlacement, params.placement);
+  }
+  if (
+    INK_TRIAL_BREAKOUT_EVENTS.has(eventName) &&
+    isOneOf(INK_TRIAL_STAGES, params.inkStage) &&
+    isOneOf(INK_TRIAL_INKS, params.ink) &&
+    isInkSurface(params.inkSurface)
+  ) {
+    updated.byInkTrial = incrementKeyMap(existing.byInkTrial, `${params.inkStage}|${params.ink}|${params.inkSurface}`);
+  }
   // Pass & Play breakouts - see the two sets above. Guarded for the same reason the
   // rewarded one is: this function is exported, so a bad value must leave the map
   // untouched rather than open an unbounded key.
@@ -980,6 +1006,8 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byArmOutcome: mergeKeyMaps(ae.byArmOutcome, be.byArmOutcome),
       byCadence: mergeKeyMaps(ae.byCadence, be.byCadence),
       byInterstitialReason: mergeKeyMaps(ae.byInterstitialReason, be.byInterstitialReason),
+      byPlacement: mergeKeyMaps(ae.byPlacement, be.byPlacement),
+      byInkTrial: mergeKeyMaps(ae.byInkTrial, be.byInkTrial),
       byAppVersionCode: mergeKeyMaps(ae.byAppVersionCode, be.byAppVersionCode),
       byRoundCount: mergeKeyMaps(ae.byRoundCount, be.byRoundCount),
       byRoundIndex: mergeKeyMaps(ae.byRoundIndex, be.byRoundIndex),

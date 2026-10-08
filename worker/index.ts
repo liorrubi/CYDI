@@ -47,6 +47,7 @@ import {
   type ReleaseIndexEntry,
 } from "../src/content/catalogSchema";
 import { ADS_CONFIG_KV_KEY, isValidRemoteAdsConfig, parseRemoteAdsConfig } from "../src/services/ads/remoteAdsConfigSchema";
+import { INK_TRIAL_KV_KEY, isValidStoredInkTrialConfig, parseStoredInkTrialConfig, type InkTrialConfig } from "../src/services/ads/inkTrialConfigSchema";
 import {
   INTERSTITIAL_CONFIG_KV_KEY,
   INTERSTITIAL_EXPERIMENTS_KV_KEY,
@@ -616,8 +617,12 @@ export async function handleInterstitialConfigGet(request: Request, env: Env): P
   const v2 = version === "2" || version === "3";
   const body: Record<string, unknown> = { ...toClientConfig(config, country, v2) };
   if (version === "3") {
-    const experiments = await readValidInterstitialExperiments(env);
+    // `ink` (0.57.1+) rides the same response so no new request exists. Its own KV key and validator: it never
+    // touches the base or `experiments`, and an absent/invalid value omits the key (= Ink OFF). 0.57 clients
+    // ignore unknown top-level keys (parseInterstitialV3Body), so they are unaffected.
+    const [experiments, ink] = await Promise.all([readValidInterstitialExperiments(env), readValidInkTrialConfig(env)]);
     if (experiments !== null) body.experiments = experiments;
+    if (ink !== null) body.ink = ink;
   }
   return new Response(JSON.stringify(body), {
     headers: {
@@ -636,6 +641,42 @@ async function readValidInterstitialExperiments(env: Env): Promise<{ interstitia
   } catch {
     return null;
   }
+}
+
+/** Never throws and never 500s: a missing, unreadable or invalid Ink Trial config simply means "Ink OFF" (key omitted). */
+async function readValidInkTrialConfig(env: Env): Promise<InkTrialConfig | null> {
+  try {
+    const raw = await env.CONTENT_KV.get(INK_TRIAL_KV_KEY);
+    return raw === null ? null : parseStoredInkTrialConfig(raw);
+  } catch {
+    return null;
+  }
+}
+
+// The Rewarded Ink Trial config (0.57.1+): its OWN key, served only as the `ink` key of the v3 interstitial config
+// response. A PUT replaces the whole object and is validated strictly BEFORE anything is written - same admin gate as
+// the interstitial config. There is no GET: the value is read back through the v3 config route. To switch Ink OFF,
+// PUT `enabled: false` (or delete the key); Trials already granted keep running either way.
+export async function handleInkTrialConfigPut(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    return jsonNoStore({ error: "invalid json" }, 400);
+  }
+  if (!isValidStoredInkTrialConfig(parsed)) {
+    return jsonNoStore(
+      {
+        error:
+          "body must be exactly { enabled: boolean, version: 1-1000000, rolloutPercent: 0-100, " +
+          "surfaces: { classic, playTogether, twoPlayers, daily: boolean }, classicRotation: 1-6 x \"coin\"|\"ink\" }",
+      },
+      400,
+    );
+  }
+  await env.CONTENT_KV.put(INK_TRIAL_KV_KEY, JSON.stringify(parsed));
+  return jsonNoStore({ ok: true, ink: parsed });
 }
 
 // A PUT REPLACES the whole stored object: anything omitted is deleted, nothing is merged. Always resend
@@ -1166,6 +1207,7 @@ export default {
       if (request.method === "PUT") return handleInterstitialConfigPut(request, env);
     }
     if (url.pathname === "/api/config/ads/experiments" && request.method === "PUT") return handleInterstitialExperimentsPut(request, env);
+    if (url.pathname === "/api/config/ads/ink" && request.method === "PUT") return handleInkTrialConfigPut(request, env);
 
     if (url.pathname === "/api/daily/current" && request.method === "GET") return forwardToDailyDO(request, env, "/current");
     if (url.pathname === "/api/daily/submit" && request.method === "POST") return forwardToDailyDO(request, env, "/submit");

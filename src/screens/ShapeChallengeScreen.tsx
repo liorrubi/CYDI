@@ -81,22 +81,21 @@ import {
   beginInterstitialResultCycle,
   getInterstitialArmForAnalytics,
   getInterstitialCellForAnalytics,
-  claimResultAdLane,
-  markRewardedOfferRenderedThisCycle,
   recordInterstitialGameCompleted,
   recordInterstitialGameStarted,
-  recordRewardedOfferDeferred,
   runInterstitialCheckpoint,
   takeNextGameContext,
 } from "../services/ads/interstitialController";
-import {
-  decideResultOffer,
-  getRewardedArm,
-  markRewardedOfferShown,
-  recordRewardedGameCompleted,
-  takeRewardedContinuation,
-  upcomingOfferContext,
-} from "../app/rewardedOfferCadence";
+import { getRewardedArm, takeRewardedContinuation, upcomingOfferContext } from "../app/rewardedOfferCadence";
+import { commitClassicOfferRendered, decideClassicResultLane } from "../services/ads/resultAdLane";
+import type { ClassicRewardedContent } from "../app/inkTrialPolicy";
+import InkTrialOffer, { type InkOfferContext } from "../components/InkTrialOffer";
+import InkTrialCta from "../components/InkTrialCta";
+import InkTrialBadge from "../components/InkTrialBadge";
+import { useInkTrialRevision } from "../hooks/useInkTrialRevision";
+import { consumeInkTrialUse, getActiveInkTrial, markInkTrialStarted, resolveEffectiveInk, setInkTrialOverlay } from "../services/inkTrialStore";
+import { isColorUnlocked } from "../services/penColorStore";
+import type { InkTrialInk } from "../services/analyticsSchema";
 import { useListScrollMemory, useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import { trackEvent } from "../services/analytics";
 import { withGameCoins } from "../services/economyAnalytics";
@@ -908,8 +907,20 @@ function ShapePlay({
     const t = window.setTimeout(() => triggerCoinFlight(plainCoinsRef.current ?? document.querySelector(".score-total")), 0);
     return () => window.clearTimeout(t);
   }, [phase, plainCoinsAmount]);
-  const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  /**
+   * The ink this play draws with, re-resolved at the start of every play (mount = Next Shape, and Try Again): the
+   * active Ink Trial's ink while its overlay is on, otherwise the permanent selection. A practice round never uses
+   * a Trial (it can never consume one).
+   */
+  const resolvePlayInk = (): PenColorId => (practice ? getSelectedColor() : resolveEffectiveInk("classic", getSelectedColor()).color);
+  const [penColor, setPenColor] = useState<PenColorId>(resolvePlayInk);
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
+  /** Rewarded Ink Trial (0.57.1): this Result's Ink offer, Try -> Buy CTA, and the rendered Rewarded content. */
+  const [inkOffer, setInkOffer] = useState<{ ink: InkTrialInk; context: InkOfferContext } | null>(null);
+  const [ctaInk, setCtaInk] = useState<InkTrialInk | null>(null);
+  const offerContentRef = useRef<ClassicRewardedContent | null>(null);
+  useInkTrialRevision();
+  const activeTrial = practice ? null : getActiveInkTrial();
   const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
   // The inline first-round coach (countdown, "Draw it", "Tap Done", "Tap Next").
   // Frozen at mount: recordRoundCompleted() flips the underlying condition mid-round,
@@ -938,7 +949,15 @@ function ShapePlay({
   }
 
   function handleSelectPenColor(id: PenColorId) {
-    setSelectedColor(id);
+    // An active Trial's ink is an overlay: picking it turns the overlay on and writes NOTHING permanent; picking
+    // any owned ink is the normal permanent selection and pauses the Trial (no play is consumed while paused).
+    const trial = practice ? null : getActiveInkTrial();
+    if (trial && id === trial.ink && !isColorUnlocked(id)) {
+      setInkTrialOverlay(true);
+    } else {
+      setSelectedColor(id);
+      if (trial) setInkTrialOverlay(false);
+    }
     setPenColor(id);
   }
 
@@ -985,6 +1004,13 @@ function ShapePlay({
       // what keeps this and the offer's preload from ever becoming two requests.
       // Fire-and-forget: a rejected preload can never reach the round.
       if (!practice) void preloadRewardedAd("shape_challenge_double_reward");
+      // The play starts: its ink is resolved now (an expired Trial can never leak into a retry), and a play that
+      // starts with the Trial ink marks the Trial as started (once per Trial, inside the store).
+      if (!practice) {
+        const effective = resolveEffectiveInk("classic", getSelectedColor());
+        setPenColor(effective.color);
+        if (effective.trialInk) markInkTrialStarted(effective.trialInk, "classic");
+      }
       setPhase("drawing");
     }, previewDurationMs);
     return () => window.clearTimeout(timeoutId);
@@ -1016,7 +1042,8 @@ function ShapePlay({
   // to continue at all and the ×2 offer is a live decision, so both outrank a
   // discovery nudge - and deferring it here does NOT mark it shown, so it simply
   // returns on the next round.
-  const showCreateDiscovery = phase === "result" && createDiscovery !== null && !showResultTutorial && doubleOfferAmount === null;
+  const showCreateDiscovery =
+    phase === "result" && createDiscovery !== null && !showResultTutorial && doubleOfferAmount === null && inkOffer === null && ctaInk === null;
 
   // Remembers WHICH prompt was already logged, not merely that one was: a player who
   // reaches the reminder threshold through retries of a single shape - no remount in
@@ -1057,7 +1084,7 @@ function ShapePlay({
     practice,
     resultTutorialVisible: showResultTutorial,
     createDiscoveryVisible: showCreateDiscovery,
-    doubleOfferPending: doubleOfferAmount !== null,
+    doubleOfferPending: doubleOfferAmount !== null || inkOffer !== null || ctaInk !== null,
   });
 
   // Exactly one play_store_cta_shown per genuine appearance - the rule itself
@@ -1104,8 +1131,8 @@ function ShapePlay({
   /** The base reward is already credited where `doubleOfferAmount` is set below - only the extra half of a successful double is new (mirrors ChestRewardOverlay), so navigating away before resolving the offer can never forfeit the coins already earned. */
   /** The offer is on screen: it counts as shown (cadence restarts) and this Result screen's ad lane is rewarded - no interstitial may follow from it. */
   function handleRewardedOfferShown() {
-    markRewardedOfferShown();
-    markRewardedOfferRenderedThisCycle();
+    // Same commit as 0.57 (cadence restarts, the lane is rewarded) + the coin/ink rotation moves one slot.
+    commitClassicOfferRendered(offerContentRef.current ?? { kind: "coin" });
   }
 
   function handleDoubleOfferResolved(finalAmount: number, anchorEl: HTMLElement | null) {
@@ -1248,25 +1275,47 @@ function ShapePlay({
       // interstitial reserves this screen once per opportunity and the offer stays pending;
       // otherwise the offer renders and, from that moment, no interstitial may follow from
       // this screen. A zero-coin result never claims, so it cannot spend the reservation.
-      let showOffer = false;
+      // Rewarded Ink Trial (0.57.1): a completed, scored, non-practice play that DREW with the Trial ink uses one of
+      // its plays (an abandoned play never reaches here). Done before the lane decision, so the last play's Result can
+      // already show the Try -> Buy CTA.
       if (!practice) {
-        const due = recordRewardedGameCompleted();
-        const eligible = decideResultOffer({
-          due,
-          interstitialDue: false,
-          coinsEarned: offerAmount,
-          canOfferAd: isRewardedAdAvailable() || isMathFallbackEnabled(),
-        });
-        const decision = eligible === "show" && claimResultAdLane() === "interstitial" ? "pending_interstitial" : eligible;
-        if (decision === "pending_interstitial") recordRewardedOfferDeferred();
-        if (decision === "show") {
-          showOffer = true;
+        const trial = getActiveInkTrial();
+        if (trial && penColor === trial.ink) consumeInkTrialUse(trial.ink, `classic:${shape.id}:${Date.now()}`, "classic");
+      }
+
+      // The Result's one Rewarded slot (services/ads/resultAdLane.ts): WHETHER there is a legal opportunity is the
+      // 0.57 rule unchanged (cadence + coins + ad capability, then the interstitial's claimResultAdLane), WHAT it
+      // carries is the coin/ink rotation. A pending Try -> Buy CTA takes the screen first; the offer then stays due.
+      let showCoinOffer = false;
+      offerContentRef.current = null;
+      if (!practice) {
+        const lane = decideClassicResultLane({ coinsEarned: offerAmount, canOfferAd: isRewardedAdAvailable() || isMathFallbackEnabled() });
+        if (lane.kind === "offer") {
+          offerContentRef.current = lane.content;
           const ifxCell = getInterstitialCellForAnalytics();
-          setRewardedOffer({ arm: getRewardedArm(), ...upcomingOfferContext(), interstitialArm: getInterstitialArmForAnalytics(), ...(ifxCell !== null ? { ifxCell } : {}) });
+          const context = upcomingOfferContext();
+          const interstitialArm = getInterstitialArmForAnalytics();
+          if (lane.content.kind === "coin") {
+            showCoinOffer = true;
+            setRewardedOffer({
+              arm: getRewardedArm(),
+              ...context,
+              interstitialArm,
+              ...(ifxCell !== null ? { ifxCell } : {}),
+              ...(lane.content.rotationSlot !== undefined ? { rotationSlot: lane.content.rotationSlot } : {}),
+            });
+          } else {
+            setInkOffer({
+              ink: lane.content.ink,
+              context: { ...context, interstitialArm, ...(ifxCell !== null ? { ifxCell } : {}), rotationSlot: lane.content.rotationSlot },
+            });
+          }
+        } else if (lane.kind === "cta") {
+          setCtaInk(lane.ink);
         }
       }
       if (offerAmount > 0) {
-        if (showOffer) setDoubleOfferAmount(offerAmount);
+        if (showCoinOffer) setDoubleOfferAmount(offerAmount);
         else setPlainCoinsAmount(offerAmount);
       }
 
@@ -1288,6 +1337,11 @@ function ShapePlay({
     setDoubleOfferAmount(null);
     setRewardedOffer(null);
     setPlainCoinsAmount(null);
+    setInkOffer(null);
+    setCtaInk(null);
+    offerContentRef.current = null;
+    // A retry is a new play: its ink is resolved again (an exhausted Trial cannot carry over).
+    setPenColor(resolvePlayInk());
     // The callout was already marked as seen when it rendered, so this resolves to
     // false after the first showing - a retry does not repeat it.
     setResultTutorialPending(shouldShowResultActionsTutorial());
@@ -1306,6 +1360,31 @@ function ShapePlay({
   if (phase === "result" && result && attemptPath) {
     const passed = result.total >= passScore;
     const resultTip = improvementTip(result);
+
+    /*
+     * Rewarded Ink Trial (0.57.1): the Result's scheduled Ink slot, or the Try -> Buy CTA. The round's coins are
+     * already credited - they get their own plain line, so the card can never read as a coin multiplier or as
+     * putting those coins at stake.
+     */
+    const inkResultNode = (
+      <>
+        {plainCoinsAmount !== null && (
+          <div ref={plainCoinsRef} className="ink-offer-coins">
+            🪙 You earned {plainCoinsAmount} coins
+          </div>
+        )}
+        {inkOffer !== null && (
+          <InkTrialOffer
+            ink={inkOffer.ink}
+            surface="classic"
+            placement="shape_challenge_ink_trial"
+            context={inkOffer.context}
+            onShown={handleRewardedOfferShown}
+          />
+        )}
+        {inkOffer === null && ctaInk !== null && <InkTrialCta ink={ctaInk} surface="classic" onClosed={() => setCtaInk(null)} />}
+      </>
+    );
 
     /*
      * The conditional pieces this screen already renders, built once and handed
@@ -1330,6 +1409,8 @@ function ShapePlay({
             offerSkipReporterRef.current = report;
           }}
         />
+      ) : inkOffer !== null || ctaInk !== null ? (
+        inkResultNode
       ) : plainCoinsAmount !== null ? (
         <div ref={plainCoinsRef} className="double-offer-banner">
           <p className="double-offer-headline">🪙 You earned {plainCoinsAmount} Coins</p>
@@ -1455,7 +1536,8 @@ function ShapePlay({
             }}
           />
         )}
-        {doubleOfferAmount === null && plainCoinsAmount !== null && (
+        {doubleOfferAmount === null && (inkOffer !== null || ctaInk !== null) && inkResultNode}
+        {doubleOfferAmount === null && inkOffer === null && ctaInk === null && plainCoinsAmount !== null && (
           <div ref={plainCoinsRef} className="double-offer-banner">
             <p className="double-offer-headline">🪙 You earned {plainCoinsAmount} Coins</p>
           </div>
@@ -1591,8 +1673,9 @@ function ShapePlay({
   );
 
   const inkControl = (
-    <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={onNavigateToShop} />
+    <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={onNavigateToShop} trial={activeTrial} />
   );
+  const trialBadge = practice ? null : <InkTrialBadge surface="classic" />;
   const penControl = (
     <PenSkinMenu
       selected={penSkin}
@@ -1632,6 +1715,7 @@ function ShapePlay({
         coached={firstRoundCoach}
         inkControl={inkControl}
         penControl={penControl}
+        trialBadge={trialBadge}
         onUndo={handleUndo}
         undoDisabled={!attemptPath || attemptPath.points.length === 0}
         guideEnabled={guideEnabled}
@@ -1671,6 +1755,7 @@ function ShapePlay({
           {phase === "analyzing" && "Analyzing..."}
         </p>
       )}
+      {!practice && (phase === "preview" || phase === "drawing") && <InkTrialBadge surface="classic" asRow />}
       {canvasNode}
       {phase === "drawing" && (
         <>

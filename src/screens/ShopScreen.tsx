@@ -26,7 +26,8 @@ import { getMegaAlbumSize, getMegaCards, type MegaCardDefinition } from "../cont
 import { getCoins, onCoinsChanged, spendCoins } from "../services/coinsStore";
 import { isChestOnCooldown, msUntilChestAvailable, startChestCooldown } from "../services/chestCooldownStore";
 import { collectedMegaCardCount, getMegaProgress, isMegaChallengeUnlocked, unlockMegaCard } from "../services/megaChallengeStore";
-import { getUnlockedColors, setSelectedColor, unlockColor } from "../services/penColorStore";
+import { getUnlockedColors } from "../services/penColorStore";
+import { purchasePenColor } from "../services/shopPurchase";
 import { getUnlockedSkins, setSelectedSkin, unlockSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
 import { playSuccessSound } from "../engine/soundEngine";
@@ -151,13 +152,11 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handlePurchase(id: (typeof PEN_COLOR_PRODUCTS)[number]["id"], price: number) {
-    if (coins < price || unlocked.includes(id)) return;
-    spendCoins(price, "pen_color");
-    unlockColor(id);
-    setSelectedColor(id);
+  function handlePurchase(id: (typeof PEN_COLOR_PRODUCTS)[number]["id"]) {
+    // The shared helper (services/shopPurchase.ts): same price, spend, unlock, auto-select and event as before,
+    // and it also closes a running Ink Trial for this ink (ownership wins).
+    if (purchasePenColor(id) !== "purchased") return;
     setUnlocked(getUnlockedColors());
-    trackEvent("shop_purchase_with_coins", { productType: "penColor", tier: id, price });
   }
 
   function handleBuySkin(id: PenSkinId, price: number) {
@@ -440,7 +439,7 @@ export default function ShopScreen({ from, highlightPenColorId, highlightPenSkin
               {owned ? (
                 <span className="shop-product-owned">✓ Owned</span>
               ) : (
-                <Button disabled={!canAfford} onClick={() => handlePurchase(color.id, price)}>
+                <Button disabled={!canAfford} onClick={() => handlePurchase(color.id)}>
                   🪙 {price}
                 </Button>
               )}

@@ -1401,3 +1401,27 @@ test("segment summary: dropped, not emitted, when the analytics session already 
   assert.equal(summaries().length, 1);
   assert.equal(summaries()[0].classicGames, 2, "the dropped segment's games are not carried over");
 });
+
+// --- 0.57.1: deferInterstitialThisCycle (a non-ad card holds the Result screen) ------------------------------------
+
+test("0.57.1 defer: the opportunity stays due - not consumed, not recorded, not suppressed - and the next Result runs it", async () => {
+  const { deferInterstitialThisCycle } = await import("./interstitialController");
+  playRounds(6);
+  completeRound(); // the 7th eligible completion: due
+  assert.equal(isInterstitialDueThisCycle(), true);
+  deferInterstitialThisCycle();
+  assert.equal(runInterstitialCheckpoint(), null);
+  assert.equal(checkpoints().length, 0, "nothing recorded");
+  assert.equal(persisted().session?.opportunities ?? 0, 0, "nothing consumed");
+  assert.ok(persisted().eligibleGamesSinceLastOpportunity >= 7, "the counter keeps its progress");
+  completeRound(); // the next Result: still due (since >= cadence), the defer flag is gone
+  runInterstitialCheckpoint();
+  assert.equal(checkpoints().length, 1);
+  assert.equal(checkpoints()[0].outcome, "not_ready");
+  assert.equal(persisted().session?.opportunities, 1);
+});
+
+test("0.57.1 defer: without a deferral the same round runs the checkpoint exactly as in 0.57", () => {
+  playRounds(7);
+  assert.equal(checkpoints().length, 1);
+});

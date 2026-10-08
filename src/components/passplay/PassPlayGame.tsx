@@ -18,6 +18,10 @@ import WinnerReveal from "../multiplayer/WinnerReveal";
 import { CANVAS_SIZE } from "../../app/constants";
 import { getShapeById } from "../../engine/shapeLibrary";
 import { getSelectedColor } from "../../services/penColorStore";
+import { consumeInkTrialUse, getPendingCtaInk, markInkTrialStarted, resolveEffectiveInk, setPostSessionPending } from "../../services/inkTrialStore";
+import { warmPostSessionInkAd } from "../../services/inkTrialOffers";
+import type { InkTrialInk } from "../../services/analyticsSchema";
+import InkTrialCta from "../InkTrialCta";
 import { playRoundStartSound } from "../../engine/soundEngine";
 import { hapticRoundStart } from "../../services/haptics";
 import { ScreenWakeLock } from "../../services/wakeLock";
@@ -111,7 +115,19 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
   // phone back and forth is a different game from everyone drawing at once, and
   // having been walked through one is not having been shown the other.
   const [coachArmed] = useState(() => shouldShowPassPlayRoundCoach());
-  const penColor = useMemo(() => getSelectedColor(), []);
+  /**
+   * The ink THIS game draws with, pinned per game (a rematch mints a new gameId and resolves again): an Ink Trial
+   * active at the start stays on for the whole game, and a Trial granted later applies from the next game.
+   */
+  // game.gameId is the deliberate key: the ink is re-read from the stores once per game, never mid-game.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const gameInk = useMemo(() => resolveEffectiveInk("twoPlayers", getSelectedColor()), [game.gameId]);
+  const penColor = gameInk.color;
+  useEffect(() => {
+    if (gameInk.trialInk) markInkTrialStarted(gameInk.trialInk, "twoPlayers");
+  }, [gameInk]);
+  /** The Try -> Buy CTA when this game used the Trial's last play (not an ad - it sits under the final actions). */
+  const [ctaInk, setCtaInk] = useState<InkTrialInk | null>(null);
 
   const { phase, roundIndex, turnPosition } = game;
   const player = currentPlayer(game);
@@ -259,6 +275,13 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
     if (phase !== "FINAL_RESULTS" || finishedRef.current === game.gameId) return;
     finishedRef.current = game.gameId;
     trackEvent("pp_game_finished", { playerCount: game.players.length, roundCount: game.rounds });
+    // Rewarded Ink Trial (0.57.1): a completed game (any round count) that drew with the Trial ink uses exactly one
+    // play, keyed on the game. It also owes one Ink offer, shown back on the setup screen - never here, where the
+    // players may want Play Again straight away. Local state, not the event: it holds even if analytics never sends.
+    if (gameInk.trialInk) consumeInkTrialUse(gameInk.trialInk, `pp:${game.gameId}`, "twoPlayers");
+    setPostSessionPending("twoPlayers");
+    warmPostSessionInkAd("twoPlayers");
+    setCtaInk(getPendingCtaInk());
     const result = awardPassPlayMatch(game.gameId, PASS_PLAY_MATCH_POINTS);
     /*
      * Reported off `granted`, which the store sets only the first time an award
@@ -275,7 +298,7 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
     // Hold the header badge at the old total until the card takes over.
     if (result.points > 0) setSocialPointsOverride(result.total - result.points);
     setAward({ points: result.points, total: result.total, previousTotal: result.total - result.points });
-  }, [phase, game.gameId, game.players.length, game.rounds]);
+  }, [phase, game.gameId, game.players.length, game.rounds, gameInk.trialInk]);
 
   const shapeId = visibleShapeId(game);
   const target = useMemo(() => (shapeId ? getShapeById(shapeId)?.generate(CANVAS_SIZE) : undefined), [shapeId]);
@@ -552,6 +575,7 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
                   onClick={() => {
                     trackEvent("pp_rematch", { playerCount: game.players.length });
                     setAward(null);
+                    setCtaInk(null);
                     clearSocialPointsOverride();
                     setGame((c) => rematch(c));
                   }}
@@ -559,6 +583,8 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
                   Play Again
                 </Button>
               </div>
+              {/* Try -> Buy after the Trial's last play: not an ad, after the actions, never in Play Again's way. */}
+              {ctaInk && <InkTrialCta ink={ctaInk} surface="twoPlayers" onClosed={() => setCtaInk(null)} />}
             </>
           )}
         </div>

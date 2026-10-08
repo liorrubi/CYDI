@@ -2055,3 +2055,11 @@
   font-weight: 900;
   letter-spacing: -0.02em;
 }
+
+/* 0.57.1: the active Ink Trial chip at the end of the Show / Draw row - no extra row, the canvas does not move. */
+.app-shell .app-play-trial {
+  margin-left: auto;
+  min-width: 0;
+  display: inline-flex;
+  overflow: hidden;
+}

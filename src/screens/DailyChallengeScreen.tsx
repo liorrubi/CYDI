@@ -30,7 +30,10 @@ import { addCoins } from "../services/coinsStore";
 import { withGameCoins } from "../services/economyAnalytics";
 import { dailyChallengeShareUrl } from "../services/dailyChallengeShare";
 import { genericShareUrl, shareOrCopy } from "../services/nativeShare";
-import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
+import { getSelectedColor, isColorUnlocked, setSelectedColor } from "../services/penColorStore";
+import { consumeInkTrialUse, getActiveInkTrial, markInkTrialStarted, resolveEffectiveInk, setInkTrialOverlay } from "../services/inkTrialStore";
+import { doesActiveTrialApplyOn } from "../services/ads/inkTrialConfig";
+import { useInkTrialRevision } from "../hooks/useInkTrialRevision";
 import { getSelectedSkin, setSelectedSkin } from "../services/penSkinStore";
 import { trackEvent } from "../services/analytics";
 import { markDrawingTutorialShown, shouldShowDrawingTutorial } from "../services/tutorialStore";
@@ -91,7 +94,11 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   /** One line per unclaimed prize (never summed) - a player who was away for several episodes could have more than one queued at once. */
   const [prizeMessages, setPrizeMessages] = useState<string[]>([]);
-  const [penColor, setPenColor] = useState<PenColorId>(() => getSelectedColor());
+  // Rewarded Ink Trial (0.57.1, D6): an active Trial applies to Daily attempts ONLY while the remote config enables
+  // the Daily surface (OFF by default) - resolveEffectiveInk returns the permanent ink otherwise. No Daily offer.
+  const [penColor, setPenColor] = useState<PenColorId>(() => resolveEffectiveInk("daily", getSelectedColor()).color);
+  useInkTrialRevision();
+  const dailyTrial = doesActiveTrialApplyOn("daily") ? getActiveInkTrial() : null;
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
   const [showDrawingTutorial, setShowDrawingTutorial] = useState(false);
   const canvasRef = useRef<DrawingCanvasHandle | null>(null);
@@ -163,6 +170,10 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       if (episode && shape) {
         trackEvent("game_started", { gameType: "dailyChallenge", category: shape.category, contentKey: `daily:${episode.id}` });
       }
+      // Each attempt resolves its ink at its start, so an expired Trial never carries into a retry.
+      const effective = resolveEffectiveInk("daily", getSelectedColor());
+      setPenColor(effective.color);
+      if (effective.trialInk) markInkTrialStarted(effective.trialInk, "daily");
       setPhase("drawing");
     }, PREVIEW_DURATION_MS);
     return () => window.clearTimeout(timeoutId);
@@ -170,7 +181,13 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const target = useMemo(() => shape?.generate(CANVAS_SIZE), [shape]);
 
   function handleSelectPenColor(id: PenColorId) {
-    setSelectedColor(id);
+    // Same overlay rule as Classic: the Trial ink writes nothing permanent; any owned ink pauses the Trial.
+    if (dailyTrial && id === dailyTrial.ink && !isColorUnlocked(id)) {
+      setInkTrialOverlay(true);
+    } else {
+      setSelectedColor(id);
+      if (dailyTrial) setInkTrialOverlay(false);
+    }
     setPenColor(id);
   }
 
@@ -241,6 +258,8 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       else playEncourageSound();
       // A daily game pays nothing itself (prizes are claimed later, as coin_earned) - 0 still records the balance bucket.
       trackEvent("game_completed", withGameCoins({ gameType: "dailyChallenge", category: shape.category, contentKey: `daily:${episode.id}` }, 0));
+      // D6: a completed Daily attempt drawn with the Trial ink uses one play (only reachable with Daily enabled).
+      if (dailyTrial && penColor === dailyTrial.ink) consumeInkTrialUse(dailyTrial.ink, `daily:${episode.id}:${Date.now()}`, "daily");
       setPhase("result");
     }, delay);
   }
@@ -424,7 +443,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       {phase === "drawing" && (
         <>
           <div className="pen-tools-row">
-            <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} />
+            <PenColorMenu selected={penColor} onSelect={handleSelectPenColor} onLockedColorClick={goToShop} trial={dailyTrial} />
             <PenSkinMenu
               selected={penSkin}
               inkColor={penInkGlyphColor(penColor)}

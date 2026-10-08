@@ -44,6 +44,7 @@ import {
   refreshInterstitialConfigIfStale,
 } from "./interstitialConfig";
 import { getInterstitialControllerDebugInfo } from "./interstitialController";
+import { installInkTrialConfigObserver } from "./inkTrialConfig";
 import { isQaBuild } from "../analyticsIdentity";
 
 let interstitialResumeHookInstalled = false;
@@ -88,6 +89,8 @@ function installInterstitialQaHook(): void {
 export async function initializeNativeAds(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
 
+  // 0.57.1: the Rewarded Ink Trial config rides this same response (its own `ink` key) - observed before the first fetch.
+  installInkTrialConfigObserver();
   void refreshInterstitialConfig();
   installInterstitialResumeRefresh();
   installInterstitialQaHook();

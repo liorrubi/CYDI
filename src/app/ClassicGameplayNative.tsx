@@ -75,6 +75,8 @@ type ClassicGameplayNativeProps = {
   inkControl?: ReactNode;
   /** <PenSkinMenu/>, untouched. */
   penControl?: ReactNode;
+  /** 0.57.1: the active Ink Trial chip (renders nothing without a Trial). Sits at the end of the phase row - no new row, never over the canvas. */
+  trialBadge?: ReactNode;
   onUndo?: () => void;
   undoDisabled?: boolean;
   guideEnabled?: boolean;
@@ -98,6 +100,7 @@ export default function ClassicGameplayNative({
   coached,
   inkControl,
   penControl,
+  trialBadge,
   onUndo,
   undoDisabled,
   guideEnabled,
@@ -157,6 +160,7 @@ export default function ClassicGameplayNative({
           {!showLit && <span className="app-play-pill-dot" aria-hidden="true" />}
           Draw
         </span>
+        {trialBadge && <span className="app-play-trial">{trialBadge}</span>}
       </div>
 
       {/* 4 · The surface. One panel, one canvas, unchanged between the phases -

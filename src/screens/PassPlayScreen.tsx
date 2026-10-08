@@ -8,6 +8,8 @@ import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
 import PassPlayGame, { type PassPlayProgress } from "../components/passplay/PassPlayGame";
 import { SocialPointsBadge } from "../components/SocialPointsBadge";
+import PostSessionInkOffer from "../components/PostSessionInkOffer";
+import InkTrialBadge from "../components/InkTrialBadge";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { trackEvent } from "../services/analytics";
 import { getPlayerName, setPlayerName } from "../services/playerProfileStore";
@@ -169,6 +171,12 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
         onNavigateToShapeChallenge={() => onNavigate(toShapeChallenge())}
       />
       {!onWeb && <SocialPointsBadge />}
+
+      {/* Rewarded Ink Trial (0.57.1): the SAFE post-game surface - back on setup after a completed game, never on
+          the champion / Play Again screen. Renders only when a completed game left an offer pending and an ink is
+          eligible; never opens an ad by itself. */}
+      <PostSessionInkOffer surface="twoPlayers" />
+      <InkTrialBadge surface="twoPlayers" asRow />
 
       {/* The web gets the 3a composition; Android keeps the form below,
           unchanged. Both drive the same state and the same handleStart. */}

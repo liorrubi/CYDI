@@ -117,6 +117,14 @@
 //   double8  rewardedDeferred 0..99                          double9  cadence       3..20 (effective; gamesBetweenAds' slot)
 //   double10 cap              1..5 (effective; ifxCap's slot) double11 ifxVersion / double12 ifxCell as above
 //   double13 batchSize, double14..19 = 0 (no economy context), double20 = 1 - the generic slots 1 / 13 / 20 are unchanged.
+//   --- 0.57.1 Rewarded Ink Trial (no new columns, schema stays 3) ---
+//   Ink offer funnel rows (reward_* with an *_ink_trial blob16 placement): blob18 = ink (rainbow | diamondBlue,
+//   the generic arm slot - an ink row carries no arm), blob19 = interstitialArm (Classic only), double5/double6 =
+//   sessionGames/offerNumber, double12 = ifxCell, double17 offerFlags from adAvailable, double16 multiplier = 0.
+//   blob20   rotationSlot     Classic offer rows (coin AND ink): "rotationSlot:coin" | "rotationSlot:ink" = what the
+//                             rotation scheduled; the placement is what rendered. Skip rows keep skipStage first.
+//   ink_trial rows: blob18 = ink, blob19 = inkSurface (classic | playTogether | twoPlayers | daily),
+//                   blob20 = "inkStage:<granted|started|completed|cta_shown|cta_purchased|cta_declined|cta_dismissed>".
 // coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
 // balance BUCKET is ever written - never a balance.
 // Booleans are 1/0 and absent numbers are 0, so always filter on blob1 before reading
@@ -156,7 +164,7 @@ type ShadowPath = "/event" | "/events";
 export type ShadowDataPoint = { blobs: string[]; doubles: number[]; indexes: string[] };
 
 /** Bounded enum params, first match wins. Every one is a closed set in analyticsSchema. */
-const DETAIL_PARAMS = ["difficulty", "phase", "tutorialType", "productType", "rarity", "surface", "installAge", "newRank", "coinSink", "coinSource", "milestone", "cause", "notReadyCause", "skipStage"] as const;
+const DETAIL_PARAMS = ["difficulty", "phase", "tutorialType", "productType", "rarity", "surface", "installAge", "newRank", "coinSink", "coinSource", "milestone", "cause", "notReadyCause", "skipStage", "rotationSlot", "inkStage"] as const;
 
 /** The schema-2 doubles (14..20) for one accepted envelope's params: economy context (0 when absent) + the reserved sampleWeight (1). */
 export function economyDoubles(params: Record<string, unknown>): number[] {
@@ -235,10 +243,12 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       attribution?.content ?? "",
       str(params.placement),
       str(params.reason),
-      str(params.arm),
+      // 0.57.1: Ink offer and ink_trial rows carry no arm - their ink takes the slot.
+      str(params.arm ?? params.ink),
       // Schema 3: reward funnel rows carry no outcome, so this slot holds their interstitialArm.
       // 0.57: game_completed rows carry the next-game context's nextOutcome here (no other row has both).
-      str(params.outcome ?? params.interstitialArm ?? params.nextOutcome),
+      // 0.57.1: ink_trial rows carry their inkSurface here (they have none of the other three).
+      str(params.outcome ?? params.interstitialArm ?? params.nextOutcome ?? params.inkSurface),
       detailFor(params),
     ],
     doubles: [

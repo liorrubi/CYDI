@@ -1120,8 +1120,11 @@ test("H: the experiment code never imports, reads or mutates Rewarded state", ()
   assert.deepEqual([...cadence.matchAll(/^import .*from "([^"]+)"/gm)].map((m) => m[1]).sort(), ["../services/analyticsIdentity", "../services/analyticsSchema"]);
 });
 
-test("H: no Ink Trial / pending-purchase CTA logic exists in the 0.57.0 tree (only hostile-key test fixtures mention `inkTrial`)", () => {
-  const needles = /inktrial|ink[-_ ]trial|pendingPurchaseCta|ctaClaimed/i;
+test("H (0.57.1): the Ink Trial lives OUTSIDE the interstitial and rewarded-ad core - none of these files knows it exists", () => {
+  // Ink Trial (0.57.1) is an independent layer (inkTrialStore / inkTrialConfig / inkTrialPolicy / resultAdLane). The
+  // interstitial modules, the rewarded SDK wrapper, the coin cadence and the coin offer must never name it: the only
+  // contact points are the generic claimResultAdLane() / deferInterstitialThisCycle() and the v3 body observer.
+  const needles = /inktrial|ink[-_ ]trial|pendingPurchaseCta|ctaClaimed|config:ads:ink/i;
   const files = [
     "services/ads/interstitialController.ts",
     "services/ads/interstitialCells.ts",
@@ -1130,13 +1133,10 @@ test("H: no Ink Trial / pending-purchase CTA logic exists in the 0.57.0 tree (on
     "services/ads/interstitialExperiment.ts",
     "services/ads/playSegmentSummary.ts",
     "services/ads/rewardedAds.ts",
-    "services/analyticsSchema.ts",
     "app/rewardedOfferCadence.ts",
-    "screens/ShapeChallengeScreen.tsx",
     "components/DoubleCoinsOffer.tsx",
   ];
   for (const f of files) assert.ok(!needles.test(read(`../../${f}`)), f);
-  assert.ok(!needles.test(read("../../../worker/index.ts")));
 });
 
 beforeEach(() => {

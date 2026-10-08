@@ -112,6 +112,8 @@ export const ALWAYS_PRESERVE: readonly string[] = [
   // Inputs to the OTHER guard's decision. See the note above.
   "mp_room_created",
   "mp_game_started",
+  // Rewarded Ink Trial lifecycle (0.57.1): exact, at most 5 rows per Trial - a few rows a day.
+  "ink_trial",
 ];
 
 export type AnalyticsCountryPolicy = {

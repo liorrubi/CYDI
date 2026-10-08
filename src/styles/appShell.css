@@ -1184,23 +1184,27 @@
  * score, the four metrics and the card's preview, name and price keep their
  * size - so the primary stays reachable without scrolling. Taller screens keep
  * the normal layout (without the card the primary sits near 601-653px).
+ * Sized for the worst case: a failed round, where "Score 70+ to unlock the next
+ * shape." adds a line above Try Again (Mi 8: Try Again 678-730px).
  * ------------------------------------------------------------------------ */
 @media (max-height: 840px) {
   .app-shell .app-result-compact {
-    gap: var(--space-2);
+    gap: 6px;
   }
 
   .app-shell .app-result-compact .app-result-stage {
     gap: 6px;
-    padding: var(--space-2);
+    padding: 6px;
   }
 
   .app-shell .app-result-compact .app-result-card {
-    padding: var(--space-3);
+    gap: var(--space-2);
+    padding: 10px;
   }
 
   .app-shell .app-result-compact .app-result-metrics {
     gap: 6px;
+    padding-top: var(--space-2);
   }
 
   .app-shell .app-result-compact .ink-cta {
@@ -2092,7 +2096,7 @@
   letter-spacing: -0.02em;
 }
 
-/* 0.57.1: the active Ink Trial chip at the end of the Show / Draw row - no extra row, the canvas does not move. */
+/* 0.58.0: the active Ink Trial chip at the end of the Show / Draw row - no extra row, the canvas does not move. */
 .app-shell .app-play-trial {
   margin-left: auto;
   min-width: 0;

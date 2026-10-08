@@ -13,9 +13,11 @@ import { trackEvent } from "./analytics";
 import { isColorUnlocked } from "./penColorStore";
 import type { PenColorId } from "../app/constants";
 import {
+  TRIAL_EXTENSION_PLAYS,
   TRIAL_PLAYS,
   activeTrial,
   advancedPointer,
+  extensionAvailable,
   nextEligibleInk,
   pendingCtaInk,
   scheduledSlot,
@@ -80,7 +82,9 @@ const localInkStorage: InkTrialStorage = {
   },
 };
 
-type Tracker = (stage: InkTrialStage, ink: InkTrialInk, surface: InkSurface, extra?: { deferredInterstitial: boolean }) => void;
+/** Extra bounded context on a lifecycle row: the CTA's interstitial deferral, and whether the row belongs to the extension phase. */
+type TrackExtra = { deferredInterstitial?: boolean; inkExtension?: true };
+type Tracker = (stage: InkTrialStage, ink: InkTrialInk, surface: InkSurface, extra?: TrackExtra) => void;
 const defaultTracker: Tracker = (inkStage, ink, inkSurface, extra) => trackEvent("ink_trial", { inkStage, ink, inkSurface, ...(extra ?? {}) });
 
 let storage: InkTrialStorage = localInkStorage;
@@ -98,10 +102,11 @@ function isRecordShape(value: unknown): value is InkTrialRecord {
     typeof r.usesLeft === "number" &&
     Number.isInteger(r.usesLeft) &&
     r.usesLeft >= 0 &&
-    r.usesLeft <= TRIAL_PLAYS &&
+    r.usesLeft <= Math.max(TRIAL_PLAYS, TRIAL_EXTENSION_PLAYS) &&
     typeof r.started === "boolean" &&
     typeof r.ctaShown === "boolean" &&
-    (r.ctaOutcome === null || r.ctaOutcome === "purchased" || r.ctaOutcome === "declined" || r.ctaOutcome === "dismissed")
+    (r.ctaOutcome === null || ["purchased", "declined", "dismissed", "shop", "extended"].includes(r.ctaOutcome as string)) &&
+    (r.extended === undefined || typeof r.extended === "boolean")
   );
 }
 
@@ -114,7 +119,8 @@ function parseState(raw: string | null): InkTrialState | null {
     const state = freshState();
     for (const ink of INK_TRIAL_INKS) {
       const record = (parsed.trials as Record<string, unknown>)[ink];
-      if (isRecordShape(record)) state.trials[ink] = { ...record };
+      // `extended` is absent on a record stored before the extension existed: never extended.
+      if (isRecordShape(record)) state.trials[ink] = { ...record, extended: record.extended === true };
     }
     state.overlayOff = parsed.overlayOff === true;
     if (typeof parsed.classicPointer === "number" && Number.isInteger(parsed.classicPointer) && parsed.classicPointer >= 0) state.classicPointer = parsed.classicPointer;
@@ -211,7 +217,7 @@ export function resolveEffectiveInk(surface: InkSurface, permanent: PenColorId):
 export function grantInkTrial(ink: InkTrialInk, surface: InkSurface): boolean {
   const state = load();
   if (nextEligibleInk(state.trials, isOwned) !== ink) return false;
-  state.trials[ink] = { status: "active", usesLeft: TRIAL_PLAYS, started: false, ctaShown: false, ctaOutcome: null };
+  state.trials[ink] = { status: "active", usesLeft: TRIAL_PLAYS, started: false, ctaShown: false, ctaOutcome: null, extended: false };
   state.overlayOff = false;
   save(state);
   track("granted", ink, surface);
@@ -225,7 +231,7 @@ export function markInkTrialStarted(ink: InkTrialInk, surface: InkSurface): void
   if (!record || record.status !== "active" || record.started) return;
   record.started = true;
   save(state);
-  track("started", ink, surface);
+  track("started", ink, surface, phaseExtra(record));
 }
 
 /**
@@ -250,8 +256,8 @@ export function consumeInkTrialUse(ink: InkTrialInk, key: string, surface: InkSu
     state.overlayOff = false;
   }
   save(state);
-  if (firstUse) track("started", ink, surface);
-  if (exhausted) track("completed", ink, surface);
+  if (firstUse) track("started", ink, surface, phaseExtra(record));
+  if (exhausted) track("completed", ink, surface, phaseExtra(record));
   return { consumed: true, usesLeft: record.usesLeft, exhausted };
 }
 
@@ -286,17 +292,54 @@ export function markInkCtaShown(ink: InkTrialInk, surface: InkSurface, deferredI
   if (!record || record.ctaShown) return;
   record.ctaShown = true;
   save(state);
-  track("cta_shown", ink, surface, { deferredInterstitial });
+  track("cta_shown", ink, surface, { deferredInterstitial, ...phaseExtra(record) });
 }
 
-/** The CTA's one outcome: purchased (from the CTA), declined (NOT NOW) or dismissed (left without choosing). */
-export function recordInkCtaOutcome(ink: InkTrialInk, outcome: InkCtaOutcome, surface: InkSurface): void {
+/**
+ * The CTA's one outcome: purchased (from the CTA), declined (NOT NOW), dismissed (left without choosing), shop
+ * (VIEW IN SHOP). The extension's grant is the first card's outcome too, recorded by grantInkTrialExtension - its
+ * own `granted` row (inkExtension) says so, so it has no cta_* row.
+ */
+export function recordInkCtaOutcome(ink: InkTrialInk, outcome: Exclude<InkCtaOutcome, "extended">, surface: InkSurface): void {
   const state = load();
   const record = state.trials[ink];
   if (!record || !record.ctaShown || record.ctaOutcome !== null) return;
   record.ctaOutcome = outcome;
   save(state);
-  track(outcome === "purchased" ? "cta_purchased" : outcome === "declined" ? "cta_declined" : "cta_dismissed", ink, surface);
+  const stage: InkTrialStage = outcome === "purchased" ? "cta_purchased" : outcome === "declined" ? "cta_declined" : outcome === "shop" ? "cta_shop" : "cta_dismissed";
+  track(stage, ink, surface, phaseExtra(record));
+}
+
+/** Was this ink's one-time extension already granted (its next Keep-it card is the final, buy / Shop only one)? */
+export function isInkTrialExtended(ink: InkTrialInk): boolean {
+  return load().trials[ink]?.extended === true;
+}
+
+/** Is this ink's one-time +5 extension on offer right now (its first Keep-it card is open)? */
+export function isInkExtensionAvailable(ink: InkTrialInk): boolean {
+  return extensionAvailable(load().trials[ink], isOwned(ink));
+}
+
+/**
+ * A completed rewarded ad on the FIRST Keep-it card: +TRIAL_EXTENSION_PLAYS plays of the same Trial, once per ink
+ * (`extended` can never be set twice), re-equipped as the overlay. The record becomes active again, so its own
+ * started / completed / Keep-it card follow from the next play or session - the final card has no extension.
+ * Refused (false) when not available: already extended, the card already answered, owned, or another Trial running.
+ */
+export function grantInkTrialExtension(ink: InkTrialInk, surface: InkSurface): boolean {
+  const state = load();
+  const record = state.trials[ink];
+  if (!extensionAvailable(record, isOwned(ink)) || activeTrial(state.trials, isOwned) !== null) return false;
+  state.trials[ink] = { status: "active", usesLeft: TRIAL_EXTENSION_PLAYS, started: false, ctaShown: false, ctaOutcome: null, extended: true };
+  state.overlayOff = false;
+  save(state);
+  track("granted", ink, surface, { inkExtension: true });
+  return true;
+}
+
+/** A row of the extension phase carries inkExtension; the first 5 plays' rows carry nothing new. */
+function phaseExtra(record: InkTrialRecord): TrackExtra {
+  return record.extended ? { inkExtension: true } : {};
 }
 
 /**

@@ -258,3 +258,38 @@ test("M6: exact ledger - the purchase stays exact; DO byInkPurchase is ink|inkTr
   counters = incrementEvent(counters as never, "purchase_completed", buy("diamondBlue", { inkTrialBefore: "none" }), "android", "0.58.0") as never;
   assert.equal((counters.shop_purchase_with_coins.byInkPurchase as Record<string, number>)["diamondBlue|none"], 1, "the legacy name lands on the canonical row");
 });
+
+// ================================================ M7: the one-time +5 extension (no new event, no new column) ====
+
+test("M7: inkExtension - only true; on ink_trial any stage; on the Ink offer funnel never with a rotation slot; cta_shop stage", () => {
+  assert.equal(valid("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkExtension: true }), true);
+  assert.equal(valid("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "playTogether", deferredInterstitial: false, inkExtension: true }), true);
+  assert.equal(valid("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkExtension: false }), false, "only true");
+  assert.equal(valid("ink_trial", { inkStage: "cta_shop", ink: "diamondBlue", inkSurface: "twoPlayers" }), true);
+  const ext = { placement: "shape_challenge_ink_trial", ink: "rainbow", offerNumber: 1, sessionGames: 5, adAvailable: true, inkExtension: true };
+  for (const e of ["reward_offer_shown", "reward_ad_started", "reward_ad_completed", "reward_ad_failed"]) assert.equal(valid(e, ext), true, e);
+  assert.equal(valid("reward_skipped", { ...ext, skipStage: "offer" }), true);
+  assert.equal(valid("reward_offer_shown", { ...ext, rotationSlot: "ink" }), false, "the extension is not a rotation slot");
+  assert.equal(valid("reward_offer_shown", { ...ext, inkExtension: "yes" }), false);
+  assert.equal(valid("reward_offer_shown", { ...ext, placement: "shape_challenge_double_reward" }), false, "Ink placements only");
+});
+
+test("M7: AE double10 = 1 on extension rows (Ink offer funnel and ink_trial); DO byInkTrial gains |ext", () => {
+  const offer = point("reward_ad_completed", { placement: "play_together_ink_trial", ink: "rainbow", offerNumber: 1, sessionGames: 2, adAvailable: true, inkExtension: true });
+  assert.deepEqual([b(offer, 16), b(offer, 18), d(offer, 10)], ["play_together_ink_trial", "rainbow", 1]);
+  const life = point("ink_trial", { inkStage: "completed", ink: "rainbow", inkSurface: "classic", inkExtension: true });
+  assert.deepEqual([b(life, 18), b(life, 19), b(life, 20), d(life, 10)], ["rainbow", "classic", "inkStage:completed", 1]);
+  assert.equal(d(point("ink_trial", { inkStage: "completed", ink: "rainbow", inkSurface: "classic" }), 10), 0, "the first 5's rows: 0");
+  let counters = {} as Record<string, Record<string, unknown>>;
+  const inc = (params: Record<string, unknown>) => (counters = incrementEvent(counters as never, "ink_trial", params, "android", "0.58.0") as never);
+  inc({ inkStage: "granted", ink: "rainbow", inkSurface: "classic" });
+  inc({ inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkExtension: true });
+  inc({ inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true, inkExtension: true });
+  inc({ inkStage: "cta_shop", ink: "rainbow", inkSurface: "classic", inkExtension: true });
+  assert.deepEqual(counters.ink_trial.byInkTrial, {
+    "granted|rainbow|classic": 1,
+    "granted|rainbow|classic|ext": 1,
+    "cta_shown|rainbow|classic|deferred|ext": 1,
+    "cta_shop|rainbow|classic|ext": 1,
+  });
+});

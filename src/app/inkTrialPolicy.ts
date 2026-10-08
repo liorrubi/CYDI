@@ -11,21 +11,28 @@ import { INK_TRIAL_INKS, type InkTrialInk } from "../services/analyticsSchema";
 
 /** A Trial is worth this many plays (Classic: one completed scored play; Play Together / 2 Players: one completed session). */
 export const TRIAL_PLAYS = 5;
+/** The one optional Rewarded extension, offered once on the first Keep-it card: +5 plays (so at most 10 per ink). */
+export const TRIAL_EXTENSION_PLAYS = 5;
 
 /**
- * active    - granted, plays left.
- * exhausted - every play used (the Try -> Buy CTA follows once).
+ * active    - granted, plays left (the first 5, or - with `extended` - the extension's 5).
+ * exhausted - every play of the current phase used: the Keep-it card follows once (CTA, `ctaShown`).
  * closed    - bought permanently while the Trial was still active (ownership wins, nothing left to consume).
+ * `extended` - the one-time extension was granted. One record = one Trial lifecycle per ink:
+ *   initial active (!extended) -> initial exhausted (the first card: buy / +5 plays / Shop) -> [extension]
+ *   extension active (extended) -> extension exhausted (the final card: buy / Shop only).
  * Any record at all = this ink's Trial was granted once, so it is never offered or granted again.
  */
 export type InkTrialStatus = "active" | "exhausted" | "closed";
-export type InkCtaOutcome = "purchased" | "declined" | "dismissed";
+/** "extended" = the first card ended in the +5 extension (its own `granted` row says so); "shop" = VIEW IN SHOP. */
+export type InkCtaOutcome = "purchased" | "declined" | "dismissed" | "shop" | "extended";
 export type InkTrialRecord = {
   status: InkTrialStatus;
   usesLeft: number;
   started: boolean;
   ctaShown: boolean;
   ctaOutcome: InkCtaOutcome | null;
+  extended: boolean;
 };
 export type InkTrials = Partial<Record<InkTrialInk, InkTrialRecord>>;
 
@@ -55,6 +62,23 @@ export function nextEligibleInk(trials: InkTrials, isOwned: IsOwned): InkTrialIn
     return ink;
   }
   return null;
+}
+
+/**
+ * May this ink's one-time +5 extension be granted? Only while its FIRST Keep-it card is open: the first 5 plays used,
+ * never extended, that card not yet answered (NOT NOW / leaving / Shop / buying all end the chance), not owned.
+ */
+export function extensionAvailable(record: InkTrialRecord | undefined, owned: boolean): boolean {
+  return !!record && record.status === "exhausted" && !record.extended && record.ctaOutcome === null && !owned;
+}
+
+/**
+ * What one extension ad's result does. ONLY the SDK's confirmed reward grants the +5: an ad closed early is a
+ * dismissal (the card stays), and no-fill / timeout / an SDK error is a failure (the card stays, nothing granted).
+ */
+export function extensionAdStep(status: "rewarded" | "dismissed" | "unavailable" | "error"): "grant" | "dismissed" | "failed" {
+  if (status === "rewarded") return "grant";
+  return status === "dismissed" ? "dismissed" : "failed";
 }
 
 /** The ink whose Try -> Buy CTA is still owed: Trial used up, CTA never shown, not owned (buying it already answered the question). */

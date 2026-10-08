@@ -1215,6 +1215,21 @@
   .app-shell .app-result-compact .ink-cta .ink-offer-actions {
     margin-top: var(--space-2);
   }
+
+  /* The first Keep-it card has a third row (the +5 extension's NOT NOW / shortfall line). To keep Try Again on a
+     failed round above the fold, the legend and the Guide toggle share one row under the canvas - both stay. */
+  .app-shell .app-result-compact .app-result-stage {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    column-gap: var(--space-4);
+  }
+
+  .app-shell .app-result-compact .app-result-stage > .canvas-wrapper {
+    display: flex;
+    flex: 0 0 100%;
+    justify-content: center;
+  }
 }
 
 /* ===========================================================================

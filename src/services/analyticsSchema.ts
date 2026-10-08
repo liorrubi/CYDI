@@ -222,7 +222,8 @@ export type InkTrialInk = (typeof INK_TRIAL_INKS)[number];
  * The Trial lifecycle, one `ink_trial` row per stage per Trial (at most 5 rows per Trial: granted, started,
  * completed, cta_shown, and ONE cta outcome). No per-use rows.
  */
-export const INK_TRIAL_STAGES = ["granted", "started", "completed", "cta_shown", "cta_purchased", "cta_declined", "cta_dismissed"] as const;
+/** cta_shop (0.58.0): VIEW IN SHOP on the Keep-it card. The extension phase reuses every stage, marked by `inkExtension`. */
+export const INK_TRIAL_STAGES = ["granted", "started", "completed", "cta_shown", "cta_purchased", "cta_declined", "cta_dismissed", "cta_shop"] as const;
 export type InkTrialStage = (typeof INK_TRIAL_STAGES)[number];
 /**
  * An Ink Trial offer reuses the reward-offer funnel events (offer_shown / ad_started / ad_completed / ad_failed /
@@ -238,6 +239,8 @@ export type RewardOfferInk = {
   adAvailable: boolean;
   interstitialArm?: RewardInterstitialArm;
   ifxCell?: InterstitialCellId;
+  /** The one-time +5 extension offered on the first Keep-it card (same Ink placement and unit); absent = the Trial offer. */
+  inkExtension?: true;
 };
 /**
  * Optional on a CLASSIC offer (coin or ink): what the coin/ink rotation SCHEDULED for this opportunity. The
@@ -253,7 +256,8 @@ export type RewardOfferParams =
  * `deferredInterstitial` (cta_shown only, optional): the CTA owned its Result and an interstitial opportunity due on
  * that exit was deferred (left due, not consumed) - so CTA priority and the preserved opportunity can be verified.
  */
-export type InkTrialParams = { inkStage: InkTrialStage; ink: InkTrialInk; inkSurface: InkSurface; deferredInterstitial?: boolean };
+/** `inkExtension` (optional, only `true`): the row belongs to the one-time +5 extension phase of this Trial. */
+export type InkTrialParams = { inkStage: InkTrialStage; ink: InkTrialInk; inkSurface: InkSurface; deferredInterstitial?: boolean; inkExtension?: true };
 /**
  * `inkTrialBefore` (0.58.0, shop_purchase_with_coins only, a Trial ink's penColor purchase): that ink's Trial
  * history at the moment of purchase, from the local Ink Trial store. `none` = never granted, `active` = bought while
@@ -943,10 +947,12 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   play_store_click: (p) => validatePlayStoreEvent(p),
   session_summary: (p) => validateSessionSummary(p),
   ink_trial: (p) => {
-    if (!isRecord(p) || !hasKeysWithin(p, ["inkStage", "ink", "inkSurface"], ["deferredInterstitial"])) return { valid: false };
+    if (!isRecord(p) || !hasKeysWithin(p, ["inkStage", "ink", "inkSurface"], ["deferredInterstitial", "inkExtension"])) return { valid: false };
     if (!isOneOf(INK_TRIAL_STAGES, p.inkStage) || !isOneOf(INK_TRIAL_INKS, p.ink) || !isOneOf(INK_SURFACES, p.inkSurface)) return { valid: false };
     // deferredInterstitial: a boolean, and only on cta_shown.
     if ("deferredInterstitial" in p && (p.inkStage !== "cta_shown" || !isBoolean(p.deferredInterstitial))) return { valid: false };
+    // inkExtension: present only as true (an extension-phase row).
+    if ("inkExtension" in p && p.inkExtension !== true) return { valid: false };
     return {
       valid: true,
       params: {
@@ -954,6 +960,7 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
         ink: p.ink,
         inkSurface: p.inkSurface,
         ...("deferredInterstitial" in p ? { deferredInterstitial: p.deferredInterstitial as boolean } : {}),
+        ...("inkExtension" in p ? { inkExtension: true as const } : {}),
       },
     };
   },
@@ -1269,7 +1276,7 @@ function validateRewardOfferEvent<
 }
 
 const INK_OFFER_REQUIRED_KEYS = ["placement", "ink", "offerNumber", "sessionGames", "adAvailable"] as const;
-const INK_OFFER_OPTIONAL_KEYS = ["interstitialArm", "ifxCell", "rotationSlot"] as const;
+const INK_OFFER_OPTIONAL_KEYS = ["interstitialArm", "ifxCell", "rotationSlot", "inkExtension"] as const;
 /** The Ink offer placements - an ink block on any other placement is a bug and is rejected. */
 const INK_OFFER_PLACEMENTS: readonly RewardedAdPlacement[] = ["shape_challenge_ink_trial", "play_together_ink_trial", "two_players_ink_trial"];
 
@@ -1284,10 +1291,13 @@ function validateInkOfferEvent<E extends AnalyticsEventName>(p: Record<string, u
   if (!optionalField(p, "interstitialArm", (v) => isOneOf(REWARD_INTERSTITIAL_ARMS, v))) return { valid: false };
   if ("ifxCell" in p && (!isOneOf(INTERSTITIAL_CELL_IDS, p.ifxCell) || p.interstitialArm === undefined || p.interstitialArm === "none")) return { valid: false };
   if ("rotationSlot" in p && (!classic || !isOneOf(INK_ROTATION_SLOTS, p.rotationSlot))) return { valid: false };
+  // The +5 extension: only `true`, and never a rotation slot (it is offered by the Keep-it card, not the rotation).
+  if ("inkExtension" in p && (p.inkExtension !== true || "rotationSlot" in p)) return { valid: false };
   const params: Record<string, unknown> = { placement, ink, offerNumber, sessionGames, adAvailable };
   if ("interstitialArm" in p) params.interstitialArm = p.interstitialArm;
   if ("ifxCell" in p) params.ifxCell = p.ifxCell;
   if ("rotationSlot" in p) params.rotationSlot = p.rotationSlot;
+  if ("inkExtension" in p) params.inkExtension = true;
   return { valid: true, params: params as EventParamsMap[E] };
 }
 

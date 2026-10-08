@@ -18,10 +18,8 @@ import WinnerReveal from "../multiplayer/WinnerReveal";
 import { CANVAS_SIZE } from "../../app/constants";
 import { getShapeById } from "../../engine/shapeLibrary";
 import { getSelectedColor } from "../../services/penColorStore";
-import { consumeInkTrialUse, getPendingCtaInk, markInkTrialStarted, resolveEffectiveInk, setPostSessionPending } from "../../services/inkTrialStore";
+import { consumeInkTrialUse, markInkTrialStarted, resolveEffectiveInk, setPostSessionPending } from "../../services/inkTrialStore";
 import { warmPostSessionInkAd } from "../../services/inkTrialOffers";
-import type { InkTrialInk } from "../../services/analyticsSchema";
-import InkTrialCta from "../InkTrialCta";
 import { playRoundStartSound } from "../../engine/soundEngine";
 import { hapticRoundStart } from "../../services/haptics";
 import { ScreenWakeLock } from "../../services/wakeLock";
@@ -126,8 +124,6 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
   useEffect(() => {
     if (gameInk.trialInk) markInkTrialStarted(gameInk.trialInk, "twoPlayers");
   }, [gameInk]);
-  /** The Try -> Buy CTA when this game used the Trial's last play (not an ad - it sits under the final actions). */
-  const [ctaInk, setCtaInk] = useState<InkTrialInk | null>(null);
 
   const { phase, roundIndex, turnPosition } = game;
   const player = currentPlayer(game);
@@ -276,12 +272,12 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
     finishedRef.current = game.gameId;
     trackEvent("pp_game_finished", { playerCount: game.players.length, roundCount: game.rounds });
     // Rewarded Ink Trial (0.58.0): a completed game (any round count) that drew with the Trial ink uses exactly one
-    // play, keyed on the game. It also owes one Ink offer, shown back on the setup screen - never here, where the
+    // play, keyed on the game. It also owes one Ink offer - or, after a Trial's last play, its Keep-it card (buy / +5
+    // plays / Shop) - shown back on the setup screen, never here, where the
     // players may want Play Again straight away. Local state, not the event: it holds even if analytics never sends.
     if (gameInk.trialInk) consumeInkTrialUse(gameInk.trialInk, `pp:${game.gameId}`, "twoPlayers");
     setPostSessionPending("twoPlayers");
     warmPostSessionInkAd("twoPlayers");
-    setCtaInk(getPendingCtaInk());
     const result = awardPassPlayMatch(game.gameId, PASS_PLAY_MATCH_POINTS);
     /*
      * Reported off `granted`, which the store sets only the first time an award
@@ -575,7 +571,6 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
                   onClick={() => {
                     trackEvent("pp_rematch", { playerCount: game.players.length });
                     setAward(null);
-                    setCtaInk(null);
                     clearSocialPointsOverride();
                     setGame((c) => rematch(c));
                   }}
@@ -583,8 +578,6 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
                   Play Again
                 </Button>
               </div>
-              {/* Try -> Buy after the Trial's last play: not an ad, after the actions, never in Play Again's way. */}
-              {ctaInk && <InkTrialCta ink={ctaInk} surface="twoPlayers" onClosed={() => setCtaInk(null)} />}
             </>
           )}
         </div>

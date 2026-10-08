@@ -4,6 +4,9 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
+  TRIAL_EXTENSION_PLAYS,
+  extensionAdStep,
+  extensionAvailable,
   TRIAL_PLAYS,
   activeTrial,
   advancedPointer,
@@ -17,7 +20,7 @@ import {
 } from "./inkTrialPolicy";
 
 const none = () => false;
-const record = (over: Partial<InkTrialRecord> = {}): InkTrialRecord => ({ status: "active", usesLeft: TRIAL_PLAYS, started: false, ctaShown: false, ctaOutcome: null, ...over });
+const record = (over: Partial<InkTrialRecord> = {}): InkTrialRecord => ({ status: "active", usesLeft: TRIAL_PLAYS, started: false, ctaShown: false, ctaOutcome: null, extended: false, ...over });
 
 test("a Trial is 5 plays", () => {
   assert.equal(TRIAL_PLAYS, 5);
@@ -99,4 +102,22 @@ test("content: scheduled coin stays coin even with an eligible ink; scheduled in
 
 test("content: with Ink off the rotation is not consulted at all - exactly the 0.57 coin offer, no rotationSlot", () => {
   assert.deepEqual(chooseClassicContent({ inkOn: false, scheduled: "ink", eligibleInk: "rainbow" }), { kind: "coin" });
+});
+
+test("extension ad: ONLY the confirmed reward grants; early close is a dismissal; no-fill / timeout / SDK error is a failure", () => {
+  assert.equal(extensionAdStep("rewarded"), "grant");
+  assert.equal(extensionAdStep("dismissed"), "dismissed");
+  assert.equal(extensionAdStep("unavailable"), "failed");
+  assert.equal(extensionAdStep("error"), "failed");
+});
+
+test("extension availability: first card open, never extended, not owned - nothing else", () => {
+  const firstCard = record({ status: "exhausted", usesLeft: 0, started: true, ctaShown: true });
+  assert.equal(TRIAL_EXTENSION_PLAYS, 5);
+  assert.equal(extensionAvailable(firstCard, false), true);
+  assert.equal(extensionAvailable(firstCard, true), false, "owned");
+  assert.equal(extensionAvailable({ ...firstCard, extended: true }, false), false, "already extended");
+  assert.equal(extensionAvailable({ ...firstCard, ctaOutcome: "declined" }, false), false, "card answered");
+  assert.equal(extensionAvailable(record(), false), false, "still active");
+  assert.equal(extensionAvailable(undefined, false), false);
 });

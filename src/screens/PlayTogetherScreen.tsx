@@ -365,7 +365,7 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode, openJo
       {/* Rewarded Ink Trial (0.58.0): the SAFE post-session surface - the player has left the room, so nobody
           waits and no rematch is in play. Renders only when a completed session left an offer pending and an ink
           is eligible; never opens an ad by itself. */}
-      {view === "menu" && <PostSessionInkOffer surface="playTogether" />}
+      {view === "menu" && <PostSessionInkOffer surface="playTogether" onViewShop={(ink) => onNavigate(toShop(toPlayTogether(), ink))} />}
 
       {/* The web gets the 3a composition; Android keeps the existing entry
           below, unchanged. Both drive the same two actions. */}

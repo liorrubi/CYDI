@@ -19,7 +19,7 @@ const { validateEventParams } = await import("./analyticsSchema.ts");
 const { updateSaveData, replaceSaveData } = await import("./saveStore.ts");
 const { createDefaultSaveData } = await import("./saveData.ts");
 const { purchasePenColor } = await import("./shopPurchase.ts");
-const { _resetInkTrialStoreForTests, consumeInkTrialUse, getActiveInkTrial, grantInkTrial, getInkTrialHistory } = await import("./inkTrialStore.ts");
+const { _resetInkTrialStoreForTests, consumeInkTrialUse, getActiveInkTrial, grantInkTrial, getInkTrialHistory, grantInkTrialExtension, markInkCtaShown } = await import("./inkTrialStore.ts");
 const { isColorUnlocked } = await import("./penColorStore.ts");
 
 type Sent = { name: string; params: Record<string, unknown> };
@@ -88,4 +88,34 @@ test("every purchase row above passes the shared validator (the Worker's ingest 
   const rows = everySent.filter((s) => s.name === "shop_purchase_with_coins").map((s) => s.params);
   assert.deepEqual(rows.map((p) => `${p.tier}:${p.inkTrialBefore ?? "-"}`), ["rainbow:none", "rainbow:active", "rainbow:ended", "diamondBlue:none", "purple:-"]);
   for (const p of rows) assert.equal(validateEventParams("shop_purchase_with_coins", p).valid, true, JSON.stringify(p));
+});
+
+test("the +5 extension: bought during it -> active; bought after all 10 plays -> ended", () => {
+  freshPlayer();
+  grantInkTrial("rainbow", "classic");
+  for (let i = 1; i <= 5; i++) consumeInkTrialUse("rainbow", `e${i}`, "classic");
+  markInkCtaShown("rainbow", "classic");
+  assert.equal(grantInkTrialExtension("rainbow", "classic"), true);
+  assert.equal(getInkTrialHistory("rainbow"), "active");
+  for (let i = 1; i <= 5; i++) consumeInkTrialUse("rainbow", `f${i}`, "classic");
+  assert.equal(getInkTrialHistory("rainbow"), "ended");
+  freshPlayer();
+  grantInkTrial("rainbow", "twoPlayers");
+  for (let i = 1; i <= 5; i++) consumeInkTrialUse("rainbow", `g${i}`, "twoPlayers");
+  markInkCtaShown("rainbow", "twoPlayers");
+  grantInkTrialExtension("rainbow", "twoPlayers");
+  consumeInkTrialUse("rainbow", "h1", "twoPlayers");
+  // (Its row equals an earlier test's "rainbow / active" row, which analytics de-duplicates within 2 s - so the
+  // value the purchase reads is asserted directly.)
+  assert.equal(getInkTrialHistory("rainbow"), "active", "a purchase during the extension is Trial-active");
+  assert.equal(purchasePenColor("rainbow"), "purchased");
+  assert.equal(getActiveInkTrial(), null, "and it closes the Trial");
+});
+
+test("VIEW IN SHOP opens the existing Shop on that ink (the route the card's hosts build)", async () => {
+  const { toShop, toPlayTogether, toPassPlay } = await import("../app/routes.ts");
+  const shop = toShop(toPlayTogether(), "rainbow") as { name: string; highlightPenColorId?: string };
+  assert.equal(shop.name, "shop");
+  assert.equal(shop.highlightPenColorId, "rainbow");
+  assert.equal((toShop(toPassPlay(), "diamondBlue") as { highlightPenColorId?: string }).highlightPenColorId, "diamondBlue");
 });

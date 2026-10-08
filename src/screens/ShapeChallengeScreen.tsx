@@ -1391,7 +1391,18 @@ function ShapePlay({
             }}
           />
         )}
-        {inkOffer === null && ctaInk !== null && <InkTrialCta ink={ctaInk} surface="classic" deferredInterstitial={ctaDeferredInterstitial} onClosed={() => setCtaInk(null)} />}
+        {inkOffer === null && ctaInk !== null && (
+          <InkTrialCta
+            ink={ctaInk}
+            surface="classic"
+            placement="shape_challenge_ink_trial"
+            sessionGames={upcomingOfferContext().sessionGames}
+            deferredInterstitial={ctaDeferredInterstitial}
+            // VIEW IN SHOP: the existing Shop, opened on this ink (its card is scrolled to and highlighted).
+            onViewShop={(ink) => onNavigateToShop(ink)}
+            onClosed={() => setCtaInk(null)}
+          />
+        )}
       </>
     );
 

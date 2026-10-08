@@ -4,6 +4,7 @@ import {
   clearPostSessionPending,
   completedSessionsThisRun,
   getNextEligibleInk,
+  getPendingCtaInk,
   hasPostSessionPending,
   nextInkOfferNumber,
   type PostSessionSurface,
@@ -12,8 +13,9 @@ import { POST_SESSION_INK_PLACEMENT, canOfferInkOn, hasInkConfigAnswer } from ".
 import type { InkTrialInk } from "../services/analyticsSchema";
 import { isMathFallbackEnabled } from "./DoubleCoinsOffer";
 import InkTrialOffer from "./InkTrialOffer";
+import InkTrialCta from "./InkTrialCta";
 
-type Decision = { ink: InkTrialInk; offerNumber: number; sessionGames: number };
+type Decision = { kind: "offer" | "cta"; ink: InkTrialInk; offerNumber: number; sessionGames: number };
 
 /**
  * The Play Together / 2 Players Ink offer, on the SAFE post-session surface only (the Play Together menu after the
@@ -31,6 +33,10 @@ type Evaluation = { decision: Decision | null; drop: boolean };
 /** Pure: what this mount does with the pending offer. `drop` = nothing will ever be offered for it. */
 function evaluate(surface: PostSessionSurface): Evaluation {
   if (!hasPostSessionPending(surface)) return { decision: null, drop: false };
+  // A Trial phase just ended on this surface: its Keep-it card comes first (buy / one-time +5 / Shop). It is not an
+  // ad offer, so it needs neither the surface config nor an ad - only its optional +5 button does (InkTrialCta).
+  const ctaInk = getPendingCtaInk();
+  if (ctaInk !== null) return { decision: { kind: "cta", ink: ctaInk, offerNumber: 1, sessionGames: completedSessionsThisRun(surface) }, drop: false };
   const ink = getNextEligibleInk();
   // No eligible ink (owned / already trialled / another Trial running): nothing to offer for this session.
   if (ink === null) return { decision: null, drop: true };
@@ -40,18 +46,33 @@ function evaluate(surface: PostSessionSurface): Evaluation {
     return { decision: null, drop: hasInkConfigAnswer() };
   }
   if (!isRewardedAdAvailable(POST_SESSION_INK_PLACEMENT[surface]) && !isMathFallbackEnabled()) return { decision: null, drop: false };
-  return { decision: { ink, offerNumber: nextInkOfferNumber(ink), sessionGames: completedSessionsThisRun(surface) }, drop: false };
+  return { decision: { kind: "offer", ink, offerNumber: nextInkOfferNumber(ink), sessionGames: completedSessionsThisRun(surface) }, drop: false };
 }
 
-export default function PostSessionInkOffer({ surface }: { surface: PostSessionSurface }) {
+export default function PostSessionInkOffer({ surface, onViewShop }: { surface: PostSessionSurface; onViewShop: (ink: InkTrialInk) => void }) {
   const [closed, setClosed] = useState(false);
   // Decided once per mount from a pure read; the pending flag is spent only when the card really renders.
   const [{ decision, drop }] = useState<Evaluation>(() => evaluate(surface));
   useEffect(() => {
-    if (drop) clearPostSessionPending(surface);
-  }, [drop, surface]);
+    // The Keep-it card is rendered as soon as it is decided: its pending session is spent here.
+    if (drop || decision?.kind === "cta") clearPostSessionPending(surface);
+  }, [drop, decision, surface]);
 
   if (decision === null || closed) return null;
+  if (decision.kind === "cta") {
+    return (
+      <div className="ink-offer-slot">
+        <InkTrialCta
+          ink={decision.ink}
+          surface={surface}
+          placement={POST_SESSION_INK_PLACEMENT[surface]}
+          sessionGames={decision.sessionGames}
+          onViewShop={onViewShop}
+          onClosed={() => setClosed(true)}
+        />
+      </div>
+    );
+  }
   return (
     <div className="ink-offer-slot">
       <InkTrialOffer

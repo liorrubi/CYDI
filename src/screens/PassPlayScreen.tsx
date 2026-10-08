@@ -175,7 +175,7 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
       {/* Rewarded Ink Trial (0.58.0): the SAFE post-game surface - back on setup after a completed game, never on
           the champion / Play Again screen. Renders only when a completed game left an offer pending and an ink is
           eligible; never opens an ad by itself. */}
-      <PostSessionInkOffer surface="twoPlayers" />
+      <PostSessionInkOffer surface="twoPlayers" onViewShop={(ink) => onNavigate(toShop(toPassPlay(), ink))} />
       <InkTrialBadge surface="twoPlayers" asRow />
 
       {/* The web gets the 3a composition; Android keeps the form below,

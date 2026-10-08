@@ -15,7 +15,6 @@ import { getShapeById } from "../../content/contentRepository";
 import { getSelectedColor } from "../../services/penColorStore";
 import {
   consumeInkTrialUse,
-  getPendingCtaInk,
   getPinnedInkTrialSession,
   markInkTrialStarted,
   pinInkTrialSession,
@@ -25,7 +24,6 @@ import {
 import { warmPostSessionInkAd } from "../../services/inkTrialOffers";
 import type { InkTrialInk } from "../../services/analyticsSchema";
 import type { PenColorId } from "../../app/constants";
-import InkTrialCta from "../InkTrialCta";
 import InkTrialBadge from "../InkTrialBadge";
 import {
   markGuestTutorialShown,
@@ -117,8 +115,6 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
   const gameInkRef = useRef(gameInk);
   gameInkRef.current = gameInk;
   const penColor = gameInk.color;
-  /** The Try -> Buy CTA when this session used the Trial's last play (not an ad - it may sit under the final actions). */
-  const [ctaInk, setCtaInk] = useState<InkTrialInk | null>(null);
 
   const phase = snapshot?.phase ?? "LOBBY";
   const you = snapshot?.you ?? null;
@@ -208,7 +204,6 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
 
     if (snapshot.phase === "LOBBY") {
       // A rematch returns to the lobby, so re-arm for the next game.
-      setCtaInk(null);
       joinedFinishedRef.current = false;
       reportedStartRef.current = false;
       reportedFinishRef.current = false;
@@ -269,7 +264,6 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
         if (pinnedInk) consumeInkTrialUse(pinnedInk, `mp:${gameKey}`, "playTogether");
         setPostSessionPending("playTogether");
         warmPostSessionInkAd("playTogether");
-        setCtaInk(getPendingCtaInk());
       }
     }
   }, [snapshot]);
@@ -800,8 +794,6 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
                   <SocialProgressCard previousTotal={award.previousTotal} total={award.total} pointsAwarded={award.points} />
                 </>
               )}
-              {/* Try -> Buy after the Trial's last play: not an ad, after the actions, never in the rematch's way. */}
-              {ctaInk && <InkTrialCta ink={ctaInk} surface="playTogether" onClosed={() => setCtaInk(null)} />}
             </>
           )}
         </div>

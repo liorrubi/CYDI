@@ -8,7 +8,9 @@ import { isRewardedUnitConfigured, preloadRewardedAd, type RewardedAdPlacement }
 import { hasInkConfigAnswer, isInkOfferSurfaceOn } from "./ads/inkTrialConfig";
 
 export { hasInkConfigAnswer };
-import { getNextEligibleInk, type PostSessionSurface } from "./inkTrialStore";
+import { getNextEligibleInk, getPendingCtaInk, isInkExtensionAvailable, type PostSessionSurface } from "./inkTrialStore";
+import type { InkSurface } from "./ads/inkTrialConfigSchema";
+import type { InkTrialInk } from "./analyticsSchema";
 
 export const POST_SESSION_INK_PLACEMENT: Record<PostSessionSurface, RewardedAdPlacement> = {
   playTogether: "play_together_ink_trial",
@@ -24,11 +26,22 @@ export function canOfferInkOn(surface: PostSessionSurface): boolean {
 }
 
 /**
+ * Can the Keep-it card for `ink` offer its one-time +5 extension on this surface: the extension still available,
+ * the surface on in the remote config, and the Ink rewarded unit configured (the same unit as the Trial offer).
+ * The card's own ad capability check (isRewardedAdAvailable) comes on top, as for every Rewarded offer.
+ */
+export function canOfferInkExtensionOn(surface: Exclude<InkSurface, "daily">, ink: InkTrialInk): boolean {
+  return isInkExtensionAvailable(ink) && isInkOfferSurfaceOn(surface) && isRewardedUnitConfigured("ink");
+}
+
+/**
  * A session just completed: warm the rewarded ad so the post-exit offer is likely ready when it appears - the same
  * guarded preload the Classic round uses (consent, kill switch, adapter all checked inside; a no-op on the web).
  * Nothing is requested when no offer is possible.
  */
 export function warmPostSessionInkAd(surface: PostSessionSurface): void {
-  if (!canOfferInkOn(surface)) return;
+  const ctaInk = getPendingCtaInk();
+  const extension = ctaInk !== null && canOfferInkExtensionOn(surface, ctaInk);
+  if (!extension && !canOfferInkOn(surface)) return;
   void preloadRewardedAd(POST_SESSION_INK_PLACEMENT[surface]);
 }

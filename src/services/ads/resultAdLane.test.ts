@@ -105,3 +105,25 @@ test("the CTA reports whether an interstitial was actually due (deferredIntersti
   const d = deps({ pendingCtaInk: () => "diamondBlue", interstitialDueOnExit: false });
   assert.deepEqual(decideClassicResultLane(paying, d.deps), { kind: "cta", ink: "diamondBlue", deferredInterstitial: false });
 });
+
+test("the Keep-it card owns the Result at BOTH exhaustions (first 5, then the extension's 5): interstitial deferred each time", async () => {
+  const store = await import("../inkTrialStore");
+  store._resetInkTrialStoreForTests({ isOwned: () => false, track: () => {} });
+  const live = () => deps({ pendingCtaInk: store.getPendingCtaInk, interstitialDueOnExit: true });
+  store.grantInkTrial("rainbow", "classic");
+  for (let i = 1; i <= 4; i++) store.consumeInkTrialUse("rainbow", `a${i}`, "classic");
+  assert.equal(decideClassicResultLane(paying, live().deps).kind, "offer", "plays left: an ordinary Result");
+  store.consumeInkTrialUse("rainbow", "a5", "classic");
+  const first = live();
+  assert.deepEqual(decideClassicResultLane(paying, first.deps), { kind: "cta", ink: "rainbow", deferredInterstitial: true });
+  assert.equal(first.calls.claims, 0);
+  store.markInkCtaShown("rainbow", "classic");
+  store.grantInkTrialExtension("rainbow", "classic");
+  assert.equal(decideClassicResultLane(paying, live().deps).kind, "offer", "during the extension: an ordinary Result");
+  for (let i = 1; i <= 5; i++) store.consumeInkTrialUse("rainbow", `b${i}`, "classic");
+  const final = live();
+  assert.deepEqual(decideClassicResultLane(paying, final.deps), { kind: "cta", ink: "rainbow", deferredInterstitial: true });
+  assert.equal(final.calls.interstitialDeferrals, 1);
+  store.markInkCtaShown("rainbow", "classic");
+  assert.equal(decideClassicResultLane(paying, live().deps).kind, "offer", "the final card shows once");
+});

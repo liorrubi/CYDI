@@ -80,8 +80,8 @@ const localInkStorage: InkTrialStorage = {
   },
 };
 
-type Tracker = (stage: InkTrialStage, ink: InkTrialInk, surface: InkSurface) => void;
-const defaultTracker: Tracker = (inkStage, ink, inkSurface) => trackEvent("ink_trial", { inkStage, ink, inkSurface });
+type Tracker = (stage: InkTrialStage, ink: InkTrialInk, surface: InkSurface, extra?: { deferredInterstitial: boolean }) => void;
+const defaultTracker: Tracker = (inkStage, ink, inkSurface, extra) => trackEvent("ink_trial", { inkStage, ink, inkSurface, ...(extra ?? {}) });
 
 let storage: InkTrialStorage = localInkStorage;
 let memoryState: InkTrialState | null = null;
@@ -276,14 +276,17 @@ export function setInkTrialOverlay(on: boolean): void {
   save(state);
 }
 
-/** The Try -> Buy CTA is on screen (once per Trial). */
-export function markInkCtaShown(ink: InkTrialInk, surface: InkSurface): void {
+/**
+ * The Try -> Buy CTA is on screen (once per Trial). `deferredInterstitial`: the CTA owned its Result and an
+ * interstitial opportunity due on that exit was deferred (Classic); always false where no interstitial exists.
+ */
+export function markInkCtaShown(ink: InkTrialInk, surface: InkSurface, deferredInterstitial = false): void {
   const state = load();
   const record = state.trials[ink];
   if (!record || record.ctaShown) return;
   record.ctaShown = true;
   save(state);
-  track("cta_shown", ink, surface);
+  track("cta_shown", ink, surface, { deferredInterstitial });
 }
 
 /** The CTA's one outcome: purchased (from the CTA), declined (NOT NOW) or dismissed (left without choosing). */

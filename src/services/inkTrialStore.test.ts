@@ -192,3 +192,12 @@ test("a Play Together pin survives a remount: the session that started with the 
   for (let i = 0; i < 15; i++) pinInkTrialSession(`R:${i}`, "rainbow");
   assert.equal(getPinnedInkTrialSession("ROOM:3"), null, "bounded: only the newest pins are kept");
 });
+
+test("cta_shown carries deferredInterstitial (false by default, e.g. Play Together / 2 Players)", async () => {
+  const extras: unknown[] = [];
+  _resetInkTrialStoreForTests({ storage, isOwned: () => false, track: (_s, _i, _u, extra) => extras.push(extra) });
+  grantInkTrial("rainbow", "classic");
+  for (const key of ["1", "2", "3", "4", "5"]) consumeInkTrialUse("rainbow", key, "classic");
+  markInkCtaShown("rainbow", "classic", true);
+  assert.deepEqual(extras.at(-1), { deferredInterstitial: true });
+});

@@ -1123,8 +1123,8 @@ test("H: the experiment code never imports, reads or mutates Rewarded state", ()
 test("H (0.57.1): the Ink Trial lives OUTSIDE the interstitial and rewarded-ad core - none of these files knows it exists", () => {
   // Ink Trial (0.57.1) is an independent layer (inkTrialStore / inkTrialConfig / inkTrialPolicy / resultAdLane). The
   // interstitial modules, the rewarded SDK wrapper, the coin cadence and the coin offer must never name it: the only
-  // contact points are the existing claimResultAdLane() / isInterstitialDueThisCycle() / markRewardedOfferRenderedThisCycle()
-  // (called from resultAdLane.ts) and the v3 body observer. interstitialController.ts itself is byte-identical to 0.57.0.
+  // contact points are claimResultAdLane() / markRewardedOfferRenderedThisCycle() / deferInterstitialThisCycle()
+  // (called from resultAdLane.ts only) and the v3 body observer. rewardedAds.ts knows only a generic coin/ink UNIT.
   const needles = /inktrial|ink[-_ ]trial|pendingPurchaseCta|ctaClaimed|config:ads:ink/i;
   const files = [
     "services/ads/interstitialController.ts",
@@ -1142,4 +1142,26 @@ test("H (0.57.1): the Ink Trial lives OUTSIDE the interstitial and rewarded-ad c
 
 beforeEach(() => {
   // every test boots its own world; nothing is shared between tests
+});
+
+test("0.57.1 orthogonality: Rewarded / Ink never read the interstitial assignment (arm, cell, cadence, cap, rollout)", () => {
+  // The Ink modules may reach the interstitial ONLY through the lane functions (resultAdLane.ts) and the config
+  // body observer (inkTrialConfig.ts). No Ink module reads an arm, a cell, a cadence, a cap or a rollout value, so
+  // every interstitial cell, control and non-participant runs under the same Rewarded / Ink policy.
+  const inkModules = [
+    "services/inkTrialStore.ts",
+    "services/inkTrialOffers.ts",
+    "services/ads/inkTrialConfig.ts",
+    "services/ads/inkTrialConfigSchema.ts",
+    "app/inkTrialPolicy.ts",
+    "services/ads/resultAdLane.ts",
+    "components/InkTrialOffer.tsx",
+    "components/InkTrialCta.tsx",
+    "components/PostSessionInkOffer.tsx",
+  ];
+  const forbidden = /getInterstitialArm|getInterstitialCell|getEffectiveInterstitialContext|getFrozenInterstitialConfig|getInterstitialExperimentSpec|gamesBetweenAds|maxOpportunitiesPerSession|rolloutPercentInTreatment|interstitialCells|interstitialExperiment\b|isInterstitialDueThisCycle/;
+  for (const f of inkModules) assert.ok(!forbidden.test(read(`../../${f}`)), `${f} reads an interstitial assignment value`);
+  const lane = read("../../services/ads/resultAdLane.ts");
+  const fromController = /import \{([^}]*)\} from "\.\/interstitialController"/.exec(lane)?.[1].split(",").map((s) => s.trim()).filter(Boolean).sort();
+  assert.deepEqual(fromController, ["claimResultAdLane", "deferInterstitialThisCycle", "markRewardedOfferRenderedThisCycle", "recordRewardedOfferDeferred"]);
 });

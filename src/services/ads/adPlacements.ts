@@ -32,6 +32,18 @@ export const REWARDED_AD_PLACEMENTS = [
 
 export type RewardedAdPlacement = (typeof REWARDED_AD_PLACEMENTS)[number];
 
+/**
+ * 0.57.1: which AdMob rewarded ad UNIT a placement serves from. Two units, one lane (rewardedAds.ts): "ink" = the
+ * Ink Trial offers (their own unit, so AdMob reports Coin and Ink apart); "coin" = every other placement, on the
+ * long-standing production rewarded unit (unchanged ID, so its history continues).
+ */
+export type RewardedUnit = "coin" | "ink";
+const INK_UNIT_PLACEMENTS: readonly RewardedAdPlacement[] = ["shape_challenge_ink_trial", "play_together_ink_trial", "two_players_ink_trial"];
+
+export function rewardedUnitFor(placement: RewardedAdPlacement): RewardedUnit {
+  return INK_UNIT_PLACEMENTS.includes(placement) ? "ink" : "coin";
+}
+
 export function isRewardedAdPlacement(value: unknown): value is RewardedAdPlacement {
   return typeof value === "string" && (REWARDED_AD_PLACEMENTS as readonly string[]).includes(value);
 }

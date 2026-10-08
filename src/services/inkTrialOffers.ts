@@ -4,7 +4,7 @@
 // moment "a session completed" to this file, and the offer itself lives in components/PostSessionInkOffer.tsx on the
 // safe post-exit surface.
 
-import { preloadRewardedAd, type RewardedAdPlacement } from "./ads";
+import { isRewardedUnitConfigured, preloadRewardedAd, type RewardedAdPlacement } from "./ads";
 import { hasInkConfigAnswer, isInkOfferSurfaceOn } from "./ads/inkTrialConfig";
 
 export { hasInkConfigAnswer };
@@ -15,9 +15,12 @@ export const POST_SESSION_INK_PLACEMENT: Record<PostSessionSurface, RewardedAdPl
   twoPlayers: "two_players_ink_trial",
 };
 
-/** Is a NEW Ink offer possible on this surface right now (an eligible ink + the surface on in the remote config)? */
+/**
+ * Is a NEW Ink offer possible on this surface right now: an eligible ink, the surface on in the remote config, and
+ * the Ink rewarded unit configured in this build (no unit = Ink OFF, never a fallback onto the Coin unit)?
+ */
 export function canOfferInkOn(surface: PostSessionSurface): boolean {
-  return getNextEligibleInk() !== null && isInkOfferSurfaceOn(surface);
+  return getNextEligibleInk() !== null && isInkOfferSurfaceOn(surface) && isRewardedUnitConfigured("ink");
 }
 
 /**

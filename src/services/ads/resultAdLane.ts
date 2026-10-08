@@ -1,36 +1,36 @@
 // The Classic Result screen's one Rewarded slot (0.57.1): WHETHER there is a legal Rewarded opportunity is decided
 // exactly as in 0.57 (rewardedOfferCadence.ts: due + coins + ad capability, then interstitialController's
 // claimResultAdLane()); WHAT it carries is the coin/ink rotation (app/inkTrialPolicy.ts). Ink never creates an
-// opportunity, and nothing here reads an interstitial value - the interstitial only answers "do I claim this screen"
-// (claimResultAdLane) and "is one due on this exit" (isInterstitialDueThisCycle, read-only).
+// opportunity, and nothing here reads an interstitial value (arm, cell, cadence, cap, rollout): the interstitial
+// only answers "do I claim this screen" (claimResultAdLane) and "defer whatever is due on this exit"
+// (deferInterstitialThisCycle). Rewarded and Ink policy is the same for every interstitial cell, control and
+// non-participant.
 //
-// One card per Result: a pending Try -> Buy CTA (not an ad) is placed so that the interstitial is touched exactly
-// where 0.57 touched it - claimResultAdLane() is still called only on a Result with a legal Rewarded opportunity:
-//  - such a Result whose lane is rewarded: the CTA takes the slot and commits the lane like a rendered offer; the
-//    Rewarded offer stays due (cadence untouched) and renders on a later Result;
-//  - any other Result: the CTA appears only when no treatment interstitial is due on its exit, so it never shares
-//    a screen with an ad and never changes an interstitial's claim, reservation or outcome.
+// Try -> Buy has priority (owner decision, 8 Oct 2026): when the Trial's last play has just ended, the CTA owns
+// that Result. No Rewarded offer renders there (one that was due simply stays due - its cadence untouched), and an
+// interstitial opportunity due on its exit is DEFERRED - not shown, not consumed, not counted against the session
+// cap - so it comes due again at the next legal opportunity.
 
 import { decideResultOffer, markRewardedOfferShown, recordRewardedGameCompleted, type ResultOfferDecision } from "../../app/rewardedOfferCadence";
 import { chooseClassicContent, type ClassicRewardedContent } from "../../app/inkTrialPolicy";
-import { claimResultAdLane, isInterstitialDueThisCycle, markRewardedOfferRenderedThisCycle, recordRewardedOfferDeferred } from "./interstitialController";
+import { claimResultAdLane, deferInterstitialThisCycle, markRewardedOfferRenderedThisCycle, recordRewardedOfferDeferred } from "./interstitialController";
 import { getClassicRotation, isInkOfferSurfaceOn } from "./inkTrialConfig";
+import { isRewardedUnitConfigured } from "./rewardedAds";
+import type { RewardedAdPlacement } from "./adPlacements";
 import { advanceClassicRotation, getNextEligibleInk, getPendingCtaInk, peekClassicRotationSlot } from "../inkTrialStore";
 import type { InkTrialInk } from "../analyticsSchema";
 
 export type ClassicResultLane =
-  | { kind: "none"; decision: ResultOfferDecision | "pending_cta" }
+  | { kind: "none"; decision: ResultOfferDecision }
   | { kind: "offer"; content: ClassicRewardedContent }
-  | { kind: "cta"; ink: InkTrialInk };
+  | { kind: "cta"; ink: InkTrialInk; deferredInterstitial: boolean };
 
 export type ResultLaneDeps = {
   recordGameCompleted: () => boolean;
   claimLane: () => "interstitial" | "rewarded";
   recordDeferred: () => void;
-  /** Diagnostic read only: is a TREATMENT interstitial due on this Result's exit? Never claims or reserves. */
-  interstitialDue: () => boolean;
-  /** The 0.57 "a Rewarded card is on this Result" lane commit (markRewardedOfferRenderedThisCycle). */
-  markLaneRendered: () => void;
+  /** Defers an interstitial opportunity due on this Result's exit; returns whether one was due (and so deferred). */
+  deferInterstitial: () => boolean;
   pendingCtaInk: () => InkTrialInk | null;
   inkOn: () => boolean;
   scheduledSlot: () => "coin" | "ink";
@@ -41,10 +41,10 @@ const liveDeps: ResultLaneDeps = {
   recordGameCompleted: recordRewardedGameCompleted,
   claimLane: claimResultAdLane,
   recordDeferred: recordRewardedOfferDeferred,
-  interstitialDue: isInterstitialDueThisCycle,
-  markLaneRendered: markRewardedOfferRenderedThisCycle,
+  deferInterstitial: deferInterstitialThisCycle,
   pendingCtaInk: getPendingCtaInk,
-  inkOn: () => isInkOfferSurfaceOn("classic"),
+  // Ink on Classic needs the remote config AND the Ink rewarded unit in this build (no unit = Ink OFF).
+  inkOn: () => isInkOfferSurfaceOn("classic") && isRewardedUnitConfigured("ink"),
   scheduledSlot: () => peekClassicRotationSlot(getClassicRotation()),
   eligibleInk: getNextEligibleInk,
 };
@@ -58,24 +58,15 @@ export function decideClassicResultLane(input: { coinsEarned: number; canOfferAd
   const eligible = decideResultOffer({ due, interstitialDue: false, coinsEarned: input.coinsEarned, canOfferAd: input.canOfferAd });
 
   const ctaInk = deps.pendingCtaInk();
-
-  if (eligible !== "show") {
-    // A pending CTA may use a Result with no Rewarded opportunity - but the interstitial lane is never asked here
-    // (0.57 never asked it on such a Result either): the CTA simply waits whenever a treatment interstitial is due
-    // on this exit, so nothing about the interstitial's claim, reservation or outcome can change.
-    if (ctaInk !== null && !deps.interstitialDue()) return { kind: "cta", ink: ctaInk };
-    return { kind: "none", decision: eligible };
+  if (ctaInk !== null) {
+    // The CTA owns this Result: no lane claim, no Rewarded offer (it stays due), the interstitial deferred.
+    return { kind: "cta", ink: ctaInk, deferredInterstitial: deps.deferInterstitial() };
   }
+
+  if (eligible !== "show") return { kind: "none", decision: eligible };
   if (deps.claimLane() === "interstitial") {
     deps.recordDeferred();
     return { kind: "none", decision: "pending_interstitial" };
-  }
-  if (ctaInk !== null) {
-    // A legal Rewarded opportunity whose lane is rewarded: the CTA takes the slot exactly as an offer would - the
-    // lane is committed like a rendered offer, so the interstitial records what 0.57 would have recorded here.
-    // The Rewarded cadence is NOT restarted: the offer stays due and renders on a later Result.
-    deps.markLaneRendered();
-    return { kind: "cta", ink: ctaInk };
   }
   const inkOn = deps.inkOn();
   const content = chooseClassicContent({
@@ -84,6 +75,18 @@ export function decideClassicResultLane(input: { coinsEarned: number; canOfferAd
     eligibleInk: inkOn ? deps.eligibleInk() : null,
   });
   return { kind: "offer", content };
+}
+
+/**
+ * Which rewarded placement - and so which AdMob unit - the NEXT Classic Rewarded opportunity will most likely use,
+ * for the preload at drawing start: the rotation's scheduled slot and the eligible ink are already known then, so
+ * the unit that will actually be offered is the one warmed (an Ink slot with no eligible ink is the coin fallback).
+ * A preload is never an opportunity: it decides nothing about whether or what is offered.
+ */
+export function expectedClassicRewardedPlacement(deps: ResultLaneDeps = liveDeps): RewardedAdPlacement {
+  if (!deps.inkOn()) return "shape_challenge_double_reward";
+  const content = chooseClassicContent({ inkOn: true, scheduled: deps.scheduledSlot(), eligibleInk: deps.eligibleInk() });
+  return content.kind === "ink" ? "shape_challenge_ink_trial" : "shape_challenge_double_reward";
 }
 
 /**

@@ -249,7 +249,11 @@ export type RewardOfferParams =
   | ({ placement: RewardedAdPlacement } & RewardOfferEconomy)
   | ({ placement: RewardedAdPlacement } & RewardOfferEconomy & RewardOfferExperiment & RewardRotation)
   | ({ placement: RewardedAdPlacement } & RewardOfferInk & RewardRotation);
-export type InkTrialParams = { inkStage: InkTrialStage; ink: InkTrialInk; inkSurface: InkSurface };
+/**
+ * `deferredInterstitial` (cta_shown only, optional): the CTA owned its Result and an interstitial opportunity due on
+ * that exit was deferred (left due, not consumed) - so CTA priority and the preserved opportunity can be verified.
+ */
+export type InkTrialParams = { inkStage: InkTrialStage; ink: InkTrialInk; inkSurface: InkSurface; deferredInterstitial?: boolean };
 
 const REWARD_OFFER_ECONOMY_KEYS = ["balanceBucket", "baseReward", "multiplier", "adAvailable", "nextTarget", "shortfallBucket", "adClosesGap", "gamesBucket"] as const;
 const REWARD_OFFER_EXPERIMENT_KEYS = ["arm", "offerNumber", "sessionGames", "bonusCoins", "interstitialArm"] as const;
@@ -931,9 +935,19 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   play_store_click: (p) => validatePlayStoreEvent(p),
   session_summary: (p) => validateSessionSummary(p),
   ink_trial: (p) => {
-    if (!isRecord(p) || !hasExactKeys(p, ["inkStage", "ink", "inkSurface"])) return { valid: false };
+    if (!isRecord(p) || !hasKeysWithin(p, ["inkStage", "ink", "inkSurface"], ["deferredInterstitial"])) return { valid: false };
     if (!isOneOf(INK_TRIAL_STAGES, p.inkStage) || !isOneOf(INK_TRIAL_INKS, p.ink) || !isOneOf(INK_SURFACES, p.inkSurface)) return { valid: false };
-    return { valid: true, params: { inkStage: p.inkStage, ink: p.ink, inkSurface: p.inkSurface } };
+    // deferredInterstitial: a boolean, and only on cta_shown.
+    if ("deferredInterstitial" in p && (p.inkStage !== "cta_shown" || !isBoolean(p.deferredInterstitial))) return { valid: false };
+    return {
+      valid: true,
+      params: {
+        inkStage: p.inkStage,
+        ink: p.ink,
+        inkSurface: p.inkSurface,
+        ...("deferredInterstitial" in p ? { deferredInterstitial: p.deferredInterstitial as boolean } : {}),
+      },
+    };
   },
 };
 

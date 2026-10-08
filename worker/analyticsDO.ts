@@ -758,7 +758,9 @@ export function incrementEvent(
     isOneOf(INK_TRIAL_INKS, params.ink) &&
     isInkSurface(params.inkSurface)
   ) {
-    updated.byInkTrial = incrementKeyMap(existing.byInkTrial, `${params.inkStage}|${params.ink}|${params.inkSurface}`);
+    // cta_shown carrying deferredInterstitial gets a 4th part (deferred | none): still a closed set (+14 keys at most).
+    const deferral = typeof params.deferredInterstitial === "boolean" ? `|${params.deferredInterstitial ? "deferred" : "none"}` : "";
+    updated.byInkTrial = incrementKeyMap(existing.byInkTrial, `${params.inkStage}|${params.ink}|${params.inkSurface}${deferral}`);
   }
   // Pass & Play breakouts - see the two sets above. Guarded for the same reason the
   // rewarded one is: this function is exported, so a bad value must leave the map

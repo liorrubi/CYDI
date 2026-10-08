@@ -60,9 +60,10 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
   /** A full-screen ad is in flight: leaving now is not a skip - the SDK's answer still settles this offer. */
   const adPendingRef = useRef(false);
   // Capability at render (the same stable check the coin offer reports as adAvailable) - frozen for the funnel.
-  const [adAvailableAtRender] = useState(() => isRewardedAdAvailable());
+  // Measured on the Ink unit (0.57.1: the Ink Trial serves from its own AdMob unit).
+  const [adAvailableAtRender] = useState(() => isRewardedAdAvailable(placement));
   const devSimulation = isMathFallbackEnabled();
-  const canWatch = isRewardedAdAvailable() || devSimulation;
+  const canWatch = isRewardedAdAvailable(placement) || devSimulation;
 
   const funnelParams = (skipStage?: RewardSkipStage): RewardOfferParams & { skipStage?: RewardSkipStage } => ({
     placement,
@@ -121,7 +122,7 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
     setAdUnavailable(false);
     // Dev server only (no ad can ever load there): the dev build simulates the confirmed reward so the flow can be
     // exercised. isMathFallbackEnabled() is false in every production bundle.
-    if (!isRewardedAdAvailable() && devSimulation) {
+    if (!isRewardedAdAvailable(placement) && devSimulation) {
       grant();
       return;
     }

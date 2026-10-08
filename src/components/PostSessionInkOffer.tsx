@@ -39,7 +39,7 @@ function evaluate(surface: PostSessionSurface): Evaluation {
     // start, "off" just means "not known yet", so the offer waits (it expires on its own after 2 h).
     return { decision: null, drop: hasInkConfigAnswer() };
   }
-  if (!isRewardedAdAvailable() && !isMathFallbackEnabled()) return { decision: null, drop: false };
+  if (!isRewardedAdAvailable(POST_SESSION_INK_PLACEMENT[surface]) && !isMathFallbackEnabled()) return { decision: null, drop: false };
   return { decision: { ink, offerNumber: nextInkOfferNumber(ink), sessionGames: completedSessionsThisRun(surface) }, drop: false };
 }
 

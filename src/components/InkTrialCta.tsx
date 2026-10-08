@@ -13,6 +13,8 @@ type InkTrialCtaProps = {
   surface: InkSurface;
   /** The card is finished (bought or NOT NOW) - the screen may drop it. */
   onClosed?: () => void;
+  /** Classic: an interstitial due on this Result's exit was deferred so the CTA owns the Result (analytics only). */
+  deferredInterstitial?: boolean;
 };
 
 function formatCoins(n: number): string {
@@ -28,7 +30,7 @@ function formatCoins(n: number): string {
  * an enabled button that is guaranteed to fail. One outcome per CTA: purchased, declined (NOT NOW), or dismissed
  * (the screen was left without a choice).
  */
-export default function InkTrialCta({ ink, surface, onClosed }: InkTrialCtaProps) {
+export default function InkTrialCta({ ink, surface, onClosed, deferredInterstitial = false }: InkTrialCtaProps) {
   const option = penColorById(ink);
   const price = penColorPrice(ink) ?? 0;
   const [coins, setCoins] = useState(() => getCoins());
@@ -43,7 +45,7 @@ export default function InkTrialCta({ ink, surface, onClosed }: InkTrialCtaProps
     // without a choice reports `dismissed` exactly once.
     const t = window.setTimeout(() => {
       shownRef.current = true;
-      markInkCtaShown(ink, surface);
+      markInkCtaShown(ink, surface, deferredInterstitial);
     }, 0);
     return () => {
       window.clearTimeout(t);
@@ -61,7 +63,7 @@ export default function InkTrialCta({ ink, surface, onClosed }: InkTrialCtaProps
     if (!affordable || decidedRef.current) return;
     if (purchasePenColor(ink) !== "purchased") return;
     decidedRef.current = true;
-    if (!shownRef.current) markInkCtaShown(ink, surface);
+    if (!shownRef.current) markInkCtaShown(ink, surface, deferredInterstitial);
     recordInkCtaOutcome(ink, "purchased", surface);
     playSuccessSound();
     setBought(true);
@@ -71,7 +73,7 @@ export default function InkTrialCta({ ink, surface, onClosed }: InkTrialCtaProps
     if (decidedRef.current) return;
     playSelectSound();
     decidedRef.current = true;
-    if (!shownRef.current) markInkCtaShown(ink, surface);
+    if (!shownRef.current) markInkCtaShown(ink, surface, deferredInterstitial);
     recordInkCtaOutcome(ink, "declined", surface);
     onClosed?.();
   }

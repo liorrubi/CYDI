@@ -15,8 +15,8 @@
 // yields "dismissed" - no reward, no error. The adapter (admobAdapter.ts) is what turns the
 // plugin's Dismissed event into that null; the plugin's own show call never settles on a close.
 
-import { isAdFormatEnabled, getAdUnitId } from "./adConfig";
-import { isRewardedAdPlacement, type RewardedAdPlacement } from "./adPlacements";
+import { isAdFormatEnabled, getRewardedAdUnitId } from "./adConfig";
+import { isRewardedAdPlacement, rewardedUnitFor, type RewardedAdPlacement, type RewardedUnit } from "./adPlacements";
 import { adLatencyBucket, isAdErrorCode, type AdLoadSource, type AdNotReadyCause, type RewardedTapState } from "./adDiagnostics";
 import type {
   AdAdapter,
@@ -188,6 +188,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 //              |         '-> expired (a loaded ad outlived READY_TTL_MS)
 //              '-> failed (SDK failure, or the hard load expiry)
 //
+// 0.57.1 - TWO UNITS, ONE LANE. Coin and Ink placements serve from different AdMob units (adPlacements.ts
+// rewardedUnitFor), but the native plugin holds ONE prepared rewarded ad, and so does this lane: one load at a time,
+// one ready ad, tagged with the unit it was loaded for (`loadUnit`). A request for the OTHER unit never starts a
+// second concurrent load and never shows the wrong unit's ad: a ready / failed / expired ad of the other unit is
+// simply set aside (state -> idle) and the requested unit is loaded; a load still in flight for the other unit is
+// left to finish. Before 0.57.1 every placement was the coin unit, so for coin-only traffic nothing changes.
+//
 // One native load at a time: a load is never started while `nativeLoadActive`. Every load
 // carries a generation (`loadSeq`); a callback from an older load (abandoned at the hard
 // expiry, superseded, or from before a lifecycle reset) finds a different generation and
@@ -202,6 +209,8 @@ let loadSeq = 0;
 let nativeLoadActive = false;
 let loadStartedAt = 0;
 let loadPlacement: RewardedAdPlacement | null = null;
+/** The unit the current load / ready ad belongs to (0.57.1). */
+let loadUnit: RewardedUnit = "coin";
 let loadSource: AdLoadSource = "preload";
 let loadReported = false;
 // The per-call UI callback of the call that started the load, so its spinner hears "loaded".
@@ -221,18 +230,36 @@ function settleWaiters(): void {
 }
 
 /** The blocking reason right now, or null when a rewarded ad could actually be served. */
-function rewardedBlockReason(): AdFailureReason | null {
+function rewardedBlockReason(unit: RewardedUnit = "coin"): AdFailureReason | null {
   if (!isAdFormatEnabled("rewarded")) return "ads_disabled";
   if (!remoteAdsGate()) return "ads_disabled";
   if (!consentGate()) return "consent_blocked";
   if (activeAdapter() === undefined) return "no_adapter";
-  if (getAdUnitId("rewarded", detectPlatform()) === "") return "not_configured";
+  if (getRewardedAdUnitId(unit, detectPlatform()) === "") return "not_configured";
   return null;
 }
 
-/** True only when everything needed to actually serve a rewarded ad is in place. */
-export function isRewardedAdAvailable(): boolean {
-  return rewardedBlockReason() === null;
+/**
+ * True only when everything needed to actually serve a rewarded ad is in place - for the unit of `placement`
+ * (no placement = the coin unit, the pre-0.57.1 meaning every existing caller relies on).
+ */
+export function isRewardedAdAvailable(placement?: RewardedAdPlacement): boolean {
+  return rewardedBlockReason(placement ? rewardedUnitFor(placement) : "coin") === null;
+}
+
+/** Is this unit's production ID configured in this build? (Always true in dev / test-ads builds.) */
+export function isRewardedUnitConfigured(unit: RewardedUnit): boolean {
+  return getRewardedAdUnitId(unit, detectPlatform()) !== "";
+}
+
+/**
+ * A request for `unit` meets a settled ad of the OTHER unit (ready, failed or expired): set it aside so the
+ * requested unit can load. Never touches a load in flight or an ad on screen. (A failure of the other unit
+ * therefore never holds this unit in its cooldown.)
+ */
+function releaseOtherUnit(unit: RewardedUnit): void {
+  if (loadUnit === unit) return;
+  if (state === "ready" || state === "failed" || state === "expired") state = "idle";
 }
 
 /**
@@ -329,6 +356,7 @@ function startLoad(adapter: AdAdapter, placement: RewardedAdPlacement, source: A
   nativeLoadActive = true;
   loadStartedAt = now();
   loadPlacement = placement;
+  loadUnit = rewardedUnitFor(placement);
   loadSource = source;
   loadReported = false;
   loadOnEvent = onEvent;
@@ -346,7 +374,7 @@ function startLoad(adapter: AdAdapter, placement: RewardedAdPlacement, source: A
 
   let pending: Promise<void>;
   try {
-    pending = adapter.loadRewarded(getAdUnitId("rewarded", detectPlatform()));
+    pending = adapter.loadRewarded(getRewardedAdUnitId(loadUnit, detectPlatform()));
   } catch (err) {
     pending = Promise.reject(err);
   }
@@ -384,8 +412,10 @@ function startLoad(adapter: AdAdapter, placement: RewardedAdPlacement, source: A
  */
 export async function preloadRewardedAd(placement: RewardedAdPlacement, onEvent?: RewardedAdListener): Promise<void> {
   if (!isRewardedAdPlacement(placement)) return;
-  if (rewardedBlockReason() !== null) return;
+  const unit = rewardedUnitFor(placement);
+  if (rewardedBlockReason(unit) !== null) return;
   refreshLifecycle();
+  releaseOtherUnit(unit);
   if (state === "loading" || state === "ready" || state === "showing" || nativeLoadActive) return;
   if (state === "failed" && lifecycleV2() && now() - failedAt < failedCooldownMs) return;
   startLoad(activeAdapter()!, placement, "preload", onEvent);
@@ -441,11 +471,13 @@ export async function showRewardedAd(
   // to flow into lifecycle events or analytics.
   if (!isRewardedAdPlacement(placement)) return { status: "unavailable", reason: "invalid_placement" };
 
+  const unit = rewardedUnitFor(placement);
   refreshLifecycle();
+  releaseOtherUnit(unit);
   const stateAtTap: RewardedTapState = state;
   emit("requested", placement, undefined, onEvent, { stateAtTap });
 
-  const blocked = rewardedBlockReason() ?? (state === "showing" ? "already_showing" : null);
+  const blocked = rewardedBlockReason(unit) ?? (state === "showing" ? "already_showing" : null);
   if (blocked) {
     emit("unavailable", placement, blocked, onEvent, { stateAtTap, cause: "blocked" });
     return { status: "unavailable", reason: blocked };
@@ -469,7 +501,8 @@ export async function showRewardedAd(
     await waitForLoad(v2 ? tapWaitMs : LEGACY_LOAD_TIMEOUT_MS + 1000);
     refreshLifecycle();
     // `state` moved while we awaited (a callback ran), which the compiler cannot see.
-    const after = state as RewardedState;
+    // A load of the OTHER unit that was already in flight is not this tap's ad (0.57.1): it counts as still loading.
+    const after: RewardedState = (state as RewardedState) === "ready" && loadUnit !== unit ? "loading" : (state as RewardedState);
     if (after !== "ready") {
       const failedNow = after === "failed";
       const reason: AdFailureReason = failedNow ? lastLoadFailure : "timeout";
@@ -548,6 +581,7 @@ export function _resetRewardedAdsForTests(): void {
   nativeLoadActive = false;
   loadStartedAt = 0;
   loadPlacement = null;
+  loadUnit = "coin";
   loadSource = "preload";
   loadReported = false;
   loadOnEvent = undefined;

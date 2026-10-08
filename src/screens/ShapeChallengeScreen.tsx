@@ -87,7 +87,7 @@ import {
   takeNextGameContext,
 } from "../services/ads/interstitialController";
 import { getRewardedArm, takeRewardedContinuation, upcomingOfferContext } from "../app/rewardedOfferCadence";
-import { commitClassicOfferRendered, decideClassicResultLane } from "../services/ads/resultAdLane";
+import { commitClassicOfferRendered, decideClassicResultLane, expectedClassicRewardedPlacement } from "../services/ads/resultAdLane";
 import type { ClassicRewardedContent } from "../app/inkTrialPolicy";
 import InkTrialOffer, { type InkOfferContext } from "../components/InkTrialOffer";
 import InkTrialCta from "../components/InkTrialCta";
@@ -918,6 +918,8 @@ function ShapePlay({
   /** Rewarded Ink Trial (0.57.1): this Result's Ink offer, Try -> Buy CTA, and the rendered Rewarded content. */
   const [inkOffer, setInkOffer] = useState<{ ink: InkTrialInk; context: InkOfferContext } | null>(null);
   const [ctaInk, setCtaInk] = useState<InkTrialInk | null>(null);
+  /** The CTA's Result deferred an interstitial opportunity (analytics only). */
+  const [ctaDeferredInterstitial, setCtaDeferredInterstitial] = useState(false);
   const offerContentRef = useRef<ClassicRewardedContent | null>(null);
   useInkTrialRevision();
   const activeTrial = practice ? null : getActiveInkTrial();
@@ -1003,7 +1005,8 @@ function ShapePlay({
       // this returns silently and nothing is requested. Its `state !== "idle"` guard is
       // what keeps this and the offer's preload from ever becoming two requests.
       // Fire-and-forget: a rejected preload can never reach the round.
-      if (!practice) void preloadRewardedAd("shape_challenge_double_reward");
+      // 0.57.1: warm the unit the next Rewarded opportunity will use (coin or Ink rotation slot) - same single lane.
+      if (!practice) void preloadRewardedAd(expectedClassicRewardedPlacement());
       // The play starts: its ink is resolved now (an expired Trial can never leak into a retry), and a play that
       // starts with the Trial ink marks the Trial as started (once per Trial, inside the store).
       if (!practice) {
@@ -1312,6 +1315,7 @@ function ShapePlay({
           }
         } else if (lane.kind === "cta") {
           setCtaInk(lane.ink);
+          setCtaDeferredInterstitial(lane.deferredInterstitial);
         }
       }
       if (offerAmount > 0) {
@@ -1387,7 +1391,7 @@ function ShapePlay({
             }}
           />
         )}
-        {inkOffer === null && ctaInk !== null && <InkTrialCta ink={ctaInk} surface="classic" onClosed={() => setCtaInk(null)} />}
+        {inkOffer === null && ctaInk !== null && <InkTrialCta ink={ctaInk} surface="classic" deferredInterstitial={ctaDeferredInterstitial} onClosed={() => setCtaInk(null)} />}
       </>
     );
 

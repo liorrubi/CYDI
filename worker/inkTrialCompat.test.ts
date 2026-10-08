@@ -198,3 +198,17 @@ test("M4: DO breakdowns - byPlacement keeps coin and Ink taps apart; byInkTrial 
   counters = incrementEvent(counters as never, "app_open", {}, "android", "0.57.1") as never;
   assert.equal(counters.app_open.byPlacement, undefined);
 });
+
+test("M5: deferredInterstitial - optional boolean on ink_trial cta_shown only; AE double3; DO key gains deferred|none", () => {
+  assert.equal(valid("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true }), true);
+  assert.equal(valid("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "playTogether", deferredInterstitial: false }), true);
+  assert.equal(valid("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic" }), true, "optional");
+  assert.equal(valid("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true }), false, "cta_shown only");
+  assert.equal(valid("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: "yes" }), false);
+  const p = point("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true });
+  assert.equal(d(p, 3), 1);
+  let counters = {} as Record<string, Record<string, unknown>>;
+  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true }, "android", "0.57.1") as never;
+  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: false }, "android", "0.57.1") as never;
+  assert.deepEqual(counters.ink_trial.byInkTrial, { "cta_shown|rainbow|classic|deferred": 1, "cta_shown|rainbow|classic|none": 1 });
+});

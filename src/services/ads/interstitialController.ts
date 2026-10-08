@@ -89,6 +89,8 @@ let dueThisCycle = false;
 let dueArmThisCycle: InterstitialArm | null = null;
 /** A rewarded OFFER was rendered on this result: nothing may present an interstitial from it. */
 let rewardedRenderedThisCycle = false;
+/** 0.57.1: a non-ad card owns this Result (deferInterstitialThisCycle) - its exit runs no checkpoint at all. */
+let deferredThisCycle = false;
 /**
  * The current (not yet consumed) opportunity has already reserved one Result screen and
  * deferred the rewarded offer there. It may do so only once: if the player left that
@@ -223,6 +225,7 @@ export function getInterstitialCellForAnalytics(): InterstitialCellId | null {
 export function beginInterstitialResultCycle(): void {
   rewardedShownThisCycle = false;
   rewardedRenderedThisCycle = false;
+  deferredThisCycle = false;
   dueThisCycle = false;
   dueArmThisCycle = null;
 }
@@ -319,6 +322,18 @@ export function markRewardedOfferRenderedThisCycle(): void {
   rewardedRenderedThisCycle = true;
 }
 
+/**
+ * 0.57.1: a NON-AD card (the purchase CTA after a trial's last play) owns this Result. Leaving it runs no checkpoint:
+ * an opportunity due on this exit is NOT shown, NOT consumed, NOT recorded and NOT counted against the session cap.
+ * The persisted counter is untouched (eligible games keep counting, `since >= cadence`), so it comes due again at
+ * the next legal Result. Same for every arm and cell. Reads and changes no cadence, cap, rollout or cell value.
+ * Returns whether an opportunity was due (= was deferred), for the caller's analytics only.
+ */
+export function deferInterstitialThisCycle(): boolean {
+  deferredThisCycle = true;
+  return dueThisCycle;
+}
+
 /** What the readiness machinery knew when the checkpoint ran (captured before anything is presented). */
 type ReadinessAtCheckpoint = ReturnType<typeof getInterstitialReadiness> & { attempts: number };
 
@@ -354,6 +369,8 @@ function checkpointParams(
  */
 export function runInterstitialCheckpoint(): Promise<boolean> | null {
   if (!dueThisCycle || checkpointInFlight) return null;
+  // Deferred (deferInterstitialThisCycle): left due for the next Result - nothing consumed, recorded or shown.
+  if (deferredThisCycle) return null;
   dueThisCycle = false;
   const who = participation();
   if (who === null) return null;
@@ -512,6 +529,7 @@ export function _resetInterstitialControllerForTests(options: {
   installationIdSource = options.installationId ?? getPersistedInstallationId;
   rewardedShownThisCycle = false;
   rewardedRenderedThisCycle = false;
+  deferredThisCycle = false;
   laneReservedForOpportunity = false;
   dueThisCycle = false;
   dueArmThisCycle = null;

@@ -1401,3 +1401,41 @@ test("segment summary: dropped, not emitted, when the analytics session already 
   assert.equal(summaries().length, 1);
   assert.equal(summaries()[0].classicGames, 2, "the dropped segment's games are not carried over");
 });
+
+// --- 0.57.1: deferInterstitialThisCycle (the purchase CTA owns this Result) ----------------------------------------
+
+test("0.57.1 defer: a due opportunity is left due - not shown, not consumed, not recorded, cap untouched - and runs at the next Result", async () => {
+  const { deferInterstitialThisCycle } = await import("./interstitialController");
+  playRounds(6);
+  completeRound(); // the 7th eligible completion: due
+  assert.equal(deferInterstitialThisCycle(), true, "reports that an opportunity was due (= deferred)");
+  assert.equal(runInterstitialCheckpoint(), null);
+  assert.equal(checkpoints().length, 0, "nothing recorded");
+  assert.equal(persisted().session?.opportunities ?? 0, 0, "nothing consumed / no cap used");
+  assert.ok(persisted().eligibleGamesSinceLastOpportunity >= 7, "cadence progress preserved");
+  completeRound(); // the next Result: still due, the defer flag is gone
+  runInterstitialCheckpoint();
+  assert.equal(checkpoints().length, 1);
+  assert.equal(persisted().session?.opportunities, 1);
+});
+
+test("0.57.1 defer: control is deferred the same way (symmetric across arms); nothing due -> reports false", async () => {
+  const { deferInterstitialThisCycle } = await import("./interstitialController");
+  installation = CONTROL_ID;
+  _resetInterstitialControllerForTests({
+    track: (name, params) => tracked.push({ name, params: params as Record<string, unknown> }),
+    storage,
+    sessionId: () => session,
+    installationId: () => installation,
+  });
+  completeRound();
+  assert.equal(deferInterstitialThisCycle(), false, "not due yet");
+  playRounds(5);
+  completeRound();
+  assert.equal(deferInterstitialThisCycle(), true);
+  assert.equal(runInterstitialCheckpoint(), null);
+  assert.equal(checkpoints().length, 0);
+  completeRound();
+  runInterstitialCheckpoint();
+  assert.deepEqual(checkpoints().map((c) => c.outcome), ["control"]);
+});

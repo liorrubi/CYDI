@@ -124,7 +124,8 @@
 //   blob20   rotationSlot     Classic offer rows (coin AND ink): "rotationSlot:coin" | "rotationSlot:ink" = what the
 //                             rotation scheduled; the placement is what rendered. Skip rows keep skipStage first.
 //   ink_trial rows: blob18 = ink, blob19 = inkSurface (classic | playTogether | twoPlayers | daily),
-//                   blob20 = "inkStage:<granted|started|completed|cta_shown|cta_purchased|cta_declined|cta_dismissed>".
+//                   blob20 = "inkStage:<granted|started|completed|cta_shown|cta_purchased|cta_declined|cta_dismissed>",
+//                   double3 = deferredInterstitial on cta_shown (1 = an interstitial due on that exit was deferred).
 // coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
 // balance BUCKET is ever written - never a balance.
 // Booleans are 1/0 and absent numbers are 0, so always filter on blob1 before reading
@@ -254,7 +255,8 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
     doubles: [
       AE_SCHEMA_VERSION,
       num(params.starRating ?? (typeof params.code === "number" ? params.code + 2 : undefined)),
-      num(params.passed ?? params.attempt),
+      // 0.57.1: ink_trial cta_shown rows carry deferredInterstitial (1/0) here - they have neither passed nor attempt.
+      num(params.passed ?? params.attempt ?? params.deferredInterstitial),
       num(params.isNewBest ?? enumPosition(AD_LATENCY_BUCKETS, params.latency)),
       // Schema 3: sessionGames / offerNumber / bonusCoins share these slots on reward rows,
       // which never carry roundCount / roundIndex / amount (see the SCHEMA block above).

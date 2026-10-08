@@ -193,3 +193,23 @@ export function getAdMobAppId(platform: AdPlatform): string {
 export function getAdUnitId(format: AdFormat, platform: AdPlatform): string {
   return isAdTestingEnvironment() ? GOOGLE_TEST_AD_UNITS[format][platform] : PROD_AD_UNITS[format][platform];
 }
+
+/**
+ * 0.57.1: the Ink Trial's OWN production rewarded unit (AdMob "CYDI Rewarded - Ink Trial"), so AdMob reports Coin and
+ * Ink rewarded apart. Same format, same SDK, same lifecycle - only the unit differs. Not configured = "" = Ink offers
+ * cannot be served (fail-closed: the Ink layer treats it as Ink OFF), never a fallback onto the Coin unit.
+ */
+const PROD_REWARDED_INK_UNIT: Record<AdPlatform, string> = {
+  android: env((e) => e.VITE_ADMOB_REWARDED_INK_ANDROID),
+  ios: env((e) => e.VITE_ADMOB_REWARDED_INK_IOS),
+};
+
+/**
+ * The rewarded unit for a logical unit: "coin" = the long-standing production rewarded unit (unchanged ID), "ink" =
+ * the Ink Trial unit. Dev / internal-test builds always get Google's rewarded TEST unit for both - test ads only,
+ * while the two logical paths stay distinct in the app (placement and RewardedUnit).
+ */
+export function getRewardedAdUnitId(unit: "coin" | "ink", platform: AdPlatform): string {
+  if (unit === "coin") return getAdUnitId("rewarded", platform);
+  return isAdTestingEnvironment() ? GOOGLE_TEST_AD_UNITS.rewarded[platform] : PROD_REWARDED_INK_UNIT[platform];
+}

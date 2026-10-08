@@ -4881,6 +4881,30 @@ body {
   margin-top: var(--space-2);
 }
 
+/* Narrow phones (360-380px): the four Difficulty chips fit on one row, so the setup does not grow a second chip row
+   that pushes Start Game below the fold. Only the side padding and the gap tighten; the 44px height and the 4.5rem
+   minimum width stay. */
+@media (max-width: 380px) {
+  .mp-chip-row {
+    gap: var(--space-2);
+  }
+  .mp-chip {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+}
+
+/* Short phones (<= 700px tall, e.g. 360x640 / 375x667), Android: the setup sections sit closer together so Start Game
+   stays fully visible under the post-game Ink card. Spacing only - every control keeps its size. */
+@media (max-height: 700px) {
+  .app-shell .mp-form {
+    gap: var(--space-3);
+  }
+  .app-shell .mp-form .mp-primary-action {
+    margin-top: 0;
+  }
+}
+
 /* --------------------------------------------------------------- invite --- */
 
 .mp-invite {
@@ -6278,8 +6302,11 @@ body {
   white-space: nowrap;
 }
 
+/* The row wraps when the two buttons no longer fit (large Android text size): the secondary then takes its own line
+   instead of being clipped by the card. On one line the primary keeps most of the free width (3:1). */
 .ink-offer-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-3);
 }
@@ -6299,13 +6326,13 @@ body {
 }
 
 .ink-offer-primary {
-  flex: 1 1 auto;
+  flex: 3 1 auto;
   background: #ffffff;
   color: #191b2e;
 }
 
 .ink-offer-secondary {
-  flex: 0 0 auto;
+  flex: 1 0 auto;
   background: rgba(255, 255, 255, 0.12);
   color: #f4f5ff;
 }

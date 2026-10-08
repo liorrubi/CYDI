@@ -48,10 +48,15 @@ type InkTrialState = {
   /** A completed session waiting for its safe post-exit surface (timestamp ms), per surface. */
   pending: Partial<Record<PostSessionSurface, number>>;
   offersRendered: Partial<Record<InkTrialInk, number>>;
+  /** Sessions that STARTED with the Trial ink (game key -> ink), so a remount/resume that lands on the final
+   *  results still consumes exactly once. Bounded (the newest few). */
+  pins: Array<[string, InkTrialInk]>;
 };
 
+const MAX_PINS = 10;
+
 function freshState(): InkTrialState {
-  return { v: 1, trials: {}, overlayOff: false, classicPointer: 0, rotationKey: "", consumed: [], pending: {}, offersRendered: {} };
+  return { v: 1, trials: {}, overlayOff: false, classicPointer: 0, rotationKey: "", consumed: [], pending: {}, offersRendered: {}, pins: [] };
 }
 
 // --- Persistence (injectable for tests) ----------------------------------------------------------
@@ -120,6 +125,11 @@ function parseState(raw: string | null): InkTrialState | null {
         const at = (parsed.pending as Record<string, unknown>)[surface];
         if (typeof at === "number" && Number.isFinite(at)) state.pending[surface] = at;
       }
+    }
+    if (Array.isArray(parsed.pins)) {
+      state.pins = parsed.pins
+        .filter((p): p is [string, InkTrialInk] => Array.isArray(p) && typeof p[0] === "string" && (INK_TRIAL_INKS as readonly unknown[]).includes(p[1]))
+        .slice(-MAX_PINS);
     }
     if (parsed.offersRendered && typeof parsed.offersRendered === "object") {
       for (const ink of INK_TRIAL_INKS) {
@@ -243,6 +253,19 @@ export function consumeInkTrialUse(ink: InkTrialInk, key: string, surface: InkSu
   if (firstUse) track("started", ink, surface);
   if (exhausted) track("completed", ink, surface);
   return { consumed: true, usesLeft: record.usesLeft, exhausted };
+}
+
+/** A multiplayer session (Play Together) started with the Trial ink: remember it by game key, for a resume. */
+export function pinInkTrialSession(key: string, ink: InkTrialInk): void {
+  const state = load();
+  if (state.pins.some(([k]) => k === key)) return;
+  state.pins = [...state.pins, [key, ink] as [string, InkTrialInk]].slice(-MAX_PINS);
+  save(state);
+}
+
+/** The Trial ink a session with this key started with, or null (not pinned / unknown). */
+export function getPinnedInkTrialSession(key: string): InkTrialInk | null {
+  return load().pins.find(([k]) => k === key)?.[1] ?? null;
 }
 
 /** The player picked an ink in a pen menu during an active Trial: the Trial ink turns the overlay on, any other off. */

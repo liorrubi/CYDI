@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isRewardedAdAvailable } from "../services/ads";
 import {
   clearPostSessionPending,
@@ -8,7 +8,7 @@ import {
   nextInkOfferNumber,
   type PostSessionSurface,
 } from "../services/inkTrialStore";
-import { POST_SESSION_INK_PLACEMENT, canOfferInkOn } from "../services/inkTrialOffers";
+import { POST_SESSION_INK_PLACEMENT, canOfferInkOn, hasInkConfigAnswer } from "../services/inkTrialOffers";
 import type { InkTrialInk } from "../services/analyticsSchema";
 import { isMathFallbackEnabled } from "./DoubleCoinsOffer";
 import InkTrialOffer from "./InkTrialOffer";
@@ -26,20 +26,30 @@ type Decision = { ink: InkTrialInk; offerNumber: number; sessionGames: number };
  * Rewarded in these modes). No rewarded ad capability -> no card, and the pending offer waits (as the coin offer's
  * pending_no_ad does).
  */
+type Evaluation = { decision: Decision | null; drop: boolean };
+
+/** Pure: what this mount does with the pending offer. `drop` = nothing will ever be offered for it. */
+function evaluate(surface: PostSessionSurface): Evaluation {
+  if (!hasPostSessionPending(surface)) return { decision: null, drop: false };
+  const ink = getNextEligibleInk();
+  // No eligible ink (owned / already trialled / another Trial running): nothing to offer for this session.
+  if (ink === null) return { decision: null, drop: true };
+  if (!canOfferInkOn(surface)) {
+    // Off by config: drop it - but only once the server has actually answered. Before the first answer of a cold
+    // start, "off" just means "not known yet", so the offer waits (it expires on its own after 2 h).
+    return { decision: null, drop: hasInkConfigAnswer() };
+  }
+  if (!isRewardedAdAvailable() && !isMathFallbackEnabled()) return { decision: null, drop: false };
+  return { decision: { ink, offerNumber: nextInkOfferNumber(ink), sessionGames: completedSessionsThisRun(surface) }, drop: false };
+}
+
 export default function PostSessionInkOffer({ surface }: { surface: PostSessionSurface }) {
   const [closed, setClosed] = useState(false);
   // Decided once per mount from a pure read; the pending flag is spent only when the card really renders.
-  const [decision] = useState<Decision | null>(() => {
-    if (!hasPostSessionPending(surface)) return null;
-    const ink = getNextEligibleInk();
-    if (ink === null || !canOfferInkOn(surface)) {
-      // Nothing to offer for this session: drop it rather than surprise the player later.
-      clearPostSessionPending(surface);
-      return null;
-    }
-    if (!isRewardedAdAvailable() && !isMathFallbackEnabled()) return null;
-    return { ink, offerNumber: nextInkOfferNumber(ink), sessionGames: completedSessionsThisRun(surface) };
-  });
+  const [{ decision, drop }] = useState<Evaluation>(() => evaluate(surface));
+  useEffect(() => {
+    if (drop) clearPostSessionPending(surface);
+  }, [drop, surface]);
 
   if (decision === null || closed) return null;
   return (

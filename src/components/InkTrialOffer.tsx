@@ -54,8 +54,11 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
   const [adPending, setAdPending] = useState(false);
   const [adUnavailable, setAdUnavailable] = useState(false);
   const [grantRefused, setGrantRefused] = useState(false);
+  const [declined, setDeclined] = useState(false);
   const adDismissedRef = useRef(false);
   const settledRef = useRef(false);
+  /** A full-screen ad is in flight: leaving now is not a skip - the SDK's answer still settles this offer. */
+  const adPendingRef = useRef(false);
   // Capability at render (the same stable check the coin offer reports as adAvailable) - frozen for the funnel.
   const [adAvailableAtRender] = useState(() => isRewardedAdAvailable());
   const devSimulation = isMathFallbackEnabled();
@@ -95,7 +98,8 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
       window.clearTimeout(t);
       // Leaving the screen with the offer still open (Back, a header shortcut, Android Back): the same one skip
       // NOT NOW records. A screen that already reported through onSkipReporter, a NOT NOW or a grant settled it.
-      if (shownRef.current) reportSkip();
+      // Not while an ad is in flight: its answer (grant / fail) settles the offer instead.
+      if (shownRef.current && !adPendingRef.current) reportSkip();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -122,7 +126,9 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
       return;
     }
     setAdPending(true);
+    adPendingRef.current = true;
     const result = await showRewardedAd(placement);
+    adPendingRef.current = false;
     setAdPending(false);
     const outcome = resolveAdOutcome(result);
     if (outcome.grantSource === "ad") {
@@ -140,8 +146,12 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
     if (adPending) return;
     playSelectSound();
     reportSkip();
+    // Gone at once, whatever the screen does with onClosed - a declined card can never be tapped again.
+    setDeclined(true);
     onClosed?.("declined");
   }
+
+  if (declined) return null;
 
   if (phase === "granted") {
     return (

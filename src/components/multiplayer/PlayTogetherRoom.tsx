@@ -13,7 +13,15 @@ import MultiplayerTutorialOverlay from "./MultiplayerTutorialOverlay";
 import { CANVAS_SIZE } from "../../app/constants";
 import { getShapeById } from "../../content/contentRepository";
 import { getSelectedColor } from "../../services/penColorStore";
-import { consumeInkTrialUse, getPendingCtaInk, markInkTrialStarted, resolveEffectiveInk, setPostSessionPending } from "../../services/inkTrialStore";
+import {
+  consumeInkTrialUse,
+  getPendingCtaInk,
+  getPinnedInkTrialSession,
+  markInkTrialStarted,
+  pinInkTrialSession,
+  resolveEffectiveInk,
+  setPostSessionPending,
+} from "../../services/inkTrialStore";
 import { warmPostSessionInkAd } from "../../services/inkTrialOffers";
 import type { InkTrialInk } from "../../services/analyticsSchema";
 import type { PenColorId } from "../../app/constants";
@@ -200,6 +208,7 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
 
     if (snapshot.phase === "LOBBY") {
       // A rematch returns to the lobby, so re-arm for the next game.
+      setCtaInk(null);
       joinedFinishedRef.current = false;
       reportedStartRef.current = false;
       reportedFinishRef.current = false;
@@ -209,12 +218,18 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
 
     if (!reportedStartRef.current && snapshot.roundIndex >= 0) {
       reportedStartRef.current = true;
-      // Pin this game's ink (Rewarded Ink Trial, 0.57.1). A game already over on arrival is not played here.
+      // Pin this game's ink (Rewarded Ink Trial, 0.57.1). A game already over on arrival is not played here. The
+      // pin is persisted by game key: a remount / resume mid-game keeps the ink it started with.
       if (!joinedFinishedRef.current) {
-        const effective = resolveEffectiveInk("playTogether", getSelectedColor());
+        const gameKey = multiplayerGameKey(snapshot.roomCode, snapshot.gameSerial);
+        const persisted = getPinnedInkTrialSession(gameKey);
+        const effective = persisted ? { color: persisted, trialInk: persisted } : resolveEffectiveInk("playTogether", getSelectedColor());
         gameInkRef.current = effective;
         setGameInk(effective);
-        if (effective.trialInk) markInkTrialStarted(effective.trialInk, "playTogether");
+        if (effective.trialInk) {
+          pinInkTrialSession(gameKey, effective.trialInk);
+          markInkTrialStarted(effective.trialInk, "playTogether");
+        }
       }
       // mpDailyOrdinal: this device's Nth multiplayer game of the local day. Counted once per genuine game
       // (roomCode:gameSerial, kept locally and never sent), for host and guest alike; null (a remount of a
@@ -246,9 +261,12 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
       // when it drew with the Trial ink - keyed on the game, so a reconnect or a repeated final snapshot consumes
       // nothing. It also owes one Ink offer, shown only AFTER the player leaves the room (never here, where a
       // rematch can start and others wait); the ad is warmed now so it is likely ready by then.
-      if (!joinedFinishedRef.current) {
-        const pinned = gameInkRef.current;
-        if (pinned.trialInk) consumeInkTrialUse(pinned.trialInk, `mp:${multiplayerGameKey(snapshot.roomCode, snapshot.gameSerial)}`, "playTogether");
+      // A resume that lands directly on the final results (app killed mid-game) still consumes: the persisted pin
+      // says this device played the session with the Trial ink.
+      const gameKey = multiplayerGameKey(snapshot.roomCode, snapshot.gameSerial);
+      const pinnedInk = joinedFinishedRef.current ? getPinnedInkTrialSession(gameKey) : gameInkRef.current.trialInk;
+      if (!joinedFinishedRef.current || pinnedInk) {
+        if (pinnedInk) consumeInkTrialUse(pinnedInk, `mp:${gameKey}`, "playTogether");
         setPostSessionPending("playTogether");
         warmPostSessionInkAd("playTogether");
         setCtaInk(getPendingCtaInk());

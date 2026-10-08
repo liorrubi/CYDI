@@ -1123,7 +1123,8 @@ test("H: the experiment code never imports, reads or mutates Rewarded state", ()
 test("H (0.57.1): the Ink Trial lives OUTSIDE the interstitial and rewarded-ad core - none of these files knows it exists", () => {
   // Ink Trial (0.57.1) is an independent layer (inkTrialStore / inkTrialConfig / inkTrialPolicy / resultAdLane). The
   // interstitial modules, the rewarded SDK wrapper, the coin cadence and the coin offer must never name it: the only
-  // contact points are the generic claimResultAdLane() / deferInterstitialThisCycle() and the v3 body observer.
+  // contact points are the existing claimResultAdLane() / isInterstitialDueThisCycle() / markRewardedOfferRenderedThisCycle()
+  // (called from resultAdLane.ts) and the v3 body observer. interstitialController.ts itself is byte-identical to 0.57.0.
   const needles = /inktrial|ink[-_ ]trial|pendingPurchaseCta|ctaClaimed|config:ads:ink/i;
   const files = [
     "services/ads/interstitialController.ts",

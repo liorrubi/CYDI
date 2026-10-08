@@ -23,6 +23,8 @@ import {
 } from "./inkTrialConfigSchema";
 
 let liveConfig: InkTrialConfig | null = null;
+/** Whether any config answer (with or without `ink`, or a 404) has arrived in this run. */
+let answered = false;
 let installationIdSource: () => string | null = () => getPersistedInstallationId();
 
 /** Feeds this module from the v3 config answers. Called once at native startup, before the first refresh. */
@@ -30,7 +32,16 @@ export function installInkTrialConfigObserver(): void {
   observeConfigBody((body) => {
     const ink = body !== null && typeof body === "object" ? (body as Record<string, unknown>).ink : undefined;
     liveConfig = parseClientInkTrialConfig(ink);
+    answered = true;
   });
+}
+
+/**
+ * Has this run heard the server's answer yet? Before it, "OFF" only means "not known yet" - a caller holding
+ * something for later (a post-session offer) keeps it rather than dropping it.
+ */
+export function hasInkConfigAnswer(): boolean {
+  return answered || readQaOverride() !== undefined;
 }
 
 // --- QA / dev override ----------------------------------------------------------------
@@ -119,6 +130,7 @@ export function getClassicRotation(): readonly InkRotationSlot[] {
 
 export function _resetInkTrialConfigForTests(options: { config?: InkTrialConfig | null; installationId?: string | null } = {}): void {
   liveConfig = options.config ?? null;
+  answered = options.config !== undefined;
   const id = options.installationId === undefined ? "test-installation" : options.installationId;
   installationIdSource = () => id;
 }

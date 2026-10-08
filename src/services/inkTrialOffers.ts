@@ -5,7 +5,9 @@
 // safe post-exit surface.
 
 import { preloadRewardedAd, type RewardedAdPlacement } from "./ads";
-import { isInkOfferSurfaceOn } from "./ads/inkTrialConfig";
+import { hasInkConfigAnswer, isInkOfferSurfaceOn } from "./ads/inkTrialConfig";
+
+export { hasInkConfigAnswer };
 import { getNextEligibleInk, type PostSessionSurface } from "./inkTrialStore";
 
 export const POST_SESSION_INK_PLACEMENT: Record<PostSessionSurface, RewardedAdPlacement> = {

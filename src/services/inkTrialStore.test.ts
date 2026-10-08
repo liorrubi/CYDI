@@ -180,3 +180,15 @@ test("corrupt storage is a fresh state, never a crash; listeners hear every writ
   grantInkTrial("diamondBlue", "classic");
   assert.equal(heard, 1);
 });
+
+test("a Play Together pin survives a remount: the session that started with the Trial ink is found by its key", async () => {
+  const { pinInkTrialSession, getPinnedInkTrialSession } = await import("./inkTrialStore");
+  grantInkTrial("rainbow", "playTogether");
+  pinInkTrialSession("ROOM:3", "rainbow");
+  pinInkTrialSession("ROOM:3", "rainbow");
+  _resetInkTrialStoreForTests({ storage, isOwned: (ink) => owned.has(ink) });
+  assert.equal(getPinnedInkTrialSession("ROOM:3"), "rainbow");
+  assert.equal(getPinnedInkTrialSession("ROOM:4"), null);
+  for (let i = 0; i < 15; i++) pinInkTrialSession(`R:${i}`, "rainbow");
+  assert.equal(getPinnedInkTrialSession("ROOM:3"), null, "bounded: only the newest pins are kept");
+});

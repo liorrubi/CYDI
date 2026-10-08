@@ -4,7 +4,7 @@
 
 import { PEN_COLORS, type PenColorId } from "../app/constants";
 import { getCoins, spendCoins } from "./coinsStore";
-import { closeInkTrialOnPurchase } from "./inkTrialStore";
+import { closeInkTrialOnPurchase, setInkTrialOverlay } from "./inkTrialStore";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "./penColorStore";
 import { trackEvent } from "./analytics";
 import { INK_TRIAL_INKS, type InkTrialInk } from "./analyticsSchema";
@@ -36,6 +36,10 @@ export function purchasePenColor(id: PenColorId): PenColorPurchaseResult {
   unlockColor(id);
   setSelectedColor(id);
   if (isTrialInk(id)) closeInkTrialOnPurchase(id);
+  // The Shop has always equipped what was just bought: a running Trial of ANOTHER ink steps aside (paused, not
+  // ended - it comes back when its ink is picked in the pen menu, and no play is used while it is paused). After
+  // buying the Trial's own ink this is a no-op: that Trial was just closed, and the next grant resets the overlay.
+  setInkTrialOverlay(false);
   trackEvent("shop_purchase_with_coins", { productType: "penColor", tier: id, price });
   return "purchased";
 }

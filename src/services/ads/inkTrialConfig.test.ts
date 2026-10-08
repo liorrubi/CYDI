@@ -138,3 +138,13 @@ test("rollout gates offers per installation; an active Trial on Classic / Play T
   for (const s of ["classic", "playTogether", "twoPlayers"] as const) assert.equal(doesActiveTrialApplyOn(s), true);
   assert.equal(doesActiveTrialApplyOn("daily"), false);
 });
+
+test("hasInkConfigAnswer: false on a cold start until the first answer (even a 404) arrives", async () => {
+  _resetInkTrialConfigForTests();
+  const { hasInkConfigAnswer } = await import("./inkTrialConfig");
+  assert.equal(hasInkConfigAnswer(), false);
+  installInkTrialConfigObserver();
+  answer = async () => response(404);
+  await refreshInterstitialConfig();
+  assert.equal(hasInkConfigAnswer(), true);
+});

@@ -1380,6 +1380,11 @@ function ShapePlay({
             placement="shape_challenge_ink_trial"
             context={inkOffer.context}
             onShown={handleRewardedOfferShown}
+            // NOT NOW: the card goes and the round's coins stay on their own line. A grant keeps the card,
+            // which then shows the confirmation.
+            onClosed={(outcome) => {
+              if (outcome === "declined") setInkOffer(null);
+            }}
           />
         )}
         {inkOffer === null && ctaInk !== null && <InkTrialCta ink={ctaInk} surface="classic" onClosed={() => setCtaInk(null)} />}

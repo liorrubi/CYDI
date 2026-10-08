@@ -194,6 +194,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 // second concurrent load and never shows the wrong unit's ad: a ready / failed / expired ad of the other unit is
 // simply set aside (state -> idle) and the requested unit is loaded; a load still in flight for the other unit is
 // left to finish. Before 0.57.1 every placement was the coin unit, so for coin-only traffic nothing changes.
+// A ready ad that is set aside emits nothing new: its `loaded` event already carries its own placement, so per unit
+// it simply counts as loaded-not-shown (which it was). A tap never adopts the other unit's ad or failure.
 //
 // One native load at a time: a load is never started while `nativeLoadActive`. Every load
 // carries a generation (`loadSeq`); a callback from an older load (abandoned at the hard
@@ -218,6 +220,8 @@ let loadOnEvent: RewardedAdListener | undefined;
 let hardExpiryTimer: ReturnType<typeof setTimeout> | null = null;
 let readyAt = 0;
 let failedAt = -Infinity;
+/** The last failure was an abandon at the hard expiry (the native prepare may still be running). */
+let lastFailAbandoned = false;
 // Why the last load attempt failed - reported if a show then finds nothing loaded.
 let lastLoadFailure: AdFailureReason = "load_failed";
 let lastLoadCode: number | undefined;
@@ -259,6 +263,9 @@ export function isRewardedUnitConfigured(unit: RewardedUnit): boolean {
  */
 function releaseOtherUnit(unit: RewardedUnit): void {
   if (loadUnit === unit) return;
+  // A load ABANDONED at the hard expiry may still be preparing natively: keep it for the usual failed cooldown, so
+  // a load for the other unit can never overlap it (the plugin holds one prepared ad - the late one would win).
+  if (state === "failed" && lastFailAbandoned && lifecycleV2() && now() - failedAt < failedCooldownMs) return;
   if (state === "ready" || state === "failed" || state === "expired") state = "idle";
 }
 
@@ -336,6 +343,7 @@ function failLoad(reason: AdFailureReason, code: number | undefined, abandon: bo
   }
   state = "failed";
   failedAt = now();
+  lastFailAbandoned = abandon;
   lastLoadFailure = reason;
   lastLoadCode = code;
   lastLoadLatencyMs = now() - loadStartedAt;
@@ -485,6 +493,12 @@ export async function showRewardedAd(
 
   const v2 = lifecycleV2();
   if (state !== "ready") {
+    if (v2 && state === "failed" && loadUnit !== unit) {
+      // 0.57.1: the OTHER unit's load was abandoned at the hard expiry moments ago (releaseOtherUnit keeps it in its
+      // cooldown, because the native prepare may still be running). Not this unit's failure: no code, no adoption.
+      emit("unavailable", placement, "timeout", onEvent, { stateAtTap, cause: "loading" });
+      return { status: "unavailable", reason: "timeout" };
+    }
     if (v2 && (state === "failed" || state === "expired")) {
       // Fail fast. A failure already reported by its preload is not repeated at the tap.
       const reason: AdFailureReason = state === "failed" ? lastLoadFailure : "load_failed";
@@ -498,11 +512,26 @@ export async function showRewardedAd(
     }
     if (state === "idle" || state === "failed" || state === "expired") startLoad(activeAdapter()!, placement, "click", onEvent);
     // v2: a short bounded wait. Legacy: wait for the load itself, which is bounded at 8 s.
-    await waitForLoad(v2 ? tapWaitMs : LEGACY_LOAD_TIMEOUT_MS + 1000);
+    const budget = v2 ? tapWaitMs : LEGACY_LOAD_TIMEOUT_MS + 1000;
+    const waitStarted = Date.now();
+    await waitForLoad(budget);
     refreshLifecycle();
+    // 0.57.1: the load this tap waited on was the OTHER unit's (already in flight at the tap). Once it has settled the
+    // lane is free: set it aside and load THIS unit within what is left of the same budget - the tap never adopts the
+    // other unit's ad or its failure.
+    if (loadUnit !== unit && !nativeLoadActive && (state as RewardedState) !== "showing") {
+      const remaining = budget - (Date.now() - waitStarted);
+      releaseOtherUnit(unit);
+      if (remaining > 0 && (state as RewardedState) === "idle") {
+        startLoad(activeAdapter()!, placement, "click", onEvent);
+        await waitForLoad(remaining);
+        refreshLifecycle();
+      }
+    }
     // `state` moved while we awaited (a callback ran), which the compiler cannot see.
-    // A load of the OTHER unit that was already in flight is not this tap's ad (0.57.1): it counts as still loading.
-    const after: RewardedState = (state as RewardedState) === "ready" && loadUnit !== unit ? "loading" : (state as RewardedState);
+    // Anything still belonging to the OTHER unit is not this tap's ad: it counts as still loading.
+    const mine = loadUnit === unit;
+    const after: RewardedState = !mine && ((state as RewardedState) === "ready" || (state as RewardedState) === "failed") ? "loading" : (state as RewardedState);
     if (after !== "ready") {
       const failedNow = after === "failed";
       const reason: AdFailureReason = failedNow ? lastLoadFailure : "timeout";
@@ -587,6 +616,7 @@ export function _resetRewardedAdsForTests(): void {
   loadOnEvent = undefined;
   readyAt = 0;
   failedAt = -Infinity;
+  lastFailAbandoned = false;
   lastLoadFailure = "load_failed";
   lastLoadCode = undefined;
   lastLoadLatencyMs = 0;

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.57.1 - 2026-10-08
+
+Android 0.57.1 (versionCode 59) and web 0.57.1. Nothing changes for players until it is switched on: the new ink trial ships turned off, and the ad frequency stays exactly as it is today.
+
+- **Try a premium ink, built but switched off:** when it is turned on, a rewarded ad can unlock
+  Rainbow Ink (and later Diamond Blue) for 5 plays, with a small preview of the real ink. It never
+  adds ad opportunities in Classic: it takes turns with the usual coin offer on the same moments.
+  In Play Together and 2 Players it only appears after you leave the finished game, never between
+  rounds or on the results screen where a rematch starts. The ink is only borrowed - buying it in
+  the Shop works exactly as before, at the same price, and owning it ends the trial straight away.
+- **A small "plays left" tag** shows while a trial ink is on your pen, and after the last play the
+  game offers to keep it for the normal Shop price (or tells you how many coins you still need).
+- **Built-in controls:** the trial is turned on, rolled out and tuned from the server without a new
+  app version, and can be turned off at any time without taking back a trial already earned.
+- **A few bounded usage numbers on existing data (no new identifiers, permissions or SDKs):** which
+  offer a rewarded slot showed (coins or ink) and the trial's steps (unlocked, first used, finished,
+  kept or not).
+
 ## 0.57.0 - 2026-10-03
 
 Android 0.57.0 (versionCode 57) and web 0.57.0. Nobody sees more ads: the ad frequency stays as it is today (same share of players, one break after every 7 games, at most 2 per session).

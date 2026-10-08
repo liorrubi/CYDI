@@ -1213,7 +1213,7 @@
   }
 
   .app-shell .app-result-compact .ink-cta .ink-offer-actions {
-    margin-top: var(--space-2);
+    margin-top: 6px;
   }
 
   /* The first Keep-it card has a third row (the +5 extension's NOT NOW / shortfall line). To keep Try Again on a

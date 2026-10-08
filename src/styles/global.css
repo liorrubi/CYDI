@@ -6244,14 +6244,14 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .ink-cta-notnow {
   flex: 0 0 auto;
   margin-left: auto;
-  min-height: 26px;
-  padding: 2px 6px;
+  min-height: 24px;
+  padding: 2px 8px;
   border: none;
   background: none;
   color: rgba(244, 245, 255, 0.72);

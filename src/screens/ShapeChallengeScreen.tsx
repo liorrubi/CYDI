@@ -1483,6 +1483,7 @@ function ShapePlay({
           actionsRef={resultActionsRef}
           offer={offerNode}
           extras={notesNode}
+          compact={doubleOfferAmount === null && inkOffer === null && ctaInk !== null}
         />
       );
     }

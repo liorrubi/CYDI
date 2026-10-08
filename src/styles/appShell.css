@@ -1177,6 +1177,42 @@
   }
 }
 
+/* ------------------------------------------- Keep-it card, short screens ---
+ * The Ink Trial Keep-it card sits between the score card and the actions. At
+ * 392×738 (Mi 8) it put the primary at 774-826px, below the fold. On a short
+ * screen the stack tightens - spacing only: nothing is hidden, the canvas, the
+ * score, the four metrics and the card's preview, name and price keep their
+ * size - so the primary stays reachable without scrolling. Taller screens keep
+ * the normal layout (without the card the primary sits near 601-653px).
+ * ------------------------------------------------------------------------ */
+@media (max-height: 840px) {
+  .app-shell .app-result-compact {
+    gap: var(--space-2);
+  }
+
+  .app-shell .app-result-compact .app-result-stage {
+    gap: 6px;
+    padding: var(--space-2);
+  }
+
+  .app-shell .app-result-compact .app-result-card {
+    padding: var(--space-3);
+  }
+
+  .app-shell .app-result-compact .app-result-metrics {
+    gap: 6px;
+  }
+
+  .app-shell .app-result-compact .ink-cta {
+    margin: 0 auto;
+    padding: 10px;
+  }
+
+  .app-shell .app-result-compact .ink-cta .ink-offer-actions {
+    margin-top: var(--space-2);
+  }
+}
+
 /* ===========================================================================
  * 2 PLAYERS RESULT  -  Version B, as its own layout
  *

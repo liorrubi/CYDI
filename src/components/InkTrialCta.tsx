@@ -102,14 +102,16 @@ export default function InkTrialCta({ ink, surface, onClosed, deferredInterstiti
           <p className="ink-offer-value">
             Keep it forever · <span className="ink-cta-price">{formatCoins(price)} 🪙</span>
           </p>
-          {!affordable && <p className="ink-cta-shortfall">Need {formatCoins(price - coins)} more 🪙</p>}
         </div>
       </div>
+      {/* Not affordable: the shortfall takes the buy button's place in the action row, so both states are two rows. */}
       <div className="ink-offer-actions">
-        {affordable && (
+        {affordable ? (
           <button type="button" className="ink-offer-primary" onClick={handleBuy}>
             UNLOCK PERMANENTLY
           </button>
+        ) : (
+          <p className="ink-cta-shortfall">Need {formatCoins(price - coins)} more 🪙</p>
         )}
         <button type="button" className="ink-offer-secondary" onClick={handleNotNow}>
           NOT NOW

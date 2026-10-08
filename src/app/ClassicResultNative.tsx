@@ -80,6 +80,11 @@ type ClassicResultNativeProps = {
   extras?: ReactNode;
   /** Overlays that position themselves; rendered last. */
   overlays?: ReactNode;
+  /**
+   * The Ink Trial Keep-it card is in the offer slot. On a short screen the stack tightens
+   * (appShell.css, `.app-result-compact`) so the primary action stays above the fold.
+   */
+  compact?: boolean;
 };
 
 export default function ClassicResultNative({
@@ -101,6 +106,7 @@ export default function ClassicResultNative({
   offer,
   extras,
   overlays,
+  compact = false,
 }: ClassicResultNativeProps) {
   /*
    * The four real sub-scores. Order matches the design; the values and their
@@ -114,7 +120,7 @@ export default function ClassicResultNative({
   ];
 
   return (
-    <div className="screen app-result">
+    <div className={compact ? "screen app-result app-result-compact" : "screen app-result"}>
       {/* 1 · Compact header. The global AppHeader carries coins, chests, the
           crown and four shortcuts, none of which a result needs - and it cost
           164px of a 738px screen. Back and the shape name are what this screen

@@ -6231,8 +6231,12 @@ body {
   color: #ffd27a;
 }
 
+/* In the action row, in the buy button's place, centred beside NOT NOW. */
 .ink-cta-shortfall {
-  margin-top: 2px;
+  flex: 1 1 auto;
+  align-self: center;
+  min-width: 0;
+  margin: 0;
 }
 
 .ink-cta-price {

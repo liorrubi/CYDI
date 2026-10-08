@@ -6267,7 +6267,7 @@ body {
   cursor: not-allowed;
 }
 
-/* WATCH AD / +5 PLAYS as the secondary beside UNLOCK PERMANENTLY: two short lines keep both on one row. */
+/* WATCH AD / +5 PLAYS as the secondary beside UNLOCK INK: two short lines keep the action row compact. */
 .ink-cta-lines {
   display: inline-flex;
   flex-direction: column;

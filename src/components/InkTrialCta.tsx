@@ -40,10 +40,10 @@ type Phase = "offer" | "bought" | "extended";
  * (purchasePenColor). Always actionable, never in the way: it sits after the screen's own actions.
  *
  * First card (the first 5 plays used, the extension still possible on this surface):
- *   affordable   UNLOCK PERMANENTLY  ·  WATCH AD · +5 PLAYS   ·  not now
+ *   affordable   UNLOCK INK  ·  WATCH AD · +5 PLAYS   ·  not now
  *   unaffordable WATCH AD · +5 PLAYS ·  VIEW IN SHOP          ·  need X more · not now
  * Final card (the extension used - or not possible here): buy or Shop only.
- *   affordable   UNLOCK PERMANENTLY  ·  NOT NOW
+ *   affordable   UNLOCK INK  ·  NOT NOW
  *   unaffordable VIEW IN SHOP        ·  NOT NOW               ·  need X more
  *
  * The +5 extension is granted ONLY on the SDK's confirmed reward (resolveAdOutcome "rewarded"), once per ink
@@ -198,7 +198,7 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
           <div className="ink-offer-text">
             {phase === "bought" ? (
               <p className="ink-offer-title">
-                {option.name} is yours forever <span aria-hidden="true">{option.icon}</span>
+                {option.name} unlocked! <span aria-hidden="true">{option.icon}</span>
               </p>
             ) : (
               <>
@@ -206,7 +206,7 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
                   {TRIAL_EXTENSION_PLAYS} more plays <span aria-hidden="true">{option.icon}</span>
                 </p>
                 <p className="ink-offer-value">
-                  {option.name} is back on your pen for {TRIAL_EXTENSION_PLAYS} plays
+                  {option.name} is back on your pen
                 </p>
               </>
             )}
@@ -231,7 +231,7 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
         <div className="ink-offer-text">
           <p className="ink-offer-title">{finalCard ? `${option.name} trial ended` : `Loved ${option.name}?`}</p>
           <p className="ink-offer-value">
-            Keep it forever · <span className="ink-cta-price">{formatCoins(price)} 🪙</span>
+            Unlock {option.name} · <span className="ink-cta-price">{formatCoins(price)} 🪙</span>
           </p>
         </div>
       </div>
@@ -242,7 +242,7 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
             {affordable ? (
               <>
                 <button type="button" className="ink-offer-primary" onClick={handleBuy} disabled={adPending}>
-                  UNLOCK PERMANENTLY
+                  UNLOCK INK
                 </button>
                 <button type="button" className="ink-offer-secondary ink-cta-watch" onClick={handleWatch} disabled={adPending}>
                   {adPending ? (
@@ -276,7 +276,7 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
           <div className="ink-offer-actions">
             {affordable ? (
               <button type="button" className="ink-offer-primary" onClick={handleBuy}>
-                UNLOCK PERMANENTLY
+                UNLOCK INK
               </button>
             ) : (
               <button type="button" className="ink-offer-primary" onClick={handleShop}>

@@ -13,6 +13,7 @@ import {
   closeInkTrialOnPurchase,
   consumeInkTrialUse,
   getActiveInkTrial,
+  getInkTrialHistory,
   getNextEligibleInk,
   getPendingCtaInk,
   grantInkTrial,
@@ -128,6 +129,21 @@ test("ownership wins at once: a purchase closes the Trial, nothing more is consu
   assert.equal(consumeInkTrialUse("rainbow", "2", "classic").consumed, false);
   assert.equal(getPendingCtaInk(), null, "no CTA for an ink you own");
   assert.equal(getNextEligibleInk(), "diamondBlue");
+});
+
+test("Trial history for the purchase row: none -> active (also paused) -> ended; a closed Trial reads as ended", () => {
+  assert.equal(getInkTrialHistory("rainbow"), "none");
+  grantInkTrial("rainbow", "classic");
+  assert.equal(getInkTrialHistory("rainbow"), "active");
+  setInkTrialOverlay(false);
+  assert.equal(getInkTrialHistory("rainbow"), "active", "a paused Trial is still running");
+  setInkTrialOverlay(true);
+  for (let i = 1; i <= 5; i++) consumeInkTrialUse("rainbow", `k${i}`, "classic");
+  assert.equal(getInkTrialHistory("rainbow"), "ended");
+  assert.equal(getInkTrialHistory("diamondBlue"), "none");
+  grantInkTrial("diamondBlue", "twoPlayers");
+  closeInkTrialOnPurchase("diamondBlue");
+  assert.equal(getInkTrialHistory("diamondBlue"), "ended");
 });
 
 test("Daily: an active Trial applies only while the remote config enables the Daily surface (OFF by default)", () => {

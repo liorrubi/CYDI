@@ -212,3 +212,49 @@ test("M5: deferredInterstitial - optional boolean on ink_trial cta_shown only; A
   counters = incrementEvent(counters as never, "ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: false }, "android", "0.58.0") as never;
   assert.deepEqual(counters.ink_trial.byInkTrial, { "cta_shown|rainbow|classic|deferred": 1, "cta_shown|rainbow|classic|none": 1 });
 });
+
+// ============================================== M6: inkTrialBefore on Trial-ink Shop purchases ====
+
+const buy = (tier: string, extra: Record<string, unknown> = {}) => ({ productType: "penColor", tier, price: tier === "diamondBlue" ? 15000 : 10000, ...extra });
+
+test("M6: inkTrialBefore - optional, closed set, only on a Trial ink's penColor purchase; the 0.57 shape is unchanged", () => {
+  for (const before of ["none", "active", "ended"]) {
+    assert.equal(valid("shop_purchase_with_coins", buy("rainbow", { inkTrialBefore: before })), true);
+    assert.equal(valid("shop_purchase_with_coins", buy("diamondBlue", { inkTrialBefore: before })), true);
+  }
+  assert.equal(valid("shop_purchase_with_coins", buy("rainbow")), true, "optional: every older client stays valid");
+  assert.equal(valid("shop_purchase_with_coins", { productType: "penColor", tier: "purple", price: 1000 }), true);
+  assert.equal(valid("shop_purchase_with_coins", buy("rainbow", { inkTrialBefore: "unknown" })), false, "closed set");
+  assert.equal(valid("shop_purchase_with_coins", { productType: "penColor", tier: "purple", price: 1000, inkTrialBefore: "none" }), false, "Trial inks only");
+  assert.equal(valid("shop_purchase_with_coins", { productType: "penSkin", tier: "rainbow", price: 1000, inkTrialBefore: "none" }), false, "penColor only");
+  assert.equal(valid("shop_purchase_with_coins", buy("rainbow", { inkTrialBefore: "none", surface: "classic" })), false, "no other new key");
+});
+
+test("M6: AE - a Trial ink's purchase row keeps the ink's canonical id (not the price) and inkTrialBefore; other rows unchanged", () => {
+  const p = point("shop_purchase_with_coins", buy("rainbow", { inkTrialBefore: "ended" }));
+  assert.equal(p.blobs.length, 20);
+  assert.equal(p.doubles.length, 20);
+  assert.deepEqual([b(p, 1), b(p, 18), b(p, 19), b(p, 20), d(p, 8)], ["shop_purchase_with_coins", "rainbow", "ended", "productType:penColor", 10000]);
+  const old = point("shop_purchase_with_coins", buy("diamondBlue"));
+  assert.deepEqual([b(old, 18), b(old, 19)], ["diamondBlue", ""], "a pre-0.58 client's purchase still names the ink");
+  const other = point("shop_purchase_with_coins", { productType: "penColor", tier: "purple", price: 1000 });
+  assert.deepEqual([b(other, 18), b(other, 19)], ["", ""], "a non-Trial colour opens nothing");
+  const legacy = point("purchase_completed", buy("rainbow", { inkTrialBefore: "active" }));
+  assert.deepEqual([b(legacy, 1), b(legacy, 18), b(legacy, 19)], ["shop_purchase_with_coins", "rainbow", "active"]);
+});
+
+test("M6: exact ledger - the purchase stays exact; DO byInkPurchase is ink|inkTrialBefore (unknown for older clients), bounded", () => {
+  assert.equal(EXACT_LEDGER_EVENTS.has("shop_purchase_with_coins"), true);
+  let counters = {} as Record<string, Record<string, unknown>>;
+  const inc = (params: Record<string, unknown>) => (counters = incrementEvent(counters as never, "shop_purchase_with_coins", params, "android", "0.58.0") as never);
+  inc(buy("rainbow", { inkTrialBefore: "none" }));
+  inc(buy("rainbow", { inkTrialBefore: "ended" }));
+  inc(buy("diamondBlue", { inkTrialBefore: "active" }));
+  inc(buy("rainbow"));
+  inc({ productType: "penColor", tier: "purple", price: 1000 });
+  inc(buy("rainbow", { inkTrialBefore: "x" })); // direct call, bypassing validation: never opens a key
+  assert.deepEqual(counters.shop_purchase_with_coins.byInkPurchase, { "rainbow|none": 1, "rainbow|ended": 1, "diamondBlue|active": 1, "rainbow|unknown": 1 });
+  assert.equal(counters.shop_purchase_with_coins.total, 6, "the total is untouched");
+  counters = incrementEvent(counters as never, "purchase_completed", buy("diamondBlue", { inkTrialBefore: "none" }), "android", "0.58.0") as never;
+  assert.equal((counters.shop_purchase_with_coins.byInkPurchase as Record<string, number>)["diamondBlue|none"], 1, "the legacy name lands on the canonical row");
+});

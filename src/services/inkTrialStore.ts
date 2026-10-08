@@ -23,7 +23,7 @@ import {
   type InkTrialRecord,
   type InkTrials,
 } from "../app/inkTrialPolicy";
-import { INK_TRIAL_INKS, type InkTrialInk, type InkTrialStage } from "./analyticsSchema";
+import { INK_TRIAL_INKS, type InkTrialBefore, type InkTrialInk, type InkTrialStage } from "./analyticsSchema";
 import type { InkRotationSlot, InkSurface } from "./ads/inkTrialConfigSchema";
 import { doesActiveTrialApplyOn } from "./ads/inkTrialConfig";
 
@@ -297,6 +297,17 @@ export function recordInkCtaOutcome(ink: InkTrialInk, outcome: InkCtaOutcome, su
   record.ctaOutcome = outcome;
   save(state);
   track(outcome === "purchased" ? "cta_purchased" : outcome === "declined" ? "cta_declined" : "cta_dismissed", ink, surface);
+}
+
+/**
+ * This ink's Trial history, for the purchase event's `inkTrialBefore` - read BEFORE closeInkTrialOnPurchase. Never
+ * granted -> none; running (also while paused) -> active; used up -> ended. `closed` (already bought once while
+ * running) can only be seen again if ownership was lost; it had a Trial, so it reads as ended.
+ */
+export function getInkTrialHistory(ink: InkTrialInk): InkTrialBefore {
+  const record = load().trials[ink];
+  if (!record) return "none";
+  return record.status === "active" ? "active" : "ended";
 }
 
 /** A permanent purchase (from anywhere) wins at once: a running Trial is closed. Exhausted/closed records are kept (never re-granted). */

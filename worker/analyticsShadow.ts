@@ -126,6 +126,9 @@
 //   ink_trial rows: blob18 = ink, blob19 = inkSurface (classic | playTogether | twoPlayers | daily),
 //                   blob20 = "inkStage:<granted|started|completed|cta_shown|cta_purchased|cta_declined|cta_dismissed>",
 //                   double3 = deferredInterstitial on cta_shown (1 = an interstitial due on that exit was deferred).
+//   shop_purchase_with_coins rows of a Trial ink (productType penColor, tier rainbow | diamondBlue): blob18 = the ink
+//                   (its canonical id - never inferred from the price), blob19 = inkTrialBefore (none | active | ended;
+//                   "" from a client before 0.58.0). blob20 keeps productType:penColor, double8 the price.
 // coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
 // balance BUCKET is ever written - never a balance.
 // Booleans are 1/0 and absent numbers are 0, so always filter on blob1 before reading
@@ -135,7 +138,7 @@
 import { canonicalEventName, normalizeCountry } from "./analyticsDO";
 import { AD_LATENCY_BUCKETS, AD_LOAD_SOURCES, REWARDED_TAP_STATES, enumPosition } from "../src/services/ads/adDiagnostics";
 import { INTERSTITIAL_CELL_IDS } from "../src/services/ads/interstitialConfigSchema";
-import { normalizeAnalyticsPlatform, normalizeAppVersion, normalizeAppVersionCode } from "../src/services/analyticsSchema";
+import { INK_TRIAL_INKS, normalizeAnalyticsPlatform, normalizeAppVersion, normalizeAppVersionCode } from "../src/services/analyticsSchema";
 import { checkedEnvelopes, parseIngest, type CheckedEnvelope, type ParsedIngest } from "./analyticsIngest";
 import { normalizeAttribution } from "../src/services/analyticsAttribution";
 import { normalizeAnalyticsAudience } from "../src/services/analyticsUsage";
@@ -206,6 +209,15 @@ function modeFor(eventName: string, params: Record<string, unknown>): string {
   return "";
 }
 
+/**
+ * 0.58.0: a Shop purchase of a Trial ink keeps WHICH ink it was - its canonical pen-colour id from the closed
+ * INK_TRIAL_INKS set (never the free-text `tier` of any other product), so the ink is not read back from the price.
+ */
+function trialInkPurchased(eventName: string, params: Record<string, unknown>): string | undefined {
+  if (canonicalEventName(eventName) !== "shop_purchase_with_coins" || params.productType !== "penColor") return undefined;
+  return (INK_TRIAL_INKS as readonly unknown[]).includes(params.tier) ? (params.tier as string) : undefined;
+}
+
 function detailFor(params: Record<string, unknown>): string {
   for (const key of DETAIL_PARAMS) {
     const value = params[key];
@@ -244,12 +256,13 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       attribution?.content ?? "",
       str(params.placement),
       str(params.reason),
-      // 0.58.0: Ink offer and ink_trial rows carry no arm - their ink takes the slot.
-      str(params.arm ?? params.ink),
+      // 0.58.0: Ink offer and ink_trial rows carry no arm - their ink takes the slot; so does a Trial ink's Shop purchase.
+      str(params.arm ?? params.ink ?? trialInkPurchased(eventName, params)),
       // Schema 3: reward funnel rows carry no outcome, so this slot holds their interstitialArm.
       // 0.57: game_completed rows carry the next-game context's nextOutcome here (no other row has both).
-      // 0.58.0: ink_trial rows carry their inkSurface here (they have none of the other three).
-      str(params.outcome ?? params.interstitialArm ?? params.nextOutcome ?? params.inkSurface),
+      // 0.58.0: ink_trial rows carry their inkSurface here (they have none of the other three); a Trial ink's Shop
+      // purchase its inkTrialBefore.
+      str(params.outcome ?? params.interstitialArm ?? params.nextOutcome ?? params.inkSurface ?? params.inkTrialBefore),
       detailFor(params),
     ],
     doubles: [

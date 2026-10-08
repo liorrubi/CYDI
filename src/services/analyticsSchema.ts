@@ -254,6 +254,14 @@ export type RewardOfferParams =
  * that exit was deferred (left due, not consumed) - so CTA priority and the preserved opportunity can be verified.
  */
 export type InkTrialParams = { inkStage: InkTrialStage; ink: InkTrialInk; inkSurface: InkSurface; deferredInterstitial?: boolean };
+/**
+ * `inkTrialBefore` (0.58.0, shop_purchase_with_coins only, a Trial ink's penColor purchase): that ink's Trial
+ * history at the moment of purchase, from the local Ink Trial store. `none` = never granted, `active` = bought while
+ * its Trial was running, `ended` = bought after its Trial was used up (through the Keep-it CTA - which also sends
+ * ink_trial cta_purchased - or later in the Shop). Aggregate Trial -> Shop attribution with no identifier.
+ */
+export const INK_TRIAL_BEFORE = ["none", "active", "ended"] as const;
+export type InkTrialBefore = (typeof INK_TRIAL_BEFORE)[number];
 
 const REWARD_OFFER_ECONOMY_KEYS = ["balanceBucket", "baseReward", "multiplier", "adAvailable", "nextTarget", "shortfallBucket", "adClosesGap", "gamesBucket"] as const;
 const REWARD_OFFER_EXPERIMENT_KEYS = ["arm", "offerNumber", "sessionGames", "bonusCoins", "interstitialArm"] as const;
@@ -365,7 +373,7 @@ export type EventParamsMap = {
    */
   purchase_completed: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
   /** Canonical name for the coin-funded Shop unlock above; identical params. Not yet emitted by any client - see the rename note in AGENT_NOTES.md. */
-  shop_purchase_with_coins: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
+  shop_purchase_with_coins: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number; inkTrialBefore?: InkTrialBefore };
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
   artist_pack_link_clicked: { artistKey: string; packKey: string; hasAffiliate: boolean };
   game_started: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
@@ -959,11 +967,16 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
  * figure. See the doc comment on `purchase_completed` for why that matters.
  */
 function validateCoinShopPurchase<E extends "purchase_completed" | "shop_purchase_with_coins">(p: unknown): ValidationResult<E> {
-  if (!isRecord(p) || !hasExactKeys(p, ["productType", "tier", "price"])) return { valid: false };
+  if (!isRecord(p) || !hasKeysWithin(p, ["productType", "tier", "price"], ["inkTrialBefore"])) return { valid: false };
   const { productType, tier, price } = p;
   if (typeof productType !== "string" || !(PRODUCT_TYPES as readonly string[]).includes(productType)) return { valid: false };
   if (!isSafeString(tier)) return { valid: false };
   if (!isFinitePrice(price)) return { valid: false };
+  // 0.58.0: a Trial ink's penColor purchase may state its Trial history - only there, and only from the closed set.
+  if ("inkTrialBefore" in p) {
+    if (productType !== "penColor" || !isOneOf(INK_TRIAL_INKS, tier) || !isOneOf(INK_TRIAL_BEFORE, p.inkTrialBefore)) return { valid: false };
+    return { valid: true, params: { productType, tier, price, inkTrialBefore: p.inkTrialBefore } as EventParamsMap[E] };
+  }
   return { valid: true, params: { productType, tier, price } as EventParamsMap[E] };
 }
 

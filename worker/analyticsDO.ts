@@ -1,5 +1,6 @@
 import {
   ANALYTICS_EVENT_NAMES,
+  INK_TRIAL_BEFORE,
   INK_TRIAL_INKS,
   INK_TRIAL_STAGES,
   datesInRange,
@@ -171,6 +172,10 @@ const INTERSTITIAL_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["inters
 // byInkTrial is "stage|ink|surface" on ink_trial: three closed sets, at most 7 x 2 x 4 = 56 keys.
 const PLACEMENT_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["reward_ad_started", "reward_ad_completed", "reward_ad_failed", "rewarded_ad_shown", "rewarded_ad_completed"]);
 const INK_TRIAL_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["ink_trial"]);
+// byInkPurchase is "ink|inkTrialBefore" on a Trial ink's Shop purchase (Keep-it CTA or Shop): 2 inks x (none | active |
+// ended | unknown = a client before 0.58.0) = at most 8 keys, same bucket value. The ink is the canonical id, not the price.
+// (The legacy name purchase_completed is canonicalised before this runs.)
+const INK_PURCHASE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["shop_purchase_with_coins"]);
 // Pass & Play length and progress. `roundCount` is the length the players CHOSE
 // (ROUND_COUNT_ACCEPTED - 3, 5, 10, and 15 from older clients), `roundIndex` how far the
 // game got. Both are closed, re-validated server-side by validateEventParams before this
@@ -477,6 +482,7 @@ type EventCounters = {
   // event, and on day buckets recorded before 0.58.0.
   byPlacement?: Record<string, number>;
   byInkTrial?: Record<string, number>;
+  byInkPurchase?: Record<string, number>;
   // app_open ONLY, like byAppBuild - the native Android versionCode, which tells two
   // APKs of one versionName apart. Web never sends one; a native client that has not
   // read it yet, and every client older than 0.53.0, counts as "unknown".
@@ -762,6 +768,10 @@ export function incrementEvent(
     const deferral = typeof params.deferredInterstitial === "boolean" ? `|${params.deferredInterstitial ? "deferred" : "none"}` : "";
     updated.byInkTrial = incrementKeyMap(existing.byInkTrial, `${params.inkStage}|${params.ink}|${params.inkSurface}${deferral}`);
   }
+  if (INK_PURCHASE_BREAKOUT_EVENTS.has(eventName) && params.productType === "penColor" && isOneOf(INK_TRIAL_INKS, params.tier)) {
+    const before = params.inkTrialBefore === undefined ? "unknown" : isOneOf(INK_TRIAL_BEFORE, params.inkTrialBefore) ? params.inkTrialBefore : null;
+    if (before !== null) updated.byInkPurchase = incrementKeyMap(existing.byInkPurchase, `${params.tier}|${before}`);
+  }
   // Pass & Play breakouts - see the two sets above. Guarded for the same reason the
   // rewarded one is: this function is exported, so a bad value must leave the map
   // untouched rather than open an unbounded key.
@@ -1010,6 +1020,7 @@ export function mergeCounters(a: AllCounters, b: AllCounters): AllCounters {
       byInterstitialReason: mergeKeyMaps(ae.byInterstitialReason, be.byInterstitialReason),
       byPlacement: mergeKeyMaps(ae.byPlacement, be.byPlacement),
       byInkTrial: mergeKeyMaps(ae.byInkTrial, be.byInkTrial),
+      byInkPurchase: mergeKeyMaps(ae.byInkPurchase, be.byInkPurchase),
       byAppVersionCode: mergeKeyMaps(ae.byAppVersionCode, be.byAppVersionCode),
       byRoundCount: mergeKeyMaps(ae.byRoundCount, be.byRoundCount),
       byRoundIndex: mergeKeyMaps(ae.byRoundIndex, be.byRoundIndex),

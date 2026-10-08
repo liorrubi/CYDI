@@ -387,6 +387,21 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode, openJo
 
       {view === "menu" && Capacitor.isNativePlatform() && (
         <div className="mp-entry">
+          {/* Create / Join first, How it works after: the game entry stays above the fold even with the post-session
+              Ink card above it (Rewarded is prominent but never hides the mode's primary action). */}
+          <div className="mp-entry-actions">
+            <button type="button" className="card mp-entry-card mp-entry-card-primary" onClick={() => setView("create")}>
+              <span className="mp-entry-icon" aria-hidden="true">➕</span>
+              <span className="mp-entry-title">Create Game</span>
+              <span className="mp-entry-sub">Host a room and invite your friends</span>
+            </button>
+            <button type="button" className="card mp-entry-card" onClick={() => setView("join")}>
+              <span className="mp-entry-icon" aria-hidden="true">🔑</span>
+              <span className="mp-entry-title">Join Game</span>
+              <span className="mp-entry-sub">Enter a room code you were given</span>
+            </button>
+          </div>
+
           <section className="mp-explainer">
             <h2 className="mp-panel-heading">How it works</h2>
             <ol className="mp-explainer-list">
@@ -409,19 +424,6 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode, openJo
             </ol>
             <p className="mp-hint">2–8 players · 3, 5 or 10 rounds · 20 seconds to draw</p>
           </section>
-
-          <div className="mp-entry-actions">
-            <button type="button" className="card mp-entry-card mp-entry-card-primary" onClick={() => setView("create")}>
-              <span className="mp-entry-icon" aria-hidden="true">➕</span>
-              <span className="mp-entry-title">Create Game</span>
-              <span className="mp-entry-sub">Host a room and invite your friends</span>
-            </button>
-            <button type="button" className="card mp-entry-card" onClick={() => setView("join")}>
-              <span className="mp-entry-icon" aria-hidden="true">🔑</span>
-              <span className="mp-entry-title">Join Game</span>
-              <span className="mp-entry-sub">Enter a room code you were given</span>
-            </button>
-          </div>
         </div>
       )}
 

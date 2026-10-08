@@ -65,6 +65,8 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
   const [progress, setProgress] = useState<PassPlayProgress | null>(null);
   /** The navigation the player asked for, held while the "Quit game?" confirmation is up. */
   const [pendingExit, setPendingExit] = useState<{ run: () => void } | null>(null);
+  // The post-game Ink card is on screen: the setup keeps Start Game above the fold (names move below it meanwhile).
+  const [inkCardVisible, setInkCardVisible] = useState(false);
 
   const goHome = () => onNavigate(toHome());
 
@@ -136,6 +138,26 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
   const onWeb = !Capacitor.isNativePlatform();
   const shopFromHere = onWeb ? () => onNavigate(toShop(toPassPlay())) : undefined;
 
+  // Android setup: the pre-filled names, rendered above Rounds - or below Start Game while the Ink card shows.
+  const playersFieldset = (
+    <fieldset className="mp-fieldset">
+      <legend className="mp-legend">Players</legend>
+      {names.map((name, seat) => (
+        <label className="mp-field" key={seat}>
+          <span className="mp-field-label">Player {seat + 1}</span>
+          <input
+            className="mp-input"
+            value={name}
+            onChange={(e) => updateName(seat, e.target.value)}
+            maxLength={PASS_PLAY_LIMITS.MAX_NAME_LENGTH}
+            placeholder={seat === 0 ? "e.g. Maya" : "e.g. Tom"}
+            autoComplete="off"
+          />
+        </label>
+      ))}
+    </fieldset>
+  );
+
   if (setup) {
     const backToSetup = () => {
       setProgress(null);
@@ -175,7 +197,7 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
       {/* Rewarded Ink Trial (0.58.0): the SAFE post-game surface - back on setup after a completed game, never on
           the champion / Play Again screen. Renders only when a completed game left an offer pending and an ink is
           eligible; never opens an ad by itself. */}
-      <PostSessionInkOffer surface="twoPlayers" onViewShop={(ink) => onNavigate(toShop(toPassPlay(), ink))} />
+      <PostSessionInkOffer surface="twoPlayers" onViewShop={(ink) => onNavigate(toShop(toPassPlay(), ink))} onVisibleChange={setInkCardVisible} />
       <InkTrialBadge surface="twoPlayers" asRow />
 
       {/* The web gets the 3a composition; Android keeps the form below,
@@ -202,44 +224,9 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
 
       {Capacitor.isNativePlatform() && (
       <div className="mp-form">
-        <section className="mp-explainer">
-          <h2 className="mp-panel-heading">How it works</h2>
-          <ol className="mp-explainer-list">
-            <li>
-              <span className="mp-explainer-icon" aria-hidden="true">📱</span>
-              One device. You take your turns one after the other.
-            </li>
-            <li>
-              <span className="mp-explainer-icon" aria-hidden="true">👀</span>
-              The same shape each round — 3 seconds to look, 20 to draw it.
-            </li>
-            <li>
-              <span className="mp-explainer-icon" aria-hidden="true">🤝</span>
-              No scores until you have both drawn, so nobody has a target to beat.
-            </li>
-            <li>
-              <span className="mp-explainer-icon" aria-hidden="true">🏆</span>
-              Accuracy and speed both count. Highest total takes the crown.
-            </li>
-          </ol>
-        </section>
-
-        <fieldset className="mp-fieldset">
-          <legend className="mp-legend">Players</legend>
-          {names.map((name, seat) => (
-            <label className="mp-field" key={seat}>
-              <span className="mp-field-label">Player {seat + 1}</span>
-              <input
-                className="mp-input"
-                value={name}
-                onChange={(e) => updateName(seat, e.target.value)}
-                maxLength={PASS_PLAY_LIMITS.MAX_NAME_LENGTH}
-                placeholder={seat === 0 ? "e.g. Maya" : "e.g. Tom"}
-                autoComplete="off"
-              />
-            </label>
-          ))}
-        </fieldset>
+        {/* Start Game stays above the fold: How it works comes after it, and while the post-game Ink card shows,
+            the pre-filled names do too (Rewarded is prominent but never hides the mode's primary action). */}
+        {!inkCardVisible && playersFieldset}
 
         <fieldset className="mp-fieldset">
           <legend className="mp-legend">Rounds</legend>
@@ -285,6 +272,30 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
         <Button className="mp-primary-action" onClick={handleStart}>
           Start Game
         </Button>
+
+        {inkCardVisible && playersFieldset}
+
+        <section className="mp-explainer">
+          <h2 className="mp-panel-heading">How it works</h2>
+          <ol className="mp-explainer-list">
+            <li>
+              <span className="mp-explainer-icon" aria-hidden="true">📱</span>
+              One device. You take your turns one after the other.
+            </li>
+            <li>
+              <span className="mp-explainer-icon" aria-hidden="true">👀</span>
+              The same shape each round — 3 seconds to look, 20 to draw it.
+            </li>
+            <li>
+              <span className="mp-explainer-icon" aria-hidden="true">🤝</span>
+              No scores until you have both drawn, so nobody has a target to beat.
+            </li>
+            <li>
+              <span className="mp-explainer-icon" aria-hidden="true">🏆</span>
+              Accuracy and speed both count. Highest total takes the crown.
+            </li>
+          </ol>
+        </section>
       </div>
       )}
     </div>

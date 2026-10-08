@@ -49,7 +49,14 @@ function evaluate(surface: PostSessionSurface): Evaluation {
   return { decision: { kind: "offer", ink, offerNumber: nextInkOfferNumber(ink), sessionGames: completedSessionsThisRun(surface) }, drop: false };
 }
 
-export default function PostSessionInkOffer({ surface, onViewShop }: { surface: PostSessionSurface; onViewShop: (ink: InkTrialInk) => void }) {
+type PostSessionInkOfferProps = {
+  surface: PostSessionSurface;
+  onViewShop: (ink: InkTrialInk) => void;
+  /** Whether a card is on screen, so the host screen can keep its primary action above the fold. */
+  onVisibleChange?: (visible: boolean) => void;
+};
+
+export default function PostSessionInkOffer({ surface, onViewShop, onVisibleChange }: PostSessionInkOfferProps) {
   const [closed, setClosed] = useState(false);
   // Decided once per mount from a pure read; the pending flag is spent only when the card really renders.
   const [{ decision, drop }] = useState<Evaluation>(() => evaluate(surface));
@@ -57,6 +64,11 @@ export default function PostSessionInkOffer({ surface, onViewShop }: { surface: 
     // The Keep-it card is rendered as soon as it is decided: its pending session is spent here.
     if (drop || decision?.kind === "cta") clearPostSessionPending(surface);
   }, [drop, decision, surface]);
+  const visible = decision !== null && !closed;
+  useEffect(() => {
+    onVisibleChange?.(visible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   if (decision === null || closed) return null;
   if (decision.kind === "cta") {

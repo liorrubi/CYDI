@@ -89,7 +89,7 @@ let dueThisCycle = false;
 let dueArmThisCycle: InterstitialArm | null = null;
 /** A rewarded OFFER was rendered on this result: nothing may present an interstitial from it. */
 let rewardedRenderedThisCycle = false;
-/** 0.57.1: a non-ad card owns this Result (deferInterstitialThisCycle) - its exit runs no checkpoint at all. */
+/** 0.58.0: a non-ad card owns this Result (deferInterstitialThisCycle) - its exit runs no checkpoint at all. */
 let deferredThisCycle = false;
 /**
  * The current (not yet consumed) opportunity has already reserved one Result screen and
@@ -323,7 +323,7 @@ export function markRewardedOfferRenderedThisCycle(): void {
 }
 
 /**
- * 0.57.1: a NON-AD card (the purchase CTA after a trial's last play) owns this Result. Leaving it runs no checkpoint:
+ * 0.58.0: a NON-AD card (the purchase CTA after a trial's last play) owns this Result. Leaving it runs no checkpoint:
  * an opportunity due on this exit is NOT shown, NOT consumed, NOT recorded and NOT counted against the session cap.
  * The persisted counter is untouched (eligible games keep counting, `since >= cadence`), so it comes due again at
  * the next legal Result. Same for every arm and cell. Reads and changes no cadence, cap, rollout or cell value.

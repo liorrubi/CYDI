@@ -362,7 +362,7 @@ export default function PlayTogetherScreen({ onNavigate, initialJoinCode, openJo
 
       {!onWeb && <SocialPointsBadge />}
 
-      {/* Rewarded Ink Trial (0.57.1): the SAFE post-session surface - the player has left the room, so nobody
+      {/* Rewarded Ink Trial (0.58.0): the SAFE post-session surface - the player has left the room, so nobody
           waits and no rematch is in play. Renders only when a completed session left an offer pending and an ink
           is eligible; never opens an ad by itself. */}
       {view === "menu" && <PostSessionInkOffer surface="playTogether" />}

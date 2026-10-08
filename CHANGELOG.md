@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.57.1 - 2026-10-08
+## 0.58.0 - 2026-10-08
 
-Android 0.57.1 (versionCode 59) and web 0.57.1. Nothing changes for players until it is switched on: the new ink trial ships turned off, and the ad frequency stays exactly as it is today.
+Android 0.58.0 (versionCode 59) and web 0.58.0. Nothing changes for players until it is switched on: the new ink trial ships turned off, and the ad frequency stays exactly as it is today.
 
 - **Try a premium ink, built but switched off:** when it is turned on, a rewarded ad can unlock
   Rainbow Ink (and later Diamond Blue) for 5 plays, with a small preview of the real ink. It never

@@ -66,7 +66,7 @@ type Fetcher = (path: string, init: { timeoutMs: number }) => Promise<ApiRespons
 let fetcher: Fetcher = apiFetch;
 
 /**
- * 0.57.1: another independent config may ride this same response as its own top-level key, so it costs no extra
+ * 0.58.0: another independent config may ride this same response as its own top-level key, so it costs no extra
  * request. This module never reads such a key - it only hands every ANSWER on: the parsed body of a 200 (whatever
  * its shape), or null for a 404 / an unreadable body. A network error, timeout or 5xx is not an answer and is not
  * passed on (the observer keeps its last answer, exactly like this module). The observer cannot affect anything here.

@@ -22,18 +22,18 @@ export const REWARDED_AD_PLACEMENTS = [
   "special_challenge_double_reward",
   /** Double the coin reward on an Artist Pack challenge. */
   "artist_pack_double_reward",
-  /** 0.57.1 Rewarded Ink Trial: the Classic Result's scheduled Ink slot (coin/ink rotation). */
+  /** 0.58.0 Rewarded Ink Trial: the Classic Result's scheduled Ink slot (coin/ink rotation). */
   "shape_challenge_ink_trial",
-  /** 0.57.1 Rewarded Ink Trial: Play Together's post-exit menu, after a completed session. */
+  /** 0.58.0 Rewarded Ink Trial: Play Together's post-exit menu, after a completed session. */
   "play_together_ink_trial",
-  /** 0.57.1 Rewarded Ink Trial: 2 Players' setup screen, after a completed game. */
+  /** 0.58.0 Rewarded Ink Trial: 2 Players' setup screen, after a completed game. */
   "two_players_ink_trial",
 ] as const;
 
 export type RewardedAdPlacement = (typeof REWARDED_AD_PLACEMENTS)[number];
 
 /**
- * 0.57.1: which AdMob rewarded ad UNIT a placement serves from. Two units, one lane (rewardedAds.ts): "ink" = the
+ * 0.58.0: which AdMob rewarded ad UNIT a placement serves from. Two units, one lane (rewardedAds.ts): "ink" = the
  * Ink Trial offers (their own unit, so AdMob reports Coin and Ink apart); "coin" = every other placement, on the
  * long-standing production rewarded unit (unchanged ID, so its history continues).
  */

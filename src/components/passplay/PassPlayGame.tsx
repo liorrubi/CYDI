@@ -275,7 +275,7 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
     if (phase !== "FINAL_RESULTS" || finishedRef.current === game.gameId) return;
     finishedRef.current = game.gameId;
     trackEvent("pp_game_finished", { playerCount: game.players.length, roundCount: game.rounds });
-    // Rewarded Ink Trial (0.57.1): a completed game (any round count) that drew with the Trial ink uses exactly one
+    // Rewarded Ink Trial (0.58.0): a completed game (any round count) that drew with the Trial ink uses exactly one
     // play, keyed on the game. It also owes one Ink offer, shown back on the setup screen - never here, where the
     // players may want Play Again straight away. Local state, not the event: it holds even if analytics never sends.
     if (gameInk.trialInk) consumeInkTrialUse(gameInk.trialInk, `pp:${game.gameId}`, "twoPlayers");

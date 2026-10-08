@@ -1,4 +1,4 @@
-// Client side of the Rewarded Ink Trial remote config (0.57.1+). The value rides the existing
+// Client side of the Rewarded Ink Trial remote config (0.58.0+). The value rides the existing
 // `GET /api/config/ads/interstitial?v=3` answer as its own top-level `ink` key (no extra request); this module
 // observes that answer and parses ONLY `ink`, with its own validator (inkTrialConfigSchema.ts).
 //

@@ -195,7 +195,7 @@ export function getAdUnitId(format: AdFormat, platform: AdPlatform): string {
 }
 
 /**
- * 0.57.1: the Ink Trial's OWN production rewarded unit (AdMob "CYDI Rewarded - Ink Trial"), so AdMob reports Coin and
+ * 0.58.0: the Ink Trial's OWN production rewarded unit (AdMob "CYDI Rewarded - Ink Trial"), so AdMob reports Coin and
  * Ink rewarded apart. Same format, same SDK, same lifecycle - only the unit differs. Not configured = "" = Ink offers
  * cannot be served (fail-closed: the Ink layer treats it as Ink OFF), never a fallback onto the Coin unit.
  */

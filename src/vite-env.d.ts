@@ -15,7 +15,7 @@ interface ImportMetaEnv {
   readonly VITE_ADMOB_APP_ID_IOS?: string;
   readonly VITE_ADMOB_REWARDED_ANDROID?: string;
   readonly VITE_ADMOB_REWARDED_IOS?: string;
-  /** 0.57.1: the Ink Trial's own rewarded unit (AdMob "CYDI Rewarded - Ink Trial"). */
+  /** 0.58.0: the Ink Trial's own rewarded unit (AdMob "CYDI Rewarded - Ink Trial"). */
   readonly VITE_ADMOB_REWARDED_INK_ANDROID?: string;
   readonly VITE_ADMOB_REWARDED_INK_IOS?: string;
   readonly VITE_ADMOB_REWARDED_INTERSTITIAL_ANDROID?: string;

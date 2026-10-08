@@ -165,7 +165,7 @@ const INSTALL_AGE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["first_open"]);
 const ARM_OUTCOME_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["interstitial_checkpoint", "interstitial_continuation"]);
 const CADENCE_BREAKOUT_EVENTS = ARM_OUTCOME_BREAKOUT_EVENTS;
 const INTERSTITIAL_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["interstitial_load_failed", "interstitial_checkpoint"]);
-// 0.57.1 Rewarded Ink Trial. The Ink offer reuses the reward-offer funnel events, so the ledger keeps their
+// 0.58.0 Rewarded Ink Trial. The Ink offer reuses the reward-offer funnel events, so the ledger keeps their
 // placement apart: byPlacement is the closed REWARDED_AD_PLACEMENTS id (re-validated before this runs), at most
 // 11 keys per event, inside the existing per-day bucket value - no new storage key, write or request.
 // byInkTrial is "stage|ink|surface" on ink_trial: three closed sets, at most 7 x 2 x 4 = 56 keys.
@@ -473,8 +473,8 @@ type EventCounters = {
   byArmOutcome?: Record<string, number>;
   byCadence?: Record<string, number>;
   byInterstitialReason?: Record<string, number>;
-  // PLACEMENT_BREAKOUT_EVENTS / INK_TRIAL_BREAKOUT_EVENTS only (0.57.1) - see those sets. Absent on every other
-  // event, and on day buckets recorded before 0.57.1.
+  // PLACEMENT_BREAKOUT_EVENTS / INK_TRIAL_BREAKOUT_EVENTS only (0.58.0) - see those sets. Absent on every other
+  // event, and on day buckets recorded before 0.58.0.
   byPlacement?: Record<string, number>;
   byInkTrial?: Record<string, number>;
   // app_open ONLY, like byAppBuild - the native Android versionCode, which tells two
@@ -748,7 +748,7 @@ export function incrementEvent(
   if (INTERSTITIAL_REASON_BREAKOUT_EVENTS.has(eventName) && isInterstitialFailureReason(params.reason)) {
     updated.byInterstitialReason = incrementKeyMap(existing.byInterstitialReason, params.reason);
   }
-  // Rewarded Ink Trial (0.57.1) - guarded the same way, so a direct call cannot open a free-text key.
+  // Rewarded Ink Trial (0.58.0) - guarded the same way, so a direct call cannot open a free-text key.
   if (PLACEMENT_BREAKOUT_EVENTS.has(eventName) && isRewardedAdPlacement(params.placement)) {
     updated.byPlacement = incrementKeyMap(existing.byPlacement, params.placement);
   }

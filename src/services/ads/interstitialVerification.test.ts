@@ -1120,8 +1120,8 @@ test("H: the experiment code never imports, reads or mutates Rewarded state", ()
   assert.deepEqual([...cadence.matchAll(/^import .*from "([^"]+)"/gm)].map((m) => m[1]).sort(), ["../services/analyticsIdentity", "../services/analyticsSchema"]);
 });
 
-test("H (0.57.1): the Ink Trial lives OUTSIDE the interstitial and rewarded-ad core - none of these files knows it exists", () => {
-  // Ink Trial (0.57.1) is an independent layer (inkTrialStore / inkTrialConfig / inkTrialPolicy / resultAdLane). The
+test("H (0.58.0): the Ink Trial lives OUTSIDE the interstitial and rewarded-ad core - none of these files knows it exists", () => {
+  // Ink Trial (0.58.0) is an independent layer (inkTrialStore / inkTrialConfig / inkTrialPolicy / resultAdLane). The
   // interstitial modules, the rewarded SDK wrapper, the coin cadence and the coin offer must never name it: the only
   // contact points are claimResultAdLane() / markRewardedOfferRenderedThisCycle() / deferInterstitialThisCycle()
   // (called from resultAdLane.ts only) and the v3 body observer. rewardedAds.ts knows only a generic coin/ink UNIT.
@@ -1144,7 +1144,7 @@ beforeEach(() => {
   // every test boots its own world; nothing is shared between tests
 });
 
-test("0.57.1 orthogonality: Rewarded / Ink never read the interstitial assignment (arm, cell, cadence, cap, rollout)", () => {
+test("0.58.0 orthogonality: Rewarded / Ink never read the interstitial assignment (arm, cell, cadence, cap, rollout)", () => {
   // The Ink modules may reach the interstitial ONLY through the lane functions (resultAdLane.ts) and the config
   // body observer (inkTrialConfig.ts). No Ink module reads an arm, a cell, a cadence, a cap or a rollout value, so
   // every interstitial cell, control and non-participant runs under the same Rewarded / Ink policy.

@@ -9,7 +9,7 @@ type PenColorMenuProps = {
   onSelect: (id: PenColorId) => void;
   onLockedColorClick: (id: PenColorId) => void;
   /**
-   * 0.57.1: an active Ink Trial that applies on this screen. Its ink is selectable here (with its plays left
+   * 0.58.0: an active Ink Trial that applies on this screen. Its ink is selectable here (with its plays left
    * instead of a lock) - a temporary overlay only; the Shop's ownership is untouched.
    */
   trial?: { ink: PenColorId; usesLeft: number } | null;

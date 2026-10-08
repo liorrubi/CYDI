@@ -1,4 +1,4 @@
-// The Rewarded Ink Trial's post-session boundary (0.57.1) - the ONLY Ink entry point the Play Together and 2 Players
+// The Rewarded Ink Trial's post-session boundary (0.58.0) - the ONLY Ink entry point the Play Together and 2 Players
 // features use besides inkTrialStore.ts. Those features stay structurally free of coins and ads
 // (src/multiplayer/isolation.test.ts): they never import the ads module, a coin store or the Shop; they hand the
 // moment "a session completed" to this file, and the offer itself lives in components/PostSessionInkOffer.tsx on the

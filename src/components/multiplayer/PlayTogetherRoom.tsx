@@ -218,7 +218,7 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
 
     if (!reportedStartRef.current && snapshot.roundIndex >= 0) {
       reportedStartRef.current = true;
-      // Pin this game's ink (Rewarded Ink Trial, 0.57.1). A game already over on arrival is not played here. The
+      // Pin this game's ink (Rewarded Ink Trial, 0.58.0). A game already over on arrival is not played here. The
       // pin is persisted by game key: a remount / resume mid-game keeps the ink it started with.
       if (!joinedFinishedRef.current) {
         const gameKey = multiplayerGameKey(snapshot.roomCode, snapshot.gameSerial);
@@ -257,7 +257,7 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
     if (snapshot.phase === "FINAL_RESULTS" && !reportedFinishRef.current) {
       reportedFinishRef.current = true;
       trackEvent("mp_game_finished", { playerCount: snapshot.players.length, roundCount: snapshot.rounds });
-      // Rewarded Ink Trial (0.57.1). A completed session played here (any round count) uses exactly one Trial play
+      // Rewarded Ink Trial (0.58.0). A completed session played here (any round count) uses exactly one Trial play
       // when it drew with the Trial ink - keyed on the game, so a reconnect or a repeated final snapshot consumes
       // nothing. It also owes one Ink offer, shown only AFTER the player leaves the room (never here, where a
       // rematch can start and others wait); the ad is warmed now so it is likely ready by then.

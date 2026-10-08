@@ -10,7 +10,7 @@ import { join } from "node:path";
 // those modules. A future accidental import shows up here rather than as a coin
 // balance that moved during a multiplayer round.
 //
-// 0.57.1 (owner-approved Rewarded Ink Trial): the one sanctioned contact is the
+// 0.58.0 (owner-approved Rewarded Ink Trial): the one sanctioned contact is the
 // Ink Trial boundary - services/inkTrialStore (the temporary ink overlay and its
 // play count), services/inkTrialOffers (warming the post-exit offer's ad) and the
 // InkTrial* / PostSessionInkOffer components. Rounds stay coin- and ad-free: the

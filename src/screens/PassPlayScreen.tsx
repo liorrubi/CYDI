@@ -172,7 +172,7 @@ export default function PassPlayScreen({ onNavigate }: PassPlayScreenProps) {
       />
       {!onWeb && <SocialPointsBadge />}
 
-      {/* Rewarded Ink Trial (0.57.1): the SAFE post-game surface - back on setup after a completed game, never on
+      {/* Rewarded Ink Trial (0.58.0): the SAFE post-game surface - back on setup after a completed game, never on
           the champion / Play Again screen. Renders only when a completed game left an offer pending and an ink is
           eligible; never opens an ad by itself. */}
       <PostSessionInkOffer surface="twoPlayers" />

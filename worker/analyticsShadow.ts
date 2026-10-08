@@ -117,7 +117,7 @@
 //   double8  rewardedDeferred 0..99                          double9  cadence       3..20 (effective; gamesBetweenAds' slot)
 //   double10 cap              1..5 (effective; ifxCap's slot) double11 ifxVersion / double12 ifxCell as above
 //   double13 batchSize, double14..19 = 0 (no economy context), double20 = 1 - the generic slots 1 / 13 / 20 are unchanged.
-//   --- 0.57.1 Rewarded Ink Trial (no new columns, schema stays 3) ---
+//   --- 0.58.0 Rewarded Ink Trial (no new columns, schema stays 3) ---
 //   Ink offer funnel rows (reward_* with an *_ink_trial blob16 placement): blob18 = ink (rainbow | diamondBlue,
 //   the generic arm slot - an ink row carries no arm), blob19 = interstitialArm (Classic only), double5/double6 =
 //   sessionGames/offerNumber, double12 = ifxCell, double17 offerFlags from adAvailable, double16 multiplier = 0.
@@ -244,18 +244,18 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       attribution?.content ?? "",
       str(params.placement),
       str(params.reason),
-      // 0.57.1: Ink offer and ink_trial rows carry no arm - their ink takes the slot.
+      // 0.58.0: Ink offer and ink_trial rows carry no arm - their ink takes the slot.
       str(params.arm ?? params.ink),
       // Schema 3: reward funnel rows carry no outcome, so this slot holds their interstitialArm.
       // 0.57: game_completed rows carry the next-game context's nextOutcome here (no other row has both).
-      // 0.57.1: ink_trial rows carry their inkSurface here (they have none of the other three).
+      // 0.58.0: ink_trial rows carry their inkSurface here (they have none of the other three).
       str(params.outcome ?? params.interstitialArm ?? params.nextOutcome ?? params.inkSurface),
       detailFor(params),
     ],
     doubles: [
       AE_SCHEMA_VERSION,
       num(params.starRating ?? (typeof params.code === "number" ? params.code + 2 : undefined)),
-      // 0.57.1: ink_trial cta_shown rows carry deferredInterstitial (1/0) here - they have neither passed nor attempt.
+      // 0.58.0: ink_trial cta_shown rows carry deferredInterstitial (1/0) here - they have neither passed nor attempt.
       num(params.passed ?? params.attempt ?? params.deferredInterstitial),
       num(params.isNewBest ?? enumPosition(AD_LATENCY_BUCKETS, params.latency)),
       // Schema 3: sessionGames / offerNumber / bonusCoins share these slots on reward rows,

@@ -89,7 +89,7 @@ function installInterstitialQaHook(): void {
 export async function initializeNativeAds(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
 
-  // 0.57.1: the Rewarded Ink Trial config rides this same response (its own `ink` key) - observed before the first fetch.
+  // 0.58.0: the Rewarded Ink Trial config rides this same response (its own `ink` key) - observed before the first fetch.
   installInkTrialConfigObserver();
   void refreshInterstitialConfig();
   installInterstitialResumeRefresh();

@@ -75,7 +75,7 @@ type ClassicGameplayNativeProps = {
   inkControl?: ReactNode;
   /** <PenSkinMenu/>, untouched. */
   penControl?: ReactNode;
-  /** 0.57.1: the active Ink Trial chip (renders nothing without a Trial). Sits at the end of the phase row - no new row, never over the canvas. */
+  /** 0.58.0: the active Ink Trial chip (renders nothing without a Trial). Sits at the end of the phase row - no new row, never over the canvas. */
   trialBadge?: ReactNode;
   onUndo?: () => void;
   undoDisabled?: boolean;

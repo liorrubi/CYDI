@@ -1,4 +1,4 @@
-// Shared wire format for the Rewarded Ink Trial remote config (0.57.1+), used by the client
+// Shared wire format for the Rewarded Ink Trial remote config (0.58.0+), used by the client
 // (inkTrialConfig.ts) and the Worker (PUT /api/config/ads/ink, and the `ink` key of the
 // `GET /api/config/ads/interstitial?v=3` body). Same "shared, dependency-free schema module" rule
 // as interstitialConfigSchema.ts: no imports, no import.meta.env, no browser APIs.

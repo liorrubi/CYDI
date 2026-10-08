@@ -188,12 +188,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 //              |         '-> expired (a loaded ad outlived READY_TTL_MS)
 //              '-> failed (SDK failure, or the hard load expiry)
 //
-// 0.57.1 - TWO UNITS, ONE LANE. Coin and Ink placements serve from different AdMob units (adPlacements.ts
+// 0.58.0 - TWO UNITS, ONE LANE. Coin and Ink placements serve from different AdMob units (adPlacements.ts
 // rewardedUnitFor), but the native plugin holds ONE prepared rewarded ad, and so does this lane: one load at a time,
 // one ready ad, tagged with the unit it was loaded for (`loadUnit`). A request for the OTHER unit never starts a
 // second concurrent load and never shows the wrong unit's ad: a ready / failed / expired ad of the other unit is
 // simply set aside (state -> idle) and the requested unit is loaded; a load still in flight for the other unit is
-// left to finish. Before 0.57.1 every placement was the coin unit, so for coin-only traffic nothing changes.
+// left to finish. Before 0.58.0 every placement was the coin unit, so for coin-only traffic nothing changes.
 // A ready ad that is set aside emits nothing new: its `loaded` event already carries its own placement, so per unit
 // it simply counts as loaded-not-shown (which it was). A tap never adopts the other unit's ad or failure.
 //
@@ -211,7 +211,7 @@ let loadSeq = 0;
 let nativeLoadActive = false;
 let loadStartedAt = 0;
 let loadPlacement: RewardedAdPlacement | null = null;
-/** The unit the current load / ready ad belongs to (0.57.1). */
+/** The unit the current load / ready ad belongs to (0.58.0). */
 let loadUnit: RewardedUnit = "coin";
 let loadSource: AdLoadSource = "preload";
 let loadReported = false;
@@ -245,7 +245,7 @@ function rewardedBlockReason(unit: RewardedUnit = "coin"): AdFailureReason | nul
 
 /**
  * True only when everything needed to actually serve a rewarded ad is in place - for the unit of `placement`
- * (no placement = the coin unit, the pre-0.57.1 meaning every existing caller relies on).
+ * (no placement = the coin unit, the pre-0.58.0 meaning every existing caller relies on).
  */
 export function isRewardedAdAvailable(placement?: RewardedAdPlacement): boolean {
   return rewardedBlockReason(placement ? rewardedUnitFor(placement) : "coin") === null;
@@ -494,7 +494,7 @@ export async function showRewardedAd(
   const v2 = lifecycleV2();
   if (state !== "ready") {
     if (v2 && state === "failed" && loadUnit !== unit) {
-      // 0.57.1: the OTHER unit's load was abandoned at the hard expiry moments ago (releaseOtherUnit keeps it in its
+      // 0.58.0: the OTHER unit's load was abandoned at the hard expiry moments ago (releaseOtherUnit keeps it in its
       // cooldown, because the native prepare may still be running). Not this unit's failure: no code, no adoption.
       emit("unavailable", placement, "timeout", onEvent, { stateAtTap, cause: "loading" });
       return { status: "unavailable", reason: "timeout" };
@@ -516,7 +516,7 @@ export async function showRewardedAd(
     const waitStarted = Date.now();
     await waitForLoad(budget);
     refreshLifecycle();
-    // 0.57.1: the load this tap waited on was the OTHER unit's (already in flight at the tap). Once it has settled the
+    // 0.58.0: the load this tap waited on was the OTHER unit's (already in flight at the tap). Once it has settled the
     // lane is free: set it aside and load THIS unit within what is left of the same budget - the tap never adopts the
     // other unit's ad or its failure.
     if (loadUnit !== unit && !nativeLoadActive && (state as RewardedState) !== "showing") {

@@ -213,7 +213,7 @@ export type RewardOfferExperiment = {
   ifxCell?: InterstitialCellId;
 };
 /**
- * 0.57.1 Rewarded Ink Trial. The inks a Trial can be offered for - the two premium Shop inks, in offer order.
+ * 0.58.0 Rewarded Ink Trial. The inks a Trial can be offered for - the two premium Shop inks, in offer order.
  * The Shop product ids, never a new cosmetic id.
  */
 export const INK_TRIAL_INKS = ["rainbow", "diamondBlue"] as const;
@@ -484,7 +484,7 @@ export type EventParamsMap = {
    * identifier of any kind. See src/services/ads/playSegmentSummary.ts.
    */
   session_summary: SessionSummaryParams;
-  // --- 0.57.1: Rewarded Ink Trial lifecycle ------------------------------------
+  // --- 0.58.0: Rewarded Ink Trial lifecycle ------------------------------------
   /**
    * One row per lifecycle stage of one Trial (granted after a completed rewarded ad, started on the first play that
    * really draws with the Trial ink, completed after the last of its plays, the Try -> Buy CTA shown, and its one
@@ -1220,9 +1220,9 @@ function validateRewardOfferEvent<
 >(p: unknown): ValidationResult<E> {
   if (!isRecord(p)) return { valid: false };
   if (Object.keys(p).length === 1) return validateAdEvent(p) as ValidationResult<E>;
-  // 0.57.1: the Ink Trial offer shape (its own context block, never the coin economy block).
+  // 0.58.0: the Ink Trial offer shape (its own context block, never the coin economy block).
   if ("ink" in p) return validateInkOfferEvent<E>(p);
-  // 0.57.1: the Classic coin offer may carry what the coin/ink rotation scheduled. Optional; the old key sets stay valid.
+  // 0.58.0: the Classic coin offer may carry what the coin/ink rotation scheduled. Optional; the old key sets stay valid.
   if ("rotationSlot" in p) {
     const { rotationSlot, ...rest } = p;
     if (!isOneOf(INK_ROTATION_SLOTS, rotationSlot)) return { valid: false };

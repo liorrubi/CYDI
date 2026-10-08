@@ -1,4 +1,4 @@
-// Rewarded Ink Trial (0.57.1) - the device state: grant, the per-surface session pin, idempotent consumption, the
+// Rewarded Ink Trial (0.58.0) - the device state: grant, the per-surface session pin, idempotent consumption, the
 // lifecycle rows (at most 5 per Trial, each exactly once), ownership winning, the overlay, the post-session pending
 // offer and the persisted Classic rotation pointer.
 

@@ -1,4 +1,4 @@
-// Rewarded Ink Trial config (0.57.1): its own validator, riding the v3 interstitial config answer as a top-level
+// Rewarded Ink Trial config (0.58.0): its own validator, riding the v3 interstitial config answer as a top-level
 // `ink` key. Fail-closed (absent / invalid / 404 = OFF), never able to touch the interstitial base or experiment,
 // tolerant of future keys, and an installation-stable rollout bucket of its own.
 

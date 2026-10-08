@@ -1402,9 +1402,9 @@ test("segment summary: dropped, not emitted, when the analytics session already 
   assert.equal(summaries()[0].classicGames, 2, "the dropped segment's games are not carried over");
 });
 
-// --- 0.57.1: deferInterstitialThisCycle (the purchase CTA owns this Result) ----------------------------------------
+// --- 0.58.0: deferInterstitialThisCycle (the purchase CTA owns this Result) ----------------------------------------
 
-test("0.57.1 defer: a due opportunity is left due - not shown, not consumed, not recorded, cap untouched - and runs at the next Result", async () => {
+test("0.58.0 defer: a due opportunity is left due - not shown, not consumed, not recorded, cap untouched - and runs at the next Result", async () => {
   const { deferInterstitialThisCycle } = await import("./interstitialController");
   playRounds(6);
   completeRound(); // the 7th eligible completion: due
@@ -1419,7 +1419,7 @@ test("0.57.1 defer: a due opportunity is left due - not shown, not consumed, not
   assert.equal(persisted().session?.opportunities, 1);
 });
 
-test("0.57.1 defer: control is deferred the same way (symmetric across arms); nothing due -> reports false", async () => {
+test("0.58.0 defer: control is deferred the same way (symmetric across arms); nothing due -> reports false", async () => {
   const { deferInterstitialThisCycle } = await import("./interstitialController");
   installation = CONTROL_ID;
   _resetInterstitialControllerForTests({

@@ -6122,7 +6122,7 @@ body {
   color: var(--color-primary-fill);
 }
 
-/* ==================== REWARDED INK TRIAL (0.57.1) ====================
+/* ==================== REWARDED INK TRIAL (0.58.0) ====================
    A compact premium card, deliberately NOT the coin banner's pink/purple multiplier look: a deep ink-black panel
    whose edge carries the offered ink. In the screen's flow (never a modal or overlay), never wider than the coin
    banner, two rows tall. One soft sheen on arrival, then still - no loops, nothing that delays a tap. */

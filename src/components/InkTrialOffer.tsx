@@ -60,7 +60,7 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
   /** A full-screen ad is in flight: leaving now is not a skip - the SDK's answer still settles this offer. */
   const adPendingRef = useRef(false);
   // Capability at render (the same stable check the coin offer reports as adAvailable) - frozen for the funnel.
-  // Measured on the Ink unit (0.57.1: the Ink Trial serves from its own AdMob unit).
+  // Measured on the Ink unit (0.58.0: the Ink Trial serves from its own AdMob unit).
   const [adAvailableAtRender] = useState(() => isRewardedAdAvailable(placement));
   const devSimulation = isMathFallbackEnabled();
   const canWatch = isRewardedAdAvailable(placement) || devSimulation;

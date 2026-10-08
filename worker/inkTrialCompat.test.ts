@@ -1,4 +1,4 @@
-// 0.57.1 Rewarded Ink Trial - Worker / shared-schema compatibility, with the real shipped code:
+// 0.58.0 Rewarded Ink Trial - Worker / shared-schema compatibility, with the real shipped code:
 //   M1  the config route: `ink` rides ONLY the v3 body, from its own KV key; legacy (0.55) and ?v=2 (0.56) bodies are
 //       byte-for-byte what they were; an absent / invalid key omits `ink` and never touches the base or experiments.
 //   M2  the admin PUT: auth, strict validation, whole-object write.
@@ -151,7 +151,7 @@ test("M3: ink_trial - exact keys, closed stages / inks / surfaces", () => {
 // ================================================================ M4: AE / ledger / DO ====
 
 function point(event: string, params: Record<string, unknown>) {
-  const env = { eventName: event, params, platform: "android", appVersion: "0.57.1", appVersionCode: 59, installationId: "i", sessionId: "s", isInternal: false };
+  const env = { eventName: event, params, platform: "android", appVersion: "0.58.0", appVersionCode: 59, installationId: "i", sessionId: "s", isInternal: false };
   const pts = buildShadowDataPoints("/events", JSON.stringify({ events: [env] }), "US", () => 0.5);
   assert.equal(pts.length, 1);
   return pts[0];
@@ -177,7 +177,7 @@ test("M4: ink_trial is an exact (ledger) event and never shed; the offer stays t
   assert.equal(EXACT_LEDGER_EVENTS.has("ink_trial"), true);
   assert.equal(ALWAYS_PRESERVE.includes("ink_trial"), true);
   assert.equal(EXACT_LEDGER_EVENTS.has("reward_offer_shown"), false);
-  const env = (eventName: string, params: Record<string, unknown>) => ({ eventName, params, platform: "android", appVersion: "0.57.1", sessionId: "s", installationId: "i" });
+  const env = (eventName: string, params: Record<string, unknown>) => ({ eventName, params, platform: "android", appVersion: "0.58.0", sessionId: "s", installationId: "i" });
   const split = splitForLedger("/events", JSON.stringify({ events: [env("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic" }), env("reward_offer_shown", inkPT)] }));
   assert.ok(split);
   assert.deepEqual(split.exact.map((e) => (e as { eventName: string }).eventName), ["ink_trial"]);
@@ -186,16 +186,16 @@ test("M4: ink_trial is an exact (ledger) event and never shed; the offer stays t
 
 test("M4: DO breakdowns - byPlacement keeps coin and Ink taps apart; byInkTrial is stage|ink|surface", () => {
   let counters = {} as Record<string, Record<string, unknown>>;
-  counters = incrementEvent(counters as never, "reward_ad_started", inkPT, "android", "0.57.1") as never;
-  counters = incrementEvent(counters as never, "reward_ad_started", { placement: "shape_challenge_double_reward", ...econ, ...exp }, "android", "0.57.1") as never;
+  counters = incrementEvent(counters as never, "reward_ad_started", inkPT, "android", "0.58.0") as never;
+  counters = incrementEvent(counters as never, "reward_ad_started", { placement: "shape_challenge_double_reward", ...econ, ...exp }, "android", "0.58.0") as never;
   assert.deepEqual(counters.reward_ad_started.byPlacement, { play_together_ink_trial: 1, shape_challenge_double_reward: 1 });
-  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "playTogether" }, "android", "0.57.1") as never;
+  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "playTogether" }, "android", "0.58.0") as never;
   assert.deepEqual(counters.ink_trial.byInkTrial, { "granted|rainbow|playTogether": 1 });
   // A bad value never opens a key (direct call, bypassing validation).
-  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "x", ink: "rainbow", inkSurface: "classic" }, "android", "0.57.1") as never;
+  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "x", ink: "rainbow", inkSurface: "classic" }, "android", "0.58.0") as never;
   assert.deepEqual(counters.ink_trial.byInkTrial, { "granted|rainbow|playTogether": 1 });
   // Untouched events gain no new map.
-  counters = incrementEvent(counters as never, "app_open", {}, "android", "0.57.1") as never;
+  counters = incrementEvent(counters as never, "app_open", {}, "android", "0.58.0") as never;
   assert.equal(counters.app_open.byPlacement, undefined);
 });
 
@@ -208,7 +208,7 @@ test("M5: deferredInterstitial - optional boolean on ink_trial cta_shown only; A
   const p = point("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true });
   assert.equal(d(p, 3), 1);
   let counters = {} as Record<string, Record<string, unknown>>;
-  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true }, "android", "0.57.1") as never;
-  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: false }, "android", "0.57.1") as never;
+  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true }, "android", "0.58.0") as never;
+  counters = incrementEvent(counters as never, "ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: false }, "android", "0.58.0") as never;
   assert.deepEqual(counters.ink_trial.byInkTrial, { "cta_shown|rainbow|classic|deferred": 1, "cta_shown|rainbow|classic|none": 1 });
 });

@@ -915,7 +915,7 @@ function ShapePlay({
   const resolvePlayInk = (): PenColorId => (practice ? getSelectedColor() : resolveEffectiveInk("classic", getSelectedColor()).color);
   const [penColor, setPenColor] = useState<PenColorId>(resolvePlayInk);
   const [penSkin, setPenSkin] = useState<PenSkinId>(() => getSelectedSkin());
-  /** Rewarded Ink Trial (0.57.1): this Result's Ink offer, Try -> Buy CTA, and the rendered Rewarded content. */
+  /** Rewarded Ink Trial (0.58.0): this Result's Ink offer, Try -> Buy CTA, and the rendered Rewarded content. */
   const [inkOffer, setInkOffer] = useState<{ ink: InkTrialInk; context: InkOfferContext } | null>(null);
   const [ctaInk, setCtaInk] = useState<InkTrialInk | null>(null);
   /** The CTA's Result deferred an interstitial opportunity (analytics only). */
@@ -1005,7 +1005,7 @@ function ShapePlay({
       // this returns silently and nothing is requested. Its `state !== "idle"` guard is
       // what keeps this and the offer's preload from ever becoming two requests.
       // Fire-and-forget: a rejected preload can never reach the round.
-      // 0.57.1: warm the unit the next Rewarded opportunity will use (coin or Ink rotation slot) - same single lane.
+      // 0.58.0: warm the unit the next Rewarded opportunity will use (coin or Ink rotation slot) - same single lane.
       if (!practice) void preloadRewardedAd(expectedClassicRewardedPlacement());
       // The play starts: its ink is resolved now (an expired Trial can never leak into a retry), and a play that
       // starts with the Trial ink marks the Trial as started (once per Trial, inside the store).
@@ -1278,7 +1278,7 @@ function ShapePlay({
       // interstitial reserves this screen once per opportunity and the offer stays pending;
       // otherwise the offer renders and, from that moment, no interstitial may follow from
       // this screen. A zero-coin result never claims, so it cannot spend the reservation.
-      // Rewarded Ink Trial (0.57.1): a completed, scored, non-practice play that DREW with the Trial ink uses one of
+      // Rewarded Ink Trial (0.58.0): a completed, scored, non-practice play that DREW with the Trial ink uses one of
       // its plays (an abandoned play never reaches here). Done before the lane decision, so the last play's Result can
       // already show the Try -> Buy CTA.
       if (!practice) {
@@ -1366,7 +1366,7 @@ function ShapePlay({
     const resultTip = improvementTip(result);
 
     /*
-     * Rewarded Ink Trial (0.57.1): the Result's scheduled Ink slot, or the Try -> Buy CTA. The round's coins are
+     * Rewarded Ink Trial (0.58.0): the Result's scheduled Ink slot, or the Try -> Buy CTA. The round's coins are
      * already credited - they get their own plain line, so the card can never read as a coin multiplier or as
      * putting those coins at stake.
      */

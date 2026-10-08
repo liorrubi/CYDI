@@ -1,4 +1,4 @@
-// Rewarded Ink Trial (0.57.1) - the pure rules: eligibility order, one Trial per ink ever, no conflicting Trials,
+// Rewarded Ink Trial (0.58.0) - the pure rules: eligibility order, one Trial per ink ever, no conflicting Trials,
 // the CTA owed after the last play, and the Classic coin/ink rotation.
 
 import { strict as assert } from "node:assert";

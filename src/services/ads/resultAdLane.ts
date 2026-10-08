@@ -1,4 +1,4 @@
-// The Classic Result screen's one Rewarded slot (0.57.1): WHETHER there is a legal Rewarded opportunity is decided
+// The Classic Result screen's one Rewarded slot (0.58.0): WHETHER there is a legal Rewarded opportunity is decided
 // exactly as in 0.57 (rewardedOfferCadence.ts: due + coins + ad capability, then interstitialController's
 // claimResultAdLane()); WHAT it carries is the coin/ink rotation (app/inkTrialPolicy.ts). Ink never creates an
 // opportunity, and nothing here reads an interstitial value (arm, cell, cadence, cap, rollout): the interstitial

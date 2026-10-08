@@ -44,7 +44,7 @@ export type RewardedExperimentOffer = {
   interstitialArm: RewardInterstitialArm;
   /** 0.57: the multi-cell interstitial experiment cell, present only for a participant. */
   ifxCell?: InterstitialCellId;
-  /** 0.57.1: what the Classic coin/ink rotation scheduled for this opportunity ("ink" here = the Ink -> Coin fallback). Absent while the rotation is off. */
+  /** 0.58.0: what the Classic coin/ink rotation scheduled for this opportunity ("ink" here = the Ink -> Coin fallback). Absent while the rotation is off. */
   rotationSlot?: "coin" | "ink";
 };
 

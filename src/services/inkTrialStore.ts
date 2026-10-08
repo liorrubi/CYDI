@@ -1,4 +1,4 @@
-// Rewarded Ink Trial (0.57.1) - the device's Trial state and every write to it.
+// Rewarded Ink Trial (0.58.0) - the device's Trial state and every write to it.
 //
 // A Trial is a TEMPORARY OVERLAY on top of the Shop's permanent state. This module never writes
 // `progress.unlockedPenColors` or `settings.selectedPenColor` (penColorStore.ts), and the Shop never reads this:

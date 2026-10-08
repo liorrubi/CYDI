@@ -91,7 +91,7 @@ export const EXACT_LEDGER_EVENTS: ReadonlySet<string> = new Set([
   // Virality and the multiplayer guard's input.
   "result_shared",
   "mp_room_created",
-  // Rewarded Ink Trial lifecycle (0.57.1): at most 5 rows per Trial, a business decision (Try -> Buy).
+  // Rewarded Ink Trial lifecycle (0.58.0): at most 5 rows per Trial, a business decision (Try -> Buy).
   "ink_trial",
 ]);
 

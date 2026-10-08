@@ -1,4 +1,4 @@
-// The Classic Result's one Rewarded slot (0.57.1): whether a legal opportunity exists is the 0.57 decision unchanged;
+// The Classic Result's one Rewarded slot (0.58.0): whether a legal opportunity exists is the 0.57 decision unchanged;
 // the coin/ink rotation only decides its content; a pending Try -> Buy CTA owns its Result (interstitial deferred,
 // Rewarded offer left due).
 

@@ -1,4 +1,4 @@
-// Rewarded Ink Trial (0.57.1) - the pure rules. No storage, no React, no SDK, no config fetch: the store
+// Rewarded Ink Trial (0.58.0) - the pure rules. No storage, no React, no SDK, no config fetch: the store
 // (services/inkTrialStore.ts) and the Classic Result lane (services/ads/resultAdLane.ts) feed these functions
 // their state, so every rule below is unit-testable on its own.
 //

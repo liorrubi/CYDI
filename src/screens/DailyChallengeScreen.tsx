@@ -94,7 +94,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   /** One line per unclaimed prize (never summed) - a player who was away for several episodes could have more than one queued at once. */
   const [prizeMessages, setPrizeMessages] = useState<string[]>([]);
-  // Rewarded Ink Trial (0.57.1, D6): an active Trial applies to Daily attempts ONLY while the remote config enables
+  // Rewarded Ink Trial (0.58.0, D6): an active Trial applies to Daily attempts ONLY while the remote config enables
   // the Daily surface (OFF by default) - resolveEffectiveInk returns the permanent ink otherwise. No Daily offer.
   const [penColor, setPenColor] = useState<PenColorId>(() => resolveEffectiveInk("daily", getSelectedColor()).color);
   useInkTrialRevision();

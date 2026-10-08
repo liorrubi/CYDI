@@ -108,7 +108,7 @@ test("every current coin grant/spend call site names its source/sink - the audit
     "screens/ShapeChallengeScreen.tsx:spendCoins:mega_unlock",
     "screens/ShopScreen.tsx:spendCoins:chest_key",
     "screens/ShopScreen.tsx:spendCoins:mega_card_shop",
-    // 0.57.1: the ink-colour purchase moved into the shared helper the Shop and the Ink Trial CTA both call (same sink).
+    // 0.58.0: the ink-colour purchase moved into the shared helper the Shop and the Ink Trial CTA both call (same sink).
     "services/shopPurchase.ts:spendCoins:pen_color",
     "screens/ShopScreen.tsx:spendCoins:pen_skin",
     "screens/SpecialChallengeScreen.tsx:addCoins:ad_multiplier",

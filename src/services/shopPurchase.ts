@@ -1,4 +1,4 @@
-// The ONE way to buy an ink colour with coins (0.57.1): the Shop and the Ink Trial's Try -> Buy CTA both call it, so
+// The ONE way to buy an ink colour with coins (0.58.0): the Shop and the Ink Trial's Try -> Buy CTA both call it, so
 // the price, the spend, the unlock, the auto-equip and the purchase event can never drift apart. The price is always
 // the canonical Shop price (PEN_COLORS) - there is no Trial price, no discount and no price argument.
 

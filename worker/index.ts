@@ -617,7 +617,7 @@ export async function handleInterstitialConfigGet(request: Request, env: Env): P
   const v2 = version === "2" || version === "3";
   const body: Record<string, unknown> = { ...toClientConfig(config, country, v2) };
   if (version === "3") {
-    // `ink` (0.57.1+) rides the same response so no new request exists. Its own KV key and validator: it never
+    // `ink` (0.58.0+) rides the same response so no new request exists. Its own KV key and validator: it never
     // touches the base or `experiments`, and an absent/invalid value omits the key (= Ink OFF). 0.57 clients
     // ignore unknown top-level keys (parseInterstitialV3Body), so they are unaffected.
     const [experiments, ink] = await Promise.all([readValidInterstitialExperiments(env), readValidInkTrialConfig(env)]);
@@ -653,7 +653,7 @@ async function readValidInkTrialConfig(env: Env): Promise<InkTrialConfig | null>
   }
 }
 
-// The Rewarded Ink Trial config (0.57.1+): its OWN key, served only as the `ink` key of the v3 interstitial config
+// The Rewarded Ink Trial config (0.58.0+): its OWN key, served only as the `ink` key of the v3 interstitial config
 // response. A PUT replaces the whole object and is validated strictly BEFORE anything is written - same admin gate as
 // the interstitial config. There is no GET: the value is read back through the v3 config route. To switch Ink OFF,
 // PUT `enabled: false` (or delete the key); Trials already granted keep running either way.

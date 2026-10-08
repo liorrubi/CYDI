@@ -1,4 +1,4 @@
-// 0.57.1: two AdMob rewarded units (Coin, Ink Trial) on ONE rewarded lane. One native load at a time, one ready ad,
+// 0.58.0: two AdMob rewarded units (Coin, Ink Trial) on ONE rewarded lane. One native load at a time, one ready ad,
 // never the wrong unit's ad shown; a settled ad of the other unit is set aside, a load in flight is left alone.
 
 import { strict as assert } from "node:assert";

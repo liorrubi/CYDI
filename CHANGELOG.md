@@ -11,14 +11,15 @@ Android 0.58.0 (versionCode 59) and web 0.58.0. Nothing changes for players unti
   rounds or on the results screen where a rematch starts. The ink is only borrowed - buying it in
   the Shop works exactly as before, at the same price, and owning it ends the trial straight away.
 - **A small "plays left" tag** shows while a trial ink is on your pen. After the 5th play the game offers
-  to keep it for the normal Shop price, to watch one more ad for 5 more plays (once per ink, so at most 10), or
-  to look it up in the Shop when you still need coins. After the extra plays it offers only the purchase or the Shop.
+  to watch an ad for 5 more plays - again each time they run out, up to a limit set from the server - or to
+  keep it for the normal Shop price (or look it up in the Shop when you still need coins). Once the limit is reached
+  it offers only the purchase or the Shop.
   In Play Together and 2 Players this card appears back on the menu / setup screen, never inside a game.
 - **Built-in controls:** the trial is turned on, rolled out and tuned from the server without a new
   app version, and can be turned off at any time without taking back a trial already earned.
 - **A few bounded usage numbers on existing data (no new identifiers, permissions or SDKs):** which
   offer a rewarded slot showed (coins or ink) and the trial's steps (unlocked, first used, finished,
-  extended, kept or not, looked up in the Shop), and on a trial ink's Shop purchase whether its trial was
+  how many times plays were added (1, 2, 3, 4, 5+), kept or not, looked up in the Shop), and on a trial ink's Shop purchase whether its trial was
   never received, still running or finished.
 
 ## 0.57.0 - 2026-10-03

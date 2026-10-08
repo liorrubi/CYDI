@@ -25,6 +25,15 @@ export const INK_ROTATION_MIN_LENGTH = 1;
 export const INK_ROTATION_MAX_LENGTH = 6;
 export const DEFAULT_CLASSIC_ROTATION: readonly InkRotationSlot[] = ["coin", "ink"];
 
+/**
+ * Rewarded +5 refills per Ink Trial: after each used-up block of plays the Keep-it card may offer one more
+ * (WATCH AD · +5 PLAYS) while fewer than `maxExtensions` were granted. 0 = no refills; absent = 1 (the one-time
+ * extension). Bounded so a value can never be unbounded: MAX_INK_EXTENSIONS (99 = 495 extra plays) is the
+ * "effectively unlimited" setting.
+ */
+export const DEFAULT_INK_MAX_EXTENSIONS = 1;
+export const MAX_INK_EXTENSIONS = 99;
+
 export type InkTrialConfig = {
   enabled: boolean;
   /** Bumped by the operator on any change; reported nowhere today, kept for audits. */
@@ -34,9 +43,12 @@ export type InkTrialConfig = {
   /** Per-mode switches. A surface missing from a CLIENT answer is OFF. */
   surfaces: Record<InkSurface, boolean>;
   classicRotation: InkRotationSlot[];
+  /** Optional: how many +5 refills one Trial may receive (0..MAX_INK_EXTENSIONS). Absent = DEFAULT_INK_MAX_EXTENSIONS. */
+  maxExtensions?: number;
 };
 
 const REQUIRED_KEYS = ["enabled", "version", "rolloutPercent", "surfaces", "classicRotation"] as const;
+const OPTIONAL_KEYS = ["maxExtensions"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -64,13 +76,15 @@ function isValidRotation(value: unknown): value is InkRotationSlot[] {
 }
 
 /**
- * The STORED object (admin PUT): strict. Exactly the five keys, `surfaces` exactly the four modes,
- * every value in range. A typo can never be stored.
+ * The STORED object (admin PUT): strict. The five keys plus, optionally, `maxExtensions`; `surfaces` exactly
+ * the four modes, every value in range. A typo can never be stored.
  */
 export function isValidStoredInkTrialConfig(value: unknown): value is InkTrialConfig {
   if (!isRecord(value)) return false;
   const keys = Object.keys(value);
-  if (keys.length !== REQUIRED_KEYS.length || !REQUIRED_KEYS.every((k) => keys.includes(k))) return false;
+  if (!REQUIRED_KEYS.every((k) => keys.includes(k))) return false;
+  if (!keys.every((k) => (REQUIRED_KEYS as readonly string[]).includes(k) || (OPTIONAL_KEYS as readonly string[]).includes(k))) return false;
+  if ("maxExtensions" in value && !isIntInRange(value.maxExtensions, 0, MAX_INK_EXTENSIONS)) return false;
   if (typeof value.enabled !== "boolean") return false;
   if (!isIntInRange(value.version, 1, 1_000_000) || !isIntInRange(value.rolloutPercent, 0, 100)) return false;
   if (!isValidRotation(value.classicRotation)) return false;
@@ -103,6 +117,8 @@ export function parseClientInkTrialConfig(value: unknown): InkTrialConfig | null
   if (typeof value.enabled !== "boolean") return null;
   if (!isIntInRange(value.version, 1, 1_000_000) || !isIntInRange(value.rolloutPercent, 0, 100)) return null;
   if (!isValidRotation(value.classicRotation)) return null;
+  // Known key, strict: an invalid refill limit is OFF rather than half-applied.
+  if (value.maxExtensions !== undefined && !isIntInRange(value.maxExtensions, 0, MAX_INK_EXTENSIONS)) return null;
   if (!isRecord(value.surfaces)) return null;
   const rawSurfaces = value.surfaces;
   const surfaces = {} as Record<InkSurface, boolean>;
@@ -117,5 +133,17 @@ export function parseClientInkTrialConfig(value: unknown): InkTrialConfig | null
     rolloutPercent: value.rolloutPercent,
     surfaces,
     classicRotation: [...value.classicRotation],
+    ...(value.maxExtensions !== undefined ? { maxExtensions: value.maxExtensions as number } : {}),
   };
+}
+
+/** The refill limit a config allows (absent key = DEFAULT_INK_MAX_EXTENSIONS). */
+export function inkMaxExtensions(config: InkTrialConfig | null): number {
+  return config?.maxExtensions ?? DEFAULT_INK_MAX_EXTENSIONS;
+}
+
+/** Analytics: a refill's ordinal as a bounded bucket 1..5 (5 = the 5th refill or later). */
+export const INK_REFILL_BUCKET_MAX = 5;
+export function inkRefillBucket(refill: number): number {
+  return Math.max(1, Math.min(INK_REFILL_BUCKET_MAX, Math.floor(refill)));
 }

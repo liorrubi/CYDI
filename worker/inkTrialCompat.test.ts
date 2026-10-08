@@ -259,37 +259,53 @@ test("M6: exact ledger - the purchase stays exact; DO byInkPurchase is ink|inkTr
   assert.equal((counters.shop_purchase_with_coins.byInkPurchase as Record<string, number>)["diamondBlue|none"], 1, "the legacy name lands on the canonical row");
 });
 
-// ================================================ M7: the one-time +5 extension (no new event, no new column) ====
+// ================================================ M7: Rewarded +5 refills (no new event, no new column) ====
 
-test("M7: inkExtension - only true; on ink_trial any stage; on the Ink offer funnel never with a rotation slot; cta_shop stage", () => {
-  assert.equal(valid("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkExtension: true }), true);
-  assert.equal(valid("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "playTogether", deferredInterstitial: false, inkExtension: true }), true);
-  assert.equal(valid("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkExtension: false }), false, "only true");
+test("M7: inkRefill - bounded 1..5 on ink_trial (any stage) and on the Ink offer funnel (never with a rotation slot); cta_shop", () => {
+  for (const n of [1, 2, 5]) assert.equal(valid("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkRefill: n }), true, String(n));
+  assert.equal(valid("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "playTogether", deferredInterstitial: false, inkRefill: 3 }), true);
+  for (const bad of [0, 6, 1.5, true, "2"]) assert.equal(valid("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkRefill: bad }), false, String(bad));
+  assert.equal(valid("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkExtension: true }), false, "the earlier flag is not accepted");
   assert.equal(valid("ink_trial", { inkStage: "cta_shop", ink: "diamondBlue", inkSurface: "twoPlayers" }), true);
-  const ext = { placement: "shape_challenge_ink_trial", ink: "rainbow", offerNumber: 1, sessionGames: 5, adAvailable: true, inkExtension: true };
+  const ext = { placement: "shape_challenge_ink_trial", ink: "rainbow", offerNumber: 1, sessionGames: 5, adAvailable: true, inkRefill: 2 };
   for (const e of ["reward_offer_shown", "reward_ad_started", "reward_ad_completed", "reward_ad_failed"]) assert.equal(valid(e, ext), true, e);
   assert.equal(valid("reward_skipped", { ...ext, skipStage: "offer" }), true);
-  assert.equal(valid("reward_offer_shown", { ...ext, rotationSlot: "ink" }), false, "the extension is not a rotation slot");
-  assert.equal(valid("reward_offer_shown", { ...ext, inkExtension: "yes" }), false);
+  assert.equal(valid("reward_offer_shown", { ...ext, rotationSlot: "ink" }), false, "a refill is not a rotation slot");
+  assert.equal(valid("reward_offer_shown", { ...ext, inkRefill: 9 }), false);
   assert.equal(valid("reward_offer_shown", { ...ext, placement: "shape_challenge_double_reward" }), false, "Ink placements only");
 });
 
-test("M7: AE double10 = 1 on extension rows (Ink offer funnel and ink_trial); DO byInkTrial gains |ext", () => {
-  const offer = point("reward_ad_completed", { placement: "play_together_ink_trial", ink: "rainbow", offerNumber: 1, sessionGames: 2, adAvailable: true, inkExtension: true });
-  assert.deepEqual([b(offer, 16), b(offer, 18), d(offer, 10)], ["play_together_ink_trial", "rainbow", 1]);
-  const life = point("ink_trial", { inkStage: "completed", ink: "rainbow", inkSurface: "classic", inkExtension: true });
-  assert.deepEqual([b(life, 18), b(life, 19), b(life, 20), d(life, 10)], ["rainbow", "classic", "inkStage:completed", 1]);
-  assert.equal(d(point("ink_trial", { inkStage: "completed", ink: "rainbow", inkSurface: "classic" }), 10), 0, "the first 5's rows: 0");
+test("M7: Shop purchase - inkRefill only beside a Trial history (active / ended), bounded", () => {
+  const buyRefill = (extra: Record<string, unknown>) => ({ productType: "penColor", tier: "rainbow", price: 10000, ...extra });
+  assert.equal(valid("shop_purchase_with_coins", buyRefill({ inkTrialBefore: "ended", inkRefill: 4 })), true);
+  assert.equal(valid("shop_purchase_with_coins", buyRefill({ inkTrialBefore: "active", inkRefill: 1 })), true);
+  assert.equal(valid("shop_purchase_with_coins", buyRefill({ inkTrialBefore: "none", inkRefill: 1 })), false, "no refills without a Trial");
+  assert.equal(valid("shop_purchase_with_coins", buyRefill({ inkRefill: 1 })), false, "never without the history");
+  assert.equal(valid("shop_purchase_with_coins", buyRefill({ inkTrialBefore: "ended", inkRefill: 6 })), false);
+});
+
+test("M7: AE double10 = the refill ordinal (offer funnel, ink_trial, Shop purchase); DO keys gain |r1..|r5", () => {
+  const offer = point("reward_ad_completed", { placement: "play_together_ink_trial", ink: "rainbow", offerNumber: 1, sessionGames: 2, adAvailable: true, inkRefill: 3 });
+  assert.deepEqual([b(offer, 16), b(offer, 18), d(offer, 10)], ["play_together_ink_trial", "rainbow", 3]);
+  const life = point("ink_trial", { inkStage: "completed", ink: "rainbow", inkSurface: "classic", inkRefill: 5 });
+  assert.deepEqual([b(life, 18), b(life, 19), b(life, 20), d(life, 10)], ["rainbow", "classic", "inkStage:completed", 5]);
+  assert.equal(d(point("ink_trial", { inkStage: "completed", ink: "rainbow", inkSurface: "classic" }), 10), 0, "the first block: 0");
+  const shop = point("shop_purchase_with_coins", { productType: "penColor", tier: "rainbow", price: 10000, inkTrialBefore: "ended", inkRefill: 2 });
+  assert.deepEqual([b(shop, 18), b(shop, 19), d(shop, 8), d(shop, 10)], ["rainbow", "ended", 10000, 2]);
   let counters = {} as Record<string, Record<string, unknown>>;
-  const inc = (params: Record<string, unknown>) => (counters = incrementEvent(counters as never, "ink_trial", params, "android", "0.58.0") as never);
-  inc({ inkStage: "granted", ink: "rainbow", inkSurface: "classic" });
-  inc({ inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkExtension: true });
-  inc({ inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true, inkExtension: true });
-  inc({ inkStage: "cta_shop", ink: "rainbow", inkSurface: "classic", inkExtension: true });
+  const inc = (e: string, params: Record<string, unknown>) => (counters = incrementEvent(counters as never, e as never, params, "android", "0.58.0") as never);
+  inc("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic" });
+  inc("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkRefill: 1 });
+  inc("ink_trial", { inkStage: "granted", ink: "rainbow", inkSurface: "classic", inkRefill: 2 });
+  inc("ink_trial", { inkStage: "cta_shown", ink: "rainbow", inkSurface: "classic", deferredInterstitial: true, inkRefill: 2 });
+  inc("ink_trial", { inkStage: "cta_shop", ink: "rainbow", inkSurface: "classic", inkRefill: 9 }); // direct call, bypassing validation
   assert.deepEqual(counters.ink_trial.byInkTrial, {
     "granted|rainbow|classic": 1,
-    "granted|rainbow|classic|ext": 1,
-    "cta_shown|rainbow|classic|deferred|ext": 1,
-    "cta_shop|rainbow|classic|ext": 1,
+    "granted|rainbow|classic|r1": 1,
+    "granted|rainbow|classic|r2": 1,
+    "cta_shown|rainbow|classic|deferred|r2": 1,
+    "cta_shop|rainbow|classic": 1,
   });
+  inc("shop_purchase_with_coins", { productType: "penColor", tier: "rainbow", price: 10000, inkTrialBefore: "ended", inkRefill: 3 });
+  assert.deepEqual(counters.shop_purchase_with_coins.byInkPurchase, { "rainbow|ended|r3": 1 });
 });

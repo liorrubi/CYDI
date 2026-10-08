@@ -138,9 +138,10 @@ export const PRIVACY_POLICY_HTML = `
   days-since-you-started range is calculated on your device; the start date itself is never sent. When a
   bonus-Coins rewarded ad is offered, we also record whether an ad was available and how the offer relates to
   your next unlock, again as ranges. When a rewarded ad offers a premium-Ink trial instead, we record which ink
-  was offered and the trial’s steps (granted, first used, finished, a one-time extension if one was watched, and whether the ink was then kept or looked up in the Shop) and, when
+  was offered and the trial’s steps (granted, first used, finished, each time more plays were added by watching
+  an ad - counted in a range up to 5+ - and whether the ink was then kept or looked up in the Shop) and, when
   one of these inks is bought with coins, whether its trial was never received, still running or already
-  finished, with no additional identifier. CYDI Coins cannot be bought with real money, so none of this involves payment
+  finished and how many times plays were added, with no additional identifier. CYDI Coins cannot be bought with real money, so none of this involves payment
   information.
 </p>
 <p class="status-text">

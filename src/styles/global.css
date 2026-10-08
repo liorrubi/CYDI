@@ -6267,15 +6267,6 @@ body {
   cursor: not-allowed;
 }
 
-/* WATCH AD / +5 PLAYS as the secondary beside UNLOCK INK: two short lines keep the action row compact. */
-.ink-cta-lines {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  font-size: 12px;
-  line-height: 1.15;
-}
-
 .ink-cta .ink-offer-primary,
 .ink-cta .ink-offer-secondary {
   font-size: 13px;

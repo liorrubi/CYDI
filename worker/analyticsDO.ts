@@ -169,14 +169,18 @@ const INTERSTITIAL_REASON_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["inters
 // 0.58.0 Rewarded Ink Trial. The Ink offer reuses the reward-offer funnel events, so the ledger keeps their
 // placement apart: byPlacement is the closed REWARDED_AD_PLACEMENTS id (re-validated before this runs), at most
 // 11 keys per event, inside the existing per-day bucket value - no new storage key, write or request.
-// byInkTrial is "stage|ink|surface" on ink_trial: three closed sets, at most 8 x 2 x 4 = 64 keys (x2 with the |ext
-// extension-phase suffix, + the cta_shown deferred|none part).
+// byInkTrial is "stage|ink|surface" on ink_trial: three closed sets, at most 8 x 2 x 4 = 64 keys (x6 with the |r1..|r5
+// refill-block suffix, + the cta_shown deferred|none part) - only combinations that actually occur are stored.
 const PLACEMENT_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["reward_ad_started", "reward_ad_completed", "reward_ad_failed", "rewarded_ad_shown", "rewarded_ad_completed"]);
 const INK_TRIAL_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["ink_trial"]);
 // byInkPurchase is "ink|inkTrialBefore" on a Trial ink's Shop purchase (Keep-it CTA or Shop): 2 inks x (none | active |
 // ended | unknown = a client before 0.58.0) = at most 8 keys, same bucket value. The ink is the canonical id, not the price.
 // (The legacy name purchase_completed is canonicalised before this runs.)
 const INK_PURCHASE_BREAKOUT_EVENTS = new Set<AnalyticsEventName>(["shop_purchase_with_coins"]);
+/** A +5 refill ordinal bucket (1..5) - the only values a byInkTrial / byInkPurchase key part may take. */
+function isRefillBucket(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5;
+}
 // Pass & Play length and progress. `roundCount` is the length the players CHOSE
 // (ROUND_COUNT_ACCEPTED - 3, 5, 10, and 15 from older clients), `roundIndex` how far the
 // game got. Both are closed, re-validated server-side by validateEventParams before this
@@ -767,13 +771,14 @@ export function incrementEvent(
   ) {
     // cta_shown carrying deferredInterstitial gets a 4th part (deferred | none): still a closed set (+14 keys at most).
     const deferral = typeof params.deferredInterstitial === "boolean" ? `|${params.deferredInterstitial ? "deferred" : "none"}` : "";
-    // The one-time +5 extension phase gets a last part (|ext): still a closed set (at most doubles the keys).
-    const phase = params.inkExtension === true ? "|ext" : "";
+    // A refill block gets a last part (|r1..|r5, 5 = 5th or later): still a closed set.
+    const phase = isRefillBucket(params.inkRefill) ? `|r${params.inkRefill}` : "";
     updated.byInkTrial = incrementKeyMap(existing.byInkTrial, `${params.inkStage}|${params.ink}|${params.inkSurface}${deferral}${phase}`);
   }
   if (INK_PURCHASE_BREAKOUT_EVENTS.has(eventName) && params.productType === "penColor" && isOneOf(INK_TRIAL_INKS, params.tier)) {
     const before = params.inkTrialBefore === undefined ? "unknown" : isOneOf(INK_TRIAL_BEFORE, params.inkTrialBefore) ? params.inkTrialBefore : null;
-    if (before !== null) updated.byInkPurchase = incrementKeyMap(existing.byInkPurchase, `${params.tier}|${before}`);
+    const refills = isRefillBucket(params.inkRefill) ? `|r${params.inkRefill}` : "";
+    if (before !== null) updated.byInkPurchase = incrementKeyMap(existing.byInkPurchase, `${params.tier}|${before}${refills}`);
   }
   // Pass & Play breakouts - see the two sets above. Guarded for the same reason the
   // rewarded one is: this function is exported, so a bad value must leave the map

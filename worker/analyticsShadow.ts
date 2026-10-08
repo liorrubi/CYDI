@@ -126,8 +126,9 @@
 //   ink_trial rows: blob18 = ink, blob19 = inkSurface (classic | playTogether | twoPlayers | daily),
 //                   blob20 = "inkStage:<granted|started|completed|cta_shown|cta_purchased|cta_declined|cta_dismissed>",
 //                   double3 = deferredInterstitial on cta_shown (1 = an interstitial due on that exit was deferred).
-//   double10 inkExtension    Ink offer funnel rows and ink_trial rows: 1 = the one-time +5 extension (its offer on the
-//                            first Keep-it card, its ad, and every lifecycle row of the extension phase); 0 = the Trial.
+//   double10 inkRefill       Ink offer funnel, ink_trial and Trial-ink Shop purchase rows: the +5 refill ordinal, bucket
+//                            1..5 (5 = 5th or later) - its offer and ad on a Keep-it card, every lifecycle row of that
+//                            refill block, and on a purchase the refills received; 0 = the first block / none.
 //   shop_purchase_with_coins rows of a Trial ink (productType penColor, tier rainbow | diamondBlue): blob18 = the ink
 //                   (its canonical id - never inferred from the price), blob19 = inkTrialBefore (none | active | ended;
 //                   "" from a client before 0.58.0). blob20 keeps productType:penColor, double8 the price.
@@ -282,8 +283,8 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       // 0.57: mp_game_started rows carry mpDailyOrdinal here (no other event has both params).
       num(params.gamesBetweenAds ?? params.mpDailyOrdinal),
       // 0.57: ifxCap on interstitial rows, which carry neither amount nor bonusCoins.
-      // 0.58.0: inkExtension (1) on Ink offer funnel and ink_trial rows - they carry none of the other three.
-      num(params.amount ?? params.bonusCoins ?? params.ifxCap ?? params.inkExtension),
+      // 0.58.0: inkRefill (1..5) on Ink offer funnel, ink_trial and Trial-ink Shop purchase rows - none carry the other three.
+      num(params.amount ?? params.bonusCoins ?? params.ifxCap ?? params.inkRefill),
       // 0.57: ifxVersion (interstitial rows, session_summary) - submitted belongs to mp_/pp_round rows only.
       num(params.submitted ?? params.ifxVersion),
       // 0.57: ifxCell as a 1-based position - hadCache belongs to daily_shape_fallback only.

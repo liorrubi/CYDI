@@ -47,7 +47,7 @@ import {
   type InterstitialFailureReason,
   type InterstitialOutcome,
 } from "./ads/interstitialConfigSchema";
-import { INK_ROTATION_SLOTS, INK_SURFACES, type InkRotationSlot, type InkSurface } from "./ads/inkTrialConfigSchema";
+import { INK_REFILL_BUCKET_MAX, INK_ROTATION_SLOTS, INK_SURFACES, type InkRotationSlot, type InkSurface } from "./ads/inkTrialConfigSchema";
 import {
   BALANCE_BUCKETS,
   COIN_EARNED_SOURCES,
@@ -222,7 +222,7 @@ export type InkTrialInk = (typeof INK_TRIAL_INKS)[number];
  * The Trial lifecycle, one `ink_trial` row per stage per Trial (at most 5 rows per Trial: granted, started,
  * completed, cta_shown, and ONE cta outcome). No per-use rows.
  */
-/** cta_shop (0.58.0): VIEW IN SHOP on the Keep-it card. The extension phase reuses every stage, marked by `inkExtension`. */
+/** cta_shop (0.58.0): VIEW IN SHOP on the Keep-it card. A refill block reuses every stage, marked by `inkRefill`. */
 export const INK_TRIAL_STAGES = ["granted", "started", "completed", "cta_shown", "cta_purchased", "cta_declined", "cta_dismissed", "cta_shop"] as const;
 export type InkTrialStage = (typeof INK_TRIAL_STAGES)[number];
 /**
@@ -239,8 +239,8 @@ export type RewardOfferInk = {
   adAvailable: boolean;
   interstitialArm?: RewardInterstitialArm;
   ifxCell?: InterstitialCellId;
-  /** The one-time +5 extension offered on the first Keep-it card (same Ink placement and unit); absent = the Trial offer. */
-  inkExtension?: true;
+  /** A +5 refill offered on a Keep-it card (same Ink placement and unit): its ordinal, bucket 1..5 (5 = 5th or later). Absent = the Trial offer. */
+  inkRefill?: number;
 };
 /**
  * Optional on a CLASSIC offer (coin or ink): what the coin/ink rotation SCHEDULED for this opportunity. The
@@ -256,8 +256,8 @@ export type RewardOfferParams =
  * `deferredInterstitial` (cta_shown only, optional): the CTA owned its Result and an interstitial opportunity due on
  * that exit was deferred (left due, not consumed) - so CTA priority and the preserved opportunity can be verified.
  */
-/** `inkExtension` (optional, only `true`): the row belongs to the one-time +5 extension phase of this Trial. */
-export type InkTrialParams = { inkStage: InkTrialStage; ink: InkTrialInk; inkSurface: InkSurface; deferredInterstitial?: boolean; inkExtension?: true };
+/** `inkRefill` (optional, 1..5, 5 = 5th or later): the row belongs to that +5 refill block of this Trial; absent = the first block. */
+export type InkTrialParams = { inkStage: InkTrialStage; ink: InkTrialInk; inkSurface: InkSurface; deferredInterstitial?: boolean; inkRefill?: number };
 /**
  * `inkTrialBefore` (0.58.0, shop_purchase_with_coins only, a Trial ink's penColor purchase): that ink's Trial
  * history at the moment of purchase, from the local Ink Trial store. `none` = never granted, `active` = bought while
@@ -377,7 +377,7 @@ export type EventParamsMap = {
    */
   purchase_completed: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number };
   /** Canonical name for the coin-funded Shop unlock above; identical params. Not yet emitted by any client - see the rename note in AGENT_NOTES.md. */
-  shop_purchase_with_coins: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number; inkTrialBefore?: InkTrialBefore };
+  shop_purchase_with_coins: { productType: "penColor" | "penSkin" | "chestKey" | "megaCard"; tier: string; price: number; inkTrialBefore?: InkTrialBefore; inkRefill?: number };
   mega_card_unlocked: { rarity: "rare" | "epic" | "legendary" };
   artist_pack_link_clicked: { artistKey: string; packKey: string; hasAffiliate: boolean };
   game_started: { gameType: GameType; category: CategoryOrCustom; contentKey: string };
@@ -947,12 +947,12 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
   play_store_click: (p) => validatePlayStoreEvent(p),
   session_summary: (p) => validateSessionSummary(p),
   ink_trial: (p) => {
-    if (!isRecord(p) || !hasKeysWithin(p, ["inkStage", "ink", "inkSurface"], ["deferredInterstitial", "inkExtension"])) return { valid: false };
+    if (!isRecord(p) || !hasKeysWithin(p, ["inkStage", "ink", "inkSurface"], ["deferredInterstitial", "inkRefill"])) return { valid: false };
     if (!isOneOf(INK_TRIAL_STAGES, p.inkStage) || !isOneOf(INK_TRIAL_INKS, p.ink) || !isOneOf(INK_SURFACES, p.inkSurface)) return { valid: false };
     // deferredInterstitial: a boolean, and only on cta_shown.
     if ("deferredInterstitial" in p && (p.inkStage !== "cta_shown" || !isBoolean(p.deferredInterstitial))) return { valid: false };
-    // inkExtension: present only as true (an extension-phase row).
-    if ("inkExtension" in p && p.inkExtension !== true) return { valid: false };
+    // inkRefill: the refill block's bounded ordinal.
+    if ("inkRefill" in p && !isIntInRange(p.inkRefill, 1, INK_REFILL_BUCKET_MAX)) return { valid: false };
     return {
       valid: true,
       params: {
@@ -960,7 +960,7 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
         ink: p.ink,
         inkSurface: p.inkSurface,
         ...("deferredInterstitial" in p ? { deferredInterstitial: p.deferredInterstitial as boolean } : {}),
-        ...("inkExtension" in p ? { inkExtension: true as const } : {}),
+        ...("inkRefill" in p ? { inkRefill: p.inkRefill as number } : {}),
       },
     };
   },
@@ -974,7 +974,7 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
  * figure. See the doc comment on `purchase_completed` for why that matters.
  */
 function validateCoinShopPurchase<E extends "purchase_completed" | "shop_purchase_with_coins">(p: unknown): ValidationResult<E> {
-  if (!isRecord(p) || !hasKeysWithin(p, ["productType", "tier", "price"], ["inkTrialBefore"])) return { valid: false };
+  if (!isRecord(p) || !hasKeysWithin(p, ["productType", "tier", "price"], ["inkTrialBefore", "inkRefill"])) return { valid: false };
   const { productType, tier, price } = p;
   if (typeof productType !== "string" || !(PRODUCT_TYPES as readonly string[]).includes(productType)) return { valid: false };
   if (!isSafeString(tier)) return { valid: false };
@@ -982,8 +982,14 @@ function validateCoinShopPurchase<E extends "purchase_completed" | "shop_purchas
   // 0.58.0: a Trial ink's penColor purchase may state its Trial history - only there, and only from the closed set.
   if ("inkTrialBefore" in p) {
     if (productType !== "penColor" || !isOneOf(INK_TRIAL_INKS, tier) || !isOneOf(INK_TRIAL_BEFORE, p.inkTrialBefore)) return { valid: false };
-    return { valid: true, params: { productType, tier, price, inkTrialBefore: p.inkTrialBefore } as EventParamsMap[E] };
+    // inkRefill: only beside a Trial history (never with none), bounded.
+    if ("inkRefill" in p && (p.inkTrialBefore === "none" || !isIntInRange(p.inkRefill, 1, INK_REFILL_BUCKET_MAX))) return { valid: false };
+    return {
+      valid: true,
+      params: { productType, tier, price, inkTrialBefore: p.inkTrialBefore, ...("inkRefill" in p ? { inkRefill: p.inkRefill } : {}) } as EventParamsMap[E],
+    };
   }
+  if ("inkRefill" in p) return { valid: false };
   return { valid: true, params: { productType, tier, price } as EventParamsMap[E] };
 }
 
@@ -1276,7 +1282,7 @@ function validateRewardOfferEvent<
 }
 
 const INK_OFFER_REQUIRED_KEYS = ["placement", "ink", "offerNumber", "sessionGames", "adAvailable"] as const;
-const INK_OFFER_OPTIONAL_KEYS = ["interstitialArm", "ifxCell", "rotationSlot", "inkExtension"] as const;
+const INK_OFFER_OPTIONAL_KEYS = ["interstitialArm", "ifxCell", "rotationSlot", "inkRefill"] as const;
 /** The Ink offer placements - an ink block on any other placement is a bug and is rejected. */
 const INK_OFFER_PLACEMENTS: readonly RewardedAdPlacement[] = ["shape_challenge_ink_trial", "play_together_ink_trial", "two_players_ink_trial"];
 
@@ -1291,13 +1297,13 @@ function validateInkOfferEvent<E extends AnalyticsEventName>(p: Record<string, u
   if (!optionalField(p, "interstitialArm", (v) => isOneOf(REWARD_INTERSTITIAL_ARMS, v))) return { valid: false };
   if ("ifxCell" in p && (!isOneOf(INTERSTITIAL_CELL_IDS, p.ifxCell) || p.interstitialArm === undefined || p.interstitialArm === "none")) return { valid: false };
   if ("rotationSlot" in p && (!classic || !isOneOf(INK_ROTATION_SLOTS, p.rotationSlot))) return { valid: false };
-  // The +5 extension: only `true`, and never a rotation slot (it is offered by the Keep-it card, not the rotation).
-  if ("inkExtension" in p && (p.inkExtension !== true || "rotationSlot" in p)) return { valid: false };
+  // A +5 refill: its bounded ordinal, and never a rotation slot (it is offered by the Keep-it card, not the rotation).
+  if ("inkRefill" in p && (!isIntInRange(p.inkRefill, 1, INK_REFILL_BUCKET_MAX) || "rotationSlot" in p)) return { valid: false };
   const params: Record<string, unknown> = { placement, ink, offerNumber, sessionGames, adAvailable };
   if ("interstitialArm" in p) params.interstitialArm = p.interstitialArm;
   if ("ifxCell" in p) params.ifxCell = p.ifxCell;
   if ("rotationSlot" in p) params.rotationSlot = p.rotationSlot;
-  if ("inkExtension" in p) params.inkExtension = true;
+  if ("inkRefill" in p) params.inkRefill = p.inkRefill;
   return { valid: true, params: params as EventParamsMap[E] };
 }
 

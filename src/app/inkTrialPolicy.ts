@@ -11,20 +11,20 @@ import { INK_TRIAL_INKS, type InkTrialInk } from "../services/analyticsSchema";
 
 /** A Trial is worth this many plays (Classic: one completed scored play; Play Together / 2 Players: one completed session). */
 export const TRIAL_PLAYS = 5;
-/** The one optional Rewarded extension, offered once on the first Keep-it card: +5 plays (so at most 10 per ink). */
+/** One Rewarded refill: +5 plays, offered on the Keep-it card after each used-up block (limit: config maxExtensions). */
 export const TRIAL_EXTENSION_PLAYS = 5;
 
 /**
- * active    - granted, plays left (the first 5, or - with `extended` - the extension's 5).
- * exhausted - every play of the current phase used: the Keep-it card follows once (CTA, `ctaShown`).
+ * active    - granted, plays left (the first 5, or a refill's 5).
+ * exhausted - every play of the current block used: the Keep-it card follows once (CTA, `ctaShown`).
  * closed    - bought permanently while the Trial was still active (ownership wins, nothing left to consume).
- * `extended` - the one-time extension was granted. One record = one Trial lifecycle per ink:
- *   initial active (!extended) -> initial exhausted (the first card: buy / +5 plays / Shop) -> [extension]
- *   extension active (extended) -> extension exhausted (the final card: buy / Shop only).
+ * `extensions` - how many Rewarded +5 refills were granted. One record = one Trial lifecycle per ink:
+ *   block 0 active -> exhausted (card: +5 plays / buy / Shop) -> [refill 1] block 1 active -> exhausted -> ...
+ *   until `extensions` reaches the config's maxExtensions: then the card is buy / Shop only.
  * Any record at all = this ink's Trial was granted once, so it is never offered or granted again.
  */
 export type InkTrialStatus = "active" | "exhausted" | "closed";
-/** "extended" = the first card ended in the +5 extension (its own `granted` row says so); "shop" = VIEW IN SHOP. */
+/** "extended" = the card ended in a +5 refill (its own `granted` row says so); "shop" = VIEW IN SHOP. */
 export type InkCtaOutcome = "purchased" | "declined" | "dismissed" | "shop" | "extended";
 export type InkTrialRecord = {
   status: InkTrialStatus;
@@ -32,7 +32,8 @@ export type InkTrialRecord = {
   started: boolean;
   ctaShown: boolean;
   ctaOutcome: InkCtaOutcome | null;
-  extended: boolean;
+  /** Rewarded +5 refills granted so far (0 = still the first block). */
+  extensions: number;
 };
 export type InkTrials = Partial<Record<InkTrialInk, InkTrialRecord>>;
 
@@ -65,11 +66,11 @@ export function nextEligibleInk(trials: InkTrials, isOwned: IsOwned): InkTrialIn
 }
 
 /**
- * May this ink's one-time +5 extension be granted? Only while its FIRST Keep-it card is open: the first 5 plays used,
- * never extended, that card not yet answered (NOT NOW / leaving / Shop / buying all end the chance), not owned.
+ * May this ink get another +5 refill now? Only while the Keep-it card of a used-up block is open (not yet answered:
+ * NOT NOW / leaving / Shop / buying all end that block's chance), fewer than `maxExtensions` refills granted, not owned.
  */
-export function extensionAvailable(record: InkTrialRecord | undefined, owned: boolean): boolean {
-  return !!record && record.status === "exhausted" && !record.extended && record.ctaOutcome === null && !owned;
+export function extensionAvailable(record: InkTrialRecord | undefined, owned: boolean, maxExtensions: number): boolean {
+  return !!record && record.status === "exhausted" && record.extensions < maxExtensions && record.ctaOutcome === null && !owned;
 }
 
 /**

@@ -4,7 +4,8 @@
 
 import { PEN_COLORS, type PenColorId } from "../app/constants";
 import { getCoins, spendCoins } from "./coinsStore";
-import { closeInkTrialOnPurchase, getInkTrialHistory, setInkTrialOverlay } from "./inkTrialStore";
+import { closeInkTrialOnPurchase, getInkTrialExtensions, getInkTrialHistory, setInkTrialOverlay } from "./inkTrialStore";
+import { inkRefillBucket } from "./ads/inkTrialConfigSchema";
 import { getUnlockedColors, setSelectedColor, unlockColor } from "./penColorStore";
 import { trackEvent } from "./analytics";
 import { INK_TRIAL_INKS, type InkTrialInk } from "./analyticsSchema";
@@ -34,6 +35,7 @@ export function purchasePenColor(id: PenColorId): PenColorPurchaseResult {
   if (getCoins() < price) return "insufficient_coins";
   // A Trial ink's history is read before the purchase closes its Trial (aggregate Trial -> Shop attribution).
   const inkTrialBefore = isTrialInk(id) ? getInkTrialHistory(id) : null;
+  const refills = isTrialInk(id) ? getInkTrialExtensions(id) : 0;
   spendCoins(price, "pen_color");
   unlockColor(id);
   setSelectedColor(id);
@@ -42,6 +44,12 @@ export function purchasePenColor(id: PenColorId): PenColorPurchaseResult {
   // ended - it comes back when its ink is picked in the pen menu, and no play is used while it is paused). After
   // buying the Trial's own ink this is a no-op: that Trial was just closed, and the next grant resets the overlay.
   setInkTrialOverlay(false);
-  trackEvent("shop_purchase_with_coins", { productType: "penColor", tier: id, price, ...(inkTrialBefore ? { inkTrialBefore } : {}) });
+  trackEvent("shop_purchase_with_coins", {
+    productType: "penColor",
+    tier: id,
+    price,
+    ...(inkTrialBefore ? { inkTrialBefore } : {}),
+    ...(inkTrialBefore && inkTrialBefore !== "none" && refills > 0 ? { inkRefill: inkRefillBucket(refills) } : {}),
+  });
   return "purchased";
 }

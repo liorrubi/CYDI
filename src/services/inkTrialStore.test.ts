@@ -14,9 +14,9 @@ import {
   consumeInkTrialUse,
   getActiveInkTrial,
   getInkTrialHistory,
+  getInkTrialExtensions,
   grantInkTrialExtension,
   isInkExtensionAvailable,
-  isInkTrialExtended,
   getNextEligibleInk,
   getPendingCtaInk,
   grantInkTrial,
@@ -35,7 +35,7 @@ import { validateEventParams } from "./analyticsSchema";
 import type { InkTrialInk, InkTrialStage } from "./analyticsSchema";
 import type { InkSurface } from "./ads/inkTrialConfigSchema";
 
-type Row = { stage: InkTrialStage; ink: InkTrialInk; surface: InkSurface; ext?: true };
+type Row = { stage: InkTrialStage; ink: InkTrialInk; surface: InkSurface; refill?: number };
 let rows: Row[];
 let owned: Set<string>;
 let clock: number;
@@ -51,7 +51,7 @@ beforeEach(() => {
   _resetInkTrialStoreForTests({
     storage,
     isOwned: (ink) => owned.has(ink),
-    track: (stage, ink, surface, extra) => rows.push({ stage, ink, surface, ...(extra?.inkExtension ? { ext: true as const } : {}) }),
+    track: (stage, ink, surface, extra) => rows.push({ stage, ink, surface, ...(extra?.inkRefill ? { refill: extra.inkRefill } : {}) }),
     now: () => clock,
   });
 });
@@ -221,54 +221,94 @@ test("cta_shown carries deferredInterstitial (false by default, e.g. Play Togeth
   assert.deepEqual(extras.at(-1), { deferredInterstitial: true });
 });
 
-// --- 0.58.0: the one-time +5 extension -------------------------------------------------------------------------
+// --- 0.58.0: Rewarded +5 refills (config maxExtensions; absent = 1) ------------------------------------------------
 
 /** Grant Rainbow and use `n` plays on `surface` (one key per play/session). */
 function playRainbow(n: number, surface: InkSurface = "classic", prefix = "p") {
   for (let i = 1; i <= n; i++) consumeInkTrialUse("rainbow", `${prefix}${i}`, surface);
 }
+/** The config's refill limit (everything else as the activation proposal). */
+function withMaxExtensions(maxExtensions?: number) {
+  _resetInkTrialConfigForTests({
+    config: { enabled: true, version: 1, rolloutPercent: 100, surfaces: { classic: true, playTogether: true, twoPlayers: true, daily: false }, classicRotation: ["coin", "ink"], ...(maxExtensions === undefined ? {} : { maxExtensions }) },
+  });
+}
+/** Show the open Keep-it card and take its refill. */
+function refill(surface: InkSurface = "classic"): boolean {
+  markInkCtaShown("rainbow", surface);
+  return grantInkTrialExtension("rainbow", surface);
+}
 
-test("extension: offered exactly once - on the FIRST Keep-it card - and grants exactly 5 more plays", () => {
+test("refill: offered on the Keep-it card of a used-up block and grants exactly 5 more plays, re-equipped", () => {
   grantInkTrial("rainbow", "classic");
-  assert.equal(isInkExtensionAvailable("rainbow"), false, "not while the first 5 are running");
+  assert.equal(isInkExtensionAvailable("rainbow"), false, "not while plays are left");
   playRainbow(5);
-  assert.equal(getPendingCtaInk(), "rainbow", "first exhaustion owes the Keep-it card (it owns the Result)");
+  assert.equal(getPendingCtaInk(), "rainbow", "a used-up block owes the Keep-it card (it owns the Result)");
   assert.equal(isInkExtensionAvailable("rainbow"), true);
-  markInkCtaShown("rainbow", "classic");
-  assert.equal(grantInkTrialExtension("rainbow", "classic"), true);
+  assert.equal(refill(), true);
   assert.deepEqual(getActiveInkTrial(), { ink: "rainbow", usesLeft: 5 });
-  assert.equal(isInkTrialExtended("rainbow"), true);
-  assert.equal(grantInkTrialExtension("rainbow", "classic"), false, "never twice");
-  assert.deepEqual(resolveEffectiveInk("classic", "black"), { color: "rainbow", trialInk: "rainbow" }, "re-equipped");
+  assert.equal(getInkTrialExtensions("rainbow"), 1);
+  assert.equal(grantInkTrialExtension("rainbow", "classic"), false, "one refill per card");
+  assert.deepEqual(resolveEffectiveInk("classic", "black"), { color: "rainbow", trialInk: "rainbow" });
 });
 
-test("extension: its own lifecycle rows (inkExtension), then a FINAL card with no further extension - 10 plays max", () => {
-  grantInkTrial("rainbow", "playTogether");
-  playRainbow(5, "playTogether");
-  markInkCtaShown("rainbow", "playTogether");
-  grantInkTrialExtension("rainbow", "playTogether");
-  playRainbow(5, "playTogether", "x");
-  assert.equal(getActiveInkTrial(), null);
-  assert.equal(getPendingCtaInk(), "rainbow", "final exhaustion owes the final card (it owns the Result too)");
-  assert.equal(isInkExtensionAvailable("rainbow"), false, "no second extension after 10 plays");
-  markInkCtaShown("rainbow", "playTogether");
-  assert.equal(grantInkTrialExtension("rainbow", "playTogether"), false);
-  recordInkCtaOutcome("rainbow", "declined", "playTogether");
+test("refill: maxExtensions 3 -> refill 2 is offered after refill 1 is used up, then refill 3, then no 4th (20 plays)", () => {
+  withMaxExtensions(3);
+  grantInkTrial("rainbow", "classic");
+  playRainbow(5, "classic", "a");
+  assert.equal(refill(), true, "refill 1");
+  playRainbow(5, "classic", "b");
+  assert.equal(getPendingCtaInk(), "rainbow");
+  assert.equal(isInkExtensionAvailable("rainbow"), true, "refill 2 is offered after refill 1 is used up");
+  assert.equal(refill(), true, "refill 2");
+  playRainbow(5, "classic", "c");
+  assert.equal(refill(), true, "refill 3");
+  playRainbow(5, "classic", "d");
+  assert.equal(getInkTrialExtensions("rainbow"), 3);
+  assert.equal(getPendingCtaInk(), "rainbow", "the last card still owns its Result");
+  assert.equal(isInkExtensionAvailable("rainbow"), false, "limit reached: buy / Shop only");
+  assert.equal(refill(), false);
   assert.deepEqual(
-    rows.map((r) => `${r.stage}${r.ext ? "+ext" : ""}`),
-    ["granted", "started", "completed", "cta_shown", "granted+ext", "started+ext", "completed+ext", "cta_shown+ext", "cta_declined+ext"],
-    "the first card's outcome IS the extension grant (no cta_* row for it); at most 10 rows per Trial",
+    rows.filter((r) => r.stage === "granted").map((r) => r.refill ?? 0),
+    [0, 1, 2, 3],
+    "each refill's granted row carries its ordinal",
   );
-  assert.equal(consumeInkTrialUse("rainbow", "y1", "playTogether").consumed, false, "nothing left to consume");
   for (const r of rows) {
-    const params = { inkStage: r.stage, ink: r.ink, inkSurface: r.surface, ...(r.ext ? { inkExtension: true } : {}) };
+    const params = { inkStage: r.stage, ink: r.ink, inkSurface: r.surface, ...(r.refill ? { inkRefill: r.refill } : {}) };
     assert.equal(validateEventParams("ink_trial", params).valid, true, JSON.stringify(params));
   }
 });
 
-test("extension: gone once the first card is answered without it (NOT NOW, VIEW IN SHOP, leaving)", () => {
+test("refill: absent maxExtensions = 1 (the reviewed one-time behaviour); 0 = no refills at all", () => {
+  withMaxExtensions(undefined);
+  grantInkTrial("rainbow", "classic");
+  playRainbow(5, "classic", "a");
+  assert.equal(refill(), true);
+  playRainbow(5, "classic", "b");
+  assert.equal(isInkExtensionAvailable("rainbow"), false);
+  _resetInkTrialStoreForTests({ storage: { get: () => null, set: () => {} }, isOwned: () => false, track: () => {} });
+  withMaxExtensions(0);
+  grantInkTrial("rainbow", "classic");
+  playRainbow(5);
+  assert.equal(isInkExtensionAvailable("rainbow"), false);
+  assert.equal(refill(), false);
+});
+
+test("refill: the ordinal is a bounded bucket - the 5th refill and every later one report 5", () => {
+  withMaxExtensions(99);
+  grantInkTrial("rainbow", "classic");
+  for (let block = 0; block < 7; block++) {
+    playRainbow(5, "classic", `k${block}-`);
+    assert.equal(refill(), true, `refill ${block + 1}`);
+  }
+  assert.equal(getInkTrialExtensions("rainbow"), 7);
+  assert.deepEqual(rows.filter((r) => r.stage === "granted").map((r) => r.refill ?? 0), [0, 1, 2, 3, 4, 5, 5, 5]);
+});
+
+test("refill: gone for that block once its card is answered without it (NOT NOW, VIEW IN SHOP, leaving)", () => {
   for (const outcome of ["declined", "shop", "dismissed"] as const) {
     _resetInkTrialStoreForTests({ storage: { get: () => null, set: () => {} }, isOwned: () => false, track: () => {} });
+    withMaxExtensions(99);
     grantInkTrial("rainbow", "classic");
     playRainbow(5);
     markInkCtaShown("rainbow", "classic");
@@ -278,45 +318,49 @@ test("extension: gone once the first card is answered without it (NOT NOW, VIEW 
   }
 });
 
-test("extension: VIEW IN SHOP is its own outcome row (cta_shop)", () => {
+test("refill: VIEW IN SHOP is its own outcome row (cta_shop), carrying the block's ordinal", () => {
+  withMaxExtensions(3);
   grantInkTrial("rainbow", "classic");
-  playRainbow(5);
+  playRainbow(5, "classic", "a");
+  refill();
+  playRainbow(5, "classic", "b");
   markInkCtaShown("rainbow", "classic");
   recordInkCtaOutcome("rainbow", "shop", "classic");
-  assert.equal(rows.at(-1)?.stage, "cta_shop");
+  assert.deepEqual(rows.at(-1), { stage: "cta_shop", ink: "rainbow", surface: "classic", refill: 1 });
 });
 
-test("extension: survives a restart mid-extension; a record stored before the extension existed reads as never extended", () => {
+test("refill: survives a restart mid-refill; older records (no extensions / extended: true) read as 0 / 1", () => {
+  withMaxExtensions(3);
   grantInkTrial("rainbow", "classic");
-  playRainbow(5);
-  markInkCtaShown("rainbow", "classic");
-  grantInkTrialExtension("rainbow", "classic");
-  playRainbow(2, "classic", "x");
+  playRainbow(5, "classic", "a");
+  refill();
+  playRainbow(2, "classic", "b");
   const saved = raw;
   _resetInkTrialStoreForTests({ storage: { get: () => saved, set: (v) => (raw = v) }, isOwned: () => false, track: () => {} });
   assert.deepEqual(getActiveInkTrial(), { ink: "rainbow", usesLeft: 3 });
-  assert.equal(isInkTrialExtended("rainbow"), true);
-  const legacy = JSON.stringify({ v: 1, trials: { rainbow: { status: "exhausted", usesLeft: 0, started: true, ctaShown: false, ctaOutcome: null } } });
-  _resetInkTrialStoreForTests({ storage: { get: () => legacy, set: () => {} }, isOwned: () => false, track: () => {} });
-  assert.equal(isInkTrialExtended("rainbow"), false);
-  assert.equal(isInkExtensionAvailable("rainbow"), true, "an old exhausted Trial's first card can still offer it");
+  assert.equal(getInkTrialExtensions("rainbow"), 1);
+  const base = { status: "exhausted", usesLeft: 0, started: true, ctaShown: false, ctaOutcome: null };
+  const legacy0 = JSON.stringify({ v: 1, trials: { rainbow: base } });
+  _resetInkTrialStoreForTests({ storage: { get: () => legacy0, set: () => {} }, isOwned: () => false, track: () => {} });
+  assert.equal(getInkTrialExtensions("rainbow"), 0);
+  const legacy1 = JSON.stringify({ v: 1, trials: { rainbow: { ...base, extended: true } } });
+  _resetInkTrialStoreForTests({ storage: { get: () => legacy1, set: () => {} }, isOwned: () => false, track: () => {} });
+  assert.equal(getInkTrialExtensions("rainbow"), 1);
 });
 
-test("extension: one use per completed multiplayer session (any round count, a repeated snapshot uses nothing)", () => {
+test("refill: one use per completed multiplayer session (any round count, a repeated snapshot uses nothing)", () => {
   grantInkTrial("rainbow", "twoPlayers");
   playRainbow(5, "twoPlayers");
-  markInkCtaShown("rainbow", "twoPlayers");
-  grantInkTrialExtension("rainbow", "twoPlayers");
+  refill("twoPlayers");
   assert.equal(consumeInkTrialUse("rainbow", "pp:game-1", "twoPlayers").usesLeft, 4);
   assert.equal(consumeInkTrialUse("rainbow", "pp:game-1", "twoPlayers").consumed, false, "same session key: no second use");
   assert.equal(consumeInkTrialUse("rainbow", "pp:game-2", "twoPlayers").usesLeft, 3);
 });
 
-test("extension: a purchase during the extension closes the Trial (bought while active -> history active)", () => {
+test("refill: a purchase during a refill closes the Trial (bought while active -> history active)", () => {
   grantInkTrial("rainbow", "classic");
   playRainbow(5);
-  markInkCtaShown("rainbow", "classic");
-  grantInkTrialExtension("rainbow", "classic");
+  refill();
   assert.equal(getInkTrialHistory("rainbow"), "active");
   owned.add("rainbow");
   closeInkTrialOnPurchase("rainbow");
@@ -325,12 +369,12 @@ test("extension: a purchase during the extension closes the Trial (bought while 
   assert.equal(grantInkTrialExtension("rainbow", "classic"), false);
 });
 
-test("extension: the first card's state between the two phases reads as ended for the purchase row; the final one too", () => {
+test("refill: a used-up block reads as ended for the purchase row, whatever the refill count", () => {
+  withMaxExtensions(3);
   grantInkTrial("rainbow", "classic");
-  playRainbow(5);
-  assert.equal(getInkTrialHistory("rainbow"), "ended", "first 5 used, extension not taken (yet)");
-  markInkCtaShown("rainbow", "classic");
-  grantInkTrialExtension("rainbow", "classic");
-  playRainbow(5, "classic", "x");
-  assert.equal(getInkTrialHistory("rainbow"), "ended", "all 10 used");
+  playRainbow(5, "classic", "a");
+  assert.equal(getInkTrialHistory("rainbow"), "ended", "a used-up block, its refill not taken (yet)");
+  refill();
+  playRainbow(5, "classic", "b");
+  assert.equal(getInkTrialHistory("rainbow"), "ended");
 });

@@ -7,7 +7,8 @@ import type { InkSurface } from "../services/ads/inkTrialConfigSchema";
 import { trackEvent } from "../services/analytics";
 import type { InkTrialInk, RewardOfferParams, RewardSkipStage } from "../services/analyticsSchema";
 import { getCoins, onCoinsChanged } from "../services/coinsStore";
-import { grantInkTrialExtension, isInkTrialExtended, markInkCtaShown, recordInkCtaOutcome } from "../services/inkTrialStore";
+import { getInkMaxExtensions, getInkTrialExtensions, grantInkTrialExtension, markInkCtaShown, recordInkCtaOutcome } from "../services/inkTrialStore";
+import { inkRefillBucket } from "../services/ads/inkTrialConfigSchema";
 import { canOfferInkExtensionOn } from "../services/inkTrialOffers";
 import { penColorPrice, purchasePenColor } from "../services/shopPurchase";
 import { isMathFallbackEnabled } from "./DoubleCoinsOffer";
@@ -39,16 +40,16 @@ type Phase = "offer" | "bought" | "extended";
  * (penColorPrice - no Trial price, no discount, nothing hard-coded) and the Shop's own purchase path
  * (purchasePenColor). Always actionable, never in the way: it sits after the screen's own actions.
  *
- * First card (the first 5 plays used, the extension still possible on this surface):
- *   affordable   UNLOCK INK  ·  WATCH AD · +5 PLAYS   ·  not now
- *   unaffordable WATCH AD · +5 PLAYS ·  VIEW IN SHOP          ·  need X more · not now
- * Final card (the extension used - or not possible here): buy or Shop only.
- *   affordable   UNLOCK INK  ·  NOT NOW
- *   unaffordable VIEW IN SHOP        ·  NOT NOW               ·  need X more
+ * Refill card (a used-up block, another +5 refill allowed by the config and possible on this surface) - Rewarded
+ * first, the Shop second:
+ *   WATCH AD · +5 PLAYS  ·  UNLOCK INK (affordable) / VIEW IN SHOP (+ need X more)  ·  not now
+ * Last card (the refill limit reached - or no refill possible here): buy or Shop only.
+ *   affordable   UNLOCK INK    ·  NOT NOW
+ *   unaffordable VIEW IN SHOP  ·  NOT NOW  ·  need X more
  *
- * The +5 extension is granted ONLY on the SDK's confirmed reward (resolveAdOutcome "rewarded"), once per ink
- * (grantInkTrialExtension refuses a second one); a failed, unavailable or early-closed ad grants nothing. Its ad
- * funnel is the Ink offer's (same placement / unit / single lane), marked inkExtension.
+ * A +5 refill is granted ONLY on the SDK's confirmed reward (extensionAdStep "grant"), one per card, up to the
+ * config's maxExtensions per Trial; a failed, unavailable or early-closed ad grants nothing. Its ad funnel is the
+ * Ink offer's (same placement / unit / single lane), marked with the refill's ordinal (inkRefill, bucket 1..5).
  * One outcome per card: purchased, declined (NOT NOW), dismissed (left without a choice), shop, or extended.
  */
 export default function InkTrialCta({ ink, surface, placement, sessionGames, onViewShop, onClosed, deferredInterstitial = false }: InkTrialCtaProps) {
@@ -64,9 +65,10 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
   const adDismissedRef = useRef(false);
   const extensionSettledRef = useRef(false);
   const devSimulation = isMathFallbackEnabled();
-  // Decided once, at render: does THIS card offer the +5 extension? (Not after it was used; not where it cannot run.)
-  const [finalCard] = useState(() => isInkTrialExtended(ink));
-  const [extensionOffered] = useState(() => !finalCard && canOfferInkExtensionOn(surface, ink) && (isRewardedAdAvailable(placement) || devSimulation));
+  // Decided once, at render: does THIS card offer a +5 refill? (Not past the refill limit; not where it cannot run.)
+  const [refillsSoFar] = useState(() => getInkTrialExtensions(ink));
+  const [limitReached] = useState(() => refillsSoFar >= getInkMaxExtensions());
+  const [extensionOffered] = useState(() => !limitReached && canOfferInkExtensionOn(surface, ink) && (isRewardedAdAvailable(placement) || devSimulation));
   const [adAvailableAtRender] = useState(() => isRewardedAdAvailable(placement));
 
   const funnelParams = (skipStage?: RewardSkipStage): RewardOfferParams & { skipStage?: RewardSkipStage } => ({
@@ -75,7 +77,7 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
     offerNumber: 1,
     sessionGames: Math.max(0, Math.min(999, sessionGames)),
     adAvailable: adAvailableAtRender,
-    inkExtension: true,
+    inkRefill: inkRefillBucket(refillsSoFar + 1),
     ...(skipStage ? { skipStage } : {}),
   });
 
@@ -229,7 +231,7 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
       <div className="ink-offer-main">
         <InkPreview ink={ink} width={104} height={36} />
         <div className="ink-offer-text">
-          <p className="ink-offer-title">{finalCard ? `${option.name} trial ended` : `Loved ${option.name}?`}</p>
+          <p className="ink-offer-title">{limitReached ? `${option.name} trial ended` : `Loved ${option.name}?`}</p>
           <p className="ink-offer-value">
             Unlock {option.name} · <span className="ink-cta-price">{formatCoins(price)} 🪙</span>
           </p>
@@ -239,31 +241,17 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
       {extensionOffered ? (
         <>
           <div className="ink-offer-actions">
+            <button type="button" className="ink-offer-primary" onClick={handleWatch} disabled={adPending}>
+              {watchLabel}
+            </button>
             {affordable ? (
-              <>
-                <button type="button" className="ink-offer-primary" onClick={handleBuy} disabled={adPending}>
-                  UNLOCK INK
-                </button>
-                <button type="button" className="ink-offer-secondary ink-cta-watch" onClick={handleWatch} disabled={adPending}>
-                  {adPending ? (
-                    watchLabel
-                  ) : (
-                    <span className="ink-cta-lines">
-                      <span>WATCH AD</span>
-                      <span>+5 PLAYS</span>
-                    </span>
-                  )}
-                </button>
-              </>
+              <button type="button" className="ink-offer-secondary" onClick={handleBuy} disabled={adPending}>
+                UNLOCK INK
+              </button>
             ) : (
-              <>
-                <button type="button" className="ink-offer-primary" onClick={handleWatch} disabled={adPending}>
-                  {watchLabel}
-                </button>
-                <button type="button" className="ink-offer-secondary" onClick={handleShop} disabled={adPending}>
-                  VIEW IN SHOP
-                </button>
-              </>
+              <button type="button" className="ink-offer-secondary" onClick={handleShop} disabled={adPending}>
+                VIEW IN SHOP
+              </button>
             )}
           </div>
           <div className="ink-cta-foot">

@@ -20,7 +20,7 @@ import {
 } from "./inkTrialPolicy";
 
 const none = () => false;
-const record = (over: Partial<InkTrialRecord> = {}): InkTrialRecord => ({ status: "active", usesLeft: TRIAL_PLAYS, started: false, ctaShown: false, ctaOutcome: null, extended: false, ...over });
+const record = (over: Partial<InkTrialRecord> = {}): InkTrialRecord => ({ status: "active", usesLeft: TRIAL_PLAYS, started: false, ctaShown: false, ctaOutcome: null, extensions: 0, ...over });
 
 test("a Trial is 5 plays", () => {
   assert.equal(TRIAL_PLAYS, 5);
@@ -111,13 +111,16 @@ test("extension ad: ONLY the confirmed reward grants; early close is a dismissal
   assert.equal(extensionAdStep("error"), "failed");
 });
 
-test("extension availability: first card open, never extended, not owned - nothing else", () => {
-  const firstCard = record({ status: "exhausted", usesLeft: 0, started: true, ctaShown: true });
+test("refill availability: an open card of a used-up block, under the limit, not owned - nothing else", () => {
+  const card = record({ status: "exhausted", usesLeft: 0, started: true, ctaShown: true });
   assert.equal(TRIAL_EXTENSION_PLAYS, 5);
-  assert.equal(extensionAvailable(firstCard, false), true);
-  assert.equal(extensionAvailable(firstCard, true), false, "owned");
-  assert.equal(extensionAvailable({ ...firstCard, extended: true }, false), false, "already extended");
-  assert.equal(extensionAvailable({ ...firstCard, ctaOutcome: "declined" }, false), false, "card answered");
-  assert.equal(extensionAvailable(record(), false), false, "still active");
-  assert.equal(extensionAvailable(undefined, false), false);
+  assert.equal(extensionAvailable(card, false, 1), true);
+  assert.equal(extensionAvailable(card, true, 1), false, "owned");
+  assert.equal(extensionAvailable({ ...card, extensions: 1 }, false, 1), false, "limit 1 reached");
+  assert.equal(extensionAvailable({ ...card, extensions: 1 }, false, 3), true, "refill 2 of 3");
+  assert.equal(extensionAvailable({ ...card, extensions: 3 }, false, 3), false, "limit 3 reached");
+  assert.equal(extensionAvailable(card, false, 0), false, "0 = no refills");
+  assert.equal(extensionAvailable({ ...card, ctaOutcome: "declined" }, false, 3), false, "card answered");
+  assert.equal(extensionAvailable(record(), false, 3), false, "still active");
+  assert.equal(extensionAvailable(undefined, false, 3), false);
 });

@@ -90,7 +90,7 @@ test("every purchase row above passes the shared validator (the Worker's ingest 
   for (const p of rows) assert.equal(validateEventParams("shop_purchase_with_coins", p).valid, true, JSON.stringify(p));
 });
 
-test("the +5 extension: bought during it -> active; bought after all 10 plays -> ended", () => {
+test("+5 refills: bought during one -> active; bought after a used-up block -> ended", () => {
   freshPlayer();
   grantInkTrial("rainbow", "classic");
   for (let i = 1; i <= 5; i++) consumeInkTrialUse("rainbow", `e${i}`, "classic");
@@ -118,4 +118,21 @@ test("VIEW IN SHOP opens the existing Shop on that ink (the route the card's hos
   assert.equal(shop.name, "shop");
   assert.equal(shop.highlightPenColorId, "rainbow");
   assert.equal((toShop(toPassPlay(), "diamondBlue") as { highlightPenColorId?: string }).highlightPenColorId, "diamondBlue");
+});
+
+test("a Trial ink's purchase reports how many +5 refills its Trial had received (bucket), and none without a Trial", async () => {
+  const { _resetInkTrialConfigForTests } = await import("./ads/inkTrialConfig.ts");
+  _resetInkTrialConfigForTests({ config: { enabled: true, version: 1, rolloutPercent: 100, surfaces: { classic: true, playTogether: true, twoPlayers: true, daily: false }, classicRotation: ["coin", "ink"], maxExtensions: 3 } });
+  freshPlayer();
+  grantInkTrial("rainbow", "classic");
+  for (let b = 0; b < 2; b++) {
+    for (let i = 1; i <= 5; i++) consumeInkTrialUse("rainbow", `z${b}-${i}`, "classic");
+    markInkCtaShown("rainbow", "classic");
+    assert.equal(grantInkTrialExtension("rainbow", "classic"), true, `refill ${b + 1}`);
+  }
+  assert.equal(purchasePenColor("rainbow"), "purchased");
+  const row = purchases().at(-1);
+  assert.deepEqual(row, { productType: "penColor", tier: "rainbow", price: 10000, inkTrialBefore: "active", inkRefill: 2 });
+  assert.equal(validateEventParams("shop_purchase_with_coins", row).valid, true);
+  _resetInkTrialConfigForTests({ config: null });
 });

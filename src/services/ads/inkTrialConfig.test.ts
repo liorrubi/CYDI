@@ -148,3 +148,21 @@ test("hasInkConfigAnswer: false on a cold start until the first answer (even a 4
   await refreshInterstitialConfig();
   assert.equal(hasInkConfigAnswer(), true);
 });
+
+test("maxExtensions: optional, 0..99 on the stored config and the client answer; absent = 1; invalid = OFF", async () => {
+  const schema = await import("./inkTrialConfigSchema.ts");
+  const base = { enabled: true, version: 1, rolloutPercent: 100, surfaces: { classic: true, playTogether: true, twoPlayers: true, daily: false }, classicRotation: ["coin", "ink"] };
+  for (const n of [0, 1, 3, 99]) {
+    assert.equal(schema.isValidStoredInkTrialConfig({ ...base, maxExtensions: n }), true, String(n));
+    assert.equal(schema.parseClientInkTrialConfig({ ...base, maxExtensions: n })?.maxExtensions, n);
+  }
+  assert.equal(schema.isValidStoredInkTrialConfig(base), true, "absent is fine");
+  assert.equal(schema.inkMaxExtensions(schema.parseClientInkTrialConfig(base)), 1, "absent = 1");
+  assert.equal(schema.inkMaxExtensions(null), 1);
+  for (const bad of [-1, 100, 1.5, "3", null]) {
+    assert.equal(schema.isValidStoredInkTrialConfig({ ...base, maxExtensions: bad }), false, String(bad));
+    assert.equal(schema.parseClientInkTrialConfig({ ...base, maxExtensions: bad }), null, String(bad));
+  }
+  assert.equal(schema.isValidStoredInkTrialConfig({ ...base, maxExtension: 3 }), false, "a typo can never be stored");
+  assert.deepEqual([1, 2, 5, 6, 40].map(schema.inkRefillBucket), [1, 2, 5, 5, 5]);
+});

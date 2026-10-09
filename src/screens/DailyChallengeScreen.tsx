@@ -386,7 +386,6 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
         onNavigateToSettings={goToSettings}
       />
       <div className="daily-status-line">
-        {isLive && <StreakChip />}
         <span>Your best: {yourBest === null ? "—" : `${yourBest}%`}</span>
         {isLive && (
           <>
@@ -420,6 +419,8 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
               Playing as: <strong>{nameDraft.trim() || ANONYMOUS_PLAYER_NAME}</strong> <span aria-hidden="true">✏️</span>
             </button>
           )}
+          {/* 0.59.0: the Daily streak beside the name - this row has room on a 320px phone, the status line above does not. */}
+          <StreakChip />
         </div>
       )}
       {isLive && prizeMessages.length > 0 && (

@@ -57,3 +57,8 @@ test("the amounts add up: base 35 is credited, the ad grants only the difference
   assert.equal(rewardedFinalAmount("x3", 35) - 35, 70);
   assert.equal(rewardedBonusCoins("x3", 35), 70);
 });
+
+test("0.59.0: a capped paid-chest double never claims to have doubled - it confirms the concrete amount", () => {
+  assert.ok(code.includes('wasCorrect && (experiment || (isCapped && grantSource === "ad")) ?'), "capped grant uses the 'You earned' confirmation");
+  assert.ok(code.includes("? amount + bonusCap!"), "a capped offer pays amount + cap");
+});

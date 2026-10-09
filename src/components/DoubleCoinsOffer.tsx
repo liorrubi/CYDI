@@ -523,7 +523,7 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       )}
       {phase === "feedback" && (
         <>
-          {wasCorrect && experiment ? (
+          {wasCorrect && (experiment || (isCapped && grantSource === "ad")) ? (
             <p className="double-offer-headline">✅ Ad watched! You earned 🪙 +{paidAmount}</p>
           ) : wasCorrect && grantSource === "ad" && isBonusRound ? (
             <p className="double-offer-headline">✨ Bonus! You earned 🪙 +{paidAmount}</p>

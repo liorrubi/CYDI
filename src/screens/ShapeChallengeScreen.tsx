@@ -1553,7 +1553,6 @@ function ShapePlay({
 
     const notesNode = (
       <>
-        {dailyGoalNode}
         {!practice && !canGoToNextShape && nextIndex < shapes.length && (
           <p className="result-actions-note">Score {passScore}+ to unlock the next shape.</p>
         )}
@@ -1609,6 +1608,7 @@ function ShapePlay({
           actionsRef={resultActionsRef}
           offer={offerNode}
           extras={notesNode}
+          afterActions={dailyGoalNode}
           compact={doubleOfferAmount === null && inkOffer === null && ctaInk !== null}
         />
       );

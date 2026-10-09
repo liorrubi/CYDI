@@ -78,6 +78,11 @@ type ClassicResultNativeProps = {
   offer?: ReactNode;
   /** Notes and prompts the screen already renders conditionally. */
   extras?: ReactNode;
+  /**
+   * 0.59.0: small, optional status placed right AFTER the actions (the daily-goal chip), so it can never push the
+   * primary action below the fold - measured: above the actions it moved Next Shape past 640 on a 360x640 phone.
+   */
+  afterActions?: ReactNode;
   /** Overlays that position themselves; rendered last. */
   overlays?: ReactNode;
   /**
@@ -105,6 +110,7 @@ export default function ClassicResultNative({
   actionsRef,
   offer,
   extras,
+  afterActions,
   overlays,
   compact = false,
 }: ClassicResultNativeProps) {
@@ -196,6 +202,8 @@ export default function ClassicResultNative({
           </button>
         </div>
       </footer>
+
+      {afterActions}
 
       {/* 5 · The tip, after the actions.
           It used to sit inside the card, where Version B has it - but measured

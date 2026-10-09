@@ -56,6 +56,12 @@
   border-color: rgba(249, 115, 22, 0.45);
   background: linear-gradient(135deg, rgba(251, 191, 36, 0.14), rgba(249, 115, 22, 0.14));
 }
+/* Beside "Playing as" on the Daily screen; the row centres both and wraps only for a very long name. */
+.daily-name-row {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
 .streak-chip-count {
   font-variant-numeric: tabular-nums;
 }

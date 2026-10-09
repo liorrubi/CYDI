@@ -37,8 +37,12 @@ export function unlockCategory(id: CategoryId): void {
  * category that is merely open because it was played under the pre-paywall rules (that one was never bought).
  */
 export function getPaidCategoryPurchaseCount(): number {
-  const first = getCategories()[0]?.id;
-  return readUnlocked().filter((id) => id !== first).length;
+  // Only the in-game purchase and the one-time legacy import ever wrote this list, and the price was always 1,000
+  // before 0.59.0 - so every entry is a real purchase. Player-friendly where history is ambiguous (old imports,
+  // restored backups): duplicates, unknown/retired ids and the always-free first category never raise the price.
+  const [first, ...paid] = getCategories();
+  const paidIds = new Set(paid.map((c) => c.id).filter((id) => id !== first?.id));
+  return new Set(readUnlocked().filter((id) => paidIds.has(id))).size;
 }
 
 /** What the next category costs right now: 1,000 / 1,250 / 1,500 for the 1st / 2nd / 3rd+ paid category. */

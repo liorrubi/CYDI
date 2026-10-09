@@ -372,7 +372,8 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   }
 
   return (
-    <div className="screen">
+    // `daily-play`: the preview / drawing / analyzing screen - appShell.css keeps its header to one row on Android.
+    <div className="screen daily-play">
       <AppHeader
         title={replay ? `Challenge from ${episode.dateKey}` : "Daily Challenge"}
         subtitle={!isLive ? (leader ? `Winner: ${leader.playerName} (${leader.score}%)` : "No winner - challenge expired") : undefined}

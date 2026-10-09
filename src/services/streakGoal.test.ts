@@ -166,3 +166,56 @@ test("every analytics row this file produced passes the shared validator (the Wo
   assert.ok(everySent.length > 0);
   for (const { name, params } of everySent) assert.equal(validateEventParams(name as never, params).valid, true, `${name} ${JSON.stringify(params)}`);
 });
+
+// ------------------------------------------------- 0.59.0 existing-player migration ----
+
+test("migration: a 0.58 save (no streak / goal / ad-limit fields) loads and reads without a single write", () => {
+  fresh(0);
+  updateSaveData((d) => {
+    d.progress.coins = 4321;
+    d.progress.unlockedCategories = ["geometric", "symbols", "alphabet"];
+    d.progress.achievements = ["first-steps", "explorer"];
+    d.progress.unlockedPenColors = ["purple", "rainbow"];
+    d.progress.shapeChallenge.bestScores = { circle: 91, square: 77 };
+    d.progress.dailyStreak = { lastVisitDate: "2026-10-08", currentStreak: 4, longestStreak: 9 };
+    delete (d.progress as Record<string, unknown>).drawingStreak;
+    delete (d.progress as Record<string, unknown>).dailyGoal;
+    delete (d.progress as Record<string, unknown>).adLimits;
+  });
+  const before = JSON.stringify(getSaveData());
+  // Every 0.59.0 read path a returning player hits on launch / Home / Daily / map / Shop / result.
+  assert.equal(getStreakView(il("2026-10-10")).current, 0);
+  assert.deepEqual(getDailyGoal(), { games: 0, target: 5, claimed: false });
+  assert.equal(getPaidCategoryPurchaseCount(), 2);
+  assert.equal(nextCategoryUnlockPrice(), 1500, "two paid categories bought -> the 3rd costs 1,500");
+  assert.equal(isUnlockNowUsedToday(), false);
+  assert.equal(hasRunMinBonusLeftToday(), true);
+  assert.equal(isColorUnlocked("rainbow"), true, "an ink bought at the old 10,000 stays owned");
+  assert.equal(JSON.stringify(getSaveData()), before, "coins, categories, achievements, inks, progress and the visit streak are untouched");
+});
+
+test("migration: purchase order counts only real paid purchases - ambiguous legacy history never raises the price", () => {
+  const priceFor = (list: string[]) => {
+    fresh(0);
+    updateSaveData((d) => {
+      d.progress.unlockedCategories = list;
+    });
+    return [getPaidCategoryPurchaseCount(), nextCategoryUnlockPrice()];
+  };
+  assert.deepEqual(priceFor([]), [0, 1000]);
+  assert.deepEqual(priceFor(["geometric"]), [0, 1000], "the always-free first category is not a purchase");
+  assert.deepEqual(priceFor(["symbols"]), [1, 1250]);
+  assert.deepEqual(priceFor(["geometric", "symbols", "symbols"]), [1, 1250], "a duplicate from an old import counts once");
+  assert.deepEqual(priceFor(["symbols", "retired-category", "???"]), [1, 1250], "unknown / retired ids are ignored");
+  assert.deepEqual(priceFor(["symbols", "alphabet", "home", "food"]), [4, 1500]);
+});
+
+test("migration: a category open only through pre-paywall play (progress, not purchase) is free and not counted", () => {
+  fresh(0);
+  updateSaveData((d) => {
+    d.progress.unlockedCategories = [];
+    d.progress.shapeChallenge.completedShapeIdsByCategory = { symbols: ["heart"] };
+  });
+  assert.equal(getPaidCategoryPurchaseCount(), 0);
+  assert.equal(nextCategoryUnlockPrice(), 1000);
+});

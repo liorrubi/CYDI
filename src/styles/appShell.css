@@ -2118,3 +2118,55 @@
   display: inline-flex;
   overflow: hidden;
 }
+
+/* ===========================================================================
+ * 0.59.0  SHORT-SCREEN FIXES (measured on the Mi 8 WebView, 320x568 .. 1280x800)
+ *
+ * DAILY PLAY: while a Daily round is on screen (preview / drawing / analyzing),
+ * the header's second icon row (Achievements, Share, Settings) is hidden - the
+ * same focus the Classic play header already has. It saves 64px: Done moves
+ * 750 -> 686 on a 392x738 phone (it was 12px below the fold), and on 360x640 /
+ * 320x568 the whole canvas is inside the viewport at round start. The first
+ * row (logo, coins, chest, crown) and Back stay; the result screen keeps the
+ * full header. Same class for every play phase, so nothing shifts mid-round.
+ *
+ * CLASSIC RESULT on short screens (<=700px tall): the compact spacing the Ink
+ * Keep-it card already uses, for every result. The primary action moves into
+ * view at 320x568 (624 -> 564) and 960x600 landscape (673 -> 593); taller
+ * screens are unaffected.
+ * ------------------------------------------------------------------------ */
+.app-shell .daily-play .app-header-actions-break,
+.app-shell .daily-play .app-header-actions-break ~ * {
+  display: none;
+}
+
+@media (max-height: 700px) {
+  .app-shell .app-result {
+    gap: 6px;
+  }
+
+  .app-shell .app-result .app-result-stage {
+    gap: 6px;
+    padding: 6px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    column-gap: var(--space-4);
+  }
+
+  .app-shell .app-result .app-result-stage > .canvas-wrapper {
+    display: flex;
+    flex: 0 0 100%;
+    justify-content: center;
+  }
+
+  .app-shell .app-result .app-result-card {
+    gap: var(--space-2);
+    padding: 10px;
+  }
+
+  .app-shell .app-result .app-result-metrics {
+    gap: 6px;
+    padding-top: var(--space-2);
+  }
+}

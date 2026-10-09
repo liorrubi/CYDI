@@ -50,6 +50,22 @@ function currentConfig(): CoinOfferConfig | null {
   return qa !== undefined ? qa : liveConfig;
 }
 
+export const RUN_ARM_QA_OVERRIDE_KEY = "cydi.qa.rewardedRunArm.v1";
+
+/**
+ * Debuggable APK / dev server only: force this device's Classic arm ("x3" or "x3run") so QA can see both A/B arms on
+ * one phone. Null in every Play build, and whenever the key is absent or holds anything else.
+ */
+export function qaForcedRunArm(): "x3" | "x3run" | null {
+  if (!isQaBuild() && !isDevBuild()) return null;
+  try {
+    const v = localStorage.getItem(RUN_ARM_QA_OVERRIDE_KEY);
+    return v === "x3" || v === "x3run" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Is the Classic coin-offer A/B (x3 vs x3run) running? */
 export function isRunX3ExperimentOn(): boolean {
   return currentConfig()?.runX3 === true;

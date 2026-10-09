@@ -52,7 +52,7 @@ import { getUnlockedAchievementIds, markAchievementUnlocked } from "../services/
 import { addCoins, addCoinsPending, getCoins, onCoinsChanged, revealPendingCoins, spendCoins } from "../services/coinsStore";
 import { getUnlockedCategoryIds, nextCategoryUnlockPrice, unlockCategory } from "../services/categoryUnlockStore";
 import { isUnlockNowEligible, unlockNowCredit } from "../app/unlockNow";
-import { isRunX3ExperimentOn, isUnlockNowOn } from "../services/ads/coinOfferConfig";
+import { isRunX3ExperimentOn, isUnlockNowOn, qaForcedRunArm } from "../services/ads/coinOfferConfig";
 import { isUnlockNowUsedToday, recordUnlockNowUsed } from "../services/adDailyLimitsStore";
 import { resolveAdOutcome } from "../components/doubleOfferAdFlow";
 import { isAndroidApp } from "../services/nativeShare";
@@ -642,7 +642,7 @@ function CategoryListScreen({
 
       {anyLocked && (
         <p className="category-price-note">
-          Next category: <strong>{unlockPrice.toLocaleString("en-US")} 🪙</strong>
+          Next category: <strong className="category-price-now">{unlockPrice.toLocaleString("en-US")} 🪙</strong>
           <span className="category-price-ladder"> · 1st 1,000 · 2nd 1,250 · then 1,500</span>
         </p>
       )}
@@ -706,7 +706,7 @@ function CategoryListScreen({
                   onClick={() => void handleUnlockNow(category.id)}
                   aria-label={`Unlock ${category.name} now: watch an ad for the missing ${unlockPrice - coins} coins`}
                 >
-                  <span className="unlock-now-main">{unlockNowPending ? "Loading ad…" : "🎬 Unlock now"}</span>
+                  <span className="unlock-now-main">{unlockNowPending ? "Loading ad…" : "Unlock now"}</span>
                   <span className="unlock-now-sub">ad adds {unlockPrice - coins} 🪙</span>
                 </Button>
               ) : (
@@ -1394,7 +1394,7 @@ function ShapePlay({
       let runBonus: RewardedExperimentOffer["runBonus"];
       if (!practice) {
         addRunCoins(offerAmount);
-        if (getRewardedArm(isRunX3ExperimentOn()) === "x3run") {
+        if ((qaForcedRunArm() ?? getRewardedArm(isRunX3ExperimentOn())) === "x3run") {
           const run = getRunInfo();
           const priced = runOfferBonus(run.runCoins, hasRunMinBonusLeftToday());
           coinOfferBase = run.runCoins;
@@ -1414,7 +1414,7 @@ function ShapePlay({
           if (lane.content.kind === "coin") {
             showCoinOffer = true;
             setRewardedOffer({
-              arm: getRewardedArm(isRunX3ExperimentOn()),
+              arm: qaForcedRunArm() ?? getRewardedArm(isRunX3ExperimentOn()),
               ...(runBonus ? { runBonus } : {}),
               ...context,
               interstitialArm,

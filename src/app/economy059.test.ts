@@ -227,3 +227,8 @@ test("analytics: Unlock Now funnel rows, streak / goal coins, Save purchases and
   }
   assert.equal(validateEventParams("coin_spent", { ...spend, price: 1250, coinSink: "category_unlock" }).valid, true, "category prices are range-validated, never an allowlist");
 });
+
+test("the QA arm override is inert outside debuggable builds (a Play build can never force an arm)", async () => {
+  const { qaForcedRunArm } = await import("../services/ads/coinOfferConfig");
+  assert.equal(qaForcedRunArm(), null);
+});

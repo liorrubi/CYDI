@@ -29,20 +29,28 @@
 }
 
 /* --- chip (Daily status line) --- */
+/* Compact on purpose: it sits in the Daily status line, so it must not make that line taller (the Daily's Done
+   button is already near the fold on a 360x740 phone). The ::before extends the tap target without adding height. */
 .streak-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  min-height: 32px;
-  padding: 3px 10px 3px 7px;
+  padding: 0 8px 0 5px;
+  line-height: 1.25;
   border: 1px solid var(--color-border);
   border-radius: 999px;
   background: var(--color-card);
   color: var(--color-text);
   font: inherit;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   cursor: pointer;
+}
+.streak-chip::before {
+  content: "";
+  position: absolute;
+  inset: -12px -6px;
 }
 .streak-chip-lit {
   border-color: rgba(249, 115, 22, 0.45);
@@ -387,6 +395,7 @@
   font-size: 0.85rem;
   text-align: center;
 }
+.category-price-now,
 .category-price-ladder {
   white-space: nowrap;
 }

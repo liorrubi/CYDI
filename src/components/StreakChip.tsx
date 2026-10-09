@@ -28,7 +28,7 @@ export default function StreakChip() {
         }}
         aria-label={label}
       >
-        <StreakFlame lit={view.doneToday} size={18} />
+        <StreakFlame lit={view.doneToday} size={15} />
         <span className="streak-chip-count">{view.current}</span>
       </button>
       {open && <StreakSheet onClose={() => setOpen(false)} />}

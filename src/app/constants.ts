@@ -3,7 +3,7 @@ export const APP_TAGLINE = "Quick drawing challenges";
 
 // Bumped by hand only when a new product version ships - unrelated to SaveData's
 // internal schemaVersion, which tracks the save file format, not the game itself.
-export const APP_VERSION = "0.58.0";
+export const APP_VERSION = "0.59.0";
 // Short git commit hash (or a build timestamp fallback), set automatically at build time.
 export const APP_BUILD = __APP_BUILD__;
 // ISO timestamp of when this build was produced, set automatically at build time - not schemaVersion (save file format) or APP_VERSION (hand-bumped product version).
@@ -173,8 +173,27 @@ export function coinsForStars(stars: number): number {
   return SHAPE_CHALLENGE_COIN_REWARDS[stars] ?? 0;
 }
 
-/** Coin cost to unlock a Shape Challenge category beyond the first (which is always free). Change this single value to retune pricing. */
+/** Coin cost of the player's FIRST paid Shape Challenge category (the first category is always free). Also the 1,000-coin economy milestone. */
 export const CATEGORY_UNLOCK_COST = 1000;
+
+/**
+ * 0.59.0: category prices by PURCHASE ORDER, not by category - the 1st paid category costs 1,000, the 2nd 1,250,
+ * every later one 1,500, whichever category the player picks. Index = paid categories already bought.
+ */
+export const CATEGORY_UNLOCK_PRICES = [CATEGORY_UNLOCK_COST, 1250, 1500] as const;
+
+/** Price of the next paid category, given how many paid categories the player has already bought. */
+export function categoryUnlockPrice(paidCategoriesBought: number): number {
+  const n = Number.isFinite(paidCategoriesBought) ? Math.max(0, Math.floor(paidCategoriesBought)) : 0;
+  return CATEGORY_UNLOCK_PRICES[Math.min(n, CATEGORY_UNLOCK_PRICES.length - 1)];
+}
+
+/** Paid-chest Rewarded double: the ad adds the chest's payout again, but never more than this (0.59.0). */
+export const PAID_CHEST_AD_BONUS_CAP = 500;
+
+/** 0.59.0 daily goal: finishing this many Classic games on one local day pays DAILY_GOAL_COINS, once per day. */
+export const DAILY_GOAL_GAMES = 5;
+export const DAILY_GOAL_COINS = 20;
 
 export type DifficultyLevel = "beginner" | "intermediate" | "skilled" | "expert" | "master";
 
@@ -196,28 +215,34 @@ export function passScoreForDifficulty(level: DifficultyLevel): number {
   return DIFFICULTY_LEVELS.find((d) => d.id === level)?.passScore ?? SHAPE_CHALLENGE_PASS_SCORE;
 }
 
-export type PenColorId = "black" | "purple" | "green" | "orange" | "rainbow" | "diamondBlue";
+export type PenColorId = "black" | "purple" | "green" | "orange" | "rainbow" | "diamondBlue" | "ember";
 
 export type PenColorOption = {
   id: PenColorId;
   name: string;
   icon: string;
-  /** Fixed stroke color; omitted for "rainbow", which cycles hue while drawing instead. */
+  /** Fixed stroke color; omitted for the gradient inks ("rainbow", "ember"), which shift hue while drawing instead. */
   hex?: string;
-  /** Coin price to unlock in the shop; omitted for the free default. */
+  /** Coin price to unlock in the shop; omitted for the free default and for exclusive inks. */
   price?: number;
+  /** Never sold: earned only (Ember = the first 30-day Daily streak). Hidden from the Shop, shown in the pen menu once owned. */
+  exclusive?: boolean;
 };
 
 export const DEFAULT_PEN_COLOR: PenColorId = "black";
 
 export const PEN_COLORS: PenColorOption[] = [
   { id: "black", name: "Black", icon: "⚫", hex: "#1e202e" },
-  { id: "purple", name: "Purple Ink", icon: "🟣", hex: "#8b5cf6", price: 1000 },
-  { id: "green", name: "Green Ink", icon: "🟢", hex: "#16a34a", price: 1000 },
-  { id: "orange", name: "Orange Ink", icon: "🟠", hex: "#f97316", price: 1000 },
-  { id: "rainbow", name: "Rainbow Ink", icon: "🌈", price: 10000 },
-  { id: "diamondBlue", name: "Diamond Blue", icon: "💎", hex: "#4fb6ff", price: 15000 },
+  { id: "purple", name: "Purple Ink", icon: "🟣", hex: "#8b5cf6", price: 750 },
+  { id: "green", name: "Green Ink", icon: "🟢", hex: "#16a34a", price: 750 },
+  { id: "orange", name: "Orange Ink", icon: "🟠", hex: "#f97316", price: 750 },
+  { id: "rainbow", name: "Rainbow Ink", icon: "🌈", price: 6000 },
+  { id: "diamondBlue", name: "Diamond Blue", icon: "💎", hex: "#4fb6ff", price: 9000 },
+  { id: "ember", name: "Ember Ink", icon: "🔥", exclusive: true },
 ];
+
+/** The exclusive ink a player's first 30-day Daily streak unlocks. */
+export const STREAK_EXCLUSIVE_INK: PenColorId = "ember";
 
 export function penColorById(id: PenColorId): PenColorOption {
   return PEN_COLORS.find((c) => c.id === id) ?? PEN_COLORS[0];
@@ -226,12 +251,17 @@ export function penColorById(id: PenColorId): PenColorOption {
 /** CSS `background` value that visually matches a pen color's ink - a solid hex for normal colors, a gradient swatch for "rainbow" (which has no single fixed color). Used anywhere a UI element needs to preview the player's actual pen color, like the result screen's drawing legend. */
 export function penColorCssBackground(id: PenColorId): string {
   if (id === "rainbow") return "linear-gradient(90deg, #f43f5e, #f59e0b, #22c55e, #3b82f6, #a855f7)";
+  if (id === "ember") return EMBER_CSS_GRADIENT;
   return penColorById(id).hex ?? "#1e202e";
 }
 
-/** A single solid hex for a pen color's ink, for contexts needing one plain fill color (e.g. an SVG nib tint) rather than a CSS background - "rainbow" has no single hex, so it falls back to a cheerful magenta placeholder. */
+/** Ember Ink's swatch: the same red -> orange -> gold band its strokes cycle through. */
+export const EMBER_CSS_GRADIENT = "linear-gradient(90deg, #dc2626, #f97316, #f59e0b, #f97316, #dc2626)";
+
+/** A single solid hex for a pen color's ink, for contexts needing one plain fill color (e.g. an SVG nib tint) rather than a CSS background - the gradient inks have no single hex, so each falls back to a representative tone. */
 export function penInkGlyphColor(id: PenColorId): string {
   if (id === "rainbow") return "#a855f7";
+  if (id === "ember") return "#ea580c";
   return penColorById(id).hex ?? "#1e202e";
 }
 

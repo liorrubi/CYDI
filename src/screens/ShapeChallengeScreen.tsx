@@ -19,7 +19,6 @@ import {
   ANALYZING_MAX_MS,
   ANALYZING_MIN_MS,
   CANVAS_SIZE,
-  CATEGORY_UNLOCK_COST,
   FIRST_ROUND_PREVIEW_DURATION_MS,
   PREVIEW_DURATION_MS,
   improvementTip,
@@ -51,7 +50,12 @@ import {
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { getUnlockedAchievementIds, markAchievementUnlocked } from "../services/achievementsStore";
 import { addCoins, addCoinsPending, getCoins, onCoinsChanged, revealPendingCoins, spendCoins } from "../services/coinsStore";
-import { getUnlockedCategoryIds, unlockCategory } from "../services/categoryUnlockStore";
+import { getUnlockedCategoryIds, nextCategoryUnlockPrice, unlockCategory } from "../services/categoryUnlockStore";
+import { isUnlockNowEligible, unlockNowCredit } from "../app/unlockNow";
+import { isRunX3ExperimentOn, isUnlockNowOn } from "../services/ads/coinOfferConfig";
+import { isUnlockNowUsedToday, recordUnlockNowUsed } from "../services/adDailyLimitsStore";
+import { resolveAdOutcome } from "../components/doubleOfferAdFlow";
+import { isAndroidApp } from "../services/nativeShare";
 import { getDifficulty } from "../services/difficultySettings";
 import { isUnlockEverythingActive } from "../services/unlockOverrideStore";
 import { getSelectedColor, setSelectedColor } from "../services/penColorStore";
@@ -75,7 +79,7 @@ import {
 } from "../app/playStoreCta";
 import { PLAY_STORE_URL } from "../services/nativeShare";
 import { recordOfferSkipped } from "../app/rewardOfferNudge";
-import { isRewardedAdAvailable, preloadRewardedAd } from "../services/ads";
+import { isRewardedAdAvailable, isRewardedAdReadyFor, preloadRewardedAd, showRewardedAd, subscribeRewardedAdEvents } from "../services/ads";
 import { offerExitAction } from "../app/doubleOfferSettlement";
 import {
   beginInterstitialResultCycle,
@@ -86,7 +90,10 @@ import {
   runInterstitialCheckpoint,
   takeNextGameContext,
 } from "../services/ads/interstitialController";
-import { getRewardedArm, takeRewardedContinuation, upcomingOfferContext } from "../app/rewardedOfferCadence";
+import { addRunCoins, getRewardedArm, getRunInfo, runOfferBonus, takeRewardedContinuation, upcomingOfferContext } from "../app/rewardedOfferCadence";
+import { hasRunMinBonusLeftToday } from "../services/adDailyLimitsStore";
+import { recordDailyGoalGame } from "../services/dailyGoalStore";
+import DailyGoalChip from "../components/DailyGoalChip";
 import { commitClassicOfferRendered, decideClassicResultLane, expectedClassicRewardedPlacement } from "../services/ads/resultAdLane";
 import type { ClassicRewardedContent } from "../app/inkTrialPolicy";
 import InkTrialOffer, { type InkOfferContext } from "../components/InkTrialOffer";
@@ -474,9 +481,13 @@ function CategoryListScreen({
     return isCategoryAccessible(progress, category, unlockedCategoryIds);
   }
 
+  // 0.59.0: the price of the NEXT category by purchase order (1,000 / 1,250 / 1,500) - the same for every locked card.
+  const unlockPrice = nextCategoryUnlockPrice();
+
   function handleUnlockCategory(category: CategoryId) {
-    if (coins < CATEGORY_UNLOCK_COST) return;
-    spendCoins(CATEGORY_UNLOCK_COST, "category_unlock");
+    const price = nextCategoryUnlockPrice();
+    if (getCoins() < price) return;
+    spendCoins(price, "category_unlock");
     unlockCategory(category);
     setUnlockingCategory(category);
     window.setTimeout(() => {
@@ -485,6 +496,57 @@ function CategoryListScreen({
       setShowUnlockBanner(true);
       window.setTimeout(() => setShowUnlockBanner(false), 2000);
     }, 700);
+  }
+
+  // ---- 0.59.0 Category "Unlock Now" (app/unlockNow.ts): one LOADED coin-unit rewarded ad pays the exact shortfall
+  // (max 250) and the category unlocks at once. Once a day, Android only, remote flag coin.unlockNow (absent = OFF).
+  const anyLocked = getCategories().some((c) => !categoryAccessible(c.id) && unlockingCategory !== c.id);
+  const unlockNowEligible = isUnlockNowEligible({
+    android: isAndroidApp(),
+    flagOn: isUnlockNowOn(),
+    usedToday: isUnlockNowUsedToday(),
+    anyLocked,
+    price: unlockPrice,
+    coins,
+  });
+  const [, setAdTick] = useState(0);
+  const [unlockNowPending, setUnlockNowPending] = useState(false);
+  const [unlockNowNote, setUnlockNowNote] = useState<string | null>(null);
+  // Ad readiness changes outside React: re-render on every rewarded lifecycle event.
+  useEffect(() => subscribeRewardedAdEvents("category-unlock-now", () => setAdTick((t) => t + 1)), []);
+  useEffect(() => {
+    if (unlockNowEligible) void preloadRewardedAd("category_unlock_topup");
+  }, [unlockNowEligible]);
+  const unlockNowReady = unlockNowEligible && isRewardedAdReadyFor("category_unlock_topup");
+  const unlockNowShownRef = useRef(false);
+  useEffect(() => {
+    if (!unlockNowReady || unlockNowShownRef.current) return;
+    unlockNowShownRef.current = true;
+    trackEvent("reward_offer_shown", { placement: "category_unlock_topup" });
+  }, [unlockNowReady]);
+
+  async function handleUnlockNow(category: CategoryId) {
+    if (unlockNowPending) return;
+    playSelectSound();
+    setUnlockNowPending(true);
+    setUnlockNowNote(null);
+    trackEvent("reward_ad_started", { placement: "category_unlock_topup" });
+    const outcome = resolveAdOutcome(await showRewardedAd("category_unlock_topup"));
+    setUnlockNowPending(false);
+    if (outcome.grantSource === "ad") {
+      // Granted: the day's Unlock Now is used, the exact shortfall is credited and spent on this category at once.
+      recordUnlockNowUsed();
+      trackEvent("reward_ad_completed", { placement: "category_unlock_topup" });
+      const price = nextCategoryUnlockPrice();
+      const credit = unlockNowCredit(price, getCoins());
+      if (credit > 0) addCoins(credit, "ad_topup");
+      handleUnlockCategory(category);
+      return;
+    }
+    if (!outcome.dismissed) {
+      trackEvent("reward_ad_failed", { placement: "category_unlock_topup" });
+      setUnlockNowNote("The ad couldn’t play - nothing was charged.");
+    }
   }
 
   const totalUnlocked = getTotalCompletedCount(progress);
@@ -578,6 +640,17 @@ function CategoryListScreen({
         </div>
       )}
 
+      {anyLocked && (
+        <p className="category-price-note">
+          Next category: <strong>{unlockPrice.toLocaleString("en-US")} 🪙</strong>
+          <span className="category-price-ladder"> · 1st 1,000 · 2nd 1,250 · then 1,500</span>
+        </p>
+      )}
+      {unlockNowNote && (
+        <p className="category-price-note" role="status">
+          {unlockNowNote}
+        </p>
+      )}
       <div className="category-grid">
         {getCategories().map((category, index, categories) => {
           const shapes = getShapesForCategory(category.id);
@@ -587,7 +660,7 @@ function CategoryListScreen({
           const accessible = categoryAccessible(category.id);
           const isUnlocking = unlockingCategory === category.id;
           const showAsLocked = !accessible && !isUnlocking;
-          const canAffordUnlock = coins >= CATEGORY_UNLOCK_COST;
+          const canAffordUnlock = coins >= unlockPrice;
           return (
             <div key={category.id} className="category-card-wrapper">
               <button
@@ -625,15 +698,28 @@ function CategoryListScreen({
                 )}
                 {showAsLocked && <span className="category-card-lock-badge">🔒 Locked</span>}
               </button>
-              {showAsLocked && (
+              {showAsLocked && !canAffordUnlock && unlockNowReady ? (
                 <Button
                   variant="secondary"
-                  className="category-card-unlock-btn"
-                  disabled={!canAffordUnlock}
-                  onClick={() => handleUnlockCategory(category.id)}
+                  className="category-card-unlock-btn category-card-unlock-now"
+                  disabled={unlockNowPending}
+                  onClick={() => void handleUnlockNow(category.id)}
+                  aria-label={`Unlock ${category.name} now: watch an ad for the missing ${unlockPrice - coins} coins`}
                 >
-                  Unlock for {CATEGORY_UNLOCK_COST} 🪙
+                  <span className="unlock-now-main">{unlockNowPending ? "Loading ad…" : "🎬 Unlock now"}</span>
+                  <span className="unlock-now-sub">ad adds {unlockPrice - coins} 🪙</span>
                 </Button>
+              ) : (
+                showAsLocked && (
+                  <Button
+                    variant="secondary"
+                    className="category-card-unlock-btn"
+                    disabled={!canAffordUnlock}
+                    onClick={() => handleUnlockCategory(category.id)}
+                  >
+                    Unlock for {unlockPrice.toLocaleString("en-US")} 🪙
+                  </Button>
+                )
               )}
             </div>
           );
@@ -867,6 +953,8 @@ function ShapePlay({
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   /** Rewarded Ads Experiment v1: the arm and session context of the offer this result renders (null = no offer on this result). */
   const [rewardedOffer, setRewardedOffer] = useState<RewardedExperimentOffer | null>(null);
+  /** 0.59.0 daily goal: this result's progress chip (null = nothing to show: practice, or already paid today). */
+  const [dailyGoal, setDailyGoal] = useState<{ games: number; target: number; justCompleted: boolean } | null>(null);
   /** Coins this result earned when no offer is rendered - shown as a plain "+N coins" line. */
   const [plainCoinsAmount, setPlainCoinsAmount] = useState<number | null>(null);
   const plainCoinsRef = useRef<HTMLDivElement | null>(null);
@@ -1250,6 +1338,14 @@ function ShapePlay({
       });
       const offerAmount = applyShapeRoundOutcome(outcome, onProgressChange);
       earnedOfferFinalizeRef.current = null;
+      // 0.59.0 daily goal (optional, once per local day): every completed non-practice round counts. The chip shows
+      // until the goal pays, on that result once more ("+20"), and then stays away for the rest of the day.
+      if (!practice) {
+        const goal = recordDailyGoalGame();
+        setDailyGoal(goal.justCompleted || !goal.claimed ? goal : null);
+      } else {
+        setDailyGoal(null);
+      }
 
       // Practice rounds are reported, never suppressed - but under their own game
       // type and their own completion event, so they can never be counted as
@@ -1291,8 +1387,25 @@ function ShapePlay({
       // carries is the coin/ink rotation. A pending Try -> Buy CTA takes the screen first; the offer then stays due.
       let showCoinOffer = false;
       offerContentRef.current = null;
+      // 0.59.0 run A/B: this round's coins join the run first. On the "x3run" arm the offer is priced on the whole
+      // run (runOfferBonus) and may appear even when this round paid nothing, as long as the ad would add coins.
+      // The "x3" arm (and everyone while the flag is off) keeps the 0.58 rule: this round's coins, offered only if > 0.
+      let coinOfferBase = offerAmount;
+      let runBonus: RewardedExperimentOffer["runBonus"];
       if (!practice) {
-        const lane = decideClassicResultLane({ coinsEarned: offerAmount, canOfferAd: isRewardedAdAvailable() || isMathFallbackEnabled() });
+        addRunCoins(offerAmount);
+        if (getRewardedArm(isRunX3ExperimentOn()) === "x3run") {
+          const run = getRunInfo();
+          const priced = runOfferBonus(run.runCoins, hasRunMinBonusLeftToday());
+          coinOfferBase = run.runCoins;
+          // The game this result closes is about to be counted by the lane, so the run spans one more game.
+          runBonus = { ...priced, runGames: run.runGames + 1 };
+        }
+      }
+      if (!practice) {
+        // Eligibility ("did this result earn something an ad can multiply?") - for x3run, whether the ad adds coins.
+        const eligibleCoins = runBonus ? (runBonus.bonus > 0 ? Math.max(coinOfferBase, 1) : 0) : offerAmount;
+        const lane = decideClassicResultLane({ coinsEarned: eligibleCoins, canOfferAd: isRewardedAdAvailable() || isMathFallbackEnabled() });
         if (lane.kind === "offer") {
           offerContentRef.current = lane.content;
           const ifxCell = getInterstitialCellForAnalytics();
@@ -1301,7 +1414,8 @@ function ShapePlay({
           if (lane.content.kind === "coin") {
             showCoinOffer = true;
             setRewardedOffer({
-              arm: getRewardedArm(),
+              arm: getRewardedArm(isRunX3ExperimentOn()),
+              ...(runBonus ? { runBonus } : {}),
               ...context,
               interstitialArm,
               ...(ifxCell !== null ? { ifxCell } : {}),
@@ -1318,10 +1432,8 @@ function ShapePlay({
           setCtaDeferredInterstitial(lane.deferredInterstitial);
         }
       }
-      if (offerAmount > 0) {
-        if (showCoinOffer) setDoubleOfferAmount(offerAmount);
-        else setPlainCoinsAmount(offerAmount);
-      }
+      if (showCoinOffer) setDoubleOfferAmount(coinOfferBase);
+      else if (offerAmount > 0) setPlainCoinsAmount(offerAmount);
 
       setResult(scoreResult);
       setIsNewBest(outcome.isNewBest);
@@ -1437,8 +1549,11 @@ function ShapePlay({
         </div>
       ) : null;
 
+    const dailyGoalNode = dailyGoal ? <DailyGoalChip games={dailyGoal.games} target={dailyGoal.target} justCompleted={dailyGoal.justCompleted} /> : null;
+
     const notesNode = (
       <>
+        {dailyGoalNode}
         {!practice && !canGoToNextShape && nextIndex < shapes.length && (
           <p className="result-actions-note">Score {passScore}+ to unlock the next shape.</p>
         )}
@@ -1583,6 +1698,7 @@ function ShapePlay({
             <Button onClick={handleTryAgainFromResult}>Try Again</Button>
           )}
         </div>
+        {dailyGoalNode}
         {!practice && !canGoToNextShape && nextIndex < shapes.length && (
           <p className="result-actions-note">Score {passScore}+ to unlock the next shape.</p>
         )}

@@ -55,7 +55,8 @@ type ShopScreenProps = {
 // How long the tapped-from-pen-menu color card stays visually highlighted.
 const HIGHLIGHT_DURATION_MS = 1800;
 
-const PEN_COLOR_PRODUCTS = PEN_COLORS.filter((color) => color.id !== DEFAULT_PEN_COLOR);
+// Exclusive inks (0.59.0 Ember, the 30-day streak reward) are earned, never sold - they are not Shop products.
+const PEN_COLOR_PRODUCTS = PEN_COLORS.filter((color) => color.id !== DEFAULT_PEN_COLOR && !color.exclusive);
 
 type MegaPackProduct = {
   id: string;

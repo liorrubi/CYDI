@@ -6,6 +6,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import './styles/global.css'
+import './styles/streak.css'
 import { applyThemeMode, getThemeMode } from './services/themeStore'
 import { landingPageForPath } from './seo/landingPages'
 

@@ -45,6 +45,7 @@ import {
 } from "./interstitialConfig";
 import { getInterstitialControllerDebugInfo } from "./interstitialController";
 import { installInkTrialConfigObserver } from "./inkTrialConfig";
+import { installCoinOfferConfigObserver } from "./coinOfferConfig";
 import { isQaBuild } from "../analyticsIdentity";
 
 let interstitialResumeHookInstalled = false;
@@ -91,6 +92,8 @@ export async function initializeNativeAds(): Promise<void> {
 
   // 0.58.0: the Rewarded Ink Trial config rides this same response (its own `ink` key) - observed before the first fetch.
   installInkTrialConfigObserver();
+  // 0.59.0: the coin-offer flags (Classic x3 A/B, Category Unlock Now) ride it too, as `coin`. Absent = OFF.
+  installCoinOfferConfigObserver();
   void refreshInterstitialConfig();
   installInterstitialResumeRefresh();
   installInterstitialQaHook();

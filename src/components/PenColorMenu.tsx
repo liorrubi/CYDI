@@ -29,6 +29,13 @@ function ColorDropIcon() {
   );
 }
 
+/** The gradient inks have no single hex: their swatch is a CSS class instead. */
+function gradientSwatchClass(id: string): string | null {
+  if (id === "rainbow") return "pen-color-swatch-rainbow";
+  if (id === "ember") return "pen-color-swatch-ember";
+  return null;
+}
+
 /** Button that opens a menu of every pen ink color, including locked ones - tapping a locked color jumps straight to its shop product. Its trigger is tinted with the actual ink color plus a paint-drop icon, so it's clearly the "change ink color" control (as opposed to PenSkinMenu's "change pen style" control next to it). */
 export default function PenColorMenu({ selected, onSelect, onLockedColorClick, trial = null }: PenColorMenuProps) {
   const [open, setOpen] = useState(false);
@@ -42,7 +49,7 @@ export default function PenColorMenu({ selected, onSelect, onLockedColorClick, t
     <div className="pen-color-menu">
       <button
         type="button"
-        className={selectedOption.id === "rainbow" ? "pen-color-trigger pen-color-swatch-rainbow" : "pen-color-trigger"}
+        className={gradientSwatchClass(selectedOption.id) ? `pen-color-trigger ${gradientSwatchClass(selectedOption.id)}` : "pen-color-trigger"}
         style={selectedOption.hex ? { background: selectedOption.hex } : undefined}
         onClick={() => {
           playToggleSound();
@@ -58,6 +65,8 @@ export default function PenColorMenu({ selected, onSelect, onLockedColorClick, t
         <div ref={dropdownRef} className="pen-color-dropdown">
           {PEN_COLORS.map((color) => {
             const owned = isColorUnlocked(color.id);
+            // An exclusive ink (Ember, the 30-day streak reward) is never sold: it appears only once earned.
+            if (color.exclusive && !owned) return null;
             const onTrial = !owned && trial !== null && trial.ink === color.id;
             const unlocked = owned || onTrial;
             const classes = ["pen-color-option"];
@@ -82,9 +91,7 @@ export default function PenColorMenu({ selected, onSelect, onLockedColorClick, t
               >
                 <span
                   className={
-                    color.id === "rainbow"
-                      ? "pen-color-option-swatch pen-color-swatch-rainbow"
-                      : "pen-color-option-swatch"
+                    gradientSwatchClass(color.id) ? `pen-color-option-swatch ${gradientSwatchClass(color.id)}` : "pen-color-option-swatch"
                   }
                   style={color.hex ? { background: color.hex } : undefined}
                 />

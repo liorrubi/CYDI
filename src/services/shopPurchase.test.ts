@@ -47,7 +47,7 @@ function freshPlayer(coins = 50_000) {
 test("inkTrialBefore = none: a Trial ink bought with no Trial history", () => {
   freshPlayer();
   assert.equal(purchasePenColor("rainbow"), "purchased");
-  assert.deepEqual(purchases(), [{ productType: "penColor", tier: "rainbow", price: 10000, inkTrialBefore: "none" }]);
+  assert.deepEqual(purchases(), [{ productType: "penColor", tier: "rainbow", price: 6000, inkTrialBefore: "none" }]);
 });
 
 test("inkTrialBefore = active: bought while its Trial is running - and the purchase then closes that Trial", () => {
@@ -73,8 +73,8 @@ test("Diamond Blue carries its own canonical id; a non-Trial ink carries no inkT
   purchasePenColor("diamondBlue");
   purchasePenColor("purple");
   assert.deepEqual(purchases(), [
-    { productType: "penColor", tier: "diamondBlue", price: 15000, inkTrialBefore: "none" },
-    { productType: "penColor", tier: "purple", price: 1000 },
+    { productType: "penColor", tier: "diamondBlue", price: 9000, inkTrialBefore: "none" },
+    { productType: "penColor", tier: "purple", price: 750 },
   ]);
 });
 
@@ -132,7 +132,7 @@ test("a Trial ink's purchase reports how many +5 refills its Trial had received 
   }
   assert.equal(purchasePenColor("rainbow"), "purchased");
   const row = purchases().at(-1);
-  assert.deepEqual(row, { productType: "penColor", tier: "rainbow", price: 10000, inkTrialBefore: "active", inkRefill: 2 });
+  assert.deepEqual(row, { productType: "penColor", tier: "rainbow", price: 6000, inkTrialBefore: "active", inkRefill: 2 });
   assert.equal(validateEventParams("shop_purchase_with_coins", row).valid, true);
   _resetInkTrialConfigForTests({ config: null });
 });

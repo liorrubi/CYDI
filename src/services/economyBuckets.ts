@@ -103,7 +103,18 @@ export function spendOrdinal(nth: number | null): SpendOrdinal {
 }
 
 /** Every reason coins can be spent. Required by coinsStore.spendCoins - a spend without a sink does not compile. */
-export const COIN_SINKS = ["category_unlock", "mega_unlock", "mega_card_album", "mega_card_shop", "pen_color", "pen_skin", "chest_key", "special_retry"] as const;
+export const COIN_SINKS = [
+  "category_unlock",
+  "mega_unlock",
+  "mega_card_album",
+  "mega_card_shop",
+  "pen_color",
+  "pen_skin",
+  "chest_key",
+  "special_retry",
+  /** 0.59.0: a Streak Save bought in the streak view. Appended - list positions never move. */
+  "streak_save",
+] as const;
 export type CoinSink = (typeof COIN_SINKS)[number];
 
 /**
@@ -122,15 +133,24 @@ export const COIN_SOURCES = [
   "daily_chest",
   "chest_payout",
   "daily_prize",
+  /** 0.59.0: the Daily Drawing Streak's day reward. */
+  "daily_streak",
+  /** 0.59.0: the once-a-day "finish 5 Classic games" goal. */
+  "daily_goal",
+  /** 0.59.0: Category "Unlock Now" - the exact shortfall a rewarded ad pays, spent on the unlock at once. */
+  "ad_topup",
 ] as const;
 export type CoinSource = (typeof COIN_SOURCES)[number];
 
-/** The subset reported by the coin_earned event (sources no existing event carries). */
-export const COIN_EARNED_SOURCES = ["achievement", "daily_chest", "chest_payout", "daily_prize"] as const satisfies readonly CoinSource[];
+/** The subset reported by the coin_earned event (sources no existing event carries). Appended only. */
+export const COIN_EARNED_SOURCES = ["achievement", "daily_chest", "chest_payout", "daily_prize", "daily_streak", "daily_goal"] as const satisfies readonly CoinSource[];
 export type CoinEarnedSource = (typeof COIN_EARNED_SOURCES)[number];
 
-/** Once-per-player economy milestones (category_unlocked: once per paid category, max 11). */
-export const ECONOMY_MILESTONES = ["balance_1k_reached", "category_unlocked", "balance_10k_reached", "mega_unlocked"] as const;
+/**
+ * Once-per-player economy milestones (category_unlocked: once per paid category, max 11). 0.59.0 appends the
+ * first time a Daily streak reaches day 3 / 7 / 30.
+ */
+export const ECONOMY_MILESTONES = ["balance_1k_reached", "category_unlocked", "balance_10k_reached", "mega_unlocked", "streak_3", "streak_7", "streak_30"] as const;
 export type EconomyMilestone = (typeof ECONOMY_MILESTONES)[number];
 
 /** Analytics Engine stores buckets as 1-based positions in these lists (0 = absent). */

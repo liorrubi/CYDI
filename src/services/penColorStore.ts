@@ -42,5 +42,5 @@ export function setSelectedColor(id: PenColorId): void {
 export function hasAffordableUnpurchasedProduct(): boolean {
   const coins = getCoins();
   const unlocked = getUnlockedColors();
-  return PEN_COLORS.some((color) => color.id !== DEFAULT_PEN_COLOR && !unlocked.includes(color.id) && coins >= (color.price ?? 0));
+  return PEN_COLORS.some((color) => color.id !== DEFAULT_PEN_COLOR && !color.exclusive && !unlocked.includes(color.id) && coins >= (color.price ?? 0));
 }

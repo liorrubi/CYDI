@@ -21,7 +21,8 @@ test("no 3x / triple / tripled wording remains in the offer flow", () => {
 });
 
 test("the explicit-amount copy applies to the Classic offer on web too (not gated on the Android nudges)", () => {
-  assert.ok(code.includes("const isExplicitAmountOffer = experiment !== undefined || isBonusRound;"));
+  // 0.59.0: a capped paid-chest double also names concrete amounts (its bonus is held to +500).
+  assert.ok(code.includes("const isExplicitAmountOffer = experiment !== undefined || isBonusRound || isCapped;"));
   assert.ok(code.includes("(nudgesEnabled || isExplicitAmountOffer) && canAttemptDouble"), "headline");
   assert.ok(code.includes('isExplicitAmountOffer ? `KEEP ${amount} 🪙` : nudgesEnabled ?'), "keep label is platform-independent for the Classic offer");
   // Other placements keep their long-standing x2 copy.

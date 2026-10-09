@@ -48,6 +48,7 @@ import {
 } from "../src/content/catalogSchema";
 import { ADS_CONFIG_KV_KEY, isValidRemoteAdsConfig, parseRemoteAdsConfig } from "../src/services/ads/remoteAdsConfigSchema";
 import { INK_TRIAL_KV_KEY, isValidStoredInkTrialConfig, parseStoredInkTrialConfig, type InkTrialConfig } from "../src/services/ads/inkTrialConfigSchema";
+import { COIN_OFFER_KV_KEY, isValidStoredCoinOfferConfig, parseStoredCoinOfferConfig, type CoinOfferConfig } from "../src/services/ads/coinOfferConfigSchema";
 import {
   INTERSTITIAL_CONFIG_KV_KEY,
   INTERSTITIAL_EXPERIMENTS_KV_KEY,
@@ -620,9 +621,11 @@ export async function handleInterstitialConfigGet(request: Request, env: Env): P
     // `ink` (0.58.0+) rides the same response so no new request exists. Its own KV key and validator: it never
     // touches the base or `experiments`, and an absent/invalid value omits the key (= Ink OFF). 0.57 clients
     // ignore unknown top-level keys (parseInterstitialV3Body), so they are unaffected.
-    const [experiments, ink] = await Promise.all([readValidInterstitialExperiments(env), readValidInkTrialConfig(env)]);
+    // `coin` (0.59.0+): the coin-offer flags, same pattern - own key, own validator, omitted when absent/invalid (= OFF).
+    const [experiments, ink, coin] = await Promise.all([readValidInterstitialExperiments(env), readValidInkTrialConfig(env), readValidCoinOfferConfig(env)]);
     if (experiments !== null) body.experiments = experiments;
     if (ink !== null) body.ink = ink;
+    if (coin !== null) body.coin = coin;
   }
   return new Response(JSON.stringify(body), {
     headers: {
@@ -651,6 +654,34 @@ async function readValidInkTrialConfig(env: Env): Promise<InkTrialConfig | null>
   } catch {
     return null;
   }
+}
+
+/** Never throws and never 500s: a missing, unreadable or invalid coin-offer config means both flags OFF (key omitted). */
+async function readValidCoinOfferConfig(env: Env): Promise<CoinOfferConfig | null> {
+  try {
+    const raw = await env.CONTENT_KV.get(COIN_OFFER_KV_KEY);
+    return raw === null ? null : parseStoredCoinOfferConfig(raw);
+  } catch {
+    return null;
+  }
+}
+
+// The 0.59.0 coin-offer flags: their OWN key, served only as the `coin` key of the v3 interstitial config response.
+// A PUT replaces the whole object, validated strictly before anything is written (same admin gate as Ink). To switch
+// both OFF, PUT both false or delete the key.
+export async function handleCoinOfferConfigPut(request: Request, env: Env): Promise<Response> {
+  if (!isContentAdminAuthorized(request, env)) return jsonNoStore({ error: "unauthorized" }, 401);
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    return jsonNoStore({ error: "invalid json" }, 400);
+  }
+  if (!isValidStoredCoinOfferConfig(parsed)) {
+    return jsonNoStore({ error: "body must be exactly { version: 1-1000000, runX3: boolean, unlockNow: boolean }" }, 400);
+  }
+  await env.CONTENT_KV.put(COIN_OFFER_KV_KEY, JSON.stringify(parsed));
+  return jsonNoStore({ ok: true, coin: parsed });
 }
 
 // The Rewarded Ink Trial config (0.58.0+): its OWN key, served only as the `ink` key of the v3 interstitial config
@@ -1208,6 +1239,7 @@ export default {
     }
     if (url.pathname === "/api/config/ads/experiments" && request.method === "PUT") return handleInterstitialExperimentsPut(request, env);
     if (url.pathname === "/api/config/ads/ink" && request.method === "PUT") return handleInkTrialConfigPut(request, env);
+    if (url.pathname === "/api/config/ads/coin" && request.method === "PUT") return handleCoinOfferConfigPut(request, env);
 
     if (url.pathname === "/api/daily/current" && request.method === "GET") return forwardToDailyDO(request, env, "/current");
     if (url.pathname === "/api/daily/submit" && request.method === "POST") return forwardToDailyDO(request, env, "/submit");

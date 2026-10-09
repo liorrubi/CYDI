@@ -13,6 +13,7 @@ import { trackEvent } from "../services/analytics";
 import type { InterstitialCellId } from "../services/ads/interstitialConfigSchema";
 import type { RewardInterstitialArm, RewardOfferEconomy, RewardSkipStage } from "../services/analyticsSchema";
 import { rewardOfferContext } from "../services/economyAnalytics";
+import { recordRunMinBonusGranted } from "../services/adDailyLimitsStore";
 import { markDoubleRewardTutorialShown, shouldShowDoubleRewardTutorial } from "../services/tutorialStore";
 import { consumesDoubleAttempt, resolveAdOutcome } from "./doubleOfferAdFlow";
 import { createOfferSettlement } from "../app/doubleOfferSettlement";
@@ -46,6 +47,11 @@ export type RewardedExperimentOffer = {
   ifxCell?: InterstitialCellId;
   /** 0.58.0: what the Classic coin/ink rotation scheduled for this opportunity ("ink" here = the Ink -> Coin fallback). Absent while the rotation is off. */
   rotationSlot?: "coin" | "ink";
+  /**
+   * 0.59.0 "x3run" only: what the ad adds to the run's coins (`amount` = the run), from runOfferBonus, and how many
+   * Classic games the run spans (for the copy). `minApplied` = the flat minimum, which counts against its daily limit.
+   */
+  runBonus?: { bonus: number; minApplied: boolean; runGames: number };
 };
 
 type DoubleCoinsOfferProps = {
@@ -85,6 +91,11 @@ type DoubleCoinsOfferProps = {
   experiment?: RewardedExperimentOffer;
   /** Called once, when the offer is genuinely on screen (same moment as its offer_shown event). */
   onShown?: () => void;
+  /**
+   * 0.59.0: the most a ×2 may add (paid shop chests: PAID_CHEST_AD_BONUS_CAP). When the double would add more, the
+   * offer pays `amount + bonusCap` and its copy names that concrete total instead of "double".
+   */
+  bonusCap?: number;
 };
 
 type Phase = "offer" | "quiz" | "feedback";
@@ -134,7 +145,7 @@ export function isMathFallbackEnabled(): boolean {
  * once the cap is hit, the double option disappears and only the base reward remains
  * collectible, with the current count shown to the player.
  */
-export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted, deferExplainer = false, onRewardEarned, onSkipReporter, experiment, onShown }: DoubleCoinsOfferProps) {
+export default function DoubleCoinsOffer({ amount, onResolved, placement, remainingDoubles, onDoubleAttempted, deferExplainer = false, onRewardEarned, onSkipReporter, experiment, onShown, bonusCap }: DoubleCoinsOfferProps) {
   const [phase, setPhase] = useState<Phase>("offer");
   const [question] = useState(() => ({ a: randomFactor(), b: randomFactor() }));
   const [answer, setAnswer] = useState("");
@@ -167,10 +178,22 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   const multiplier = rewardMultiplier(isBonusRound);
   /** Experiment arm "x3" -> the round's coins x3 (the only live arm; "plus100" is retired but still priced correctly by rewardedFinalAmount). */
   const isX3Arm = experiment?.arm === "x3";
-  /** Classic offer or periodic bonus: the copy names concrete amounts instead of a multiplier. */
-  const isExplicitAmountOffer = experiment !== undefined || isBonusRound;
+  /** 0.59.0 "x3run": the run's coins plus runOfferBonus (never priced without it). */
+  const runBonus = experiment?.arm === "x3run" ? experiment.runBonus : undefined;
+  /** A ×2 whose bonus is held to `bonusCap` (paid chests, 0.59.0). */
+  const isCapped = !experiment && bonusCap !== undefined && amount * (multiplier - 1) > bonusCap;
+  /** Classic offer, periodic bonus or a capped double: the copy names concrete amounts instead of a multiplier. */
+  const isExplicitAmountOffer = experiment !== undefined || isBonusRound || isCapped;
   /** The total a confirmed rewarded-ad completion pays. */
-  const adFinalAmount = experiment ? rewardedFinalAmount(experiment.arm, amount) : amount * multiplier;
+  const adFinalAmount = runBonus
+    ? amount + runBonus.bonus
+    : experiment
+      ? rewardedFinalAmount(experiment.arm, amount)
+      : isCapped
+        ? amount + bonusCap!
+        : amount * multiplier;
+  /** The multiplier the funnel reports: x3 = 3, plus100 = 1 (flat), x3run = 3, or 1 when its flat minimum applied. */
+  const reportedMultiplier: 1 | 3 = runBonus ? (runBonus.minApplied ? 1 : 3) : isX3Arm ? 3 : 1;
   /** What actually gets PAID. The 3× is reserved for a confirmed rewarded-ad
    *  completion, so the dev-only math route always settles at the standard ×2
    *  (for an experiment offer it mirrors the arm, so the dev flow shows the real value). */
@@ -236,8 +259,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   const offerParams = () => {
     if (!economyRef.current) {
       economyRef.current = experiment
-        ? rewardOfferContext(amount, isX3Arm ? 3 : 1, isRewardedAdAvailable(), adFinalAmount - amount)
-        : rewardOfferContext(amount, multiplier as 2 | 3, isRewardedAdAvailable());
+        ? rewardOfferContext(amount, reportedMultiplier, isRewardedAdAvailable(), adFinalAmount - amount)
+        : rewardOfferContext(amount, multiplier as 2 | 3, isRewardedAdAvailable(), adFinalAmount - amount);
     }
     if (!economyRef.current) return { placement };
     if (!experiment) return { placement, ...economyRef.current };
@@ -357,6 +380,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
       // The player did the thing the nudge was for - the skip streak starts over.
       recordRewardGranted();
       recordOutcome("completed");
+      // A flat x3run minimum counts against its daily limit only once actually granted.
+      if (runBonus?.minApplied) recordRunMinBonusGranted();
       trackEvent(isBonusRound ? "reward_bonus_ad_completed" : "reward_ad_completed", funnelParams());
       const finalAmount = adFinalAmount;
       onRewardEarned?.(() => settlement.settle({ granted: true, finalAmount }, anchorRef.current));
@@ -403,8 +428,12 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
   // included - the ad itself only adds M - N). No multiplier wording anywhere in that flow. Every
   // other placement keeps its long-standing ×2 "double" copy.
   const offerQuestion = "double it?";
-  const watchLabel = isExplicitAmountOffer ? `WATCH AD FOR ${adFinalAmount} 🪙` : "🎬 Watch Ad to Double";
-  const keepLabel = isExplicitAmountOffer ? `KEEP ${amount} 🪙` : nudgesEnabled ? `Keep ${amount}` : "Skip";
+  // x3run with nothing earned in the run yet (the flat minimum): nothing to keep, so the copy names only the bonus.
+  const minOnly = runBonus !== undefined && amount <= 0;
+  const watchLabel = minOnly ? `WATCH AD FOR +${adFinalAmount} 🪙` : isExplicitAmountOffer ? `WATCH AD FOR ${adFinalAmount} 🪙` : "🎬 Watch Ad to Double";
+  const keepLabel = minOnly ? "NO THANKS" : isExplicitAmountOffer ? `KEEP ${amount} 🪙` : nudgesEnabled ? `Keep ${amount}` : "Skip";
+  // x3run names the run it pays on ("your last 5 drawings") - a single-game run reads like the round offer.
+  const runPhrase = runBonus && runBonus.runGames > 1 ? `Your last ${runBonus.runGames} drawings earned ${amount} coins` : `You earned ${amount} coins`;
   const tutorialText = isExplicitAmountOffer
     ? `Watch a short ad to get ${adFinalAmount} 🪙 instead of ${amount} - completely optional.`
     : `Watch a short ad to get ${multiplier}× coins - completely optional.`;
@@ -422,15 +451,19 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
           {/* Android only: spell out the concrete before/after amounts, both derived
               from the real `amount` prop - never hard-coded. `nudgesEnabled` is false
               on web, so the website always renders the original line. */}
-          {(nudgesEnabled || isExplicitAmountOffer) && canAttemptDouble ? (
+          {minOnly && canAttemptDouble ? (
+            <p className="double-offer-headline">🎁 Watch a short ad for +{adFinalAmount} coins</p>
+          ) : (nudgesEnabled || isExplicitAmountOffer) && canAttemptDouble ? (
             <p className="double-offer-headline">
-              🪙 You earned {amount} coins - watch an ad to get {adFinalAmount}
+              🪙 {runBonus ? runPhrase : `You earned ${amount} coins`} - watch an ad to get {adFinalAmount}
             </p>
           ) : (
             <p className="double-offer-headline">
-              {canAttemptDouble
-                ? `🪙 +${amount} coins - ${offerQuestion}`
-                : `🪙 You earned ${amount} Coins`}
+              {minOnly
+                ? "🎁 Bonus coins aren’t available right now"
+                : canAttemptDouble
+                  ? `🪙 +${amount} coins - ${offerQuestion}`
+                  : `🪙 You earned ${amount} Coins`}
             </p>
           )}
           {showTutorial && (

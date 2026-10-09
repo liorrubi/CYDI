@@ -69,9 +69,32 @@ export function drawRainbowStroke(ctx: CanvasRenderingContext2D, points: Point[]
   }
 }
 
+/** Ember Ink (0.59.0, the 30-day Daily streak reward): like Rainbow, but the hue swings within a warm red -> gold band. */
+export function drawEmberStroke(ctx: CanvasRenderingContext2D, points: Point[], lineWidth = 5) {
+  if (points.length < 2) return;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = lineWidth;
+  ctx.setLineDash([]);
+  for (let i = 1; i < points.length; i++) {
+    // A triangle wave over 0..40 degrees (red -> orange -> gold and back), stepping per point like Rainbow.
+    const phase = (i * 2) % 80;
+    const hue = phase <= 40 ? phase : 80 - phase;
+    ctx.strokeStyle = `hsl(${hue}, 92%, ${50 + hue / 8}%)`;
+    ctx.beginPath();
+    ctx.moveTo(points[i - 1].x, points[i - 1].y);
+    ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+  }
+}
+
 function drawUserStroke(ctx: CanvasRenderingContext2D, points: Point[], color: PenColorId) {
   if (color === "rainbow") {
     drawRainbowStroke(ctx, points);
+    return;
+  }
+  if (color === "ember") {
+    drawEmberStroke(ctx, points);
     return;
   }
   drawStroke(ctx, points, PEN_COLORS.find((c) => c.id === color)?.hex ?? "#1e202e");

@@ -28,6 +28,8 @@ export const REWARDED_AD_PLACEMENTS = [
   "play_together_ink_trial",
   /** 0.58.0 Rewarded Ink Trial: 2 Players' setup screen, after a completed game. */
   "two_players_ink_trial",
+  /** 0.59.0 Category "Unlock Now": one rewarded ad pays the exact shortfall (max 250) and unlocks the category. Coin unit. */
+  "category_unlock_topup",
 ] as const;
 
 export type RewardedAdPlacement = (typeof REWARDED_AD_PLACEMENTS)[number];

@@ -59,6 +59,25 @@ export type SaveData = {
     };
     /** Timestamp (ms since epoch) each purchased chest tier becomes buyable again; absent/past = available. Shop-only, unrelated to the free Daily Chest. */
     shopChestCooldowns: Partial<Record<ChestTierId, number>>;
+    /**
+     * 0.59.0 Daily Drawing Streak (completing the Daily Challenge; Israel calendar day, the Daily's own clock).
+     * Optional: saves from older builds have none - read through drawingStreakStore.ts, which normalizes it.
+     * Separate from `dailyStreak` (app visits), which keeps driving the visit-streak achievements unchanged.
+     */
+    drawingStreak?: {
+      /** Israel date (YYYY-MM-DD) of the last Daily completion that counted; "" = never. */
+      lastDay: string;
+      current: number;
+      best: number;
+      /** Streak Saves held (0-2): each covers one missed day automatically. */
+      saves: number;
+      /** The Day-30 Ember Ink was already granted (once per player). */
+      emberGranted: boolean;
+    };
+    /** 0.59.0 daily goal: Classic games finished on `date` (local calendar day) and whether its coins were paid. */
+    dailyGoal?: { date: string; games: number; claimed: boolean };
+    /** 0.59.0 per-local-day Rewarded limits: Category Unlock Now (once a day) and x3run minimum-only grants (3 a day). */
+    adLimits?: { date: string; unlockNowUsed: boolean; minBonusGrants: number };
     successfulDrawings: number;
     completedRounds: number;
     /** `completedRounds` as of the last 3× bonus that was actually settled. The next

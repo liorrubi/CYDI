@@ -46,6 +46,33 @@ export const PLUS_BONUS_COINS = 100;
 export const REWARDED_CADENCE_KEY = "cydi.rewardedCadence.v1";
 const ASSIGNMENT_SALT = "rewarded-value-v1";
 
+// --- 0.59.0: the accumulated ("run") ×3 A/B --------------------------------------------------
+// While the remote flag `coin.runX3` is on, installations split 50/50 (own salt) between today's "x3" (×3 of THIS
+// round) and "x3run": the offer triples the Classic coins of the whole run since the last rendered offer. The ad
+// adds 2 × run, at most RUN_BONUS_MAX; when that is under RUN_BONUS_MIN the ad adds a flat RUN_BONUS_MIN instead,
+// at most RUN_MIN_GRANTS_PER_DAY granted times a local day (adDailyLimitsStore.ts). Flag off = everyone "x3".
+// The run is the same window as the cadence: it restarts whenever an offer (coin OR Ink) is rendered.
+
+export const RUN_BONUS_MIN = 50;
+export const RUN_BONUS_MAX = 400;
+export const RUN_MIN_GRANTS_PER_DAY = 3;
+const RUN_ASSIGNMENT_SALT = "rewarded-run-v1";
+
+/** The x3run bonus for a run of `runCoins` coins. `minAvailable` = a minimum grant is still left today. */
+export function runOfferBonus(runCoins: number, minAvailable: boolean): { bonus: number; minApplied: boolean } {
+  const run = Number.isFinite(runCoins) ? Math.max(0, Math.round(runCoins)) : 0;
+  const tripled = Math.min(2 * run, RUN_BONUS_MAX);
+  if (tripled >= RUN_BONUS_MIN) return { bonus: tripled, minApplied: false };
+  if (minAvailable) return { bonus: RUN_BONUS_MIN, minApplied: true };
+  return { bonus: tripled, minApplied: false };
+}
+
+/** 50/50 by installation, stable, its own salt (never the retired value split or the interstitial/Ink buckets). */
+export function assignRunArm(installationId: string | null): RewardedArm {
+  if (installationId === null) return "x3";
+  return fnv1a(`${RUN_ASSIGNMENT_SALT}:${installationId}`) % 2 === 0 ? "x3" : "x3run";
+}
+
 // --- Assignment --------------------------------------------------------------------------
 
 function fnv1a(input: string): number {
@@ -73,10 +100,12 @@ export type CadenceState = {
   offersShown: number;
   /** Eligible completed games in this session - telemetry only (heavy-user analysis). */
   sessionGames: number;
+  /** 0.59.0: Classic coins earned since the last rendered offer (the x3run base). Absent on older stored states = 0. */
+  runCoins?: number;
 };
 
 export function freshState(sessionId: string): CadenceState {
-  return { sessionId, gamesSinceLastOffer: 0, offersShown: 0, sessionGames: 0 };
+  return { sessionId, gamesSinceLastOffer: 0, offersShown: 0, sessionGames: 0, runCoins: 0 };
 }
 
 /** The state for `sessionId`: a stored state from another session is replaced by a fresh one. */
@@ -97,7 +126,7 @@ export function afterGameCompleted(state: CadenceState): CadenceState {
 }
 
 export function afterOfferShown(state: CadenceState): CadenceState {
-  return { ...state, gamesSinceLastOffer: 0, offersShown: state.offersShown + 1 };
+  return { ...state, gamesSinceLastOffer: 0, offersShown: state.offersShown + 1, runCoins: 0 };
 }
 
 export type ResultOfferDecision = "show" | "pending_interstitial" | "pending_no_coins" | "pending_no_ad" | "not_due";
@@ -118,7 +147,8 @@ export function decideResultOffer(input: { due: boolean; interstitialDue: boolea
 
 /** Total coins the player ends up with if the ad is completed. */
 export function rewardedFinalAmount(arm: RewardedArm, baseCoins: number): number {
-  return arm === "x3" ? baseCoins * X3_MULTIPLIER : baseCoins + PLUS_BONUS_COINS;
+  // "x3run" is priced by runOfferBonus at the offer; without that context it reads as a plain ×3.
+  return arm === "plus100" ? baseCoins + PLUS_BONUS_COINS : baseCoins * X3_MULTIPLIER;
 }
 
 /** The coins the ad itself adds (what Rewarded injects into the economy). */
@@ -155,7 +185,8 @@ let installationIdSource: () => string | null = () => getPersistedInstallationId
 function isCadenceState(v: unknown): v is CadenceState {
   if (!v || typeof v !== "object") return false;
   const s = v as Record<string, unknown>;
-  return typeof s.sessionId === "string" && [s.gamesSinceLastOffer, s.offersShown, s.sessionGames].every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0);
+  const runOk = s.runCoins === undefined || (typeof s.runCoins === "number" && Number.isFinite(s.runCoins) && s.runCoins >= 0);
+  return runOk && typeof s.sessionId === "string" && [s.gamesSinceLastOffer, s.offersShown, s.sessionGames].every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0);
 }
 
 function load(): CadenceState {
@@ -178,9 +209,26 @@ function save(state: CadenceState): void {
   storage.set(JSON.stringify(state));
 }
 
-/** The arm the Classic offer runs on. Always "x3": the +100 arm was retired in 0.57.0. */
-export function getRewardedArm(): RewardedArm {
-  return "x3";
+/**
+ * The arm the Classic offer runs on: "x3", or - while the 0.59.0 run A/B is switched on (the caller passes the remote
+ * flag, coinOfferConfig.isRunX3ExperimentOn, so this module stays free of any config/interstitial import) - this
+ * installation's stable "x3" / "x3run" assignment.
+ */
+export function getRewardedArm(runExperimentOn = false): RewardedArm {
+  return runExperimentOn ? assignRunArm(installationIdSource()) : "x3";
+}
+
+/** 0.59.0: a scored Classic round credited `coins` - they join the current run (no-op for 0). */
+export function addRunCoins(coins: number): void {
+  if (!(coins > 0)) return;
+  const state = load();
+  save({ ...state, runCoins: (state.runCoins ?? 0) + Math.round(coins) });
+}
+
+/** The current run: its coins and how many Classic games it spans (both restart with every rendered offer). */
+export function getRunInfo(): { runCoins: number; runGames: number } {
+  const state = load();
+  return { runCoins: state.runCoins ?? 0, runGames: state.gamesSinceLastOffer };
 }
 
 /** What the retired 50/50 hash assignment would give this installation. Reference/tests only - nothing live calls it. */

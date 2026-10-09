@@ -182,7 +182,12 @@ export type RewardOfferEconomy = {
  * Rewarded Ads Experiment v1 (src/app/rewardedOfferCadence.ts): the two arms differ only in
  * reward value - "x3" triples the round's coins, "plus100" adds a flat 100.
  */
-export const REWARD_EXPERIMENT_ARMS = ["x3", "plus100"] as const;
+/**
+ * "x3run" (0.59.0): the Classic offer triples the coins of the whole RUN since the last rendered offer (bonus 2 x
+ * run, min +50 for at most 3 grants a day, max +400) - the accumulated arm of the 0.59.0 A/B against "x3".
+ * Appended: the stored arm is a string, history keeps decoding.
+ */
+export const REWARD_EXPERIMENT_ARMS = ["x3", "plus100", "x3run"] as const;
 export type RewardExperimentArm = (typeof REWARD_EXPERIMENT_ARMS)[number];
 export type RewardOfferOutcome = "completed" | "skipped" | "failed";
 const REWARD_OFFER_OUTCOMES: readonly RewardOfferOutcome[] = ["completed", "skipped", "failed"];
@@ -1274,8 +1279,9 @@ function validateRewardOfferEvent<
   }
   const { arm, offerNumber, sessionGames, bonusCoins, interstitialArm } = p;
   if (!isOneOf(REWARD_EXPERIMENT_ARMS, arm) || !isOneOf(REWARD_INTERSTITIAL_ARMS, interstitialArm)) return { valid: false };
-  // The multiplier must agree with the arm: x3 advertises 3, plus100 is a flat bonus (1).
-  if (multiplier !== (arm === "x3" ? 3 : 1)) return { valid: false };
+  // The multiplier must agree with the arm: x3 advertises 3, plus100 is a flat bonus (1); x3run (0.59.0) is 3, or 1
+  // when its flat +50 minimum applied.
+  if (arm === "x3run" ? multiplier !== 3 && multiplier !== 1 : multiplier !== (arm === "x3" ? 3 : 1)) return { valid: false };
   if (!isIntInRange(offerNumber, 1, MAX_OFFER_NUMBER) || !isIntInRange(sessionGames, 0, MAX_SESSION_GAMES) || !isIntInRange(bonusCoins, 1, MAX_ECONOMY_COINS)) return { valid: false };
   if (withIfxCell && (!isOneOf(INTERSTITIAL_CELL_IDS, p.ifxCell) || interstitialArm === "none")) return { valid: false };
   return { valid: true, params: { ...economy, arm, offerNumber, sessionGames, bonusCoins, interstitialArm, ...(withIfxCell ? { ifxCell: p.ifxCell as InterstitialCellId } : {}) } as EventParamsMap[E] };

@@ -68,7 +68,8 @@ test("M1: `ink` rides the v3 body only; legacy and ?v=2 bodies are unchanged by 
   assert.deepEqual(body.ink, INK);
   const { ink: _ink, ...rest } = body;
   assert.deepEqual(rest, before.v3, "v3 = the 0.57 body + ink, nothing else changes");
-  assert.equal(v3.reads, 3);
+  // base + experiments + ink + (0.59.0) the coin-offer flags - still one request.
+  assert.equal(v3.reads, 4);
   // A 0.57 client parses it exactly as before (unknown top-level keys are ignored).
   const parsed = interstitial.parseInterstitialV3Body(body);
   assert.ok(parsed && parsed.experiment !== null);

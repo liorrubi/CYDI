@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { rollChestReward } from "../app/constants";
+import { PAID_CHEST_AD_BONUS_CAP, rollChestReward } from "../app/constants";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playAchievementUnlockedSound } from "../engine/soundEngine";
 import { addCoins } from "../services/coinsStore";
@@ -111,6 +111,8 @@ export default function ChestRewardOverlay({
             placement={isPaidChest ? "shop_double_reward" : "daily_chest_bonus"}
             remainingDoubles={remainingDoubles}
             onDoubleAttempted={isPaidChest ? recordPaidChestDoubleUsed : undefined}
+            // 0.59.0: a paid chest's ad adds its payout again, but at most +500 (the free Daily Chest stays a full ×2).
+            bonusCap={isPaidChest ? PAID_CHEST_AD_BONUS_CAP : undefined}
           />
         )}
       </div>

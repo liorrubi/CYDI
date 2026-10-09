@@ -36,6 +36,7 @@ export {
   subscribeRewardedAdEvents,
   isRewardedAdAvailable,
   isRewardedAdReady,
+  isRewardedAdReadyFor,
   isRewardedUnitConfigured,
   preloadRewardedAd,
   showRewardedAd,

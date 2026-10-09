@@ -20,6 +20,8 @@ import {
   toSpecialChallenge,
 } from "../app/routes";
 import { shareChallenge } from "../services/challengeShare";
+import StreakFlame from "../components/StreakFlame";
+import { getStreakView } from "../services/drawingStreakStore";
 import { CreateIcon, DailyIcon, GroupIcon, SavedIcon, ShopIcon, TwoPlayersIcon } from "../app/appIcons";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
 import { getShapeById } from "../content/contentRepository";
@@ -136,6 +138,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const bestScores = onWeb ? [] : Object.values(getProgress().bestScores);
   const personalBest = bestScores.length > 0 ? Math.max(...bestScores) : null;
   const savedChallenges = onWeb ? 0 : getChallenges().length;
+  // 0.59.0: the Daily tile carries the Daily Drawing Streak (a synchronous save read - Home still paints in one pass).
+  const streak = onWeb ? null : getStreakView();
 
   /*
    * Classic's mark: ONE real catalog shape, drawn by the game's own renderer.
@@ -246,7 +250,14 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </span>
           <span className="app-tile-text">
             <span className="app-tile-name">Daily</span>
-            <span className="app-tile-sub">One shape a day</span>
+            {streak && streak.current > 0 ? (
+              <span className={`app-tile-sub app-tile-streak${streak.doneToday ? " app-tile-streak-done" : ""}`}>
+                <StreakFlame lit={streak.doneToday} size={14} />
+                {streak.current}-day streak
+              </span>
+            ) : (
+              <span className="app-tile-sub">One shape a day</span>
+            )}
           </span>
         </button>
         <button type="button" className="app-tile" onClick={() => handleSelect(toCreate())}>

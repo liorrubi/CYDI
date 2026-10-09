@@ -33,6 +33,7 @@ import {
   type CoinSource,
   type NextTarget,
 } from "./economyBuckets";
+import { getPaidCategoryPurchaseCount, nextCategoryUnlockPrice } from "./categoryUnlockStore";
 import { isMegaChallengeUnlocked } from "./megaChallengeStore";
 import { getSaveData } from "./saveStore";
 import { getCategoryCompletedCount, getProgress } from "./shapeChallengeProgress";
@@ -52,6 +53,10 @@ export const COIN_SOURCE_REPORTING: Record<CoinSource, "game_completed" | "rewar
   daily_chest: "coin_earned",
   chest_payout: "coin_earned",
   daily_prize: "coin_earned",
+  daily_streak: "coin_earned",
+  daily_goal: "coin_earned",
+  // Spent on the category unlock in the same tick; the rewarded funnel (placement category_unlock_topup) carries it.
+  ad_topup: "reward_ad_completed",
 };
 
 /** Every coin SINK is a coin_spent; the two progression unlocks also emit a progression_milestone. */
@@ -64,6 +69,7 @@ export const COIN_SINK_REPORTING: Record<CoinSink, "coin_spent" | "coin_spent+pr
   pen_skin: "coin_spent",
   chest_key: "coin_spent",
   special_retry: "coin_spent",
+  streak_save: "coin_spent",
 };
 
 // ------------------------------------------------------------------ state ----
@@ -79,14 +85,14 @@ type EconomyState = {
   spendHistoryComplete: boolean;
   reached1k: boolean;
   reached10k: boolean;
+  /** 0.59.0: Daily-streak milestones (3 / 7 / 30) already reported - once per player each. Absent on older states. */
+  streakMilestones?: number[];
 };
 
 let memoryState: EconomyState | null = null;
 
-function paidCategoryCount(): number {
-  const first = getCategories()[0]?.id;
-  return (getSaveData().progress.unlockedCategories as string[]).filter((id) => id !== first).length;
-}
+/** Same count the category price reads (categoryUnlockStore), so the purchase ordinal and the price can never disagree. */
+const paidCategoryCount = getPaidCategoryPurchaseCount;
 
 function freshState(now: number): EconomyState {
   const progress = getSaveData().progress;
@@ -173,7 +179,7 @@ export function nextEconomyTarget(): { target: NextTarget; price: number | null 
   const unlocked = getSaveData().progress.unlockedCategories as string[];
   const [first, ...paid] = getCategories();
   const anyLockedCategory = paid.some((c) => c.id !== first?.id && !unlocked.includes(c.id) && getCategoryCompletedCount(progress, c.id) === 0);
-  if (anyLockedCategory) return { target: "category", price: CATEGORY_UNLOCK_COST };
+  if (anyLockedCategory) return { target: "category", price: nextCategoryUnlockPrice() };
   if (!isMegaChallengeUnlocked()) return { target: "mega", price: MEGA_CHALLENGE_UNLOCK_COST };
   return { target: "none", price: null };
 }
@@ -298,6 +304,22 @@ export function onCoinsSpent(sink: CoinSink, price: number, balanceAfter: number
     saveState();
   } catch {
     /* analytics never breaks a purchase */
+  }
+}
+
+/** The Daily Drawing Streak reached `day`: the first time ever at 3, 7 and 30 days, report it (exact, once each). */
+export function onStreakDayReached(day: number): void {
+  try {
+    const milestone = day === 3 ? "streak_3" : day === 7 ? "streak_7" : day === 30 ? "streak_30" : null;
+    if (milestone === null) return;
+    const state = loadState();
+    const reported = state.streakMilestones ?? [];
+    if (reported.includes(day)) return;
+    state.streakMilestones = [...reported, day];
+    emitMilestone(milestone, 0, currentBalance(), state);
+    saveState();
+  } catch {
+    /* analytics never breaks the streak */
   }
 }
 

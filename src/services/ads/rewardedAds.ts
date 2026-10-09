@@ -289,6 +289,15 @@ export function isRewardedAdReady(): boolean {
   return state === "ready";
 }
 
+/**
+ * 0.59.0: a rewarded ad for THIS placement's unit is loaded and can be shown at once - for an offer that must never
+ * promise a reward it cannot deliver (Category Unlock Now appears only then). A ready ad of the other unit is not one.
+ */
+export function isRewardedAdReadyFor(placement: RewardedAdPlacement): boolean {
+  refreshLifecycle();
+  return state === "ready" && loadUnit === rewardedUnitFor(placement);
+}
+
 /** The current lifecycle state, for the tap's diagnostics and QA. */
 export function getRewardedLifecycleState(): RewardedTapState {
   refreshLifecycle();

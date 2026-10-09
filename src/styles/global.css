@@ -921,6 +921,11 @@ body {
   background: conic-gradient(red, orange, yellow, green, blue, violet, red);
 }
 
+/* 0.59.0 Ember Ink (30-day Daily streak reward): the red -> orange -> gold band its strokes cycle through. */
+.pen-color-swatch-ember {
+  background: conic-gradient(#dc2626, #f97316, #f59e0b, #f97316, #dc2626);
+}
+
 .pen-color-dropdown {
   position: absolute;
   top: calc(100% + var(--space-2));

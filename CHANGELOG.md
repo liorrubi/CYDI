@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.59.0 - 2026-10-09
+
+Android 0.59.0 (versionCode 67) and web 0.59.0. Coins you already have, and everything you already own, stay exactly as they are.
+
+- **Daily Drawing Streak:** play the Daily Challenge on consecutive days to build a streak. Every day pays a few
+  coins, with bigger rewards on days 3, 7, 14 and 30, and a new exclusive **Ember Ink** for your first 30-day
+  streak. Tap the flame on the Daily screen to see your streak. A **Streak Save** (earned along the way, or
+  300 coins) covers a missed day automatically.
+- **Daily goal:** finish 5 Classic drawings in a day for a +20 coin bonus. It's optional, and progress shows
+  quietly on the result screen.
+- **New prices:** Purple, Green and Orange Ink now cost 750, Rainbow Ink 6,000 and Diamond Blue 9,000.
+  Categories are priced by how many you've unlocked: 1,000 for your first, 1,250 for the second and 1,500 after
+  that - the price is shown on the map.
+- **Paid chests:** watching an ad to double a paid chest now adds up to 500 coins. The free Daily Chest still
+  doubles in full.
+- **Built in but switched off for now:** a richer coin offer after Classic games and an "Unlock now" ad for a
+  category you're just short of. Both are turned on from the server later and change nothing until then.
+- **A few bounded usage numbers on existing events (no new identifiers, permissions or SDKs):** streak coins,
+  the daily-goal bonus, Streak Save purchases and the first time a streak reaches 3, 7 and 30 days.
+
 ## 0.58.0 - 2026-10-08
 
 Android 0.58.0 (versionCode 59) and web 0.58.0. Nothing changes for players until it is switched on: the new ink trial ships turned off, and the ad frequency stays exactly as it is today.

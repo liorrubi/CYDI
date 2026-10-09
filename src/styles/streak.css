@@ -1,0 +1,417 @@
+/* ======================================================================
+ * 0.59.0  Daily Drawing Streak, daily goal, category prices / Unlock Now.
+ * Tokens only (light, dark and the Android skin all follow). Every motion
+ * is short and decorative; none of it runs under prefers-reduced-motion.
+ * ====================================================================== */
+
+/* --- flame mark --- */
+.streak-flame {
+  flex: none;
+  display: inline-block;
+  vertical-align: middle;
+  color: var(--color-text-muted);
+}
+.streak-flame-animated {
+  transform-origin: 50% 90%;
+  animation: streak-flicker 2.6s ease-in-out infinite;
+}
+@keyframes streak-flicker {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  30% {
+    transform: scale(1.04, 0.97) rotate(-2deg);
+  }
+  60% {
+    transform: scale(0.97, 1.04) rotate(1.5deg);
+  }
+}
+
+/* --- chip (Daily status line) --- */
+.streak-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 32px;
+  padding: 3px 10px 3px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-card);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.streak-chip-lit {
+  border-color: rgba(249, 115, 22, 0.45);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.14), rgba(249, 115, 22, 0.14));
+}
+.streak-chip-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- on-demand sheet --- */
+.streak-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(15, 16, 26, 0.45);
+  animation: streak-fade 160ms ease-out;
+}
+.streak-sheet {
+  position: relative;
+  width: min(100%, 440px);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--color-card);
+  color: var(--color-text);
+  box-shadow: 0 -8px 32px rgba(15, 16, 26, 0.25);
+  animation: streak-rise 220ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+@media (min-width: 560px) {
+  .streak-sheet-backdrop {
+    align-items: center;
+  }
+  .streak-sheet {
+    border-radius: var(--radius-lg);
+  }
+}
+@keyframes streak-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes streak-rise {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+.streak-sheet-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+.streak-sheet-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+}
+.streak-sheet-title {
+  margin: 6px 0 0;
+  font-size: 1.45rem;
+}
+.streak-sheet-status {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+.streak-sheet-best {
+  margin: 2px 0 0;
+  color: var(--accent-orange-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* milestone track: five evenly spaced dots; the line runs between the first and last dot centres */
+.streak-track {
+  position: relative;
+  margin: var(--space-5) 0 var(--space-3);
+}
+.streak-track-line {
+  position: absolute;
+  top: 11px;
+  left: 10%;
+  right: 10%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+.streak-track-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f97316, #fbbf24);
+  transition: width 400ms ease-out;
+}
+.streak-track-nodes {
+  position: relative;
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.streak-node {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  text-align: center;
+}
+.streak-node-dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  background: var(--color-card);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.streak-node-reached .streak-node-dot {
+  border-color: transparent;
+  background: linear-gradient(135deg, #f97316, #fbbf24);
+}
+.streak-node-next .streak-node-dot {
+  border-color: #f97316;
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.15);
+}
+.streak-node-day {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.streak-node-reward {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+.streak-ember-swatch {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  vertical-align: -1px;
+  margin-right: 3px;
+}
+.streak-next-line {
+  margin: var(--space-3) 0 0;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* saves */
+.streak-saves {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.streak-saves-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.streak-saves-icons {
+  display: inline-flex;
+  gap: 2px;
+}
+.streak-save-icon {
+  font-size: 1.15rem;
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+.streak-save-icon-held {
+  filter: none;
+  opacity: 1;
+}
+.streak-saves-text {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+.streak-save-buy {
+  min-height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.streak-save-buy:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* --- Daily result card --- */
+.streak-day-card {
+  width: 100%;
+  max-width: 420px;
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(249, 115, 22, 0.08));
+  color: var(--color-text);
+  animation: streak-pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+.streak-day-card-milestone {
+  border-color: #f59e0b;
+  animation:
+    streak-pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3),
+    streak-glow 1.4s ease-out 420ms 2;
+}
+@keyframes streak-pop {
+  0% {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+}
+@keyframes streak-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(245, 158, 11, 0);
+  }
+}
+.streak-day-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.streak-day-text {
+  flex: 1;
+  min-width: 0;
+}
+.streak-day-title {
+  margin: 0;
+  font-weight: 800;
+  font-size: 1rem;
+}
+.streak-day-sub,
+.streak-day-note {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+.streak-day-coins {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+.streak-day-view {
+  display: block;
+  margin: var(--space-2) 0 0 auto;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  color: var(--accent-orange-text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* --- Android Home: the Daily tile's streak line --- */
+.app-tile-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.app-tile-streak-done {
+  color: var(--accent-orange-text);
+}
+
+/* --- Classic result: the optional daily goal --- */
+.daily-goal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) auto 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.daily-goal-chip-done {
+  background: rgba(29, 125, 84, 0.12);
+  color: var(--color-success);
+  animation: streak-pop 360ms ease-out;
+}
+.daily-goal-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.daily-goal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+.daily-goal-dot-on {
+  background: var(--color-success);
+}
+
+/* --- Category map: transparent prices + Unlock Now --- */
+.category-price-note {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+.category-price-ladder {
+  white-space: nowrap;
+}
+.category-card-unlock-now {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+.unlock-now-sub {
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-flame-animated,
+  .streak-day-card,
+  .streak-day-card-milestone,
+  .streak-sheet,
+  .streak-sheet-backdrop,
+  .daily-goal-chip-done {
+    animation: none;
+  }
+  .streak-track-fill {
+    transition: none;
+  }
+}

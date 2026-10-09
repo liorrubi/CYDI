@@ -72,17 +72,21 @@ let fetcher: Fetcher = apiFetch;
  * passed on (the observer keeps its last answer, exactly like this module). The observer cannot affect anything here.
  */
 type ConfigBodyObserver = (body: unknown) => void;
-let bodyObserver: ConfigBodyObserver | null = null;
+/** 0.59.0: more than one config rides the answer (Ink, Coin offers), so several observers may listen; null clears them. */
+const bodyObservers = new Set<ConfigBodyObserver>();
 
 export function observeConfigBody(observer: ConfigBodyObserver | null): void {
-  bodyObserver = observer;
+  if (observer === null) bodyObservers.clear();
+  else bodyObservers.add(observer);
 }
 
 function notifyBody(body: unknown): void {
-  try {
-    bodyObserver?.(body);
-  } catch {
-    // An observer's bug never reaches the interstitial config.
+  for (const observer of bodyObservers) {
+    try {
+      observer(body);
+    } catch {
+      // An observer's bug never reaches the interstitial config, nor another observer.
+    }
   }
 }
 
@@ -214,5 +218,5 @@ export function _resetInterstitialConfigForTests(testFetcher?: Fetcher): void {
   lastRefreshAt = -Infinity;
   qaForcedArm = null;
   fetcher = testFetcher ?? apiFetch;
-  bodyObserver = null;
+  bodyObservers.clear();
 }

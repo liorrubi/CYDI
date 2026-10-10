@@ -65,24 +65,71 @@ export type StreakState = {
   best: number;
   saves: number;
   emberGranted: boolean;
+  /** A Rewarded Streak Rescue on offer (see below): the streak of `from` days that restarted on `day`. */
+  rescue?: { from: number; day: string };
+  /** The day the last rescue was granted. */
+  rescuedOn?: string;
 };
 
 export const EMPTY_STREAK: StreakState = { lastDay: "", current: 0, best: 0, saves: 0, emberGranted: false };
+
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Any stored value -> a safe state (older saves have none; a hand-edited one could hold anything). */
 export function normalizeStreak(value: unknown): StreakState {
   if (!value || typeof value !== "object") return { ...EMPTY_STREAK };
   const v = value as Record<string, unknown>;
   const int = (n: unknown, max: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(max, Math.max(0, Math.floor(n))) : 0);
-  const lastDay = typeof v.lastDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.lastDay) ? v.lastDay : "";
+  const lastDay = typeof v.lastDay === "string" && DATE_KEY.test(v.lastDay) ? v.lastDay : "";
   const current = lastDay ? int(v.current, 100_000) : 0;
-  return {
+  const state: StreakState = {
     lastDay,
     current,
     best: Math.max(int(v.best, 100_000), current),
     saves: int(v.saves, STREAK_SAVE_MAX),
     emberGranted: v.emberGranted === true,
   };
+  const r = v.rescue as Record<string, unknown> | null | undefined;
+  if (r && typeof r === "object" && typeof r.day === "string" && DATE_KEY.test(r.day) && int(r.from, 100_000) >= STREAK_RESCUE_MIN) {
+    state.rescue = { from: int(r.from, 100_000), day: r.day };
+  }
+  if (typeof v.rescuedOn === "string" && DATE_KEY.test(v.rescuedOn)) state.rescuedOn = v.rescuedOn;
+  return state;
+}
+
+// ---- Rewarded Streak Rescue -------------------------------------------------------------------------------------
+// A streak of 3+ days that restarts because exactly ONE day was missed and no Streak Save was held (a held Save always
+// covers that day first) may be kept by one rewarded ad - offered only on that return day, at most once per 7 days.
+// It is offered AFTER the day's Daily is completed (the result card and the streak view): the restart is already
+// on screen there, and nothing ever stands between the player and the Daily itself. The rescue only restores the
+// count (the streak continues as `from + 1`, best updated); it pays no coins, no Save and no Ember - today's Day-1
+// coins stay as paid, and an Ember due at Day 30+ is granted by the next completion as usual.
+
+export const STREAK_RESCUE_MIN = 3;
+export const STREAK_RESCUE_COOLDOWN_DAYS = 7;
+
+/** The streak (days) that may be rescued on `today`, or 0. */
+export function rescuableStreak(state: StreakState, today: string): number {
+  const r = state.rescue;
+  if (!r || r.day !== today || state.lastDay !== today || state.current !== 1) return 0;
+  return r.from;
+}
+
+/** Grant the rescue offered on `offerDay`: the new state, or null when there is nothing to rescue (so a repeat grant is a no-op). */
+export function applyStreakRescue(state: StreakState, offerDay: string): StreakState | null {
+  const from = rescuableStreak(state, offerDay);
+  if (from === 0) return null;
+  const current = from + 1;
+  const { rescue: _used, ...rest } = state;
+  return { ...rest, current, best: Math.max(state.best, current), rescuedOn: offerDay };
+}
+
+/** Would a streak that restarts on `today` earn a rescue offer? (exactly one missed day, no Save, 3+ days, cooldown) */
+function rescueOfferOnRestart(state: StreakState, today: string): StreakState["rescue"] {
+  if (state.current < STREAK_RESCUE_MIN || state.saves > 0) return undefined;
+  if (daysBetween(state.lastDay, today) !== 2) return undefined;
+  if (state.rescuedOn && !(daysBetween(state.rescuedOn, today) >= STREAK_RESCUE_COOLDOWN_DAYS)) return undefined;
+  return { from: state.current, day: today };
 }
 
 export type StreakView = {
@@ -139,6 +186,8 @@ export function completeStreakDay(state: StreakState, today: string): StreakComp
   const saveEarned = earnsStreakSave(day) && saves < STREAK_SAVE_MAX;
   if (saveEarned) saves += 1;
   const emberUnlocked = day >= STREAK_EMBER_DAY && !state.emberGranted;
+  // A restart may come with a rescue offer for today; any older, unused offer is dropped here.
+  const rescue = continuing ? undefined : rescueOfferOnRestart(state, today);
   return {
     state: {
       lastDay: today,
@@ -146,6 +195,8 @@ export function completeStreakDay(state: StreakState, today: string): StreakComp
       best: Math.max(state.best, day),
       saves,
       emberGranted: state.emberGranted || emberUnlocked,
+      ...(rescue ? { rescue } : {}),
+      ...(state.rescuedOn ? { rescuedOn: state.rescuedOn } : {}),
     },
     advanced: true,
     day,

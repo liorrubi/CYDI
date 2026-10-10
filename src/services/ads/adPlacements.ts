@@ -30,6 +30,8 @@ export const REWARDED_AD_PLACEMENTS = [
   "two_players_ink_trial",
   /** 0.59.0 Category "Unlock Now": one rewarded ad pays the exact shortfall (max 250) and unlocks the category. Coin unit. */
   "category_unlock_topup",
+  /** 0.59.0 Rewarded Streak Rescue: one ad keeps a 3+ day Daily streak that restarted after exactly one missed day. Coin unit, no coins. */
+  "streak_rescue",
 ] as const;
 
 export type RewardedAdPlacement = (typeof REWARDED_AD_PLACEMENTS)[number];

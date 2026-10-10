@@ -6,8 +6,10 @@
 import { STREAK_EXCLUSIVE_INK } from "../app/constants";
 import { israelDateKey } from "../app/israelDate";
 import {
+  applyStreakRescue,
   completeStreakDay,
   normalizeStreak,
+  rescuableStreak,
   STREAK_SAVE_MAX,
   STREAK_SAVE_PRICE,
   viewStreak,
@@ -59,6 +61,26 @@ export function recordDailyCompletion(now: number = Date.now()): StreakCompletio
   if (result.coins > 0) addCoins(result.coins, "daily_streak");
   onStreakDayReached(result.day);
   return result;
+}
+
+/** A Rewarded Streak Rescue on offer right now (see app/drawingStreak.ts): the streak it keeps and its Israel day, or null. */
+export function getStreakRescueOffer(now: number = Date.now()): { from: number; day: string } | null {
+  const day = today(now);
+  const from = rescuableStreak(getStreakState(), day);
+  return from > 0 ? { from, day } : null;
+}
+
+/**
+ * A rewarded ad for the rescue offered on `offerDay` was watched to the end (call ONLY on a verified grant). Restores
+ * the streak, pays nothing. Idempotent: the offer is used up by the write, so a repeated grant changes nothing.
+ * `offerDay` is the day the offer was shown, so an ad that ends just after midnight still keeps the streak.
+ */
+export function grantStreakRescue(offerDay: string): boolean {
+  const next = applyStreakRescue(getStreakState(), offerDay);
+  if (!next) return false;
+  writeState(next);
+  onStreakDayReached(next.current);
+  return true;
 }
 
 export type BuySaveResult = "bought" | "full" | "insufficient_coins";

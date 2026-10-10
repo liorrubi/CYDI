@@ -27,7 +27,7 @@ const req = (path: string, init: RequestInit = {}) => {
 };
 const STORED = { enabled: true, rolloutPercent: 80, gamesBetweenAds: 7, maxOpportunitiesPerSession: 2, blockedCountries: ["IR"] };
 const INK = { enabled: true, version: 1, rolloutPercent: 100, surfaces: { classic: true, playTogether: true, twoPlayers: true, daily: false }, classicRotation: ["coin", "ink"], maxExtensions: 99 };
-const COIN = { version: 1, runX3: true, unlockNow: true };
+const COIN = { version: 1, runX3: true, unlockNow: true, streakRescue: false };
 
 function setup() {
   const kv = new FakeKv();
@@ -58,7 +58,7 @@ test("C1: `coin` rides the v3 body only; legacy and ?v=2 are byte-identical; `in
 test("C1: an invalid or unreadable stored value omits `coin` and breaks nothing", async () => {
   const { kv, get } = setup();
   const clean = JSON.parse(await get("?v=3"));
-  for (const bad of ["{not json", JSON.stringify({ ...COIN, extra: true }), JSON.stringify({ version: 1, runX3: "yes", unlockNow: true })]) {
+  for (const bad of ["{not json", JSON.stringify({ ...COIN, extra: true }), JSON.stringify({ version: 1, runX3: "yes", unlockNow: true, streakRescue: false }), JSON.stringify({ version: 1, runX3: true, unlockNow: true })]) {
     kv.store.set(COIN_OFFER_KV_KEY, bad);
     assert.deepEqual(JSON.parse(await get("?v=3")), clean, bad);
   }
@@ -72,9 +72,9 @@ test("C2: PUT /api/config/ads/coin - admin only, strictly validated, whole objec
   assert.equal((await put(COIN, "wrong")).status, 401);
   assert.equal((await put({ ...COIN, runX3: 1 }, "t")).status, 400);
   assert.equal(kv.store.has(COIN_OFFER_KV_KEY), false, "nothing written on a rejected body");
-  const ok = await put({ version: 2, runX3: false, unlockNow: true }, "t");
+  const ok = await put({ version: 2, runX3: false, unlockNow: true, streakRescue: true }, "t");
   assert.equal(ok.status, 200);
-  assert.deepEqual(JSON.parse(kv.store.get(COIN_OFFER_KV_KEY)!), { version: 2, runX3: false, unlockNow: true });
+  assert.deepEqual(JSON.parse(kv.store.get(COIN_OFFER_KV_KEY)!), { version: 2, runX3: false, unlockNow: true, streakRescue: true });
 });
 
 test("C3: the shipped v3 parser reads the identical interstitial config with `coin` present (released 0.57 / 0.58 clients)", async () => {

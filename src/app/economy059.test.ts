@@ -5,12 +5,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { CATEGORY_UNLOCK_COST, categoryUnlockPrice, DAILY_GOAL_COINS, DAILY_GOAL_GAMES, PAID_CHEST_AD_BONUS_CAP, PEN_COLORS, PEN_SKINS } from "./constants";
 import {
+  applyStreakRescue,
   completeStreakDay,
   daysBetween,
   EMPTY_STREAK,
   earnsStreakSave,
   isStreakMilestone,
   normalizeStreak,
+  rescuableStreak,
   streakRewardFor,
   viewStreak,
   type StreakState,
@@ -185,14 +187,66 @@ test("the run A/B: flag off = everyone x3; flag on = a stable ~50/50 split on it
   assert.ok(run > 1850 && run < 2150, `~50% x3run (got ${run})`);
 });
 
+// ----------------------------------------------------------- streak rescue ----
+
+/** A 12-day streak last counted on the 8th; the 9th was missed; the Daily is completed on the 10th. */
+const restartOn10 = (extra: Partial<StreakState> = {}) => completeStreakDay(at("2026-10-08", 12, extra), "2026-10-10");
+
+test("rescue: a 3+ day streak that restarts after exactly one missed day (no Save) is offered on that day only", () => {
+  const r = restartOn10();
+  assert.equal(r.day, 1);
+  assert.equal(r.restartedFrom, 12);
+  assert.deepEqual(r.state.rescue, { from: 12, day: "2026-10-10" });
+  assert.equal(rescuableStreak(r.state, "2026-10-10"), 12);
+  assert.equal(rescuableStreak(r.state, "2026-10-11"), 0, "gone the next day");
+  assert.equal(rescuableStreak(r.state, "2026-10-09"), 0, "a clock moved back sees nothing");
+});
+
+test("rescue: never offered with a Save held (it covers the day), after 2+ missed days, below 3 days, or within 7 days of the last", () => {
+  const withSave = restartOn10({ saves: 1 });
+  assert.equal(withSave.day, 13, "the Save kept it");
+  assert.equal(withSave.state.rescue, undefined);
+  assert.equal(completeStreakDay(at("2026-10-07", 12), "2026-10-10").state.rescue, undefined, "two missed days");
+  assert.equal(completeStreakDay(at("2026-10-08", 2), "2026-10-10").state.rescue, undefined, "a 2-day streak");
+  assert.ok(completeStreakDay(at("2026-10-08", 3), "2026-10-10").state.rescue, "3 days qualifies");
+  assert.equal(restartOn10({ rescuedOn: "2026-10-04" }).state.rescue, undefined, "6 days after the last rescue");
+  assert.ok(restartOn10({ rescuedOn: "2026-10-03" }).state.rescue, "7 days after");
+  assert.equal(completeStreakDay(at("2026-10-09", 12), "2026-10-10").state.rescue, undefined, "no missed day: it simply continues");
+});
+
+test("rescue: the grant restores the count (from + 1), pays nothing, is idempotent, and the streak continues next day", () => {
+  const r = restartOn10();
+  const kept = applyStreakRescue(r.state, "2026-10-10")!;
+  assert.deepEqual(kept, { lastDay: "2026-10-10", current: 13, best: 13, saves: 0, emberGranted: false, rescuedOn: "2026-10-10" });
+  assert.equal(applyStreakRescue(kept, "2026-10-10"), null, "a repeated grant changes nothing");
+  assert.equal(applyStreakRescue(r.state, "2026-10-11"), null, "an offer from another day cannot be used");
+  const next = completeStreakDay(kept, "2026-10-11");
+  assert.equal(next.day, 14);
+  assert.equal(next.coins, 150, "the next day pays its normal reward");
+  assert.equal(next.state.rescuedOn, "2026-10-10", "the cooldown is remembered");
+  assert.equal(viewStreak(kept, "2026-10-10").doneToday, true);
+});
+
+test("rescue: an unused offer is dropped by the next completion; normalize keeps only a valid offer and date", () => {
+  const r = restartOn10();
+  assert.equal(completeStreakDay(r.state, "2026-10-11").state.rescue, undefined);
+  const n = normalizeStreak({ ...r.state, rescue: { from: 12, day: "2026-10-10" }, rescuedOn: "2026-10-01" });
+  assert.deepEqual(n.rescue, { from: 12, day: "2026-10-10" });
+  assert.equal(n.rescuedOn, "2026-10-01");
+  const bad = normalizeStreak({ ...r.state, rescue: { from: 2, day: "2026-10-10" }, rescuedOn: "yesterday" });
+  assert.equal("rescue" in bad, false);
+  assert.equal("rescuedOn" in bad, false);
+  assert.equal("rescue" in normalizeStreak({ ...r.state, rescue: "x" }), false);
+});
+
 // ------------------------------------------------------------- flag schema ----
 
-test("coin-offer flags: exactly { version, runX3, unlockNow }; anything else is OFF", () => {
-  const ok = { version: 1, runX3: true, unlockNow: false };
+test("coin-offer flags: exactly { version, runX3, unlockNow, streakRescue }; anything else is OFF", () => {
+  const ok = { version: 1, runX3: true, unlockNow: false, streakRescue: true };
   assert.equal(isValidStoredCoinOfferConfig(ok), true);
   assert.deepEqual(parseStoredCoinOfferConfig(JSON.stringify(ok)), ok);
   assert.deepEqual(parseClientCoinOfferConfig(ok), ok);
-  for (const bad of [null, [], {}, { ...ok, extra: 1 }, { ...ok, version: 0 }, { ...ok, runX3: "true" }, { version: 1, runX3: true }]) {
+  for (const bad of [null, [], {}, { ...ok, extra: 1 }, { ...ok, version: 0 }, { ...ok, runX3: "true" }, { ...ok, streakRescue: 1 }, { version: 1, runX3: true, unlockNow: true }]) {
     assert.equal(isValidStoredCoinOfferConfig(bad), false, JSON.stringify(bad));
     assert.equal(parseClientCoinOfferConfig(bad), null);
   }
@@ -215,6 +269,7 @@ test("analytics: x3run offers validate with multiplier 3 (or 1 for the flat mini
 test("analytics: Unlock Now funnel rows, streak / goal coins, Save purchases and streak milestones all validate", () => {
   for (const ev of ["reward_offer_shown", "reward_ad_started", "reward_ad_completed", "reward_ad_failed"] as const) {
     assert.equal(validateEventParams(ev, { placement: "category_unlock_topup" }).valid, true, ev);
+    assert.equal(validateEventParams(ev, { placement: "streak_rescue" }).valid, true, ev);
   }
   for (const coinSource of ["daily_streak", "daily_goal"]) {
     assert.equal(validateEventParams("coin_earned", { coinSource, amount: 20, balanceBucket: "100_499" }).valid, true, coinSource);

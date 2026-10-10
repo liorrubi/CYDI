@@ -4,6 +4,7 @@ import { earnsStreakSave, isStreakMilestone, streakRewardFor, type StreakComplet
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playSelectSound } from "../engine/soundEngine";
 import StreakFlame from "./StreakFlame";
+import StreakRescueOffer from "./StreakRescueOffer";
 import StreakSheet from "./StreakSheet";
 
 type StreakDayCardProps = { completion: StreakCompletion };
@@ -11,13 +12,16 @@ type StreakDayCardProps = { completion: StreakCompletion };
 /**
  * The Daily result's one streak moment, shown only on the attempt that advanced the streak: the day reached, its
  * coins, and what tomorrow brings. A milestone day gets a warmer card; nothing ever blocks the result or asks for
- * anything. "View streak" opens the full view on demand.
+ * anything. "View streak" opens the full view on demand. A streak that restarted today may show the Streak Rescue
+ * (renders nothing unless a rescue ad is loaded); once granted, the card reads the kept day.
  */
 export default function StreakDayCard({ completion }: StreakDayCardProps) {
   const [open, setOpen] = useState(false);
   const coinsRef = useRef<HTMLSpanElement | null>(null);
-  const { day, coins } = completion;
-  const milestone = isStreakMilestone(day);
+  const [rescuedDay, setRescuedDay] = useState<number | null>(null);
+  const { coins } = completion;
+  const day = rescuedDay ?? completion.day;
+  const milestone = rescuedDay === null && isStreakMilestone(day);
   const tomorrow = day + 1;
   const tomorrowCoins = streakRewardFor(tomorrow);
   const tomorrowSave = earnsStreakSave(tomorrow);
@@ -36,7 +40,7 @@ export default function StreakDayCard({ completion }: StreakDayCardProps) {
         </span>
         <div className="streak-day-text">
           <p className="streak-day-title">
-            {milestone ? `Day ${day} milestone!` : day === 1 ? "Day 1 – your streak has started" : `Day ${day} streak`}
+            {rescuedDay !== null ? `Streak kept – Day ${day}` : milestone ? `Day ${day} milestone!` : day === 1 ? "Day 1 – your streak has started" : `Day ${day} streak`}
           </p>
           <p className="streak-day-sub">
             {completion.emberUnlocked ? (
@@ -57,6 +61,7 @@ export default function StreakDayCard({ completion }: StreakDayCardProps) {
           +{coins} 🪙
         </span>
       </div>
+      {completion.restartedFrom > 0 && <StreakRescueOffer onRescued={setRescuedDay} showKept={false} />}
       <button
         type="button"
         className="streak-day-view"

@@ -73,6 +73,10 @@ export type SaveData = {
       saves: number;
       /** The Day-30 Ember Ink was already granted (once per player). */
       emberGranted: boolean;
+      /** Rewarded Streak Rescue on offer: the streak of `from` days restarted on `day` and may be kept by one ad that day. */
+      rescue?: { from: number; day: string };
+      /** Israel date the last rescue was granted (at most one per 7 days). */
+      rescuedOn?: string;
     };
     /** 0.59.0 daily goal: Classic games finished on `date` (local calendar day) and whether its coins were paid. */
     dailyGoal?: { date: string; games: number; claimed: boolean };

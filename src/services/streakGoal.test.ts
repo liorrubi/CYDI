@@ -19,7 +19,7 @@ const { validateEventParams } = await import("./analyticsSchema.ts");
 const { getSaveData, updateSaveData, replaceSaveData } = await import("./saveStore.ts");
 const { createDefaultSaveData } = await import("./saveData.ts");
 const { getCoins } = await import("./coinsStore.ts");
-const { buyStreakSave, getStreakView, recordDailyCompletion } = await import("./drawingStreakStore.ts");
+const { buyStreakSave, getStreakRescueOffer, getStreakView, grantStreakRescue, recordDailyCompletion } = await import("./drawingStreakStore.ts");
 const { getDailyGoal, recordDailyGoalGame } = await import("./dailyGoalStore.ts");
 const { getPaidCategoryPurchaseCount, nextCategoryUnlockPrice, unlockCategory } = await import("./categoryUnlockStore.ts");
 const { hasRunMinBonusLeftToday, isUnlockNowUsedToday, recordRunMinBonusGranted, recordUnlockNowUsed } = await import("./adDailyLimitsStore.ts");
@@ -107,6 +107,53 @@ test("Streak Save: 300 coins, at most 2 held, never spends on failure", () => {
   assert.equal(buyStreakSave(), "insufficient_coins");
   assert.equal(getCoins(), 299);
   assert.equal(getStreakView().saves, 0);
+});
+
+test("Streak Rescue (store): offered on the restart day, granted once, pays nothing; an ad ending after midnight still counts", async () => {
+  fresh(0);
+  updateSaveData((d) => {
+    d.progress.drawingStreak = { lastDay: "2026-10-08", current: 12, best: 12, saves: 0, emberGranted: false };
+  });
+  assert.equal(getStreakRescueOffer(il("2026-10-10")), null, "nothing before the Daily is completed");
+  recordDailyCompletion(il("2026-10-10"));
+  assert.equal(getCoins(), 20, "the restart day pays Day 1");
+  const offer = getStreakRescueOffer(il("2026-10-10"));
+  assert.deepEqual(offer, { from: 12, day: "2026-10-10" });
+  const saved = JSON.parse(JSON.stringify(getSaveData()));
+  replaceSaveData(saved);
+  assert.deepEqual(getStreakRescueOffer(il("2026-10-10")), offer, "survives a reload");
+  sent.length = 0;
+  // The ad was shown on the 10th and its reward arrives at 00:00:30 Israel time on the 11th.
+  assert.equal(grantStreakRescue(offer!.day), true);
+  assert.equal(grantStreakRescue(offer!.day), false, "a duplicate reward callback changes nothing");
+  assert.equal(getCoins(), 20, "no coins");
+  assert.equal(getStreakView(Date.parse("2026-10-10T21:00:30Z")).current, 13);
+  assert.equal(recordDailyCompletion(il("2026-10-11")).day, 14, "continues the next day");
+  await flush();
+  assert.equal(sent.filter((x) => x.name === "coin_earned").length, 1, "only the next day's streak coins");
+});
+
+test("Streak Rescue: the only grant call is behind a verified ad reward (call-site audit)", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const root = path.resolve(import.meta.dirname, "..");
+  const callers: string[] = [];
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const f = path.join(dir, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) && fs.readFileSync(f, "utf8").includes("grantStreakRescue(")) {
+        callers.push(path.relative(root, f).split(path.sep).join("/"));
+      }
+    }
+  };
+  walk(root);
+  assert.deepEqual(callers.sort(), ["components/StreakRescueOffer.tsx", "services/drawingStreakStore.ts"]);
+  const src = fs.readFileSync(path.join(root, "components/StreakRescueOffer.tsx"), "utf8");
+  const grant = src.indexOf("grantStreakRescue(offer.day)");
+  const gate = src.lastIndexOf('outcome.grantSource === "ad"', grant);
+  assert.ok(gate > 0 && grant - gate < 200, "granted only inside the verified-reward branch");
+  for (const gateFn of ["isAndroidApp()", "isStreakRescueOn()", 'isRewardedAdReadyFor("streak_rescue")']) assert.ok(src.includes(gateFn), gateFn);
 });
 
 test("daily goal: 5 Classic games pay +20 exactly once that day; progress counts on", async () => {

@@ -367,6 +367,75 @@
   cursor: pointer;
 }
 
+/* --- Rewarded Streak Rescue (result card + streak view; rendered only when an ad is loaded) --- */
+.streak-rescue {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(249, 115, 22, 0.55);
+  background: var(--color-card);
+  text-align: left;
+  animation: streak-fade 220ms ease-out;
+}
+.streak-sheet-hero .streak-rescue {
+  align-self: stretch;
+}
+.streak-rescue-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+.streak-rescue-text strong {
+  display: block;
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+.streak-rescue-btn {
+  flex: none;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f97316, #f59e0b);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.streak-rescue-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+.streak-rescue-kept {
+  justify-content: center;
+  border-style: solid;
+  color: var(--accent-orange-text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.streak-rescue-note {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+@media (max-width: 360px) {
+  .streak-rescue {
+    flex-wrap: wrap;
+  }
+  .streak-rescue-btn {
+    flex: 1 1 100%;
+  }
+}
+
 /* --- Android Home: the Daily tile's streak line --- */
 .app-tile-streak {
   display: inline-flex;
@@ -438,6 +507,7 @@
   .streak-day-card-milestone,
   .streak-sheet,
   .streak-sheet-backdrop,
+  .streak-rescue,
   .daily-goal-chip-done {
     animation: none;
   }

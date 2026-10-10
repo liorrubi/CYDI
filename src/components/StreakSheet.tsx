@@ -6,6 +6,7 @@ import { useDialogA11y } from "../hooks/useDialogA11y";
 import { getCoins, onCoinsChanged } from "../services/coinsStore";
 import { buyStreakSave, getStreakState, getStreakView, onStreakChanged } from "../services/drawingStreakStore";
 import StreakFlame from "./StreakFlame";
+import StreakRescueOffer from "./StreakRescueOffer";
 
 type StreakSheetProps = { onClose: () => void };
 
@@ -89,6 +90,7 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
           </h2>
           <p className="streak-sheet-status">{status}</p>
           {view.best > current && <p className="streak-sheet-best">Best: {view.best} days</p>}
+          <StreakRescueOffer />
         </div>
 
         <div className="streak-track" aria-label={`Streak progress: day ${current}`}>

@@ -2140,6 +2140,31 @@
   display: none;
 }
 
+/* DAILY PLAY spacing: the canvas and Done fit a 360x640 phone without scrolling (Done 686 -> 626 there and on the
+   392x738 Mi 8). Spacing only - the canvas keeps its size: the instruction loses its 19px paragraph margins, the
+   column gap is 6px instead of 8, the top padding 8px, and the name button keeps 5px of vertical padding. */
+.app-shell .daily-play {
+  gap: 6px;
+  padding-top: var(--space-2);
+}
+
+.app-shell .daily-play .canvas-instruction-text {
+  margin: 0;
+}
+
+.app-shell .daily-play .daily-name-display {
+  position: relative;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+/* The tap target keeps its old height without adding any: an invisible extension above and below. */
+.app-shell .daily-play .daily-name-display::before {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+
 @media (max-height: 700px) {
   .app-shell .app-result {
     gap: 6px;

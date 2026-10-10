@@ -678,7 +678,7 @@ export async function handleCoinOfferConfigPut(request: Request, env: Env): Prom
     return jsonNoStore({ error: "invalid json" }, 400);
   }
   if (!isValidStoredCoinOfferConfig(parsed)) {
-    return jsonNoStore({ error: "body must be exactly { version: 1-1000000, runX3: boolean, unlockNow: boolean }" }, 400);
+    return jsonNoStore({ error: "body must be exactly { version: 1-1000000, runX3: boolean, unlockNow: boolean, streakRescue: boolean }" }, 400);
   }
   await env.CONTENT_KV.put(COIN_OFFER_KV_KEY, JSON.stringify(parsed));
   return jsonNoStore({ ok: true, coin: parsed });

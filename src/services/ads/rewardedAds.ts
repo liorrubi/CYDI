@@ -295,7 +295,8 @@ export function isRewardedAdReady(): boolean {
  */
 export function isRewardedAdReadyFor(placement: RewardedAdPlacement): boolean {
   refreshLifecycle();
-  return state === "ready" && loadUnit === rewardedUnitFor(placement);
+  const unit = rewardedUnitFor(placement);
+  return state === "ready" && loadUnit === unit && rewardedBlockReason(unit) === null;
 }
 
 /** The current lifecycle state, for the tap's diagnostics and QA. */

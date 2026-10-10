@@ -35,7 +35,12 @@ export type StreakDayEventDetail = { completion: StreakCompletion; route: Streak
 export type StreakProgressEventDetail = { drawings: number; target: number; route: StreakRoute };
 
 function today(now: number): string {
-  return israelDateKey(now);
+  try {
+    return israelDateKey(now);
+  } catch {
+    // An engine without the Asia/Jerusalem zone must never break a result or Home: UTC+3 (Israel summer time) instead.
+    return new Date(now + 3 * 3_600_000).toISOString().slice(0, 10);
+  }
 }
 
 export function getStreakState(): StreakState {
@@ -87,7 +92,8 @@ export function recordStreakActivity(route: StreakRoute, opts: { key?: string; n
   }
   if (c.emberUnlocked) unlockColor(STREAK_EXCLUSIVE_INK);
   const balance = c.coins > 0 ? addCoins(c.coins, "daily_streak", { streakDay: streakDayBucket(c.day), streakRoute: route }) : getCoins();
-  onStreakDayReached(c.day);
+  // A day this player's best streak had already passed (a restart, a restored backup) is not a first-time milestone.
+  if (before.best < c.day) onStreakDayReached(c.day);
   emit(STREAK_DAY_EVENT, { completion: c, route, balance, saves: c.state.saves } satisfies StreakDayEventDetail);
   return { completion: c, drawings: result.drawings, duplicate: false };
 }
@@ -109,7 +115,7 @@ export function grantStreakRescue(offerDay: string, now: number = Date.now()): b
   const next = applyStreakRescue(before, offerDay, today(now));
   if (!next) return false;
   writeState(next);
-  if (next.current !== before.current) onStreakDayReached(next.current);
+  if (next.current !== before.current && before.best < next.current) onStreakDayReached(next.current);
   return true;
 }
 

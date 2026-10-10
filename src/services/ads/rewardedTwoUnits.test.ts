@@ -8,9 +8,11 @@ import {
   _setAdTimeoutsForTests,
   getRewardedLifecycleState,
   isRewardedAdAvailable,
+  isRewardedAdReadyFor,
   isRewardedUnitConfigured,
   preloadRewardedAd,
   registerAdAdapter,
+  registerAdConsentGate,
   showRewardedAd,
   subscribeRewardedAdEvents,
 } from "./rewardedAds";
@@ -166,4 +168,17 @@ test("lifecycle events keep their own placement, so analytics attribute every lo
   await showRewardedAd(INK);
   assert.ok(events.includes(`loaded:${INK}`));
   assert.ok(events.includes(`shown:${INK}`));
+});
+
+test("0.59.0 isRewardedAdReadyFor: only the loaded unit's placements, and never once a block gate closes (consent revoked)", async () => {
+  void preloadRewardedAd(COIN);
+  loads[0].resolve();
+  await flush();
+  assert.equal(isRewardedAdReadyFor("category_unlock_topup"), true, "a coin-unit placement sees the ready coin ad");
+  assert.equal(isRewardedAdReadyFor("streak_rescue"), true);
+  assert.equal(isRewardedAdReadyFor(INK), false, "a ready coin ad is not an Ink ad");
+  registerAdConsentGate(() => false);
+  assert.equal(isRewardedAdReadyFor("category_unlock_topup"), false, "consent withdrawn: no offer may promise an ad");
+  registerAdConsentGate(() => true);
+  assert.equal(isRewardedAdReadyFor("category_unlock_topup"), true);
 });

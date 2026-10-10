@@ -30,14 +30,14 @@ export type StreakRescue = {
  * already LOADED (so this country, consent and the interstitial lane allow it). The streak is kept only on a verified
  * grant; a failed or closed ad changes nothing and the button returns only when a fresh ad has loaded.
  */
-export function useStreakRescue(): StreakRescue {
+export function useStreakRescue(enabled = true): StreakRescue {
   const [offer, setOffer] = useState(() => getStreakRescueOffer());
   const [pending, setPending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [granted, setGranted] = useState(false);
   const [, setAdTick] = useState(0);
 
-  const eligible = offer !== null && isAndroidApp() && isStreakRescueOn();
+  const eligible = enabled && offer !== null && isAndroidApp() && isStreakRescueOn();
   useEffect(() => onStreakChanged(() => setOffer(getStreakRescueOffer())), []);
   // Ad readiness changes outside React: re-render on every rewarded lifecycle event.
   useEffect(() => subscribeRewardedAdEvents("streak-rescue", () => setAdTick((t) => t + 1)), []);
@@ -78,5 +78,5 @@ export function useStreakRescue(): StreakRescue {
     void preloadRewardedAd("streak_rescue");
   }
 
-  return { from: offer?.from ?? 0, available: offer !== null && (ready || pending), pending, note, granted, watch };
+  return { from: offer?.from ?? 0, available: eligible && (ready || pending), pending, note, granted, watch };
 }

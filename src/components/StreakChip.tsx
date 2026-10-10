@@ -9,7 +9,7 @@ import StreakSheet from "./StreakSheet";
  * its count in amber). Tapping it opens the streak view on demand - nothing about the streak occupies the screen
  * otherwise.
  */
-export default function StreakChip() {
+export default function StreakChip({ disabled = false }: { disabled?: boolean }) {
   const [view, setView] = useState(() => getStreakView());
   const [open, setOpen] = useState(false);
   useEffect(() => onStreakChanged(() => setView(getStreakView())), []);
@@ -31,6 +31,7 @@ export default function StreakChip() {
           setOpen(true);
         }}
         aria-label={label}
+        disabled={disabled}
       >
         <StreakFlame lit={view.doneToday} size={15} />
         <span className="streak-chip-count">{view.current}</span>

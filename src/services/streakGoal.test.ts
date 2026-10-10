@@ -18,7 +18,7 @@ const { registerAnalyticsProvider } = await import("./analytics.ts");
 const { validateEventParams } = await import("./analyticsSchema.ts");
 const { getSaveData, updateSaveData, replaceSaveData } = await import("./saveStore.ts");
 const { createDefaultSaveData } = await import("./saveData.ts");
-const { getCoins } = await import("./coinsStore.ts");
+const { addCoins, getCoins } = await import("./coinsStore.ts");
 const { buyStreakSave, getStreakRescueOffer, getStreakView, grantStreakRescue, onStreakDayCompleted, recordStreakActivity } = await import(
   "./drawingStreakStore.ts"
 );
@@ -238,7 +238,8 @@ test("activity streak (store): opening the app or a practice replay records noth
   assert.ok(classic.lastIndexOf("if (!practice) {", call) > call - 300, "Classic counts every round except web landing-page practice");
   const mp = fs.readFileSync(path.join(root, "components/multiplayer/PlayTogetherRoom.tsx"), "utf8");
   const mpCall = mp.indexOf('recordStreakActivity("multiplayer", { key:');
-  assert.ok(mpCall > 0 && mp.lastIndexOf("if (snapshot.you?.submitted) {", mpCall) > mpCall - 120, "only rounds this device drew in, keyed per round");
+  assert.ok(mpCall > 0 && mp.lastIndexOf("if (snapshot.you?.submitted && drewRoundsRef.current.has(snapshot.roundIndex)) {", mpCall) > mpCall - 160, "only rounds this device actually drew in (not the 0s empty auto-submit), keyed per round");
+  assert.ok(mp.includes("if (drawn) drewRoundsRef.current.add(snapshot.roundIndex);"), "a round is marked drawn only when a real drawing is submitted");
   const pp = fs.readFileSync(path.join(root, "components/passplay/PassPlayGame.tsx"), "utf8");
   assert.ok(pp.includes('if (emptyTurnsRef.current === 0) recordStreakActivity("two_players", { key:'), "2 Players: a round everyone drew in, keyed per round");
 });
@@ -333,4 +334,26 @@ test("migration: a category open only through pre-paywall play (progress, not pu
   });
   assert.equal(getPaidCategoryPurchaseCount(), 0);
   assert.equal(nextCategoryUnlockPrice(), 1000);
+});
+
+test("QA fix: a streak day the player's best had already passed (restart, restored backup) is not a first-time milestone", async () => {
+  fresh(0);
+  updateSaveData((d) => {
+    d.progress.drawingStreak = { lastDay: "2026-10-09", current: 2, best: 12, saves: 0, emberGranted: false };
+  });
+  for (let i = 0; i < 5; i++) recordStreakActivity("classic", { now: il("2026-10-10") });
+  assert.equal(getStreakView(il("2026-10-10")).current, 3);
+  await flush();
+  assert.deepEqual(sent.filter((s) => s.name === "progression_milestone").map((s) => s.params.milestone), [], "best 12 already passed day 3");
+});
+
+test("QA fix: an Unlock Now top-up that lifts the balance past 1,000 for an instant is not a balance_1k milestone", async () => {
+  fresh(899);
+  addCoins(1, "achievement"); // starts tracking below 1,000 (a balance already held at first sight is not a milestone)
+  addCoins(150, "ad_topup");
+  await flush();
+  assert.deepEqual(sent.filter((s) => s.name === "progression_milestone").map((s) => s.params.milestone), []);
+  addCoins(200, "achievement");
+  await flush();
+  assert.deepEqual(sent.filter((s) => s.name === "progression_milestone").map((s) => s.params.milestone), ["balance_1k_reached"], "a real credit still reports it");
 });

@@ -41,7 +41,7 @@ export default function StreakProgressChip({ drawings, target, completion }: Str
         </span>
         <span>{label}</span>
       </button>
-      {open && <StreakSheet onClose={() => setOpen(false)} />}
+      {open && <StreakSheet onClose={() => setOpen(false)} offerRescue={false} />}
     </>
   );
 }

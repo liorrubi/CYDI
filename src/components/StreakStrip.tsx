@@ -13,7 +13,7 @@ function subLine(v: StreakView): string {
     case "restarted":
       return "New streak · today ✓";
     case "at_risk":
-      return "At risk · tap to keep it";
+      return "At risk · tap for options";
     case "protected":
       return `🛡 Protected · ${progress}`;
     case "rescued":

@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { recordStreakActivity } from "../../services/drawingStreakStore";
+import { useStreakLiveGame } from "../StreakCelebration";
 import { useRoundStartScroll } from "../../hooks/useRoundStartScroll";
 import Button from "../Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../DrawingCanvas";
@@ -245,6 +246,8 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
     });
   }, [game.gameId, game.players.length, game.rounds, game.difficulty]);
 
+  // 0.59.0: a streak day completed while this live game is on screen shows as a banner, never a card over it.
+  useStreakLiveGame();
   const roundReportedRef = useRef(-1);
   useEffect(() => {
     if (phase !== "ROUND_RESULTS" && phase !== "FINAL_RESULTS") return;

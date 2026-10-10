@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { recordStreakActivity } from "../../services/drawingStreakStore";
+import { useStreakLiveGame } from "../StreakCelebration";
 import { useRoundStartScroll } from "../../hooks/useRoundStartScroll";
 import UpdateRequiredNotice from "./UpdateRequiredNotice";
 import Button from "../Button";
@@ -181,7 +182,11 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
   // round that ended on the server clock counts exactly the same as one the
   // player finished by hand. Every payload is aggregate-only: never the room
   // code, a nickname, a seat, a token or any drawing data.
+  // 0.59.0: a streak day completed while this live game is on screen shows as a banner, never a card over it.
+  useStreakLiveGame();
   const reportedRoundRef = useRef(-1);
+  /** 0.59.0 Drawing Streak: rounds this device submitted a real drawing for (the 0s auto-submit of an empty canvas is not one). */
+  const drewRoundsRef = useRef<Set<number>>(new Set());
   const reportedStartRef = useRef(false);
   const joinedFinishedRef = useRef<boolean | null>(null);
   const reportedFinishRef = useRef(false);
@@ -247,9 +252,10 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
           playerCount: snapshot.players.length,
           submitted: snapshot.you?.submitted ?? false,
         });
-        // 0.59.0 Drawing Streak: a round this device actually drew in is one of today's 5 drawings (watching counts
-        // for nothing). Keyed by room, game and round, so a reconnect or a remount that reports it again changes nothing.
-        if (snapshot.you?.submitted) {
+        // 0.59.0 Drawing Streak: a round this device actually drew in is one of today's 5 drawings - watching, and the
+        // empty canvas auto-submitted at 0s, count for nothing. Keyed by room, game and round, so a reconnect or a
+        // remount that reports it again changes nothing.
+        if (snapshot.you?.submitted && drewRoundsRef.current.has(snapshot.roundIndex)) {
           recordStreakActivity("multiplayer", { key: `mp:${snapshot.roomCode}:${snapshot.gameSerial}:${snapshot.roundIndex}` });
         }
       }
@@ -359,6 +365,7 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
     if (!snapshot || submitting || submitted) return;
     const drawn = attempt && attempt.points.length >= 2;
     if (!drawn && !allowEmpty) return;
+    if (drawn) drewRoundsRef.current.add(snapshot.roundIndex);
     setSubmitting(true);
     send({
       type: "submit",

@@ -520,6 +520,7 @@ function CategoryListScreen({
   }, [unlockNowEligible]);
   const unlockNowReady = unlockNowEligible && isRewardedAdReadyFor("category_unlock_topup");
   const unlockNowShownRef = useRef(false);
+  const unlockNowInFlightRef = useRef(false);
   useEffect(() => {
     if (!unlockNowReady || unlockNowShownRef.current) return;
     unlockNowShownRef.current = true;
@@ -527,12 +528,14 @@ function CategoryListScreen({
   }, [unlockNowReady]);
 
   async function handleUnlockNow(category: CategoryId) {
-    if (unlockNowPending) return;
+    if (unlockNowPending || unlockNowInFlightRef.current) return;
+    unlockNowInFlightRef.current = true;
     playSelectSound();
     setUnlockNowPending(true);
     setUnlockNowNote(null);
     trackEvent("reward_ad_started", { placement: "category_unlock_topup" });
     const outcome = resolveAdOutcome(await showRewardedAd("category_unlock_topup"));
+    unlockNowInFlightRef.current = false;
     setUnlockNowPending(false);
     if (outcome.grantSource === "ad") {
       // Granted: the day's Unlock Now is used, the exact shortfall is credited and spent on this category at once.
@@ -548,6 +551,8 @@ function CategoryListScreen({
       trackEvent("reward_ad_failed", { placement: "category_unlock_topup" });
       setUnlockNowNote("The ad couldn’t play - nothing was charged.");
     }
+    // Closed early or failed: ask for a fresh ad; the button returns only once it is loaded.
+    void preloadRewardedAd("category_unlock_topup");
   }
 
   const totalUnlocked = getTotalCompletedCount(progress);

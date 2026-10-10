@@ -15,9 +15,21 @@ function isBigDay(d: StreakDayEventDetail): boolean {
   return isBigStreakDay(d.completion);
 }
 
+let liveGamesMounted = 0;
+
+/** Mounted by the live game screens (Multiplayer room, 2 Players match): while one is on screen, a day is a banner. */
+export function useStreakLiveGame(): void {
+  useEffect(() => {
+    liveGamesMounted++;
+    return () => {
+      liveGamesMounted--;
+    };
+  }, []);
+}
+
 /** A live game (other players, a running round) never gets a card on top of it - the banner says it all instead. */
 function isLiveGame(d: { route: string }): boolean {
-  return d.route === "multiplayer" || d.route === "two_players";
+  return d.route === "multiplayer" || d.route === "two_players" || liveGamesMounted > 0;
 }
 
 /**

@@ -8,7 +8,11 @@ import { getCoins, onCoinsChanged } from "../services/coinsStore";
 import { buyStreakSave, getStreakState, getStreakView, onStreakChanged } from "../services/drawingStreakStore";
 import StreakFlame from "./StreakFlame";
 
-type StreakSheetProps = { onClose: () => void };
+type StreakSheetProps = {
+  onClose: () => void;
+  /** Offer the Rewarded Rescue here (Home, Daily chip). Off on result screens, which have their own ad offers. */
+  offerRescue?: boolean;
+};
 
 /** The milestone dots are evenly spaced; the fill moves between them in proportion to the days in each stretch. */
 function trackFillPercent(current: number): number {
@@ -57,11 +61,11 @@ function statusLine(v: StreakView): string {
  * and - only when an ad is really loaded - the Rescue), the milestone track and the Saves held. No calendar, no
  * history, no nagging. Opened from Home's streak bar, the Daily chip and the result chips.
  */
-export default function StreakSheet({ onClose }: StreakSheetProps) {
+export default function StreakSheet({ onClose, offerRescue = true }: StreakSheetProps) {
   const [view, setView] = useState(() => getStreakView());
   const [emberOwned, setEmberOwned] = useState(() => getStreakState().emberGranted);
   const [coins, setCoins] = useState(() => getCoins());
-  const rescue = useStreakRescue();
+  const rescue = useStreakRescue(offerRescue);
   const ref = useDialogA11y<HTMLDivElement>(true, { onClose });
 
   useEffect(

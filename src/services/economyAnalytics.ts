@@ -276,7 +276,8 @@ export function onCoinsEarned(source: CoinSource, amount: number, balanceAfter: 
         setTimeout(flushEarned, 0);
       }
     }
-    checkBalanceMilestones(state, balanceAfter);
+    // The Unlock Now top-up is spent on the category in the same tick: it never reaches a balance milestone.
+    if (source !== "ad_topup") checkBalanceMilestones(state, balanceAfter);
     saveState();
   } catch {
     /* analytics never breaks a coin credit */

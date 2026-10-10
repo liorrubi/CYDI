@@ -423,7 +423,8 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
             </button>
           )}
           {/* 0.59.0: the Daily streak beside the name - this row has room on a 320px phone, the status line above does not. */}
-          <StreakChip />
+          {/* Not during the preview: the sheet would cover the shape while its timer keeps running. */}
+          <StreakChip disabled={phase === "preview"} />
         </div>
       )}
       {isLive && prizeMessages.length > 0 && (

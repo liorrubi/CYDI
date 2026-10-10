@@ -230,7 +230,7 @@ test("activity streak (store): opening the app or a practice replay records noth
   ]);
   const classic = fs.readFileSync(path.join(root, "screens/ShapeChallengeScreen.tsx"), "utf8");
   const call = classic.indexOf('recordStreakActivity("drawing", "classic")');
-  assert.ok(classic.lastIndexOf("if (!practice) {", call) > call - 300, "Classic counts only non-practice rounds");
+  assert.ok(classic.lastIndexOf("if (!practice) {", call) > call - 300, "Classic counts every round except web landing-page practice");
   const mp = fs.readFileSync(path.join(root, "components/multiplayer/PlayTogetherRoom.tsx"), "utf8");
   assert.ok(mp.includes('if (snapshot.you?.submitted) recordStreakActivity("drawing", "multiplayer")'), "only rounds this device drew in");
 });

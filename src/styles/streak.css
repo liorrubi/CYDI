@@ -530,7 +530,7 @@
 /* --- "Today counts" toast (Multiplayer, 2 Players, Special, Mega, Artist Pack, custom) --- */
 .streak-toast {
   position: fixed;
-  top: calc(12px + env(safe-area-inset-top, 0px));
+  top: calc(4px + env(safe-area-inset-top, 0px));
   left: 50%;
   z-index: 70;
   display: flex;
@@ -570,6 +570,17 @@
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
+}
+.streak-progress-chip.streak-progress-chip-milestone {
+  animation:
+    streak-pop 360ms ease-out,
+    streak-glow 1.4s ease-out 360ms 2;
+}
+/* Streak progress reads in the streak's own colour wherever it appears. */
+.streak-strip .daily-goal-dot-on,
+.streak-today .daily-goal-dot-on,
+.streak-progress-chip .daily-goal-dot-on {
+  background: #f97316;
 }
 .streak-progress-chip.streak-progress-chip-done {
   background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(249, 115, 22, 0.14));
@@ -637,10 +648,19 @@
   .streak-sheet,
   .streak-sheet-backdrop,
   .streak-rescue,
+  .streak-progress-chip-milestone,
   .daily-goal-chip-done {
     animation: none;
   }
   .streak-track-fill {
     transition: none;
+  }
+}
+
+/* Very narrow phones (320 px): the next-reward column gives its room to the two lines of text. */
+@media (max-width: 340px) {
+  .streak-strip-next,
+  .streak-strip-dots {
+    display: none;
   }
 }

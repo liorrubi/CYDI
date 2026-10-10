@@ -1340,7 +1340,7 @@ function ShapePlay({
       const offerAmount = applyShapeRoundOutcome(outcome, onProgressChange);
       earnedOfferFinalizeRef.current = null;
       // 0.59.0 Drawing Streak: every completed non-practice round is one of today's 5 drawings (the same games the
-      // coin offer and the interstitial count; practice replays do not count). The chip shows until the day counts,
+      // coin offer and the interstitial count; web landing-page practice rounds do not). The chip shows until the day counts,
       // on that result once more (the day and its coins), and then stays away for the rest of the day.
       if (!practice) {
         const doneBefore = getStreakView().doneToday;

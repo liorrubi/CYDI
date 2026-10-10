@@ -52,14 +52,14 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
   const status = view.doneToday
     ? "Today counts ✓ Come back tomorrow to keep it going."
     : view.atRisk > 0
-      ? `You missed a day. A Streak Save keeps your ${view.atRisk}-day streak - it is used as soon as today counts.`
+      ? "You missed a day - a Streak Save keeps your streak."
       : view.savesNeeded > 0
-        ? "A Streak Save covers the missed day as soon as today counts."
+        ? "You missed a day - your Streak Save covers it once today counts."
         : current > 0
-          ? "Keep it going today."
+          ? "Keep it going today - every mode counts."
           : view.best > 0
-            ? "Start a new streak today."
-            : "Play on consecutive days to build a streak.";
+            ? "Start a new streak today - every mode counts."
+            : "Play on consecutive days to build a streak - every mode counts.";
 
   const canBuy = view.saves < STREAK_SAVE_MAX && coins >= STREAK_SAVE_PRICE;
 
@@ -102,7 +102,10 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
                 ))}
               </span>
               <span>
-                <strong>{Math.min(view.drawings, view.target)}/{view.target} drawings</strong> in any mode · or the Daily Challenge
+                <strong>
+                  {Math.min(view.drawings, view.target)}/{view.target}
+                </strong>{" "}
+                drawings today · or the Daily
               </span>
             </p>
           )}
@@ -139,9 +142,11 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
             })}
           </ol>
           <p className="streak-next-line">
-            {view.next
-              ? `Today: Day ${view.next.day} · +${view.next.coins} 🪙`
-              : `Tomorrow: Day ${current + 1} · +${streakRewardFor(current + 1)} 🪙`}
+            {view.atRisk > 0
+              ? `Kept, today is Day ${view.atRisk + 1} · +${streakRewardFor(view.atRisk + 1)} 🪙`
+              : view.next
+                ? `Today: Day ${view.next.day} · +${view.next.coins} 🪙`
+                : `Tomorrow: Day ${current + 1} · +${streakRewardFor(current + 1)} 🪙`}
           </p>
         </div>
 

@@ -16,13 +16,13 @@ export default function StreakStrip() {
   useEffect(() => onStreakChanged(() => setView(getStreakView())), []);
 
   const count = view.current > 0 ? view.current : view.atRisk;
-  const next = STREAK_MILESTONES.find((m) => m.day > view.current);
+  const next = STREAK_MILESTONES.find((m) => m.day > count);
   const title = view.atRisk > 0 ? `${view.atRisk}-day streak at risk` : count > 0 ? `${count}-day streak` : "Start a drawing streak";
   const sub = view.doneToday
-    ? `Today counts ✓ · Tomorrow +${streakRewardFor(view.current + 1)} 🪙`
+    ? `Today ✓ · tomorrow +${streakRewardFor(view.current + 1)} 🪙`
     : view.atRisk > 0
-      ? "You missed a day - tap to keep it"
-      : `${Math.min(view.drawings, view.target)}/${view.target} drawings today · or the Daily`;
+      ? "Missed a day · tap to keep it"
+      : `${Math.min(view.drawings, view.target)}/${view.target} drawings · or the Daily`;
 
   return (
     <>

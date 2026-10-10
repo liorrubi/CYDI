@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { StreakCompletion } from "../app/drawingStreak";
+import { isStreakMilestone, type StreakCompletion } from "../app/drawingStreak";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playSelectSound } from "../engine/soundEngine";
 import StreakFlame from "./StreakFlame";
@@ -27,23 +27,25 @@ export default function StreakProgressChip({ drawings, target, completion }: Str
   }, [completion]);
 
   const shown = Math.min(drawings, target);
+  const extra = completion?.emberUnlocked ? " · Ember Ink!" : completion?.saveEarned ? " · +1 🛡" : "";
   const label = completion
     ? completion.restartedFrom > 0
       ? `New streak · Day 1 · +${completion.coins} 🪙`
-      : `Day ${completion.day} streak · +${completion.coins} 🪙`
+      : `Day ${completion.day} streak · +${completion.coins} 🪙${extra}`
     : `Streak · ${shown}/${target} today`;
+  const milestone = completion !== null && completion.restartedFrom === 0 && isStreakMilestone(completion.day);
   return (
     <>
       <button
         ref={ref}
         type="button"
-        className={`daily-goal-chip streak-progress-chip${completion ? " daily-goal-chip-done streak-progress-chip-done" : ""}`}
+        className={`daily-goal-chip streak-progress-chip${completion ? " daily-goal-chip-done streak-progress-chip-done" : ""}${milestone ? " streak-progress-chip-milestone" : ""}`}
         onClick={() => {
           playSelectSound();
           setOpen(true);
         }}
         aria-live="polite"
-        aria-label={`${label.replace(" 🪙", " coins")}. Show streak`}
+        aria-label={`${label.replace(" 🪙", " coins").replace(" 🛡", " Streak Save")}. Show streak`}
       >
         <StreakFlame lit={completion !== null} size={15} />
         {!completion && (

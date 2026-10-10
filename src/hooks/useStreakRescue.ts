@@ -1,35 +1,40 @@
 import { useEffect, useState } from "react";
 import { playChipSound, playSelectSound } from "../engine/soundEngine";
+import { resolveAdOutcome } from "../components/doubleOfferAdFlow";
 import { isStreakRescueOn } from "../services/ads/coinOfferConfig";
 import { isRewardedAdReadyFor, preloadRewardedAd, showRewardedAd, subscribeRewardedAdEvents } from "../services/ads";
 import { trackEvent } from "../services/analytics";
-import { getStreakRescueOffer, getStreakView, grantStreakRescue, onStreakChanged } from "../services/drawingStreakStore";
+import { getStreakRescueOffer, grantStreakRescue, onStreakChanged } from "../services/drawingStreakStore";
 import { isAndroidApp } from "../services/nativeShare";
-import { resolveAdOutcome } from "./doubleOfferAdFlow";
 
-type StreakRescueOfferProps = {
-  /** Called once the rescue is granted, with the streak day the player is now on. */
-  onRescued?: (day: number) => void;
-  /** Show the "Streak kept!" line after a grant (off where the caller says it itself). Default on. */
-  showKept?: boolean;
-};
-
-// One offer, possibly visible in two places at once (the result card and the streak view opened from it): report it
-// once per offer day, and never let two ads start.
+// The streak view is the one place the Rescue is offered; report each offer day once, and never let two ads start.
 const reportedOfferDays = new Set<string>();
 let adInFlight = false;
 
+export type StreakRescue = {
+  /** The streak a rescue would keep, when one is on offer today (whether or not an ad is loaded). */
+  from: number;
+  /** A rewarded ad is loaded right now (or playing): the only time the Rescue may be shown. */
+  available: boolean;
+  pending: boolean;
+  /** "The ad couldn't play" - shown once after a failure; the streak is unchanged. */
+  note: string | null;
+  /** True once a rescue was granted while this view was open. */
+  granted: boolean;
+  watch: () => Promise<void>;
+};
+
 /**
- * 0.59.0 Rewarded Streak Rescue (rules: app/drawingStreak.ts). Renders NOTHING unless the rescue is genuinely
- * available right now: Android, remote flag coin.streakRescue ON, a rescue on offer today, and a coin-unit rewarded
- * ad already LOADED (which also means this country, consent and the interstitial lane allow it). The streak is
- * restored only on a verified grant; a failed or closed ad changes nothing.
+ * 0.59.0 Rewarded Streak Rescue (rules: app/drawingStreak.ts). `available` is true ONLY when the rescue can really be
+ * delivered now: Android, remote flag coin.streakRescue ON, a rescue on offer today, and a coin-unit rewarded ad
+ * already LOADED (so this country, consent and the interstitial lane allow it). The streak is kept only on a verified
+ * grant; a failed or closed ad changes nothing and the button returns only when a fresh ad has loaded.
  */
-export default function StreakRescueOffer({ onRescued, showKept = true }: StreakRescueOfferProps) {
+export function useStreakRescue(): StreakRescue {
   const [offer, setOffer] = useState(() => getStreakRescueOffer());
   const [pending, setPending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [kept, setKept] = useState<string | null>(null);
+  const [granted, setGranted] = useState(false);
   const [, setAdTick] = useState(0);
 
   const eligible = offer !== null && isAndroidApp() && isStreakRescueOn();
@@ -47,7 +52,7 @@ export default function StreakRescueOffer({ onRescued, showKept = true }: Streak
     trackEvent("reward_offer_shown", { placement: "streak_rescue" });
   }, [ready, offer]);
 
-  async function handleWatch() {
+  async function watch() {
     if (!offer || pending || adInFlight) return;
     adInFlight = true;
     playSelectSound();
@@ -61,10 +66,7 @@ export default function StreakRescueOffer({ onRescued, showKept = true }: Streak
       trackEvent("reward_ad_completed", { placement: "streak_rescue" });
       if (grantStreakRescue(offer.day)) {
         playChipSound();
-        // After today counted: the count is restored now. Before: the missed day is covered and today continues it.
-        const after = getStreakView();
-        setKept(after.doneToday ? `You’re on Day ${after.current}.` : `Today’s drawings make it Day ${offer.from + 1}.`);
-        if (after.doneToday) onRescued?.(after.current);
+        setGranted(true);
       }
       return;
     }
@@ -76,25 +78,5 @@ export default function StreakRescueOffer({ onRescued, showKept = true }: Streak
     void preloadRewardedAd("streak_rescue");
   }
 
-  if (kept !== null) {
-    if (!showKept) return null;
-    return (
-      <p className="streak-rescue streak-rescue-kept" role="status">
-        🔥 Streak kept! {kept}
-      </p>
-    );
-  }
-  if (!offer || (!ready && !pending)) {
-    return note ? <p className="streak-rescue-note">{note}</p> : null;
-  }
-  return (
-    <div className="streak-rescue">
-      <p className="streak-rescue-text">
-        <strong>Keep your {offer.from}-day streak?</strong> You missed one day – watch a short ad and it carries on.
-      </p>
-      <button type="button" className="streak-rescue-btn" disabled={pending} onClick={() => void handleWatch()}>
-        {pending ? "Loading ad…" : "▶ Keep my streak"}
-      </button>
-    </div>
-  );
+  return { from: offer?.from ?? 0, available: offer !== null && (ready || pending), pending, note, granted, watch };
 }

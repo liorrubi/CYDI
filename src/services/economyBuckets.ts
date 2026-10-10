@@ -133,7 +133,7 @@ export const COIN_SOURCES = [
   "daily_chest",
   "chest_payout",
   "daily_prize",
-  /** 0.59.0: the Drawing Streak's day reward (5 drawings in any mode, or the Daily). */
+  /** 0.59.0: the Drawing Streak's day reward (5 finished drawings, any mix of modes). */
   "daily_streak",
   /** 0.59.0: Category "Unlock Now" - the exact shortfall a rewarded ad pays, spent on the unlock at once. */
   "ad_topup",

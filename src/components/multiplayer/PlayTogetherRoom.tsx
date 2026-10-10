@@ -248,8 +248,10 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
           submitted: snapshot.you?.submitted ?? false,
         });
         // 0.59.0 Drawing Streak: a round this device actually drew in is one of today's 5 drawings (watching counts
-        // for nothing). A finished game (5-15 rounds) therefore keeps the day; the global toast marks it.
-        if (snapshot.you?.submitted) recordStreakActivity("drawing", "multiplayer");
+        // for nothing). Keyed by room, game and round, so a reconnect or a remount that reports it again changes nothing.
+        if (snapshot.you?.submitted) {
+          recordStreakActivity("multiplayer", { key: `mp:${snapshot.roomCode}:${snapshot.gameSerial}:${snapshot.roundIndex}` });
+        }
       }
     }
 

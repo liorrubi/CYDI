@@ -11,6 +11,7 @@ import {
   daysBetween,
   EMPTY_STREAK,
   earnsStreakSave,
+  isBigStreakDay,
   isStreakMilestone,
   normalizeStreak,
   rescuableStreak,
@@ -117,8 +118,30 @@ test("one missed day uses a Save automatically; too few Saves restart at Day 1 b
   assert.equal(broken.state.saves, 1);
   assert.equal(broken.state.best, 12);
   assert.equal(broken.restartedFrom, 12);
-  // The view agrees before anything is used: alive with Saves, 0 when it can no longer continue.
-  assert.deepEqual([viewStreak(at("2026-10-08", 5, { saves: 1 }), "2026-10-10").current, viewStreak(at("2026-10-07", 12, { saves: 1 }), "2026-10-10").current], [5, 0]);
+  // The view agrees before anything is used: protected with Saves, at risk (still 12, nothing lost yet) without enough.
+  const protectedView = viewStreak(at("2026-10-08", 5, { saves: 1 }), "2026-10-10");
+  const riskView = viewStreak(at("2026-10-07", 12, { saves: 1 }), "2026-10-10");
+  assert.deepEqual([protectedView.status, protectedView.current], ["protected", 5]);
+  assert.deepEqual([riskView.status, riskView.current, riskView.savesShort], ["at_risk", 12, 1]);
+  assert.equal(viewStreak(at("2026-10-06", 12, { saves: 1 }), "2026-10-10").status, "lost", "3 missed days: no Save can keep it");
+});
+
+test("celebration: the full card on D3 (+Save), D7, D10/D17/D24 (+Save), D14, D30 (+Ember) and the larger later days; a banner otherwise", () => {
+  // Walk a continuous streak from day 1 to 45 and record which days the card is for.
+  let s: StreakState = EMPTY_STREAK;
+  const big: number[] = [];
+  const saveDays: number[] = [];
+  for (let i = 0; i < 45; i++) {
+    const realDay = new Date(Date.UTC(2026, 10, 1 + i)).toISOString().slice(0, 10);
+    const c = completeStreakDay(s, realDay);
+    if (isBigStreakDay(c)) big.push(c.day);
+    if (c.saveEarned) saveDays.push(c.day);
+    s = { ...c.state, saves: 0 }; // spend Saves so every Save day can award one
+  }
+  assert.deepEqual(big, [3, 7, 10, 14, 17, 24, 30, 31, 35, 38, 42, 45]);
+  assert.deepEqual(saveDays, [3, 10, 17, 24, 31, 38, 45]);
+  assert.equal(isBigStreakDay({ day: 1, saveEarned: false, emberUnlocked: false, restartedFrom: 12 }), false, "a restart is never celebrated");
+  assert.equal(isBigStreakDay({ day: 8, saveEarned: false, emberUnlocked: false, restartedFrom: 0 }), false);
 });
 
 test("Day 30 grants the Ember Ink exactly once", () => {
@@ -240,54 +263,84 @@ test("rescue: an unused offer is dropped by the next completion; normalize keeps
   assert.equal("rescue" in normalizeStreak({ ...r.state, rescue: "x" }), false);
 });
 
-test("rescue BEFORE the day qualifies: the missed day is bridged, today's play then continues the streak with its own reward", () => {
+test("rescue BEFORE the day counts: the missed day is bridged, today's play then continues the streak with its own reward", () => {
   const broken = at("2026-10-08", 12); // the 9th was missed, nothing played yet on the 10th
-  assert.equal(viewStreak(broken, "2026-10-10").atRisk, 12, "shown as at risk, not as 0");
+  const v = viewStreak(broken, "2026-10-10");
+  assert.deepEqual([v.status, v.current, v.next], ["at_risk", 12, { day: 13, coins: 20 }], "at risk, never 'Day 1' before it is lost");
   assert.equal(rescuableStreak(broken, "2026-10-10"), 12);
   const bridged = applyStreakRescue(broken, "2026-10-10")!;
   assert.equal(bridged.lastDay, "2026-10-09");
   assert.equal(bridged.current, 12, "nothing paid or counted yet");
   assert.equal(bridged.rescuedOn, "2026-10-10");
+  assert.equal(viewStreak(bridged, "2026-10-10").status, "rescued");
   assert.equal(applyStreakRescue(bridged, "2026-10-10"), null, "idempotent");
   const day = completeStreakDay(bridged, "2026-10-10");
   assert.equal(day.day, 13);
   assert.equal(day.coins, 20);
   assert.equal(day.restartedFrom, 0);
+  const after = viewStreak(day.state, "2026-10-10");
+  assert.deepEqual([after.status, after.rescuedToday], ["done", true]);
   // An ad that ends after midnight bridges up to the day it ended on - never a wasted rescue.
   assert.equal(applyStreakRescue(broken, "2026-10-10", "2026-10-11")!.lastDay, "2026-10-10");
 });
 
-test("at risk: only while a Save could still keep it (1-2 missed days beyond the Saves held)", () => {
-  assert.equal(viewStreak(at("2026-10-07", 9), "2026-10-10").atRisk, 9, "two missed days, no Save");
-  assert.equal(viewStreak(at("2026-10-06", 9), "2026-10-10").atRisk, 0, "three missed days: gone");
-  assert.equal(viewStreak(at("2026-10-08", 9, { saves: 1 }), "2026-10-10").atRisk, 0, "the held Save covers it");
+test("states: new, active, protected, at risk (1-2 missed beyond the Saves), lost, done, restarted - one per situation", () => {
+  const status = (s: StreakState, d = "2026-10-10") => viewStreak(s, d).status;
+  assert.equal(status(EMPTY_STREAK), "new");
+  assert.equal(status(at("2026-10-09", 4)), "active");
+  assert.equal(status(at("2026-10-08", 9, { saves: 1 })), "protected");
+  assert.equal(status(at("2026-10-07", 9, { saves: 2 })), "protected", "two Saves cover two days");
+  assert.equal(status(at("2026-10-07", 9)), "at_risk", "two missed days, no Save");
+  assert.equal(viewStreak(at("2026-10-07", 9), "2026-10-10").savesShort, 2);
+  assert.equal(status(at("2026-10-06", 9, { saves: 2 })), "lost", "three missed days: gone");
+  assert.equal(status(at("2026-10-10", 9)), "done");
+  const restart = completeStreakDay(at("2026-10-07", 9), "2026-10-10");
+  const rv = viewStreak(restart.state, "2026-10-10");
+  assert.deepEqual([rv.status, rv.current, rv.restartedFrom], ["restarted", 1, 9]);
+  assert.equal(viewStreak(restart.state, "2026-10-11").status, "active", "the restart note is about that day only");
+  assert.equal(status({ ...EMPTY_STREAK, best: 12 }), "lost", "a past streak, none now");
 });
 
 // --------------------------------------------------------- activity streak ----
 
-test("activity: 5 drawings in any mode complete the day once; the Daily completes it in one; nothing more is paid that day", () => {
+test("activity: exactly 5 finished drawings - any modes - complete the day once; no mode completes it alone", () => {
   assert.equal(STREAK_DAY_DRAWINGS, 5);
   let s: StreakState = EMPTY_STREAK;
   const steps = [];
   for (let i = 0; i < 7; i++) {
-    const a = addStreakActivity(s, "2026-10-10", "drawing");
+    const a = addStreakActivity(s, "2026-10-10");
     steps.push(a.completion?.day ?? null);
     s = a.state;
   }
   assert.deepEqual(steps, [null, null, null, null, 1, null, null], "the 5th drawing completes Day 1; later drawings only count");
   assert.equal(viewStreak(s, "2026-10-10").drawings, 7);
-  assert.equal(addStreakActivity(s, "2026-10-10", "daily").completion, null, "the Daily after 5 drawings pays nothing more");
-  const viaDaily = addStreakActivity(s, "2026-10-11", "daily");
-  assert.equal(viaDaily.completion?.day, 2, "the Daily alone completes the next day");
-  assert.equal(viaDaily.drawings, 0, "the Daily is not one of the 5 drawings");
+  const first = addStreakActivity(s, "2026-10-11");
+  assert.equal(first.completion, null, "one drawing (of any mode, the Daily included) is one of five");
+  assert.equal(first.drawings, 1);
+});
+
+test("activity: a round reported twice (same key) counts once; different rounds count; keys reset with the day", () => {
+  let s: StreakState = at("2026-10-09", 2);
+  const once = addStreakActivity(s, "2026-10-10", "mp:ABC:1:0");
+  s = once.state;
+  const again = addStreakActivity(s, "2026-10-10", "mp:ABC:1:0");
+  assert.equal(again.duplicate, true);
+  assert.equal(again.state, s, "nothing changed");
+  for (const r of [1, 2, 3]) s = addStreakActivity(s, "2026-10-10", "mp:ABC:1:" + r).state;
+  const fifth = addStreakActivity(s, "2026-10-10", "mp:ABC:1:3");
+  assert.equal(fifth.duplicate, true, "the 4th round again is not the 5th drawing");
+  const real = addStreakActivity(s, "2026-10-10", "mp:ABC:1:4");
+  assert.equal(real.completion?.day, 3);
+  assert.equal(addStreakActivity(real.state, "2026-10-11", "mp:ABC:1:0").duplicate, false, "a new day forgets yesterday's keys");
+  assert.deepEqual(normalizeStreak(JSON.parse(JSON.stringify(real.state))).today?.keys?.length, 5, "keys survive a reload");
 });
 
 test("activity: progress belongs to one Israel day - yesterday's 4 drawings do not carry over", () => {
   let s: StreakState = at("2026-10-09", 3);
-  for (let i = 0; i < 4; i++) s = addStreakActivity(s, "2026-10-10", "drawing").state;
+  for (let i = 0; i < 4; i++) s = addStreakActivity(s, "2026-10-10").state;
   assert.equal(viewStreak(s, "2026-10-10").drawings, 4);
   assert.equal(viewStreak(s, "2026-10-11").drawings, 0);
-  const next = addStreakActivity(s, "2026-10-11", "drawing");
+  const next = addStreakActivity(s, "2026-10-11");
   assert.equal(next.completion, null);
   assert.equal(next.drawings, 1);
   assert.deepEqual(normalizeStreak(JSON.parse(JSON.stringify(next.state))).today, { day: "2026-10-11", drawings: 1 }, "progress survives a reload");

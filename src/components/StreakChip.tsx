@@ -14,10 +14,10 @@ export default function StreakChip() {
   const [open, setOpen] = useState(false);
   useEffect(() => onStreakChanged(() => setView(getStreakView())), []);
 
-  const count = view.current > 0 ? view.current : view.atRisk;
+  const risk = view.status === "at_risk";
   const label =
-    view.atRisk > 0
-      ? `Drawing streak: ${view.atRisk} days, at risk. Show streak`
+    risk
+      ? `Drawing streak: ${view.current} days, at risk. Show streak`
       : view.current > 0
         ? `Drawing streak: ${view.current} ${view.current === 1 ? "day" : "days"}${view.doneToday ? ", today counts" : ""}. Show streak`
         : "Drawing streak: not started. Show streak";
@@ -25,7 +25,7 @@ export default function StreakChip() {
     <>
       <button
         type="button"
-        className={`streak-chip${view.doneToday ? " streak-chip-lit" : ""}${view.atRisk > 0 ? " streak-chip-risk" : ""}`}
+        className={`streak-chip${view.doneToday ? " streak-chip-lit" : ""}${risk ? " streak-chip-risk" : ""}`}
         onClick={() => {
           playSelectSound();
           setOpen(true);
@@ -33,7 +33,7 @@ export default function StreakChip() {
         aria-label={label}
       >
         <StreakFlame lit={view.doneToday} size={15} />
-        <span className="streak-chip-count">{count}</span>
+        <span className="streak-chip-count">{view.current}</span>
       </button>
       {open && <StreakSheet onClose={() => setOpen(false)} />}
     </>

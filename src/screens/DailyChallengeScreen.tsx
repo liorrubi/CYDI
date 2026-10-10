@@ -27,10 +27,10 @@ import { resolveDailyShape } from "../services/dailyShapeResolver";
 import { scoreAttempt } from "../engine/scoring";
 import { playEncourageSound, playSuccessSound, primeAudioContext } from "../engine/soundEngine";
 import { addCoins } from "../services/coinsStore";
-import { recordDailyCompletion } from "../services/drawingStreakStore";
-import type { StreakCompletion } from "../app/drawingStreak";
+import { getStreakView, recordStreakActivity } from "../services/drawingStreakStore";
+import { STREAK_DAY_DRAWINGS, type StreakCompletion } from "../app/drawingStreak";
 import StreakChip from "../components/StreakChip";
-import StreakDayCard from "../components/StreakDayCard";
+import StreakProgressChip from "../components/StreakProgressChip";
 import { withGameCoins } from "../services/economyAnalytics";
 import { dailyChallengeShareUrl } from "../services/dailyChallengeShare";
 import { genericShareUrl, shareOrCopy } from "../services/nativeShare";
@@ -98,8 +98,8 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
   /** One line per unclaimed prize (never summed) - a player who was away for several episodes could have more than one queued at once. */
   const [prizeMessages, setPrizeMessages] = useState<string[]>([]);
-  /** 0.59.0: the Daily Drawing Streak step THIS attempt made (only the day's first completion advances it). */
-  const [streakCompletion, setStreakCompletion] = useState<StreakCompletion | null>(null);
+  /** 0.59.0 Drawing Streak: this result's progress chip (null = nothing to show: today already counted). */
+  const [streakProgress, setStreakProgress] = useState<{ drawings: number; completion: StreakCompletion | null } | null>(null);
   // Rewarded Ink Trial (0.58.0, D6): an active Trial applies to Daily attempts ONLY while the remote config enables
   // the Daily surface (OFF by default) - resolveEffectiveInk returns the permanent ink otherwise. No Daily offer.
   const [penColor, setPenColor] = useState<PenColorId>(() => resolveEffectiveInk("daily", getSelectedColor()).color);
@@ -145,7 +145,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
     setYourBest(fetched.yourBest);
     setIsNewBest(false);
     setSubmission(null);
-    setStreakCompletion(null);
+    setStreakProgress(null);
     setAttemptPath(null);
     setResult(null);
     setFeedbackMessage(null);
@@ -263,10 +263,12 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
       if (passed) playSuccessSound();
       else playEncourageSound();
-      // 0.59.0 Drawing Streak: a completed LIVE attempt (never a replay of an ended challenge) counts the whole day at
-      // once and pays the day's coins (coin_earned daily_streak, route daily). Once today counts, nothing more is paid.
-      const streakStep = replay ? null : recordDailyCompletion();
-      setStreakCompletion(streakStep);
+      // 0.59.0 Drawing Streak: every completed attempt (a retry or a replay of an ended challenge too) is ONE of today's
+      // 5 drawings, exactly like any other mode. The chip shows until today counts, and once more on the drawing that
+      // made it count; the global celebration shows the day and its rewards.
+      const doneBefore = getStreakView().doneToday;
+      const step = recordStreakActivity("daily");
+      setStreakProgress(step.completion || !doneBefore ? { drawings: step.drawings, completion: step.completion } : null);
       // A daily game pays nothing itself (prizes are claimed later, as coin_earned) - 0 still records the balance bucket.
       trackEvent("game_completed", withGameCoins({ gameType: "dailyChallenge", category: shape.category, contentKey: `daily:${episode.id}` }, 0));
       // D6: a completed Daily attempt drawn with the Trial ink uses one play (only reachable with Daily enabled).
@@ -276,7 +278,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
   }
 
   function handleTryAgain() {
-    setStreakCompletion(null);
+    setStreakProgress(null);
     setAttemptPath(null);
     setResult(null);
     setSubmission(null);
@@ -354,7 +356,7 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
             Your best for this shape: <strong>{yourBest}%</strong>
           </p>
         )}
-        {streakCompletion && <StreakDayCard completion={streakCompletion} />}
+        {streakProgress && <StreakProgressChip drawings={streakProgress.drawings} target={STREAK_DAY_DRAWINGS} completion={streakProgress.completion} />}
         <ResultComparison target={target} attempt={attemptPath} attemptColor={penColor} />
         <div className="button-row">
           <Button variant="secondary" onClick={handleTryAgain}>

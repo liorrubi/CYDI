@@ -167,8 +167,8 @@ export default function SpecialChallengeScreen({ onNavigate }: SpecialChallengeS
       if (passed) playSuccessSound();
       else playEncourageSound();
       trackEvent("game_completed", withGameCoins({ gameType: "specialChallenge", category: SHAPE.category, contentKey: SHAPE.id }, Math.max(0, reward)));
-      // 0.59.0 Drawing Streak: one of today's 5 drawings (the global streak toast marks the day when it completes).
-      recordStreakActivity("drawing", "other");
+      // 0.59.0 Drawing Streak: one of today's 5 drawings (the global streak feedback shows progress and the day).
+      recordStreakActivity("other");
       setPhase("result");
     }, delay);
   }

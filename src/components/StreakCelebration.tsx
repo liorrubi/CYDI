@@ -1,0 +1,183 @@
+import { useEffect, useRef, useState } from "react";
+import { EMBER_CSS_GRADIENT } from "../app/constants";
+import { earnsStreakSave, isBigStreakDay, isStreakMilestone, STREAK_MILESTONES, STREAK_SAVE_MAX } from "../app/drawingStreak";
+import { triggerCoinFlight } from "../engine/coinFlight";
+import { playSelectSound, playSuccessSound } from "../engine/soundEngine";
+import { useDialogA11y } from "../hooks/useDialogA11y";
+import { onStreakDayCompleted, onStreakProgress, type StreakDayEventDetail, type StreakProgressEventDetail } from "../services/drawingStreakStore";
+import StreakFlame from "./StreakFlame";
+
+const BANNER_MS = 3600;
+const PROGRESS_MS = 2200;
+
+/** Days that earn more than the ordinary coins - a milestone, a Streak Save or the Ember Ink - get the full card. */
+function isBigDay(d: StreakDayEventDetail): boolean {
+  return isBigStreakDay(d.completion);
+}
+
+/** A live game (other players, a running round) never gets a card on top of it - the banner says it all instead. */
+function isLiveGame(d: { route: string }): boolean {
+  return d.route === "multiplayer" || d.route === "two_players";
+}
+
+/**
+ * The Drawing Streak's moments, for every mode, from ONE place (mounted once in App):
+ *   - a small "🔥 3/5 today" pill when a drawing counts in a mode without its own streak line (Classic and the
+ *     Daily show progress on their result screens);
+ *   - when a day counts: a compact banner with the coins (and any Save or Ember) - on ordinary days, and on every
+ *     day inside a live Multiplayer / 2 Players game;
+ *   - on milestone, Save and Ember days elsewhere: one celebration card listing every reward, the new balance and
+ *     the Saves held - dismissed by a tap, never repeated.
+ * Each moment comes from a one-shot event fired only when the store actually pays, so a reload, a navigation or a
+ * repeated completion can never show it - or pay it - twice.
+ */
+export default function StreakCelebration() {
+  const [day, setDay] = useState<StreakDayEventDetail | null>(null);
+  const [progress, setProgress] = useState<StreakProgressEventDetail | null>(null);
+
+  useEffect(
+    () =>
+      onStreakProgress((p) => {
+        if (p.route === "classic" || p.route === "daily") return;
+        setProgress(p);
+      }),
+    [],
+  );
+  useEffect(
+    () =>
+      onStreakDayCompleted((d) => {
+        setProgress(null);
+        setDay(d);
+      }),
+    [],
+  );
+  useEffect(() => {
+    if (!progress) return;
+    const t = window.setTimeout(() => setProgress(null), PROGRESS_MS);
+    return () => window.clearTimeout(t);
+  }, [progress]);
+
+  if (day && isBigDay(day) && !isLiveGame(day)) return <StreakDayCard detail={day} onClose={() => setDay(null)} />;
+  if (day) return <StreakDayBanner detail={day} onDone={() => setDay(null)} />;
+  if (progress) {
+    return (
+      <div className="streak-toast streak-toast-progress" role="status">
+        <StreakFlame lit={false} size={16} />
+        <span>
+          {progress.drawings}/{progress.target} today
+        </span>
+      </div>
+    );
+  }
+  return null;
+}
+
+function rewardsText(d: StreakDayEventDetail): string {
+  const c = d.completion;
+  return [`+${c.coins} 🪙`, c.saveEarned ? `+1 🛡` : "", c.emberUnlocked ? "Ember Ink" : ""].filter(Boolean).join(" · ");
+}
+
+function StreakDayBanner({ detail, onDone }: { detail: StreakDayEventDetail; onDone: () => void }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const c = detail.completion;
+  useEffect(() => {
+    const fly = window.setTimeout(() => triggerCoinFlight(ref.current), 200);
+    const t = window.setTimeout(onDone, isBigDay(detail) ? BANNER_MS + 2000 : BANNER_MS);
+    return () => {
+      window.clearTimeout(fly);
+      window.clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail]);
+  const title = c.restartedFrom > 0 ? "New streak · Day 1" : isBigDay(detail) ? `Day ${c.day}!` : `Day ${c.day} · streak kept`;
+  return (
+    <div className={`streak-toast${isBigDay(detail) ? " streak-toast-big" : ""}`} role="status">
+      <StreakFlame lit size={20} />
+      <span>{title}</span>
+      <span ref={ref} className="streak-toast-coins">
+        {rewardsText(detail)}
+      </span>
+    </div>
+  );
+}
+
+function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onClose: () => void }) {
+  const c = detail.completion;
+  const coinsRef = useRef<HTMLDivElement | null>(null);
+  const ref = useDialogA11y<HTMLDivElement>(true, { onClose });
+  const next = STREAK_MILESTONES.find((m) => m.day > c.day);
+  useEffect(() => {
+    playSuccessSound();
+    const t = window.setTimeout(() => triggerCoinFlight(coinsRef.current), 450);
+    return () => window.clearTimeout(t);
+  }, []);
+  const close = () => {
+    playSelectSound();
+    onClose();
+  };
+  return (
+    <div className="streak-celebrate-backdrop" onClick={close}>
+      <div ref={ref} className="streak-celebrate" role="dialog" aria-modal="true" aria-labelledby="streak-celebrate-title" onClick={(e) => e.stopPropagation()}>
+        <StreakFlame lit size={64} animated />
+        <h2 id="streak-celebrate-title" className="streak-celebrate-title">
+          Day {c.day}!
+        </h2>
+        <p className="streak-celebrate-sub">{isStreakMilestone(c.day) ? "Streak milestone reached" : "Streak Save earned"}</p>
+        <ul className="streak-celebrate-rewards">
+          <li>
+            <div ref={coinsRef} className="streak-celebrate-reward">
+              <span className="streak-celebrate-icon" aria-hidden="true">
+                🪙
+              </span>
+              <strong>+{c.coins} coins</strong>
+            </div>
+            <span className="streak-celebrate-meta">Balance {detail.balance.toLocaleString("en-US")}</span>
+          </li>
+          {c.saveEarned && (
+            <li>
+              <div className="streak-celebrate-reward">
+                <span className="streak-celebrate-icon" aria-hidden="true">
+                  🛡
+                </span>
+                <strong>+1 Streak Save</strong>
+              </div>
+              <span className="streak-celebrate-meta">
+                {detail.saves}/{STREAK_SAVE_MAX} held
+              </span>
+            </li>
+          )}
+          {!c.saveEarned && earnsStreakSave(c.day) && (
+            <li>
+              <div className="streak-celebrate-reward">
+                <span className="streak-celebrate-icon" aria-hidden="true">
+                  🛡
+                </span>
+                <span>Streak Saves full</span>
+              </div>
+              <span className="streak-celebrate-meta">
+                {detail.saves}/{STREAK_SAVE_MAX} held
+              </span>
+            </li>
+          )}
+          {c.emberUnlocked && (
+            <li>
+              <div className="streak-celebrate-reward">
+                <span className="streak-ember-swatch streak-celebrate-swatch" style={{ background: EMBER_CSS_GRADIENT }} aria-hidden="true" />
+                <strong>Ember Ink</strong>
+              </div>
+              <span className="streak-celebrate-meta">Yours to keep - in your inks</span>
+            </li>
+          )}
+        </ul>
+        {next && (
+          <p className="streak-celebrate-next">
+            Next: Day {next.day} · +{next.coins} 🪙{next.extra === "ember" ? " + Ember Ink" : ""}
+          </p>
+        )}
+        <button type="button" className="streak-celebrate-ok" onClick={close}>
+          Nice!
+        </button>
+      </div>
+    </div>
+  );
+}

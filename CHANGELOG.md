@@ -4,11 +4,11 @@
 
 Android 0.59.0 (versionCode 67) and web 0.59.0. Coins you already have, and everything you already own, stay exactly as they are.
 
-- **Drawing Streak:** play on consecutive days to build a streak. A day counts when you finish **5 drawings in any
-  mode** - Classic, Multiplayer, 2 Players, Special and the rest - or the **Daily Challenge**, which counts the
-  whole day in one go. Every day pays a few coins, with bigger rewards on days 3, 7, 14 and 30, and a new
-  exclusive **Ember Ink** for your first 30-day streak. Your streak and today's progress are on Home; tap it for
-  the details. A **Streak Save** (earned along the way, or 300 coins) covers a missed day automatically.
+- **Drawing Streak:** play on consecutive days to build a streak. A day counts when you finish **5 drawings** in
+  any mix of modes - Classic, Daily, Multiplayer, 2 Players, Special and the rest each count as one. Every day pays
+  a few coins, with bigger rewards and a celebration on days 3, 7, 14 and 30, and a new exclusive **Ember Ink**
+  for your first 30-day streak. Your streak and today's progress (0/5 to 5/5) are on Home; tap it for the
+  details. A **Streak Save** (earned along the way, or 300 coins) covers a missed day automatically.
 - **New prices:** Purple, Green and Orange Ink now cost 750, Rainbow Ink 6,000 and Diamond Blue 9,000.
   Categories are priced by how many you've unlocked: 1,000 for your first, 1,250 for the second and 1,500 after
   that - the price is shown on the map.

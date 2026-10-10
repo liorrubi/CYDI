@@ -370,8 +370,8 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
       if (passed) playSuccessSound();
       else playEncourageSound();
       trackEvent("game_completed", withGameCoins({ gameType: "artistPack", category: artwork.category, contentKey: `${pack.id}:${artwork.id}` }, outcome.starCoins));
-      // 0.59.0 Drawing Streak: one of today's 5 drawings (the global streak toast marks the day when it completes).
-      recordStreakActivity("drawing", "other");
+      // 0.59.0 Drawing Streak: one of today's 5 drawings (the global streak feedback shows progress and the day).
+      recordStreakActivity("other");
       setPhase("result");
     }, delay);
   }

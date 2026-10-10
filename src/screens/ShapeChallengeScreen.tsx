@@ -1344,7 +1344,7 @@ function ShapePlay({
       // on that result once more (the day and its coins), and then stays away for the rest of the day.
       if (!practice) {
         const doneBefore = getStreakView().doneToday;
-        const step = recordStreakActivity("drawing", "classic");
+        const step = recordStreakActivity("classic");
         setStreakProgress(step.completion || !doneBefore ? { drawings: step.drawings, completion: step.completion } : null);
       } else {
         setStreakProgress(null);

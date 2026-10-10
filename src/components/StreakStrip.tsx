@@ -1,34 +1,48 @@
 import { useEffect, useState } from "react";
-import { STREAK_MILESTONES, streakRewardFor } from "../app/drawingStreak";
+import { STREAK_MILESTONES, streakRewardFor, type StreakView } from "../app/drawingStreak";
 import { playSelectSound } from "../engine/soundEngine";
 import { getStreakView, onStreakChanged } from "../services/drawingStreakStore";
 import StreakFlame from "./StreakFlame";
 import StreakSheet from "./StreakSheet";
 
+function subLine(v: StreakView): string {
+  const progress = `${Math.min(v.drawings, v.target)}/${v.target} drawings today`;
+  switch (v.status) {
+    case "done":
+      return `Today ✓ · tomorrow +${streakRewardFor(v.current + 1)} 🪙`;
+    case "restarted":
+      return "New streak · today ✓";
+    case "at_risk":
+      return "At risk · tap to keep it";
+    case "protected":
+      return `🛡 Protected · ${progress}`;
+    case "rescued":
+      return `Rescued ✓ · ${progress}`;
+    default:
+      return `${progress} · any mode`;
+  }
+}
+
 /**
- * Home's single streak indicator (Android and web): the streak, today's progress toward it in any mode, and the next
- * reward - one compact line that opens the streak view. It replaces the Daily-only presentation: whichever mode the
- * player prefers, this is where the streak lives.
+ * Home's single streak indicator (Android and web): the streak and its state, today's progress toward 5 drawings in
+ * any mode, and the next milestone - one compact line that opens the streak view. Same status as every other
+ * streak surface (app/drawingStreak.ts viewStreak), so Home and the sheet can never disagree.
  */
 export default function StreakStrip() {
   const [view, setView] = useState(() => getStreakView());
   const [open, setOpen] = useState(false);
   useEffect(() => onStreakChanged(() => setView(getStreakView())), []);
 
-  const count = view.current > 0 ? view.current : view.atRisk;
-  const next = STREAK_MILESTONES.find((m) => m.day > count);
-  const title = view.atRisk > 0 ? `${view.atRisk}-day streak at risk` : count > 0 ? `${count}-day streak` : "Start a drawing streak";
-  const sub = view.doneToday
-    ? `Today ✓ · tomorrow +${streakRewardFor(view.current + 1)} 🪙`
-    : view.atRisk > 0
-      ? "Missed a day · tap to keep it"
-      : `${Math.min(view.drawings, view.target)}/${view.target} drawings · or the Daily`;
+  const next = STREAK_MILESTONES.find((m) => m.day > view.current);
+  const title = view.current > 0 ? `${view.current}-day streak` : "Start a drawing streak";
+  const sub = subLine(view);
+  const risk = view.status === "at_risk";
 
   return (
     <>
       <button
         type="button"
-        className={`streak-strip${view.doneToday ? " streak-strip-done" : ""}${view.atRisk > 0 ? " streak-strip-risk" : ""}`}
+        className={`streak-strip${view.doneToday ? " streak-strip-done" : ""}${risk ? " streak-strip-risk" : ""}`}
         onClick={() => {
           playSelectSound();
           setOpen(true);
@@ -42,7 +56,7 @@ export default function StreakStrip() {
           <span className="streak-strip-title">{title}</span>
           <span className="streak-strip-sub">{sub}</span>
         </span>
-        {view.doneToday || view.atRisk > 0 ? (
+        {view.doneToday || risk ? (
           next && (
             <span className="streak-strip-next" aria-hidden="true">
               Day {next.day}

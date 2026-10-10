@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { EMBER_CSS_GRADIENT } from "../app/constants";
-import { STREAK_MILESTONES, STREAK_SAVE_MAX, STREAK_SAVE_PRICE, streakRewardFor } from "../app/drawingStreak";
+import { STREAK_MILESTONES, STREAK_SAVE_MAX, STREAK_SAVE_PRICE, streakRewardFor, type StreakView } from "../app/drawingStreak";
 import { playChipSound, playSelectSound } from "../engine/soundEngine";
 import { useDialogA11y } from "../hooks/useDialogA11y";
+import { useStreakRescue } from "../hooks/useStreakRescue";
 import { getCoins, onCoinsChanged } from "../services/coinsStore";
 import { buyStreakSave, getStreakState, getStreakView, onStreakChanged } from "../services/drawingStreakStore";
 import StreakFlame from "./StreakFlame";
-import StreakRescueOffer from "./StreakRescueOffer";
 
 type StreakSheetProps = { onClose: () => void };
 
@@ -21,16 +21,47 @@ function trackFillPercent(current: number): number {
   return Math.round(((i + within) / last) * 100);
 }
 
+const BADGE: Partial<Record<StreakView["status"], { text: string; tone: "ok" | "warn" | "info" }>> = {
+  done: { text: "Today ✓", tone: "ok" },
+  protected: { text: "🛡 Protected", tone: "info" },
+  at_risk: { text: "At risk", tone: "warn" },
+  rescued: { text: "Rescued ✓", tone: "ok" },
+  restarted: { text: "New streak", tone: "info" },
+};
+
+function statusLine(v: StreakView): string {
+  const missed = v.missed === 1 ? "yesterday" : `${v.missed} days`;
+  switch (v.status) {
+    case "new":
+      return "Finish 5 drawings today - any mode counts - to start your streak.";
+    case "active":
+      return "Finish 5 drawings today to keep it going.";
+    case "protected":
+      return `You missed ${missed}. Your Streak Save covers it - finish 5 drawings today.`;
+    case "at_risk":
+      return `You missed ${missed}. Keep your streak before today counts.`;
+    case "rescued":
+      return `Kept by the Rescue. Finish 5 drawings today to make it Day ${v.current + 1}.`;
+    case "lost":
+      return "Your last streak ended. Finish 5 drawings today to start a new one.";
+    case "restarted":
+      return `Today started a new streak - your ${v.restartedFrom}-day streak ended.`;
+    case "done":
+      return v.rescuedToday ? "Kept by the Rescue and today counts ✓ Come back tomorrow." : "Today counts ✓ Come back tomorrow to keep it going.";
+  }
+}
+
 /**
- * The on-demand streak view: the streak, today's progress (5 drawings in any mode, or the Daily), the road to the
- * next milestones, Streak Saves and - only when one is available - the Rewarded Rescue. One compact sheet - no
- * calendar grid, no history, no nagging. Opened from Home's streak bar, the streak chips and the result cards; closed
- * by the ✕, the backdrop or Escape.
+ * The on-demand streak view. ONE status drives every line, so it can never say "12-day streak" and "Day 1" at once:
+ * the streak and its state, today's progress (5 drawings, any mode), at most one "keep your streak" box (a Save,
+ * and - only when an ad is really loaded - the Rescue), the milestone track and the Saves held. No calendar, no
+ * history, no nagging. Opened from Home's streak bar, the Daily chip and the result chips.
  */
 export default function StreakSheet({ onClose }: StreakSheetProps) {
   const [view, setView] = useState(() => getStreakView());
   const [emberOwned, setEmberOwned] = useState(() => getStreakState().emberGranted);
   const [coins, setCoins] = useState(() => getCoins());
+  const rescue = useStreakRescue();
   const ref = useDialogA11y<HTMLDivElement>(true, { onClose });
 
   useEffect(
@@ -43,29 +74,23 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
   );
   useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
 
-  // An at-risk streak (missed days a Save can still cover) is shown as it stands, so a Save or a rescue reads as
-  // "keep these days", not as an abstract number.
-  const current = view.current > 0 ? view.current : view.atRisk;
+  const current = view.current;
   const fill = trackFillPercent(current);
   const nextMilestone = STREAK_MILESTONES.find((m) => m.day > current);
-
-  const status = view.doneToday
-    ? "Today counts ✓ Come back tomorrow to keep it going."
-    : view.atRisk > 0
-      ? "You missed a day - a Streak Save keeps your streak."
-      : view.savesNeeded > 0
-        ? "You missed a day - your Streak Save covers it once today counts."
-        : current > 0
-          ? "Keep it going today - every mode counts."
-          : view.best > 0
-            ? "Start a new streak today - every mode counts."
-            : "Play on consecutive days to build a streak - every mode counts.";
-
+  const badge = BADGE[view.status];
   const canBuy = view.saves < STREAK_SAVE_MAX && coins >= STREAK_SAVE_PRICE;
+  // At most one place offers a Save: the keep box while at risk, the Saves row otherwise.
+  const keepBox = view.status === "at_risk" || (view.status === "restarted" && rescue.available);
 
   function handleBuySave() {
     if (buyStreakSave() === "bought") playChipSound();
   }
+
+  const nextLine = view.doneToday
+    ? `Tomorrow: Day ${current + 1} · +${streakRewardFor(current + 1)} 🪙`
+    : view.next
+      ? `${view.status === "at_risk" ? "If kept, today is" : "Today:"} Day ${view.next.day} · +${view.next.coins} 🪙`
+      : "";
 
   return (
     <div className="streak-sheet-backdrop" onClick={onClose}>
@@ -89,13 +114,15 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
           ✕
         </button>
         <div className="streak-sheet-hero">
-          <StreakFlame lit={view.doneToday} size={56} animated />
+          <StreakFlame lit={view.doneToday} size={52} animated />
           <h2 id="streak-sheet-title" className="streak-sheet-title">
             {current > 0 ? `${current}-day streak` : "Drawing streak"}
           </h2>
-          <p className="streak-sheet-status">{status}</p>
+          {badge && <span className={`streak-badge streak-badge-${badge.tone}`}>{badge.text}</span>}
+          <p className="streak-sheet-status">{statusLine(view)}</p>
+          {view.best > current && <p className="streak-sheet-best">Best: {view.best} days</p>}
           {!view.doneToday && (
-            <p className="streak-today" aria-label={`Today: ${view.drawings} of ${view.target} drawings, or the Daily Challenge`}>
+            <p className="streak-today" aria-label={`Today: ${view.drawings} of ${view.target} drawings`}>
               <span className="daily-goal-dots" aria-hidden="true">
                 {Array.from({ length: view.target }, (_, i) => (
                   <span key={i} className={i < view.drawings ? "daily-goal-dot daily-goal-dot-on" : "daily-goal-dot"} />
@@ -105,15 +132,41 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
                 <strong>
                   {Math.min(view.drawings, view.target)}/{view.target}
                 </strong>{" "}
-                drawings today · or the Daily
+                drawings today · any mode
               </span>
             </p>
           )}
-          {view.best > current && <p className="streak-sheet-best">Best: {view.best} days</p>}
-          <StreakRescueOffer />
         </div>
 
-        <div className="streak-track" aria-label={`Streak progress: day ${current}`}>
+        {keepBox && (
+          <div className="streak-keep">
+            <p className="streak-keep-title">
+              {view.status === "restarted" ? `Restore your ${view.restartedFrom}-day streak?` : `Keep your ${current}-day streak`}
+            </p>
+            {view.status === "at_risk" && (
+              <>
+                <p className="streak-keep-text">
+                  {view.savesShort > 1 ? `${view.savesShort} Saves cover the missed days.` : "A Save covers the missed day."}
+                  {rescue.available ? " Or watch a short ad instead." : ""}
+                </p>
+                <button type="button" className="streak-keep-save" disabled={!canBuy} onClick={handleBuySave}>
+                  🛡 Get a Save · {STREAK_SAVE_PRICE} 🪙
+                </button>
+                {!canBuy && coins < STREAK_SAVE_PRICE && <p className="streak-keep-note">You need {STREAK_SAVE_PRICE} 🪙 for a Save.</p>}
+              </>
+            )}
+            {view.status === "restarted" && <p className="streak-keep-text">Watch a short ad and it carries on from Day {view.restartedFrom + 1}.</p>}
+            {rescue.available && !rescue.granted && (
+              <button type="button" className="streak-rescue-btn" disabled={rescue.pending} onClick={() => void rescue.watch()}>
+                {rescue.pending ? "Loading ad…" : "▶ Watch a short ad"}
+              </button>
+            )}
+            {rescue.note && <p className="streak-keep-note">{rescue.note}</p>}
+          </div>
+        )}
+
+        <div className="streak-track" aria-label={`Milestones: day ${current}`}>
+          <p className="streak-track-label">Milestones</p>
           <div className="streak-track-line">
             <div className="streak-track-fill" style={{ width: `${fill}%` }} />
           </div>
@@ -131,7 +184,7 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
                     {m.extra === "ember" ? (
                       <>
                         <span className="streak-ember-swatch" style={{ background: EMBER_CSS_GRADIENT }} aria-hidden="true" />
-                        {emberOwned ? "Ember ✓" : "Ember Ink"}
+                        {emberOwned ? "Ember ✓" : "+300 · Ember"}
                       </>
                     ) : (
                       <>+{m.coins} 🪙{m.extra === "save" ? " 🛡" : ""}</>
@@ -141,13 +194,8 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
               );
             })}
           </ol>
-          <p className="streak-next-line">
-            {view.atRisk > 0
-              ? `Kept, today is Day ${view.atRisk + 1} · +${streakRewardFor(view.atRisk + 1)} 🪙`
-              : view.next
-                ? `Today: Day ${view.next.day} · +${view.next.coins} 🪙`
-                : `Tomorrow: Day ${current + 1} · +${streakRewardFor(current + 1)} 🪙`}
-          </p>
+          <p className="streak-track-legend">Other days +20 🪙 (Day 2 +30) · 🛡 = Streak Save</p>
+          {nextLine && <p className="streak-next-line">{nextLine}</p>}
         </div>
 
         <div className="streak-saves">
@@ -159,11 +207,15 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
                 </span>
               ))}
             </span>
-            <span className="streak-saves-text">A Save covers a missed day automatically.</span>
+            <span className="streak-saves-text">
+              Saves {view.saves}/{STREAK_SAVE_MAX} - one covers a missed day automatically.
+            </span>
           </div>
-          <button type="button" className="streak-save-buy" disabled={!canBuy} onClick={handleBuySave}>
-            {view.saves >= STREAK_SAVE_MAX ? "Saves full" : `Get a Save · ${STREAK_SAVE_PRICE} 🪙`}
-          </button>
+          {!keepBox && (
+            <button type="button" className="streak-save-buy" disabled={!canBuy} onClick={handleBuySave}>
+              {view.saves >= STREAK_SAVE_MAX ? "Saves full" : `Get a Save · ${STREAK_SAVE_PRICE} 🪙`}
+            </button>
+          )}
         </div>
       </div>
     </div>

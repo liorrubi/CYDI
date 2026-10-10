@@ -1,5 +1,5 @@
 // 0.59.0 - the REAL stores against an in-memory localStorage: the Daily Drawing Streak (pays once a day, Ember once,
-// Save purchase, 5 drawings in any mode or the Daily), category purchase order (price + analytics ordinal
+// Save purchase, 5 finished drawings in any mix of modes), category purchase order (price + analytics ordinal
 // from one count) and the per-day Rewarded limits. Captures what trackEvent would send.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -19,7 +19,7 @@ const { validateEventParams } = await import("./analyticsSchema.ts");
 const { getSaveData, updateSaveData, replaceSaveData } = await import("./saveStore.ts");
 const { createDefaultSaveData } = await import("./saveData.ts");
 const { getCoins } = await import("./coinsStore.ts");
-const { buyStreakSave, getStreakRescueOffer, getStreakView, grantStreakRescue, onStreakDayCompleted, recordDailyCompletion, recordStreakActivity } = await import(
+const { buyStreakSave, getStreakRescueOffer, getStreakView, grantStreakRescue, onStreakDayCompleted, recordStreakActivity } = await import(
   "./drawingStreakStore.ts"
 );
 const { getPaidCategoryPurchaseCount, nextCategoryUnlockPrice, unlockCategory } = await import("./categoryUnlockStore.ts");
@@ -51,13 +51,19 @@ function fresh(coins = 0) {
 
 // Israel noon on the given date - the streak's day is the Israel calendar day.
 const il = (date: string) => Date.parse(`${date}T09:00:00Z`);
+/** Five finished Daily drawings at `now` - what makes a day count. Returns the completion they made, if any. */
+const fiveDrawings = (now: number) => {
+  let made = null;
+  for (let i = 0; i < 5; i++) made = recordStreakActivity("daily", { now }).completion ?? made;
+  return made;
+};
 
 test("streak: the first completion of a day pays its coins once; a retry the same day pays nothing", async () => {
   fresh(0);
-  const first = recordDailyCompletion(il("2026-10-10"));
+  const first = fiveDrawings(il("2026-10-10"));
   assert.equal(first?.day, 1);
   assert.equal(getCoins(), 20);
-  const retry = recordDailyCompletion(il("2026-10-10") + 3_600_000);
+  const retry = fiveDrawings(il("2026-10-10") + 3_600_000);
   assert.equal(retry, null);
   assert.equal(getCoins(), 20, "no second payment");
   await flush();
@@ -67,10 +73,10 @@ test("streak: the first completion of a day pays its coins once; a retry the sam
 
 test("streak: survives a reload (it lives in the save) and continues the next Israel day", () => {
   fresh(0);
-  recordDailyCompletion(il("2026-10-10"));
+  fiveDrawings(il("2026-10-10"));
   const saved = JSON.parse(JSON.stringify(getSaveData()));
   replaceSaveData(saved);
-  const next = recordDailyCompletion(il("2026-10-11"));
+  const next = fiveDrawings(il("2026-10-11"));
   assert.equal(next?.day, 2);
   assert.equal(getCoins(), 50);
   assert.equal(getStreakView(il("2026-10-11")).doneToday, true);
@@ -78,21 +84,21 @@ test("streak: survives a reload (it lives in the save) and continues the next Is
 
 test("streak: the Israel day decides, not the device's - 23:30 UTC on the 10th is already the 11th in Israel", () => {
   fresh(0);
-  recordDailyCompletion(Date.parse("2026-10-10T08:00:00Z"));
-  const lateUtc = recordDailyCompletion(Date.parse("2026-10-10T23:30:00Z")); // 02:30 on the 11th in Israel (UTC+3)
+  fiveDrawings(Date.parse("2026-10-10T08:00:00Z"));
+  const lateUtc = fiveDrawings(Date.parse("2026-10-10T23:30:00Z")); // 02:30 on the 11th in Israel (UTC+3)
   assert.equal(lateUtc?.day, 2);
 });
 
 test("streak: Day 3 milestone is reported once per player; Day 30 grants the Ember Ink", async () => {
   fresh(0);
-  for (const d of ["2026-10-01", "2026-10-02", "2026-10-03"]) recordDailyCompletion(il(d));
+  for (const d of ["2026-10-01", "2026-10-02", "2026-10-03"]) fiveDrawings(il(d));
   await flush();
   assert.deepEqual(sent.filter((s) => s.name === "progression_milestone").map((s) => s.params.milestone), ["streak_3"]);
   updateSaveData((d) => {
     d.progress.drawingStreak = { lastDay: "2026-10-20", current: 29, best: 29, saves: 0, emberGranted: false };
   });
   assert.equal(isColorUnlocked("ember"), false);
-  const day30 = recordDailyCompletion(il("2026-10-21"));
+  const day30 = fiveDrawings(il("2026-10-21"));
   assert.equal(day30?.emberUnlocked, true);
   assert.equal(isColorUnlocked("ember"), true);
 });
@@ -115,7 +121,7 @@ test("Streak Rescue (store): offered on the restart day, granted once, pays noth
     d.progress.drawingStreak = { lastDay: "2026-10-08", current: 12, best: 12, saves: 0, emberGranted: false };
   });
   assert.deepEqual(getStreakRescueOffer(il("2026-10-10")), { from: 12, day: "2026-10-10" }, "available before today counts too");
-  recordDailyCompletion(il("2026-10-10"));
+  fiveDrawings(il("2026-10-10"));
   assert.equal(getCoins(), 20, "the restart day pays Day 1");
   const offer = getStreakRescueOffer(il("2026-10-10"));
   assert.deepEqual(offer, { from: 12, day: "2026-10-10" });
@@ -128,7 +134,7 @@ test("Streak Rescue (store): offered on the restart day, granted once, pays noth
   assert.equal(grantStreakRescue(offer!.day), false, "a duplicate reward callback changes nothing");
   assert.equal(getCoins(), 20, "no coins");
   assert.equal(getStreakView(Date.parse("2026-10-10T21:00:30Z")).current, 13);
-  assert.equal(recordDailyCompletion(il("2026-10-11"))?.day, 14, "continues the next day");
+  assert.equal(fiveDrawings(il("2026-10-11"))?.day, 14, "continues the next day");
   await flush();
   assert.equal(sent.filter((x) => x.name === "coin_earned").length, 1, "only the next day's streak coins");
 });
@@ -148,8 +154,8 @@ test("Streak Rescue: the only grant call is behind a verified ad reward (call-si
     }
   };
   walk(root);
-  assert.deepEqual(callers.sort(), ["components/StreakRescueOffer.tsx", "services/drawingStreakStore.ts"]);
-  const src = fs.readFileSync(path.join(root, "components/StreakRescueOffer.tsx"), "utf8");
+  assert.deepEqual(callers.sort(), ["hooks/useStreakRescue.ts", "services/drawingStreakStore.ts"]);
+  const src = fs.readFileSync(path.join(root, "hooks/useStreakRescue.ts"), "utf8");
   const grant = src.indexOf("grantStreakRescue(offer.day)");
   const gate = src.lastIndexOf('outcome.grantSource === "ad"', grant);
   assert.ok(gate > 0 && grant - gate < 200, "granted only inside the verified-reward branch");
@@ -161,12 +167,12 @@ test("Streak Rescue (store) before today counts: the missed day is bridged, then
   updateSaveData((d) => {
     d.progress.drawingStreak = { lastDay: "2026-10-08", current: 12, best: 12, saves: 0, emberGranted: false };
   });
-  assert.equal(getStreakView(il("2026-10-10")).atRisk, 12);
+  assert.deepEqual([getStreakView(il("2026-10-10")).status, getStreakView(il("2026-10-10")).current], ["at_risk", 12]);
   assert.equal(grantStreakRescue("2026-10-10", il("2026-10-10")), true);
   assert.equal(getCoins(), 0, "the rescue pays nothing");
-  assert.equal(getStreakView(il("2026-10-10")).atRisk, 0);
+  assert.equal(getStreakView(il("2026-10-10")).status, "rescued");
   let day = null;
-  for (let i = 0; i < 5; i++) day = recordStreakActivity("drawing", "multiplayer", il("2026-10-10")).completion ?? day;
+  for (let i = 0; i < 5; i++) day = recordStreakActivity("multiplayer", { now: il("2026-10-10") }).completion ?? day;
   assert.equal(day?.day, 13);
   assert.equal(getCoins(), 20);
 });
@@ -183,9 +189,9 @@ test("activity streak (store): mixed modes reach 5 drawings; one payment with ro
   try {
     onStreakDayCompleted((d) => events.push(`${d.route}:${d.completion.day}`));
     const routes = ["classic", "classic", "multiplayer", "two_players", "other", "classic", "multiplayer"] as const;
-    const days = routes.map((r) => recordStreakActivity("drawing", r, il("2026-10-10")).completion?.day ?? null);
+    const days = routes.map((r) => recordStreakActivity(r, { now: il("2026-10-10") }).completion?.day ?? null);
     assert.deepEqual(days, [null, null, null, null, 1, null, null]);
-    assert.equal(recordDailyCompletion(il("2026-10-10")), null, "the Daily on a day that already counts pays nothing");
+    assert.equal(recordStreakActivity("daily", { now: il("2026-10-10") }).completion, null, "a Daily drawing on a day that already counts pays nothing");
   } finally {
     w.addEventListener = prevAdd;
     w.dispatchEvent = prevDispatch;
@@ -197,7 +203,7 @@ test("activity streak (store): mixed modes reach 5 drawings; one payment with ro
     sent.filter((s) => s.name === "coin_earned").map((s) => s.params),
     [{ coinSource: "daily_streak", amount: 20, balanceBucket: "0_99", streakDay: "1", streakRoute: "other" }],
   );
-  assert.equal(getStreakView(il("2026-10-10")).drawings, 7);
+  assert.equal(getStreakView(il("2026-10-10")).drawings, 8, "the Daily drawing counted as one more, nothing paid");
   assert.equal(getStreakView(il("2026-10-11")).drawings, 0, "a new Israel day starts from 0");
 });
 
@@ -222,17 +228,19 @@ test("activity streak (store): opening the app or a practice replay records noth
     "components/multiplayer/PlayTogetherRoom.tsx:1",
     "components/passplay/PassPlayGame.tsx:1",
     "screens/ArtistPackScreen.tsx:1",
+    "screens/DailyChallengeScreen.tsx:1",
     "screens/MegaChallengeScreen.tsx:1",
-    "screens/PlayChallengeScreen.tsx:1",
     "screens/ShapeChallengeScreen.tsx:1",
     "screens/SpecialChallengeScreen.tsx:1",
-    "services/drawingStreakStore.ts:1",
   ]);
   const classic = fs.readFileSync(path.join(root, "screens/ShapeChallengeScreen.tsx"), "utf8");
-  const call = classic.indexOf('recordStreakActivity("drawing", "classic")');
+  const call = classic.indexOf('recordStreakActivity("classic")');
   assert.ok(classic.lastIndexOf("if (!practice) {", call) > call - 300, "Classic counts every round except web landing-page practice");
   const mp = fs.readFileSync(path.join(root, "components/multiplayer/PlayTogetherRoom.tsx"), "utf8");
-  assert.ok(mp.includes('if (snapshot.you?.submitted) recordStreakActivity("drawing", "multiplayer")'), "only rounds this device drew in");
+  const mpCall = mp.indexOf('recordStreakActivity("multiplayer", { key:');
+  assert.ok(mpCall > 0 && mp.lastIndexOf("if (snapshot.you?.submitted) {", mpCall) > mpCall - 120, "only rounds this device drew in, keyed per round");
+  const pp = fs.readFileSync(path.join(root, "components/passplay/PassPlayGame.tsx"), "utf8");
+  assert.ok(pp.includes('if (emptyTurnsRef.current === 0) recordStreakActivity("two_players", { key:'), "2 Players: a round everyone drew in, keyed per round");
 });
 
 test("category purchase order: one count drives the price (1,000 / 1,250 / 1,500) and the analytics ordinal", () => {

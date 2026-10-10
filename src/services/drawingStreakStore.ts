@@ -1,7 +1,7 @@
 // 0.59.0 Drawing Streak - storage and side effects around the pure rules in app/drawingStreak.ts.
 // Lives in the save (progress.drawingStreak, optional - older saves normalize to an empty streak), so it travels
 // with Backup & Transfer like every other progress. The visit streak (dailyStreakStore.ts) and its achievements
-// are untouched: this is a separate counter for days with real play (5 drawings in any mode, or the Daily).
+// are untouched: this is a separate counter for days with real play (5 finished drawings, any mix of modes).
 
 import { STREAK_EXCLUSIVE_INK } from "../app/constants";
 import { israelDateKey } from "../app/israelDate";
@@ -10,6 +10,7 @@ import {
   applyStreakRescue,
   normalizeStreak,
   rescuableStreak,
+  STREAK_DAY_DRAWINGS,
   STREAK_SAVE_MAX,
   STREAK_SAVE_PRICE,
   streakDayBucket,
@@ -26,9 +27,12 @@ import { getSaveData, updateSaveData } from "./saveStore";
 
 const STREAK_UPDATED_EVENT = "cydi:streak-updated";
 const STREAK_DAY_EVENT = "cydi:streak-day";
+const STREAK_PROGRESS_EVENT = "cydi:streak-progress";
 
-/** Detail of the STREAK_DAY_EVENT: a day was just completed, and by which play (the global toast reads it). */
-export type StreakDayEventDetail = { completion: StreakCompletion; route: StreakRoute };
+/** A day was just completed (once): what it paid, the play that completed it, and the balance / Saves after it. */
+export type StreakDayEventDetail = { completion: StreakCompletion; route: StreakRoute; balance: number; saves: number };
+/** A drawing counted toward a day that has not counted yet (1-4 of 5). */
+export type StreakProgressEventDetail = { drawings: number; target: number; route: StreakRoute };
 
 function today(now: number): string {
   return israelDateKey(now);
@@ -58,29 +62,34 @@ export function getStreakView(now: number = Date.now()): StreakView {
   return viewStreak(getStreakState(), today(now));
 }
 
-export type StreakActivityResult = { completion: StreakCompletion | null; drawings: number };
+export type StreakActivityResult = { completion: StreakCompletion | null; drawings: number; duplicate: boolean };
 
 /**
- * Real play happened: one finished drawing in any mode, or a completed Daily Challenge. Counts toward today and, on
- * the 5th drawing or the Daily, completes the day ONCE: pays the day's coins (coin_earned daily_streak, with the day
- * bucket and `route`), grants the Day-30 Ember Ink once, and reports a first-time 3/7/30 milestone.
+ * One drawing was finished, in any mode - each counts exactly one. Counts toward today and, on the 5th, completes the
+ * day ONCE: pays the day's coins (coin_earned daily_streak, with the day bucket and `route`), grants the Day-30 Ember
+ * Ink once, and reports a first-time 3/7/30 milestone. `key` identifies a round that can be reported twice (a
+ * Multiplayer reconnect, a remount): a key already counted today changes nothing.
  * The state is written BEFORE the coins are credited, so a crash in between can never pay the same day twice.
  */
-export function recordStreakActivity(kind: "drawing" | "daily", route: StreakRoute, now: number = Date.now()): StreakActivityResult {
-  const result = addStreakActivity(getStreakState(), today(now), kind);
+export function recordStreakActivity(route: StreakRoute, opts: { key?: string; now?: number } = {}): StreakActivityResult {
+  const day = today(opts.now ?? Date.now());
+  const before = getStreakState();
+  const result = addStreakActivity(before, day, opts.key);
+  if (result.duplicate) return { completion: null, drawings: result.drawings, duplicate: true };
   writeState(result.state);
   const c = result.completion;
-  if (!c) return { completion: null, drawings: result.drawings };
+  if (!c) {
+    // Progress toward a day that has not counted yet (nothing to say once today counts).
+    if (!viewStreak(before, day).doneToday) {
+      emit(STREAK_PROGRESS_EVENT, { drawings: result.drawings, target: STREAK_DAY_DRAWINGS, route } satisfies StreakProgressEventDetail);
+    }
+    return { completion: null, drawings: result.drawings, duplicate: false };
+  }
   if (c.emberUnlocked) unlockColor(STREAK_EXCLUSIVE_INK);
-  if (c.coins > 0) addCoins(c.coins, "daily_streak", { streakDay: streakDayBucket(c.day), streakRoute: route });
+  const balance = c.coins > 0 ? addCoins(c.coins, "daily_streak", { streakDay: streakDayBucket(c.day), streakRoute: route }) : getCoins();
   onStreakDayReached(c.day);
-  emit(STREAK_DAY_EVENT, { completion: c, route } satisfies StreakDayEventDetail);
-  return { completion: c, drawings: result.drawings };
-}
-
-/** A live Daily Challenge attempt was completed: it counts the whole day. Returns the completion it made, if any. */
-export function recordDailyCompletion(now: number = Date.now()): StreakCompletion | null {
-  return recordStreakActivity("daily", "daily", now).completion;
+  emit(STREAK_DAY_EVENT, { completion: c, route, balance, saves: c.state.saves } satisfies StreakDayEventDetail);
+  return { completion: c, drawings: result.drawings, duplicate: false };
 }
 
 /** A Rewarded Streak Rescue on offer right now (see app/drawingStreak.ts): the streak it keeps and its Israel day, or null. */
@@ -122,7 +131,14 @@ export function onStreakChanged(listener: () => void): () => void {
   return () => window.removeEventListener(STREAK_UPDATED_EVENT, listener);
 }
 
-/** Fires once when a day is completed (any mode), with what it paid and the play that completed it. */
+/** Fires for a drawing that counted toward a day not yet complete (1-4 of 5). */
+export function onStreakProgress(listener: (detail: StreakProgressEventDetail) => void): () => void {
+  const handler = (e: Event) => listener((e as CustomEvent<StreakProgressEventDetail>).detail);
+  window.addEventListener(STREAK_PROGRESS_EVENT, handler);
+  return () => window.removeEventListener(STREAK_PROGRESS_EVENT, handler);
+}
+
+/** Fires once when a day is completed (any mode), with what it paid, the play that completed it and the balance after. */
 export function onStreakDayCompleted(listener: (detail: StreakDayEventDetail) => void): () => void {
   const handler = (e: Event) => listener((e as CustomEvent<StreakDayEventDetail>).detail);
   window.addEventListener(STREAK_DAY_EVENT, handler);

@@ -255,8 +255,9 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
       playerCount: game.players.length,
       submitted: emptyTurnsRef.current === 0,
     });
-    // 0.59.0 Drawing Streak: a round with real drawings is one of today's 5 drawings on this device.
-    if (emptyTurnsRef.current === 0) recordStreakActivity("drawing", "two_players");
+    // 0.59.0 Drawing Streak: a round in which every player drew is ONE of today's 5 drawings on this device (keyed by
+    // match and round, so a remount that reports it again changes nothing).
+    if (emptyTurnsRef.current === 0) recordStreakActivity("two_players", { key: `pp:${game.gameId}:${roundIndex}` });
   }, [phase, roundIndex, game.players.length]);
 
   // ------------------------------------------------- Social Points award ----

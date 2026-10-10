@@ -289,151 +289,186 @@
   cursor: default;
 }
 
-/* --- Daily result card --- */
-.streak-day-card {
-  width: 100%;
-  max-width: 420px;
-  margin: var(--space-3) 0;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(249, 115, 22, 0.35);
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(249, 115, 22, 0.08));
-  color: var(--color-text);
-  animation: streak-pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
-}
-.streak-day-card-milestone {
-  border-color: #f59e0b;
-  animation:
-    streak-pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3),
-    streak-glow 1.4s ease-out 420ms 2;
-}
-@keyframes streak-pop {
-  0% {
-    transform: scale(0.92);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.02);
-    opacity: 1;
-  }
-}
-@keyframes streak-glow {
-  0% {
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45);
-  }
-  100% {
-    box-shadow: 0 0 0 12px rgba(245, 158, 11, 0);
-  }
-}
-.streak-day-main {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.streak-day-text {
-  flex: 1;
-  min-width: 0;
-}
-.streak-day-title {
-  margin: 0;
-  font-weight: 800;
-  font-size: 1rem;
-}
-.streak-day-sub,
-.streak-day-note {
-  margin: 2px 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-}
-.streak-day-coins {
-  flex: none;
-  padding: 4px 10px;
+/* --- Streak view: status badge, the one "keep your streak" box, milestone labels --- */
+.streak-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 10px;
   border-radius: 999px;
-  background: var(--color-accent);
-  color: var(--color-on-accent);
+  font-size: 0.75rem;
   font-weight: 800;
-  font-size: 0.95rem;
+  letter-spacing: 0.01em;
 }
-.streak-day-view {
-  display: block;
-  margin: var(--space-2) 0 0 auto;
-  padding: 4px 2px;
-  border: none;
-  background: none;
+.streak-badge-ok {
+  background: rgba(249, 115, 22, 0.14);
   color: var(--accent-orange-text);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
-  cursor: pointer;
 }
-
-/* --- Rewarded Streak Rescue (result card + streak view; rendered only when an ad is loaded) --- */
-.streak-rescue {
+.streak-badge-info {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.streak-badge-warn {
+  background: rgba(245, 158, 11, 0.18);
+  color: var(--accent-orange-text);
+  border: 1px dashed rgba(245, 158, 11, 0.7);
+}
+.streak-keep {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
   margin: var(--space-3) 0 0;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
+  padding: var(--space-3);
   border: 1px dashed rgba(249, 115, 22, 0.55);
-  background: var(--color-card);
-  text-align: left;
+  border-radius: var(--radius-md);
+  text-align: center;
   animation: streak-fade 220ms ease-out;
 }
-.streak-sheet-hero .streak-rescue {
-  align-self: stretch;
+.streak-keep-title {
+  margin: 0;
+  font-weight: 800;
 }
-.streak-rescue-text {
-  flex: 1;
-  min-width: 0;
+.streak-keep-text,
+.streak-keep-note {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.82rem;
-  line-height: 1.3;
 }
-.streak-rescue-text strong {
-  display: block;
+.streak-keep-save {
+  min-height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-card);
   color: var(--color-text);
-  font-size: 0.9rem;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.streak-keep-save:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 .streak-rescue-btn {
-  flex: none;
-  min-height: 40px;
+  min-height: 42px;
   padding: 0 var(--space-3);
   border: none;
   border-radius: 999px;
   background: linear-gradient(135deg, #f97316, #f59e0b);
   color: #fff;
   font: inherit;
-  font-size: 0.85rem;
   font-weight: 800;
-  white-space: nowrap;
   cursor: pointer;
 }
 .streak-rescue-btn:disabled {
   opacity: 0.7;
   cursor: default;
 }
-.streak-rescue-kept {
-  justify-content: center;
-  border-style: solid;
-  color: var(--accent-orange-text);
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-.streak-rescue-note {
-  margin: var(--space-2) 0 0;
+.streak-track-label {
+  margin: 0 0 var(--space-2);
   color: var(--color-text-muted);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   text-align: center;
 }
-@media (max-width: 360px) {
-  .streak-rescue {
-    flex-wrap: wrap;
-  }
-  .streak-rescue-btn {
-    flex: 1 1 100%;
-  }
+.streak-track-legend {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* --- The day's celebration card (milestone, Save and Ember days; one tap closes it) --- */
+.streak-celebrate-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 75;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgba(15, 16, 26, 0.5);
+  animation: streak-fade 160ms ease-out;
+}
+.streak-celebrate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: min(100%, 340px);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.16), rgba(249, 115, 22, 0) 45%), var(--color-card);
+  color: var(--color-text);
+  box-shadow: 0 12px 40px rgba(15, 16, 26, 0.35);
+  text-align: center;
+  animation:
+    streak-pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3),
+    streak-glow 1.4s ease-out 420ms 2;
+}
+.streak-celebrate-title {
+  margin: 6px 0 0;
+  font-size: 1.7rem;
+  font-weight: 900;
+}
+.streak-celebrate-sub {
+  margin: 0 0 var(--space-3);
+  color: var(--accent-orange-text);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.streak-celebrate-rewards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.streak-celebrate-rewards li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.streak-celebrate-reward {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.streak-celebrate-icon {
+  font-size: 1.1rem;
+}
+.streak-celebrate-swatch {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+.streak-celebrate-meta {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  text-align: right;
+}
+.streak-celebrate-next {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+.streak-celebrate-ok {
+  width: 100%;
+  min-height: 46px;
+  margin-top: var(--space-3);
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f97316, #f59e0b);
+  color: #fff;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 /* --- Home (Android and web): the one streak indicator --- */
@@ -549,6 +584,14 @@
   transform: translateX(-50%);
   animation: streak-toast-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
+.streak-toast-progress {
+  padding: 5px 12px;
+  font-size: 0.82rem;
+  border-color: var(--color-border);
+}
+.streak-toast-big {
+  border-color: #f59e0b;
+}
 .streak-toast-coins {
   padding: 2px 9px;
   border-radius: 999px;
@@ -570,11 +613,6 @@
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
-}
-.streak-progress-chip.streak-progress-chip-milestone {
-  animation:
-    streak-pop 360ms ease-out,
-    streak-glow 1.4s ease-out 360ms 2;
 }
 /* Streak progress reads in the streak's own colour wherever it appears. */
 .streak-strip .daily-goal-dot-on,
@@ -643,12 +681,11 @@
 @media (prefers-reduced-motion: reduce) {
   .streak-flame-animated,
   .streak-toast,
-  .streak-day-card,
-  .streak-day-card-milestone,
   .streak-sheet,
   .streak-sheet-backdrop,
-  .streak-rescue,
-  .streak-progress-chip-milestone,
+  .streak-keep,
+  .streak-celebrate,
+  .streak-celebrate-backdrop,
   .daily-goal-chip-done {
     animation: none;
   }

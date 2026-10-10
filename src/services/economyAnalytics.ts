@@ -32,6 +32,8 @@ import {
   type CoinSink,
   type CoinSource,
   type NextTarget,
+  type StreakDayBucket,
+  type StreakRoute,
 } from "./economyBuckets";
 import { getPaidCategoryPurchaseCount, nextCategoryUnlockPrice } from "./categoryUnlockStore";
 import { isMegaChallengeUnlocked } from "./megaChallengeStore";
@@ -54,7 +56,6 @@ export const COIN_SOURCE_REPORTING: Record<CoinSource, "game_completed" | "rewar
   chest_payout: "coin_earned",
   daily_prize: "coin_earned",
   daily_streak: "coin_earned",
-  daily_goal: "coin_earned",
   // Spent on the category unlock in the same tick; the rewarded funnel (placement category_unlock_topup) carries it.
   ad_topup: "reward_ad_completed",
 };
@@ -227,13 +228,16 @@ export function withGameCoins(
 
 // ----------------------------------------------------------------- events ----
 
-const pendingEarned = new Map<CoinEarnedSource, { amount: number; balance: number }>();
+/** Bounded extra fields for one coin_earned row - today only the Drawing Streak's day bucket and route. */
+export type CoinEarnedDetail = { streakDay: StreakDayBucket; streakRoute: StreakRoute };
+
+const pendingEarned = new Map<CoinEarnedSource, { amount: number; balance: number; detail?: CoinEarnedDetail }>();
 let earnFlushScheduled = false;
 
 function flushEarned(): void {
   earnFlushScheduled = false;
-  for (const [coinSource, { amount, balance }] of pendingEarned) {
-    trackEvent("coin_earned", { coinSource, amount, balanceBucket: balanceBucket(balance) });
+  for (const [coinSource, { amount, balance, detail }] of pendingEarned) {
+    trackEvent("coin_earned", { coinSource, amount, balanceBucket: balanceBucket(balance), ...(detail ?? {}) });
   }
   pendingEarned.clear();
 }
@@ -260,13 +264,13 @@ function emitMilestone(milestone: EventParamsMap["progression_milestone"]["miles
 }
 
 /** coinsStore hook: a credit of `amount` from `source` left the balance at `balanceAfter`. */
-export function onCoinsEarned(source: CoinSource, amount: number, balanceAfter: number): void {
+export function onCoinsEarned(source: CoinSource, amount: number, balanceAfter: number, detail?: CoinEarnedDetail): void {
   try {
     const state = loadState();
     if (COIN_SOURCE_REPORTING[source] === "coin_earned") {
       const s = source as CoinEarnedSource;
       const prev = pendingEarned.get(s);
-      pendingEarned.set(s, { amount: (prev?.amount ?? 0) + Math.round(amount), balance: balanceAfter });
+      pendingEarned.set(s, { amount: (prev?.amount ?? 0) + Math.round(amount), balance: balanceAfter, detail: detail ?? prev?.detail });
       if (!earnFlushScheduled) {
         earnFlushScheduled = true;
         setTimeout(flushEarned, 0);

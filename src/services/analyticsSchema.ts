@@ -58,6 +58,8 @@ import {
   PLAYER_AGE_BUCKETS,
   SHORTFALL_BUCKETS,
   SPEND_ORDINALS,
+  STREAK_DAY_BUCKETS,
+  STREAK_ROUTES,
   isOneOf,
   type BalanceBucket,
   type CoinEarnedSource,
@@ -68,6 +70,8 @@ import {
   type PlayerAgeBucket,
   type ShortfallBucket,
   type SpendOrdinal,
+  type StreakDayBucket,
+  type StreakRoute,
 } from "./economyBuckets";
 
 export type GameType =
@@ -473,7 +477,8 @@ export type EventParamsMap = {
   /** Once-per-player progression points (category_unlocked once per paid category). categoryOrdinal is 0 except on category_unlocked. */
   progression_milestone: { milestone: EconomyMilestone; categoryOrdinal: number; balanceBucket: BalanceBucket; gamesBucket: GamesBucket; playerAgeBucket: PlayerAgeBucket };
   /** Coins from sources that are not a game completion (achievements, chests, daily prizes), summed per source per tick. */
-  coin_earned: { coinSource: CoinEarnedSource; amount: number; balanceBucket: BalanceBucket };
+  /** streakDay + streakRoute: 0.59.0, only on coinSource daily_streak rows, always together. */
+  coin_earned: { coinSource: CoinEarnedSource; amount: number; balanceBucket: BalanceBucket; streakDay?: StreakDayBucket; streakRoute?: StreakRoute };
   /** A challenge was created and saved - from the discovery prompt or anywhere else,
    * so this doubles as the overall "challenges created" measure. */
   challenge_created: Record<string, never>;
@@ -943,10 +948,14 @@ const VALIDATORS: { [E in AnalyticsEventName]: Validator<E> } = {
     return { valid: true, params: { milestone, categoryOrdinal: categoryOrdinal as number, balanceBucket, gamesBucket, playerAgeBucket } };
   },
   coin_earned: (p) => {
-    if (!isRecord(p) || !hasExactKeys(p, ["coinSource", "amount", "balanceBucket"])) return { valid: false };
+    if (!isRecord(p) || !hasKeysWithin(p, ["coinSource", "amount", "balanceBucket"], ["streakDay", "streakRoute"])) return { valid: false };
     const { coinSource, amount, balanceBucket } = p;
     if (!isOneOf(COIN_EARNED_SOURCES, coinSource) || !isIntInRange(amount, 1, MAX_ECONOMY_COINS) || !isOneOf(BALANCE_BUCKETS, balanceBucket)) return { valid: false };
-    return { valid: true, params: { coinSource, amount, balanceBucket } };
+    const hasStreak = "streakDay" in p || "streakRoute" in p;
+    if (!hasStreak) return { valid: true, params: { coinSource, amount, balanceBucket } };
+    // A streak day's row only: both fields, both from their closed lists.
+    if (coinSource !== "daily_streak" || !isOneOf(STREAK_DAY_BUCKETS, p.streakDay) || !isOneOf(STREAK_ROUTES, p.streakRoute)) return { valid: false };
+    return { valid: true, params: { coinSource, amount, balanceBucket, streakDay: p.streakDay, streakRoute: p.streakRoute } };
   },
   play_store_cta_shown: (p) => validatePlayStoreEvent(p),
   play_store_click: (p) => validatePlayStoreEvent(p),

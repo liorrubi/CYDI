@@ -3,8 +3,9 @@
 // schema, and the analytics shapes the new code sends (validated by the shared schema the Worker uses).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CATEGORY_UNLOCK_COST, categoryUnlockPrice, DAILY_GOAL_COINS, DAILY_GOAL_GAMES, PAID_CHEST_AD_BONUS_CAP, PEN_COLORS, PEN_SKINS } from "./constants";
+import { CATEGORY_UNLOCK_COST, categoryUnlockPrice, PAID_CHEST_AD_BONUS_CAP, PEN_COLORS, PEN_SKINS } from "./constants";
 import {
+  addStreakActivity,
   applyStreakRescue,
   completeStreakDay,
   daysBetween,
@@ -13,6 +14,8 @@ import {
   isStreakMilestone,
   normalizeStreak,
   rescuableStreak,
+  STREAK_DAY_DRAWINGS,
+  streakDayBucket,
   streakRewardFor,
   viewStreak,
   type StreakState,
@@ -39,8 +42,6 @@ test("Shop prices: basic inks 750, Rainbow 6,000, Diamond Blue 9,000; pens uncha
   assert.equal(ember.exclusive, true);
   assert.deepEqual(PEN_SKINS.map((s) => s.price ?? 0), [0, 1000, 2500, 5000, 7500, 12000, 20000]);
   assert.equal(PAID_CHEST_AD_BONUS_CAP, 500);
-  assert.equal(DAILY_GOAL_GAMES, 5);
-  assert.equal(DAILY_GOAL_COINS, 20);
 });
 
 // ------------------------------------------------------------------ streak ----
@@ -239,6 +240,70 @@ test("rescue: an unused offer is dropped by the next completion; normalize keeps
   assert.equal("rescue" in normalizeStreak({ ...r.state, rescue: "x" }), false);
 });
 
+test("rescue BEFORE the day qualifies: the missed day is bridged, today's play then continues the streak with its own reward", () => {
+  const broken = at("2026-10-08", 12); // the 9th was missed, nothing played yet on the 10th
+  assert.equal(viewStreak(broken, "2026-10-10").atRisk, 12, "shown as at risk, not as 0");
+  assert.equal(rescuableStreak(broken, "2026-10-10"), 12);
+  const bridged = applyStreakRescue(broken, "2026-10-10")!;
+  assert.equal(bridged.lastDay, "2026-10-09");
+  assert.equal(bridged.current, 12, "nothing paid or counted yet");
+  assert.equal(bridged.rescuedOn, "2026-10-10");
+  assert.equal(applyStreakRescue(bridged, "2026-10-10"), null, "idempotent");
+  const day = completeStreakDay(bridged, "2026-10-10");
+  assert.equal(day.day, 13);
+  assert.equal(day.coins, 20);
+  assert.equal(day.restartedFrom, 0);
+  // An ad that ends after midnight bridges up to the day it ended on - never a wasted rescue.
+  assert.equal(applyStreakRescue(broken, "2026-10-10", "2026-10-11")!.lastDay, "2026-10-10");
+});
+
+test("at risk: only while a Save could still keep it (1-2 missed days beyond the Saves held)", () => {
+  assert.equal(viewStreak(at("2026-10-07", 9), "2026-10-10").atRisk, 9, "two missed days, no Save");
+  assert.equal(viewStreak(at("2026-10-06", 9), "2026-10-10").atRisk, 0, "three missed days: gone");
+  assert.equal(viewStreak(at("2026-10-08", 9, { saves: 1 }), "2026-10-10").atRisk, 0, "the held Save covers it");
+});
+
+// --------------------------------------------------------- activity streak ----
+
+test("activity: 5 drawings in any mode complete the day once; the Daily completes it in one; nothing more is paid that day", () => {
+  assert.equal(STREAK_DAY_DRAWINGS, 5);
+  let s: StreakState = EMPTY_STREAK;
+  const steps = [];
+  for (let i = 0; i < 7; i++) {
+    const a = addStreakActivity(s, "2026-10-10", "drawing");
+    steps.push(a.completion?.day ?? null);
+    s = a.state;
+  }
+  assert.deepEqual(steps, [null, null, null, null, 1, null, null], "the 5th drawing completes Day 1; later drawings only count");
+  assert.equal(viewStreak(s, "2026-10-10").drawings, 7);
+  assert.equal(addStreakActivity(s, "2026-10-10", "daily").completion, null, "the Daily after 5 drawings pays nothing more");
+  const viaDaily = addStreakActivity(s, "2026-10-11", "daily");
+  assert.equal(viaDaily.completion?.day, 2, "the Daily alone completes the next day");
+  assert.equal(viaDaily.drawings, 0, "the Daily is not one of the 5 drawings");
+});
+
+test("activity: progress belongs to one Israel day - yesterday's 4 drawings do not carry over", () => {
+  let s: StreakState = at("2026-10-09", 3);
+  for (let i = 0; i < 4; i++) s = addStreakActivity(s, "2026-10-10", "drawing").state;
+  assert.equal(viewStreak(s, "2026-10-10").drawings, 4);
+  assert.equal(viewStreak(s, "2026-10-11").drawings, 0);
+  const next = addStreakActivity(s, "2026-10-11", "drawing");
+  assert.equal(next.completion, null);
+  assert.equal(next.drawings, 1);
+  assert.deepEqual(normalizeStreak(JSON.parse(JSON.stringify(next.state))).today, { day: "2026-10-11", drawings: 1 }, "progress survives a reload");
+  assert.equal(normalizeStreak({ ...next.state, today: { day: "soon", drawings: 3 } }).today, undefined);
+});
+
+test("activity: streak-day buckets and the coin_earned row they ride on", () => {
+  assert.deepEqual([1, 2, 3, 4, 6, 7, 13, 14, 29, 30, 400].map(streakDayBucket), ["1", "2", "3", "4_6", "4_6", "7_13", "7_13", "14_29", "14_29", "30_plus", "30_plus"]);
+  const row = { coinSource: "daily_streak", amount: 20, balanceBucket: "100_499" };
+  assert.equal(validateEventParams("coin_earned", { ...row, streakDay: "4_6", streakRoute: "multiplayer" }).valid, true);
+  assert.equal(validateEventParams("coin_earned", row).valid, true, "older shape still valid");
+  assert.equal(validateEventParams("coin_earned", { ...row, streakDay: "4_6" }).valid, false, "both fields or neither");
+  assert.equal(validateEventParams("coin_earned", { ...row, streakDay: "5", streakRoute: "classic" }).valid, false, "closed buckets");
+  assert.equal(validateEventParams("coin_earned", { ...row, coinSource: "achievement", streakDay: "1", streakRoute: "classic" }).valid, false, "streak rows only");
+});
+
 // ------------------------------------------------------------- flag schema ----
 
 test("coin-offer flags: exactly { version, runX3, unlockNow, streakRescue }; anything else is OFF", () => {
@@ -271,7 +336,7 @@ test("analytics: Unlock Now funnel rows, streak / goal coins, Save purchases and
     assert.equal(validateEventParams(ev, { placement: "category_unlock_topup" }).valid, true, ev);
     assert.equal(validateEventParams(ev, { placement: "streak_rescue" }).valid, true, ev);
   }
-  for (const coinSource of ["daily_streak", "daily_goal"]) {
+  for (const coinSource of ["daily_streak"]) {
     assert.equal(validateEventParams("coin_earned", { coinSource, amount: 20, balanceBucket: "100_499" }).valid, true, coinSource);
   }
   assert.equal(validateEventParams("coin_earned", { coinSource: "ad_topup", amount: 20, balanceBucket: "100_499" }).valid, false, "the top-up rides the rewarded funnel");

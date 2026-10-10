@@ -263,10 +263,10 @@ export default function DailyChallengeScreen({ onNavigate, replay }: DailyChalle
       setFeedbackMessage(passed ? randomCelebrationMessage() : randomEncouragementMessage());
       if (passed) playSuccessSound();
       else playEncourageSound();
-      // 0.59.0 Daily Drawing Streak: a completed LIVE attempt (never a replay of an ended challenge) advances it once a
-      // day and pays the day's coins (reported as coin_earned daily_streak). A retry the same day changes nothing.
+      // 0.59.0 Drawing Streak: a completed LIVE attempt (never a replay of an ended challenge) counts the whole day at
+      // once and pays the day's coins (coin_earned daily_streak, route daily). Once today counts, nothing more is paid.
       const streakStep = replay ? null : recordDailyCompletion();
-      setStreakCompletion(streakStep && streakStep.advanced ? streakStep : null);
+      setStreakCompletion(streakStep);
       // A daily game pays nothing itself (prizes are claimed later, as coin_earned) - 0 still records the balance bucket.
       trackEvent("game_completed", withGameCoins({ gameType: "dailyChallenge", category: shape.category, contentKey: `daily:${episode.id}` }, 0));
       // D6: a completed Daily attempt drawn with the Trial ink uses one play (only reachable with Daily enabled).

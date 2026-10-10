@@ -191,10 +191,6 @@ export function categoryUnlockPrice(paidCategoriesBought: number): number {
 /** Paid-chest Rewarded double: the ad adds the chest's payout again, but never more than this (0.59.0). */
 export const PAID_CHEST_AD_BONUS_CAP = 500;
 
-/** 0.59.0 daily goal: finishing this many Classic games on one local day pays DAILY_GOAL_COINS, once per day. */
-export const DAILY_GOAL_GAMES = 5;
-export const DAILY_GOAL_COINS = 20;
-
 export type DifficultyLevel = "beginner" | "intermediate" | "skilled" | "expert" | "master";
 
 export const DIFFICULTY_LEVELS: { id: DifficultyLevel; icon: string; name: string; passScore: number }[] = [

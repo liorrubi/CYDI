@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { recordStreakActivity } from "../services/drawingStreakStore";
 import { useListScrollMemory, useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
@@ -369,6 +370,8 @@ function ArtistPlay({ artwork, pack, replyTo, onFinished, onNavigate, here }: Ar
       if (passed) playSuccessSound();
       else playEncourageSound();
       trackEvent("game_completed", withGameCoins({ gameType: "artistPack", category: artwork.category, contentKey: `${pack.id}:${artwork.id}` }, outcome.starCoins));
+      // 0.59.0 Drawing Streak: one of today's 5 drawings (the global streak toast marks the day when it completes).
+      recordStreakActivity("drawing", "other");
       setPhase("result");
     }, delay);
   }

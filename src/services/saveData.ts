@@ -60,12 +60,12 @@ export type SaveData = {
     /** Timestamp (ms since epoch) each purchased chest tier becomes buyable again; absent/past = available. Shop-only, unrelated to the free Daily Chest. */
     shopChestCooldowns: Partial<Record<ChestTierId, number>>;
     /**
-     * 0.59.0 Daily Drawing Streak (completing the Daily Challenge; Israel calendar day, the Daily's own clock).
+     * 0.59.0 Drawing Streak (a day counts with 5 drawings in any mode, or the Daily Challenge; Israel calendar day).
      * Optional: saves from older builds have none - read through drawingStreakStore.ts, which normalizes it.
      * Separate from `dailyStreak` (app visits), which keeps driving the visit-streak achievements unchanged.
      */
     drawingStreak?: {
-      /** Israel date (YYYY-MM-DD) of the last Daily completion that counted; "" = never. */
+      /** Israel date (YYYY-MM-DD) of the last day that counted; "" = never. */
       lastDay: string;
       current: number;
       best: number;
@@ -77,9 +77,9 @@ export type SaveData = {
       rescue?: { from: number; day: string };
       /** Israel date the last rescue was granted (at most one per 7 days). */
       rescuedOn?: string;
+      /** Drawings finished on `day` (today's progress toward 5). */
+      today?: { day: string; drawings: number };
     };
-    /** 0.59.0 daily goal: Classic games finished on `date` (local calendar day) and whether its coins were paid. */
-    dailyGoal?: { date: string; games: number; claimed: boolean };
     /** 0.59.0 per-local-day Rewarded limits: Category Unlock Now (once a day) and x3run minimum-only grants (3 a day). */
     adLimits?: { date: string; unlockNowUsed: boolean; minBonusGrants: number };
     successfulDrawings: number;

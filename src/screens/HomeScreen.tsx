@@ -20,8 +20,7 @@ import {
   toSpecialChallenge,
 } from "../app/routes";
 import { shareChallenge } from "../services/challengeShare";
-import StreakFlame from "../components/StreakFlame";
-import { getStreakView } from "../services/drawingStreakStore";
+import StreakStrip from "../components/StreakStrip";
 import { CreateIcon, DailyIcon, GroupIcon, SavedIcon, ShopIcon, TwoPlayersIcon } from "../app/appIcons";
 import ShapePreviewIcon from "../components/ShapePreviewIcon";
 import { getShapeById } from "../content/contentRepository";
@@ -138,8 +137,6 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
   const bestScores = onWeb ? [] : Object.values(getProgress().bestScores);
   const personalBest = bestScores.length > 0 ? Math.max(...bestScores) : null;
   const savedChallenges = onWeb ? 0 : getChallenges().length;
-  // 0.59.0: the Daily tile carries the Daily Drawing Streak (a synchronous save read - Home still paints in one pass).
-  const streak = onWeb ? null : getStreakView();
 
   /*
    * Classic's mark: ONE real catalog shape, drawn by the game's own renderer.
@@ -191,6 +188,8 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
       {/* The tab strip stays on the web, where the 5b hub sits under it. On
           Android the mode cards below replace it outright. */}
       {onWeb && <HomeModeTabs active={null} onSelect={handleMode} />}
+      {/* 0.59.0 Drawing Streak: one indicator for every mode (a synchronous save read - Home still paints in one pass). */}
+      <StreakStrip />
       {/* Only renders once the room has been confirmed still live. */}
       <ResumeGameBanner onResume={(roomCode) => handleSelect(toPlayTogether(roomCode))} />
       {onWeb && (
@@ -250,14 +249,7 @@ export default function HomeScreen({ onNavigate }: HomeScreenProps) {
           </span>
           <span className="app-tile-text">
             <span className="app-tile-name">Daily</span>
-            {streak && streak.current > 0 ? (
-              <span className={`app-tile-sub app-tile-streak${streak.doneToday ? " app-tile-streak-done" : ""}`}>
-                <StreakFlame lit={streak.doneToday} size={14} />
-                {streak.current}-day streak
-              </span>
-            ) : (
-              <span className="app-tile-sub">One shape a day</span>
-            )}
+            <span className="app-tile-sub">One shape a day</span>
           </span>
         </button>
         <button type="button" className="app-tile" onClick={() => handleSelect(toCreate())}>

@@ -133,17 +133,15 @@ export const COIN_SOURCES = [
   "daily_chest",
   "chest_payout",
   "daily_prize",
-  /** 0.59.0: the Daily Drawing Streak's day reward. */
+  /** 0.59.0: the Drawing Streak's day reward (5 drawings in any mode, or the Daily). */
   "daily_streak",
-  /** 0.59.0: the once-a-day "finish 5 Classic games" goal. */
-  "daily_goal",
   /** 0.59.0: Category "Unlock Now" - the exact shortfall a rewarded ad pays, spent on the unlock at once. */
   "ad_topup",
 ] as const;
 export type CoinSource = (typeof COIN_SOURCES)[number];
 
 /** The subset reported by the coin_earned event (sources no existing event carries). Appended only. */
-export const COIN_EARNED_SOURCES = ["achievement", "daily_chest", "chest_payout", "daily_prize", "daily_streak", "daily_goal"] as const satisfies readonly CoinSource[];
+export const COIN_EARNED_SOURCES = ["achievement", "daily_chest", "chest_payout", "daily_prize", "daily_streak"] as const satisfies readonly CoinSource[];
 export type CoinEarnedSource = (typeof COIN_EARNED_SOURCES)[number];
 
 /**
@@ -152,6 +150,16 @@ export type CoinEarnedSource = (typeof COIN_EARNED_SOURCES)[number];
  */
 export const ECONOMY_MILESTONES = ["balance_1k_reached", "category_unlocked", "balance_10k_reached", "mega_unlocked", "streak_3", "streak_7", "streak_30"] as const;
 export type EconomyMilestone = (typeof ECONOMY_MILESTONES)[number];
+
+/**
+ * 0.59.0 Drawing Streak: two bounded fields on the coin_earned row of a streak day (coinSource daily_streak) - the
+ * streak day as a bucket, and which play completed the day. They answer "how long do streaks get" and "which modes
+ * keep streaks alive" from rows that are sent anyway (no new event, no new row).
+ */
+export const STREAK_DAY_BUCKETS = ["1", "2", "3", "4_6", "7_13", "14_29", "30_plus"] as const;
+export type StreakDayBucket = (typeof STREAK_DAY_BUCKETS)[number];
+export const STREAK_ROUTES = ["daily", "classic", "multiplayer", "two_players", "other"] as const;
+export type StreakRoute = (typeof STREAK_ROUTES)[number];
 
 /** Analytics Engine stores buckets as 1-based positions in these lists (0 = absent). */
 export function bucketPosition<T extends string>(list: readonly T[], value: unknown): number {

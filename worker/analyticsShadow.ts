@@ -132,6 +132,8 @@
 //   shop_purchase_with_coins rows of a Trial ink (productType penColor, tier rainbow | diamondBlue): blob18 = the ink
 //                   (its canonical id - never inferred from the price), blob19 = inkTrialBefore (none | active | ended;
 //                   "" from a client before 0.58.0). blob20 keeps productType:penColor, double8 the price.
+//   coin_earned rows of a Drawing Streak day (coinSource daily_streak, 0.59.0): blob18 = streakRoute (daily | classic |
+//                   multiplayer | two_players | other), blob19 = streakDay (1 | 2 | 3 | 4_6 | 7_13 | 14_29 | 30_plus).
 // coinSink / coinSource / milestone ride in blob20 detail (DETAIL_PARAMS). Only the
 // balance BUCKET is ever written - never a balance.
 // Booleans are 1/0 and absent numbers are 0, so always filter on blob1 before reading
@@ -260,12 +262,14 @@ function toDataPoint(checked: CheckedEnvelope, route: string, country: string, b
       str(params.placement),
       str(params.reason),
       // 0.58.0: Ink offer and ink_trial rows carry no arm - their ink takes the slot; so does a Trial ink's Shop purchase.
-      str(params.arm ?? params.ink ?? trialInkPurchased(eventName, params)),
+      // 0.59.0: a Drawing Streak day's coin_earned row carries its streakRoute here and its streakDay in blob19 (neither slot
+      // is used by coin_earned otherwise).
+      str(params.arm ?? params.ink ?? trialInkPurchased(eventName, params) ?? params.streakRoute),
       // Schema 3: reward funnel rows carry no outcome, so this slot holds their interstitialArm.
       // 0.57: game_completed rows carry the next-game context's nextOutcome here (no other row has both).
       // 0.58.0: ink_trial rows carry their inkSurface here (they have none of the other three); a Trial ink's Shop
       // purchase its inkTrialBefore.
-      str(params.outcome ?? params.interstitialArm ?? params.nextOutcome ?? params.inkSurface ?? params.inkTrialBefore),
+      str(params.outcome ?? params.interstitialArm ?? params.nextOutcome ?? params.inkSurface ?? params.inkTrialBefore ?? params.streakDay),
       detailFor(params),
     ],
     doubles: [

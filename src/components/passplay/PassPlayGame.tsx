@@ -3,6 +3,7 @@
  * Unauthorized copying, modification, distribution, or commercial use is prohibited.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { recordStreakActivity } from "../../services/drawingStreakStore";
 import { useRoundStartScroll } from "../../hooks/useRoundStartScroll";
 import Button from "../Button";
 import DrawingCanvas, { type DrawingCanvasHandle } from "../DrawingCanvas";
@@ -254,6 +255,8 @@ export default function PassPlayGame({ setup, onExit, onProgress }: PassPlayGame
       playerCount: game.players.length,
       submitted: emptyTurnsRef.current === 0,
     });
+    // 0.59.0 Drawing Streak: a round with real drawings is one of today's 5 drawings on this device.
+    if (emptyTurnsRef.current === 0) recordStreakActivity("drawing", "two_players");
   }, [phase, roundIndex, game.players.length]);
 
   // ------------------------------------------------- Social Points award ----

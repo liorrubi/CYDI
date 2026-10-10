@@ -92,8 +92,9 @@ import {
 } from "../services/ads/interstitialController";
 import { addRunCoins, getRewardedArm, getRunInfo, runOfferBonus, takeRewardedContinuation, upcomingOfferContext } from "../app/rewardedOfferCadence";
 import { hasRunMinBonusLeftToday } from "../services/adDailyLimitsStore";
-import { recordDailyGoalGame } from "../services/dailyGoalStore";
-import DailyGoalChip from "../components/DailyGoalChip";
+import { getStreakView, recordStreakActivity } from "../services/drawingStreakStore";
+import { STREAK_DAY_DRAWINGS, type StreakCompletion } from "../app/drawingStreak";
+import StreakProgressChip from "../components/StreakProgressChip";
 import { commitClassicOfferRendered, decideClassicResultLane, expectedClassicRewardedPlacement } from "../services/ads/resultAdLane";
 import type { ClassicRewardedContent } from "../app/inkTrialPolicy";
 import InkTrialOffer, { type InkOfferContext } from "../components/InkTrialOffer";
@@ -953,8 +954,8 @@ function ShapePlay({
   const [doubleOfferAmount, setDoubleOfferAmount] = useState<number | null>(null);
   /** Rewarded Ads Experiment v1: the arm and session context of the offer this result renders (null = no offer on this result). */
   const [rewardedOffer, setRewardedOffer] = useState<RewardedExperimentOffer | null>(null);
-  /** 0.59.0 daily goal: this result's progress chip (null = nothing to show: practice, or already paid today). */
-  const [dailyGoal, setDailyGoal] = useState<{ games: number; target: number; justCompleted: boolean } | null>(null);
+  /** 0.59.0 Drawing Streak: this result's progress chip (null = nothing to show: practice, or today already counted). */
+  const [streakProgress, setStreakProgress] = useState<{ drawings: number; completion: StreakCompletion | null } | null>(null);
   /** Coins this result earned when no offer is rendered - shown as a plain "+N coins" line. */
   const [plainCoinsAmount, setPlainCoinsAmount] = useState<number | null>(null);
   const plainCoinsRef = useRef<HTMLDivElement | null>(null);
@@ -1338,13 +1339,15 @@ function ShapePlay({
       });
       const offerAmount = applyShapeRoundOutcome(outcome, onProgressChange);
       earnedOfferFinalizeRef.current = null;
-      // 0.59.0 daily goal (optional, once per local day): every completed non-practice round counts. The chip shows
-      // until the goal pays, on that result once more ("+20"), and then stays away for the rest of the day.
+      // 0.59.0 Drawing Streak: every completed non-practice round is one of today's 5 drawings (the same games the
+      // coin offer and the interstitial count; practice replays do not count). The chip shows until the day counts,
+      // on that result once more (the day and its coins), and then stays away for the rest of the day.
       if (!practice) {
-        const goal = recordDailyGoalGame();
-        setDailyGoal(goal.justCompleted || !goal.claimed ? goal : null);
+        const doneBefore = getStreakView().doneToday;
+        const step = recordStreakActivity("drawing", "classic");
+        setStreakProgress(step.completion || !doneBefore ? { drawings: step.drawings, completion: step.completion } : null);
       } else {
-        setDailyGoal(null);
+        setStreakProgress(null);
       }
 
       // Practice rounds are reported, never suppressed - but under their own game
@@ -1549,7 +1552,9 @@ function ShapePlay({
         </div>
       ) : null;
 
-    const dailyGoalNode = dailyGoal ? <DailyGoalChip games={dailyGoal.games} target={dailyGoal.target} justCompleted={dailyGoal.justCompleted} /> : null;
+    const streakNode = streakProgress ? (
+      <StreakProgressChip drawings={streakProgress.drawings} target={STREAK_DAY_DRAWINGS} completion={streakProgress.completion} />
+    ) : null;
 
     const notesNode = (
       <>
@@ -1608,7 +1613,7 @@ function ShapePlay({
           actionsRef={resultActionsRef}
           offer={offerNode}
           extras={notesNode}
-          afterActions={dailyGoalNode}
+          afterActions={streakNode}
           compact={doubleOfferAmount === null && inkOffer === null && ctaInk !== null}
         />
       );
@@ -1698,7 +1703,7 @@ function ShapePlay({
             <Button onClick={handleTryAgainFromResult}>Try Again</Button>
           )}
         </div>
-        {dailyGoalNode}
+        {streakNode}
         {!practice && !canGoToNextShape && nextIndex < shapes.length && (
           <p className="result-actions-note">Score {passScore}+ to unlock the next shape.</p>
         )}

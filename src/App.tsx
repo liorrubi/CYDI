@@ -74,6 +74,7 @@ import { markModeIntroShown, resetModeIntro, shouldShowModeIntro } from "./servi
 import { runNavigationGuard } from "./app/navigationGuard";
 import { ExplicitHomeContext } from "./app/explicitHome";
 import AppSkin from "./app/AppSkin";
+import StreakToast from "./components/StreakToast";
 import { resetMultiplayerTutorials } from "./services/multiplayerTutorialStore";
 import { getChallenge, updateChallenge } from "./services/challengeStorage";
 import { decodeArtistResultHash, decodeChallengeHash, decodeResultHash, type DecodedSharedChallenge } from "./services/shareLink";
@@ -792,6 +793,7 @@ export default function App({ landing }: AppProps) {
           {updateNotice ?? linkNotice}
         </div>
       )}
+      <StreakToast />
     </>
   );
 

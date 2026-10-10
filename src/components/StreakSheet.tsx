@@ -22,9 +22,10 @@ function trackFillPercent(current: number): number {
 }
 
 /**
- * The on-demand streak view: the current streak, the road to the next milestones, Streak Saves. One compact sheet -
- * no calendar grid, no history, no nagging. Opened from the streak chip or the Daily result card, closed by the ✕,
- * the backdrop or Escape.
+ * The on-demand streak view: the streak, today's progress (5 drawings in any mode, or the Daily), the road to the
+ * next milestones, Streak Saves and - only when one is available - the Rewarded Rescue. One compact sheet - no
+ * calendar grid, no history, no nagging. Opened from Home's streak bar, the streak chips and the result cards; closed
+ * by the ✕, the backdrop or Escape.
  */
 export default function StreakSheet({ onClose }: StreakSheetProps) {
   const [view, setView] = useState(() => getStreakView());
@@ -42,19 +43,23 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
   );
   useEffect(() => onCoinsChanged(() => setCoins(getCoins())), []);
 
-  const current = view.current;
+  // An at-risk streak (missed days a Save can still cover) is shown as it stands, so a Save or a rescue reads as
+  // "keep these days", not as an abstract number.
+  const current = view.current > 0 ? view.current : view.atRisk;
   const fill = trackFillPercent(current);
   const nextMilestone = STREAK_MILESTONES.find((m) => m.day > current);
 
   const status = view.doneToday
-    ? "Done for today. Come back tomorrow to keep it going."
-    : current > 0
-      ? view.savesNeeded > 0
-        ? `A Streak Save will cover the missed day when you play today's Daily.`
-        : "Play today's Daily Challenge to keep it going."
-      : view.best > 0
-        ? "Play today's Daily Challenge to start a new streak."
-        : "Play the Daily Challenge on consecutive days to build a streak.";
+    ? "Today counts ✓ Come back tomorrow to keep it going."
+    : view.atRisk > 0
+      ? `You missed a day. A Streak Save keeps your ${view.atRisk}-day streak - it is used as soon as today counts.`
+      : view.savesNeeded > 0
+        ? "A Streak Save covers the missed day as soon as today counts."
+        : current > 0
+          ? "Keep it going today."
+          : view.best > 0
+            ? "Start a new streak today."
+            : "Play on consecutive days to build a streak.";
 
   const canBuy = view.saves < STREAK_SAVE_MAX && coins >= STREAK_SAVE_PRICE;
 
@@ -86,9 +91,21 @@ export default function StreakSheet({ onClose }: StreakSheetProps) {
         <div className="streak-sheet-hero">
           <StreakFlame lit={view.doneToday} size={56} animated />
           <h2 id="streak-sheet-title" className="streak-sheet-title">
-            {current > 0 ? `${current}-day streak` : "Daily streak"}
+            {current > 0 ? `${current}-day streak` : "Drawing streak"}
           </h2>
           <p className="streak-sheet-status">{status}</p>
+          {!view.doneToday && (
+            <p className="streak-today" aria-label={`Today: ${view.drawings} of ${view.target} drawings, or the Daily Challenge`}>
+              <span className="daily-goal-dots" aria-hidden="true">
+                {Array.from({ length: view.target }, (_, i) => (
+                  <span key={i} className={i < view.drawings ? "daily-goal-dot daily-goal-dot-on" : "daily-goal-dot"} />
+                ))}
+              </span>
+              <span>
+                <strong>{Math.min(view.drawings, view.target)}/{view.target} drawings</strong> in any mode · or the Daily Challenge
+              </span>
+            </p>
+          )}
           {view.best > current && <p className="streak-sheet-best">Best: {view.best} days</p>}
           <StreakRescueOffer />
         </div>

@@ -84,12 +84,13 @@ test("every current coin grant/spend call site names its source/sink - the audit
   for (const { path, text: raw } of sources()) {
     if (path === "services/coinsStore.ts") continue;
     const text = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
-    for (const m of text.matchAll(/\b(addCoins|addCoinsPending|spendCoins)\(([^;]*?),\s*(isPaidChest \? "chest_payout" : "daily_chest"|"[a-z_]+")\)/g)) {
+    // An optional third argument is the coin_earned detail object (0.59.0 Drawing Streak: day bucket + route).
+    for (const m of text.matchAll(/\b(addCoins|addCoinsPending|spendCoins)\(([^;]*?),\s*(isPaidChest \? "chest_payout" : "daily_chest"|"[a-z_]+")(?:,\s*\{[^;]*?\})?\)/g)) {
       found.push(`${path}:${m[1]}:${m[3].replace(/"/g, "")}`);
     }
     // A call with no second argument would not compile; this catches anything the regex misses.
     const calls = [...text.matchAll(/\b(addCoins|addCoinsPending|spendCoins)\(/g)].length;
-    const classified = [...text.matchAll(/\b(addCoins|addCoinsPending|spendCoins)\(([^;]*?),\s*(isPaidChest \? "chest_payout" : "daily_chest"|"[a-z_]+")\)/g)].length;
+    const classified = [...text.matchAll(/\b(addCoins|addCoinsPending|spendCoins)\(([^;]*?),\s*(isPaidChest \? "chest_payout" : "daily_chest"|"[a-z_]+")(?:,\s*\{[^;]*?\})?\)/g)].length;
     if (calls > 0) assert.equal(classified, calls, `${path}: every coin call is classified`);
   }
   assert.deepEqual(found.sort(), [
@@ -114,12 +115,11 @@ test("every current coin grant/spend call site names its source/sink - the audit
     "screens/SpecialChallengeScreen.tsx:addCoins:ad_multiplier",
     "screens/SpecialChallengeScreen.tsx:addCoins:special_score",
     "screens/SpecialChallengeScreen.tsx:spendCoins:special_retry",
-    // 0.59.0: Category Unlock Now (the exact shortfall, spent at once), the Daily streak, the daily goal, Streak Saves.
+    // 0.59.0: Category Unlock Now (the exact shortfall, spent at once), the Drawing Streak day, Streak Saves.
     "screens/ShapeChallengeScreen.tsx:addCoins:ad_topup",
     "services/drawingStreakStore.ts:addCoins:daily_streak",
-    "services/dailyGoalStore.ts:addCoins:daily_goal",
     "services/drawingStreakStore.ts:spendCoins:streak_save",
-  ].sort(), "16 grants + 9 spends (the chest's daily/paid pair is one call) - a new call site must be added here deliberately");
+  ].sort(), "15 grants + 9 spends (the chest's daily/paid pair is one call) - a new call site must be added here deliberately");
 });
 
 test("nothing writes the coin balance directly except coinsStore and the one-time legacy import", () => {

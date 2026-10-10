@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { recordStreakActivity } from "../../services/drawingStreakStore";
 import { useRoundStartScroll } from "../../hooks/useRoundStartScroll";
 import UpdateRequiredNotice from "./UpdateRequiredNotice";
 import Button from "../Button";
@@ -246,6 +247,9 @@ export default function PlayTogetherRoom({ transport, onExit, onActiveChange }: 
           playerCount: snapshot.players.length,
           submitted: snapshot.you?.submitted ?? false,
         });
+        // 0.59.0 Drawing Streak: a round this device actually drew in is one of today's 5 drawings (watching counts
+        // for nothing). A finished game (5-15 rounds) therefore keeps the day; the global toast marks it.
+        if (snapshot.you?.submitted) recordStreakActivity("drawing", "multiplayer");
       }
     }
 

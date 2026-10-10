@@ -1,5 +1,5 @@
 // 0.59.0 - the REAL stores against an in-memory localStorage: the Daily Drawing Streak (pays once a day, Ember once,
-// Save purchase), the daily goal (pays once a day, never twice), category purchase order (price + analytics ordinal
+// Save purchase, 5 drawings in any mode or the Daily), category purchase order (price + analytics ordinal
 // from one count) and the per-day Rewarded limits. Captures what trackEvent would send.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -19,8 +19,9 @@ const { validateEventParams } = await import("./analyticsSchema.ts");
 const { getSaveData, updateSaveData, replaceSaveData } = await import("./saveStore.ts");
 const { createDefaultSaveData } = await import("./saveData.ts");
 const { getCoins } = await import("./coinsStore.ts");
-const { buyStreakSave, getStreakRescueOffer, getStreakView, grantStreakRescue, recordDailyCompletion } = await import("./drawingStreakStore.ts");
-const { getDailyGoal, recordDailyGoalGame } = await import("./dailyGoalStore.ts");
+const { buyStreakSave, getStreakRescueOffer, getStreakView, grantStreakRescue, onStreakDayCompleted, recordDailyCompletion, recordStreakActivity } = await import(
+  "./drawingStreakStore.ts"
+);
 const { getPaidCategoryPurchaseCount, nextCategoryUnlockPrice, unlockCategory } = await import("./categoryUnlockStore.ts");
 const { hasRunMinBonusLeftToday, isUnlockNowUsedToday, recordRunMinBonusGranted, recordUnlockNowUsed } = await import("./adDailyLimitsStore.ts");
 const { isColorUnlocked } = await import("./penColorStore.ts");
@@ -54,14 +55,14 @@ const il = (date: string) => Date.parse(`${date}T09:00:00Z`);
 test("streak: the first completion of a day pays its coins once; a retry the same day pays nothing", async () => {
   fresh(0);
   const first = recordDailyCompletion(il("2026-10-10"));
-  assert.equal(first.advanced, true);
+  assert.equal(first?.day, 1);
   assert.equal(getCoins(), 20);
   const retry = recordDailyCompletion(il("2026-10-10") + 3_600_000);
-  assert.equal(retry.advanced, false);
+  assert.equal(retry, null);
   assert.equal(getCoins(), 20, "no second payment");
   await flush();
   const earned = sent.filter((s) => s.name === "coin_earned").map((s) => s.params);
-  assert.deepEqual(earned, [{ coinSource: "daily_streak", amount: 20, balanceBucket: "0_99" }]);
+  assert.deepEqual(earned, [{ coinSource: "daily_streak", amount: 20, balanceBucket: "0_99", streakDay: "1", streakRoute: "daily" }]);
 });
 
 test("streak: survives a reload (it lives in the save) and continues the next Israel day", () => {
@@ -70,7 +71,7 @@ test("streak: survives a reload (it lives in the save) and continues the next Is
   const saved = JSON.parse(JSON.stringify(getSaveData()));
   replaceSaveData(saved);
   const next = recordDailyCompletion(il("2026-10-11"));
-  assert.equal(next.day, 2);
+  assert.equal(next?.day, 2);
   assert.equal(getCoins(), 50);
   assert.equal(getStreakView(il("2026-10-11")).doneToday, true);
 });
@@ -79,8 +80,7 @@ test("streak: the Israel day decides, not the device's - 23:30 UTC on the 10th i
   fresh(0);
   recordDailyCompletion(Date.parse("2026-10-10T08:00:00Z"));
   const lateUtc = recordDailyCompletion(Date.parse("2026-10-10T23:30:00Z")); // 02:30 on the 11th in Israel (UTC+3)
-  assert.equal(lateUtc.advanced, true);
-  assert.equal(lateUtc.day, 2);
+  assert.equal(lateUtc?.day, 2);
 });
 
 test("streak: Day 3 milestone is reported once per player; Day 30 grants the Ember Ink", async () => {
@@ -93,7 +93,7 @@ test("streak: Day 3 milestone is reported once per player; Day 30 grants the Emb
   });
   assert.equal(isColorUnlocked("ember"), false);
   const day30 = recordDailyCompletion(il("2026-10-21"));
-  assert.equal(day30.emberUnlocked, true);
+  assert.equal(day30?.emberUnlocked, true);
   assert.equal(isColorUnlocked("ember"), true);
 });
 
@@ -114,7 +114,7 @@ test("Streak Rescue (store): offered on the restart day, granted once, pays noth
   updateSaveData((d) => {
     d.progress.drawingStreak = { lastDay: "2026-10-08", current: 12, best: 12, saves: 0, emberGranted: false };
   });
-  assert.equal(getStreakRescueOffer(il("2026-10-10")), null, "nothing before the Daily is completed");
+  assert.deepEqual(getStreakRescueOffer(il("2026-10-10")), { from: 12, day: "2026-10-10" }, "available before today counts too");
   recordDailyCompletion(il("2026-10-10"));
   assert.equal(getCoins(), 20, "the restart day pays Day 1");
   const offer = getStreakRescueOffer(il("2026-10-10"));
@@ -128,7 +128,7 @@ test("Streak Rescue (store): offered on the restart day, granted once, pays noth
   assert.equal(grantStreakRescue(offer!.day), false, "a duplicate reward callback changes nothing");
   assert.equal(getCoins(), 20, "no coins");
   assert.equal(getStreakView(Date.parse("2026-10-10T21:00:30Z")).current, 13);
-  assert.equal(recordDailyCompletion(il("2026-10-11")).day, 14, "continues the next day");
+  assert.equal(recordDailyCompletion(il("2026-10-11"))?.day, 14, "continues the next day");
   await flush();
   assert.equal(sent.filter((x) => x.name === "coin_earned").length, 1, "only the next day's streak coins");
 });
@@ -156,22 +156,83 @@ test("Streak Rescue: the only grant call is behind a verified ad reward (call-si
   for (const gateFn of ["isAndroidApp()", "isStreakRescueOn()", 'isRewardedAdReadyFor("streak_rescue")']) assert.ok(src.includes(gateFn), gateFn);
 });
 
-test("daily goal: 5 Classic games pay +20 exactly once that day; progress counts on", async () => {
-  fresh(0);
-  const results = Array.from({ length: 7 }, () => recordDailyGoalGame());
-  assert.deepEqual(results.map((r) => r.justCompleted), [false, false, false, false, true, false, false]);
-  assert.equal(getCoins(), 20);
-  assert.equal(getDailyGoal().claimed, true);
-  await flush();
-  assert.deepEqual(sent.filter((s) => s.name === "coin_earned").map((s) => s.params.coinSource), ["daily_goal"]);
-});
-
-test("daily goal: a stored previous day reads as a fresh 0/5", () => {
+test("Streak Rescue (store) before today counts: the missed day is bridged, then today's drawings pay Day 13", () => {
   fresh(0);
   updateSaveData((d) => {
-    d.progress.dailyGoal = { date: "2020-01-01", games: 5, claimed: true };
+    d.progress.drawingStreak = { lastDay: "2026-10-08", current: 12, best: 12, saves: 0, emberGranted: false };
   });
-  assert.deepEqual(getDailyGoal(), { games: 0, target: 5, claimed: false });
+  assert.equal(getStreakView(il("2026-10-10")).atRisk, 12);
+  assert.equal(grantStreakRescue("2026-10-10", il("2026-10-10")), true);
+  assert.equal(getCoins(), 0, "the rescue pays nothing");
+  assert.equal(getStreakView(il("2026-10-10")).atRisk, 0);
+  let day = null;
+  for (let i = 0; i < 5; i++) day = recordStreakActivity("drawing", "multiplayer", il("2026-10-10")).completion ?? day;
+  assert.equal(day?.day, 13);
+  assert.equal(getCoins(), 20);
+});
+
+test("activity streak (store): mixed modes reach 5 drawings; one payment with route + day bucket; the day event fires once", async () => {
+  fresh(0);
+  const events: string[] = [];
+  const listeners: ((e: Event) => void)[] = [];
+  const w = (globalThis as Record<string, unknown>).window as Record<string, unknown>;
+  const prevAdd = w.addEventListener;
+  const prevDispatch = w.dispatchEvent;
+  w.addEventListener = (name: string, fn: (e: Event) => void) => void (name === "cydi:streak-day" && listeners.push(fn));
+  w.dispatchEvent = (e: Event) => (e.type === "cydi:streak-day" && listeners.forEach((fn) => fn(e)), true);
+  try {
+    onStreakDayCompleted((d) => events.push(`${d.route}:${d.completion.day}`));
+    const routes = ["classic", "classic", "multiplayer", "two_players", "other", "classic", "multiplayer"] as const;
+    const days = routes.map((r) => recordStreakActivity("drawing", r, il("2026-10-10")).completion?.day ?? null);
+    assert.deepEqual(days, [null, null, null, null, 1, null, null]);
+    assert.equal(recordDailyCompletion(il("2026-10-10")), null, "the Daily on a day that already counts pays nothing");
+  } finally {
+    w.addEventListener = prevAdd;
+    w.dispatchEvent = prevDispatch;
+  }
+  assert.deepEqual(events, ["other:1"], "the 5th drawing (a Special/Mega/Artist/custom one here) completed the day");
+  assert.equal(getCoins(), 20);
+  await flush();
+  assert.deepEqual(
+    sent.filter((s) => s.name === "coin_earned").map((s) => s.params),
+    [{ coinSource: "daily_streak", amount: 20, balanceBucket: "0_99", streakDay: "1", streakRoute: "other" }],
+  );
+  assert.equal(getStreakView(il("2026-10-10")).drawings, 7);
+  assert.equal(getStreakView(il("2026-10-11")).drawings, 0, "a new Israel day starts from 0");
+});
+
+test("activity streak (store): opening the app or a practice replay records nothing - only the mode hooks call it", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const root = path.resolve(import.meta.dirname, "..");
+  const callers: string[] = [];
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const f = path.join(dir, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (/\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name)) {
+        const text = fs.readFileSync(f, "utf8");
+        const n = (text.match(/recordStreakActivity\(/g) ?? []).length - (text.includes("export function recordStreakActivity(") ? 1 : 0);
+        if (n > 0) callers.push(`${path.relative(root, f).split(path.sep).join("/")}:${n}`);
+      }
+    }
+  };
+  walk(root);
+  assert.deepEqual(callers.sort(), [
+    "components/multiplayer/PlayTogetherRoom.tsx:1",
+    "components/passplay/PassPlayGame.tsx:1",
+    "screens/ArtistPackScreen.tsx:1",
+    "screens/MegaChallengeScreen.tsx:1",
+    "screens/PlayChallengeScreen.tsx:1",
+    "screens/ShapeChallengeScreen.tsx:1",
+    "screens/SpecialChallengeScreen.tsx:1",
+    "services/drawingStreakStore.ts:1",
+  ]);
+  const classic = fs.readFileSync(path.join(root, "screens/ShapeChallengeScreen.tsx"), "utf8");
+  const call = classic.indexOf('recordStreakActivity("drawing", "classic")');
+  assert.ok(classic.lastIndexOf("if (!practice) {", call) > call - 300, "Classic counts only non-practice rounds");
+  const mp = fs.readFileSync(path.join(root, "components/multiplayer/PlayTogetherRoom.tsx"), "utf8");
+  assert.ok(mp.includes('if (snapshot.you?.submitted) recordStreakActivity("drawing", "multiplayer")'), "only rounds this device drew in");
 });
 
 test("category purchase order: one count drives the price (1,000 / 1,250 / 1,500) and the analytics ordinal", () => {
@@ -226,13 +287,12 @@ test("migration: a 0.58 save (no streak / goal / ad-limit fields) loads and read
     d.progress.shapeChallenge.bestScores = { circle: 91, square: 77 };
     d.progress.dailyStreak = { lastVisitDate: "2026-10-08", currentStreak: 4, longestStreak: 9 };
     delete (d.progress as Record<string, unknown>).drawingStreak;
-    delete (d.progress as Record<string, unknown>).dailyGoal;
     delete (d.progress as Record<string, unknown>).adLimits;
   });
   const before = JSON.stringify(getSaveData());
   // Every 0.59.0 read path a returning player hits on launch / Home / Daily / map / Shop / result.
   assert.equal(getStreakView(il("2026-10-10")).current, 0);
-  assert.deepEqual(getDailyGoal(), { games: 0, target: 5, claimed: false });
+  assert.equal(getStreakView(il("2026-10-10")).drawings, 0);
   assert.equal(getPaidCategoryPurchaseCount(), 2);
   assert.equal(nextCategoryUnlockPrice(), 1500, "two paid categories bought -> the 3rd costs 1,500");
   assert.equal(isUnlockNowUsedToday(), false);

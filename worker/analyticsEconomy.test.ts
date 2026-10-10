@@ -175,6 +175,18 @@ test("AE schema 2: economy context lands as bucket positions and codes, never a 
   }
 });
 
+test("AE: a Drawing Streak day's coin_earned row carries its route in blob18 and its day bucket in blob19; others stay empty", () => {
+  const body = JSON.stringify({ events: [
+    env1("coin_earned", { coinSource: "daily_streak", amount: 100, balanceBucket: "100_499", streakDay: "7_13", streakRoute: "multiplayer" }),
+    env1("coin_earned", { coinSource: "daily_chest", amount: 90, balanceBucket: "0_99" }),
+  ] });
+  const [streak, chest] = buildShadowDataPointsFromParsed(parseIngest("/events", body), "IR", () => 0);
+  assert.deepEqual([streak.blobs[17], streak.blobs[18], streak.blobs[19]], ["multiplayer", "7_13", "coinSource:daily_streak"]);
+  assert.equal(streak.doubles[9], 100, "amount in its usual column");
+  assert.deepEqual([chest.blobs[17], chest.blobs[18]], ["", ""]);
+  assert.equal(valid("coin_earned", { coinSource: "daily_chest", amount: 90, balanceBucket: "0_99", streakDay: "1", streakRoute: "daily" }), false);
+});
+
 // ----------------------------------------------------------------- report ----
 
 test("economy report: offer -> start -> completion conversion by balance, shortfall, reward size and gap", () => {

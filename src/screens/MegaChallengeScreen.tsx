@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { recordStreakActivity } from "../services/drawingStreakStore";
 import { useListScrollMemory, useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
@@ -365,6 +366,8 @@ function MegaPlay({ card, onFinished, onNavigate }: MegaPlayProps) {
       if (passed) playSuccessSound();
       else playEncourageSound();
       trackEvent("game_completed", withGameCoins({ gameType: "megaChallenge", category: card.category, contentKey: card.id }, outcome.completionRewardCoins));
+      // 0.59.0 Drawing Streak: one of today's 5 drawings (the global streak toast marks the day when it completes).
+      recordStreakActivity("drawing", "other");
       setPhase("result");
     }, delay);
   }

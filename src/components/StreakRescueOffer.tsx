@@ -3,7 +3,7 @@ import { playChipSound, playSelectSound } from "../engine/soundEngine";
 import { isStreakRescueOn } from "../services/ads/coinOfferConfig";
 import { isRewardedAdReadyFor, preloadRewardedAd, showRewardedAd, subscribeRewardedAdEvents } from "../services/ads";
 import { trackEvent } from "../services/analytics";
-import { getStreakRescueOffer, grantStreakRescue, onStreakChanged } from "../services/drawingStreakStore";
+import { getStreakRescueOffer, getStreakView, grantStreakRescue, onStreakChanged } from "../services/drawingStreakStore";
 import { isAndroidApp } from "../services/nativeShare";
 import { resolveAdOutcome } from "./doubleOfferAdFlow";
 
@@ -29,7 +29,7 @@ export default function StreakRescueOffer({ onRescued, showKept = true }: Streak
   const [offer, setOffer] = useState(() => getStreakRescueOffer());
   const [pending, setPending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const [kept, setKept] = useState<number | null>(null);
+  const [kept, setKept] = useState<string | null>(null);
   const [, setAdTick] = useState(0);
 
   const eligible = offer !== null && isAndroidApp() && isStreakRescueOn();
@@ -61,8 +61,10 @@ export default function StreakRescueOffer({ onRescued, showKept = true }: Streak
       trackEvent("reward_ad_completed", { placement: "streak_rescue" });
       if (grantStreakRescue(offer.day)) {
         playChipSound();
-        setKept(offer.from + 1);
-        onRescued?.(offer.from + 1);
+        // After today counted: the count is restored now. Before: the missed day is covered and today continues it.
+        const after = getStreakView();
+        setKept(after.doneToday ? `You’re on Day ${after.current}.` : `Today’s drawings make it Day ${offer.from + 1}.`);
+        if (after.doneToday) onRescued?.(after.current);
       }
       return;
     }
@@ -78,7 +80,7 @@ export default function StreakRescueOffer({ onRescued, showKept = true }: Streak
     if (!showKept) return null;
     return (
       <p className="streak-rescue streak-rescue-kept" role="status">
-        🔥 Streak kept! You’re on Day {kept}.
+        🔥 Streak kept! {kept}
       </p>
     );
   }
@@ -88,7 +90,7 @@ export default function StreakRescueOffer({ onRescued, showKept = true }: Streak
   return (
     <div className="streak-rescue">
       <p className="streak-rescue-text">
-        <strong>Keep your {offer.from}-day streak?</strong> You missed one day – watch a short ad to continue at Day {offer.from + 1}.
+        <strong>Keep your {offer.from}-day streak?</strong> You missed one day – watch a short ad and it carries on.
       </p>
       <button type="button" className="streak-rescue-btn" disabled={pending} onClick={() => void handleWatch()}>
         {pending ? "Loading ad…" : "▶ Keep my streak"}

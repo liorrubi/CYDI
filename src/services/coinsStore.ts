@@ -1,7 +1,7 @@
 import { playCashRegisterSound, playCoinsSound } from "../engine/soundEngine";
 import { getSaveData, updateSaveData } from "./saveStore";
 import type { CoinSink, CoinSource } from "./economyBuckets";
-import { onCoinsEarned, onCoinsSpent } from "./economyAnalytics";
+import { onCoinsEarned, onCoinsSpent, type CoinEarnedDetail } from "./economyAnalytics";
 
 const COINS_UPDATED_EVENT = "cydi:coins-updated";
 
@@ -40,10 +40,10 @@ function creditSilently(amount: number): number {
  * Adds coins (no-op for non-positive amounts); batches the coin-drop sound and CoinIndicator update with any other awards made in the same tick.
  * `source` is required: every coin that enters the economy says why (economyAnalytics.ts COIN_SOURCE_REPORTING).
  */
-export function addCoins(amount: number, source: CoinSource): number {
+export function addCoins(amount: number, source: CoinSource, detail?: CoinEarnedDetail): number {
   if (amount <= 0) return getCoins();
   const next = creditSilently(amount);
-  onCoinsEarned(source, amount, next);
+  onCoinsEarned(source, amount, next, detail);
   scheduleFlush();
   return next;
 }

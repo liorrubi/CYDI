@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { recordStreakActivity } from "../services/drawingStreakStore";
 import { useRoundStartScroll } from "../hooks/useRoundStartScroll";
 import AppHeader from "../components/AppHeader";
 import Button from "../components/Button";
@@ -138,6 +139,8 @@ export default function PlayChallengeScreen({ challengeId, from, onNavigate }: P
       setResult(scoreResult);
       setIsNewBest(beatBest);
       trackEvent("game_completed", { gameType: "customChallenge", category: "custom", contentKey: challenge.id });
+      // 0.59.0 Drawing Streak: one of today's 5 drawings (the global streak toast marks the day when it completes).
+      recordStreakActivity("drawing", "other");
       setPhase("result");
     }, delay);
   }

@@ -304,7 +304,7 @@ const HOW_TO_PLAY: ContentPage = {
         "There are other ways to earn them - a free Daily Chest worth " +
         `${DAILY_CHEST_MIN_COINS}-${DAILY_CHEST_MAX_COINS} coins, the Daily Challenge prizes below, and one-off ` +
         "rewards for finishing special and collectible challenges. Coins buy things inside the game: unlocking a " +
-        `new shape category costs ${CATEGORY_UNLOCK_COST.toLocaleString("en-US")} coins, and the shop sells ink ` +
+        `new shape category costs from ${CATEGORY_UNLOCK_COST.toLocaleString("en-US")} coins, and the shop sells ink ` +
         "colours, pen skins and chests.",
     },
     {
@@ -389,8 +389,8 @@ const HOW_TO_PLAY: ContentPage = {
       html:
         `The main Shape Challenge holds <strong>${SHAPE_COUNT} shapes</strong> across ${CATEGORY_COUNT} ` +
         "categories. The first category is open from the start; each shape you pass unlocks the next one in its " +
-        `category, and further categories are unlocked with coins (${CATEGORY_UNLOCK_COST.toLocaleString("en-US")} ` +
-        "each).",
+        `category, and further categories are unlocked with coins (from ${CATEGORY_UNLOCK_COST.toLocaleString("en-US")} ` +
+        "coins).",
     },
     {
       kind: "table",

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { bringIntoView } from "../app/offerVisibility";
 import { whenStreakCardClosed } from "../app/streakCardGate";
 import { penColorById } from "../app/constants";
 import { TRIAL_PLAYS } from "../app/inkTrialPolicy";
@@ -86,6 +87,7 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
   }
 
   const shownRef = useRef(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     void preloadRewardedAd(placement);
     onSkipReporter?.(reportSkip);
@@ -98,6 +100,8 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
         trackEvent("reward_offer_shown", funnelParams());
         recordInkOfferRendered(ink);
         onShown?.();
+        // Shown = on screen: Watch and Not now are brought into view on a short phone.
+        bringIntoView(rootRef.current?.querySelector(".ink-offer-actions"));
       });
     }, 0);
     return () => {
@@ -183,7 +187,7 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
   }
 
   return (
-    <div className={`ink-offer ink-offer-${ink}`}>
+    <div ref={rootRef} className={`ink-offer ink-offer-${ink}`}>
       <div className="ink-offer-main">
         <InkPreview ink={ink} width={104} height={36} />
         <div className="ink-offer-text">

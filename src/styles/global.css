@@ -6444,3 +6444,87 @@ body {
   background: #191b2e;
   white-space: nowrap;
 }
+
+/* 0.59.0 Rewarded offer: Watch and Keep share one row at every width, so both are on screen together - on phones up
+   to 400px wide they used to stack and Keep fell below the fold (Mi 8: 792 / 738). A long label wraps inside its own
+   button. Layout only (offerVisibility.ts brings the row into view when the offer counts as shown). */
+.double-offer-buttons {
+  flex-wrap: nowrap;
+}
+
+.double-offer-buttons > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: var(--space-3);
+  padding-right: var(--space-3);
+}
+
+/* 0.59.0 WEB PLAY on screens up to 800px tall (phones in a browser, 1366x768 / 1024x768 laptops and tablets): measured
+   at 360x640, Done sat at 786 (Daily 828 at 1024x768) - the full header with its icon rows, 24px gaps and the
+   instruction's 19px margins pushed it below the fold. While drawing
+   tools are on screen the header keeps Back and its title but drops the nav icons, and the spacing tightens: Done
+   786 -> 544. The canvas keeps its size and drawing geometry. Scoped to the web shell (.site-main): the Android app
+   shell has its own, already-verified rules (appShell.css). :has() needs Chrome/Safari 105+/15.4+. */
+@media (max-height: 800px) {
+  .site-main .screen:has(> .pen-tools-row) > .app-header .app-header-actions,
+  .site-main .screen:has(.mp-canvas-wrapper) .app-header .app-header-actions {
+    display: none;
+  }
+
+  .site-main .screen:has(> .pen-tools-row) > .app-header,
+  .site-main .screen:has(.mp-canvas-wrapper) .app-header {
+    padding-bottom: 4px;
+  }
+
+  .site-main .screen:has(> .pen-tools-row),
+  .site-main .screen:has(.mp-canvas-wrapper) {
+    gap: 8px;
+  }
+
+  .site-main .screen:has(> .pen-tools-row) > .canvas-instruction-text {
+    margin: 0;
+  }
+
+  .site-main .screen:has(> .pen-tools-row) > .button-row .btn {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .site-main .screen:has(.mp-canvas-wrapper) .mp-room {
+    gap: 12px;
+  }
+
+  .site-main .screen:has(.mp-canvas-wrapper) .mp-stage {
+    gap: 8px;
+  }
+}
+
+/* 0.59.0 DAILY on very short screens (<= 600px tall, both shells): the status line ("Your best • Top score by ...")
+   wrapped to two lines at 320px and pushed Done below the fold. It stays one line; the leader text ends in "..."
+   (the leaderboard card below shows it in full). The web name button and gaps tighten too (web 320x568: 600 -> ~555). */
+@media (max-height: 600px) {
+  .daily-play .daily-status-line {
+    flex-wrap: nowrap;
+  }
+
+  .daily-play .daily-status-line > span {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .daily-play .daily-status-line > span:last-child {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .site-main .daily-play .daily-name-display {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .site-main .screen.daily-play:has(> .pen-tools-row) {
+    gap: 6px;
+  }
+}

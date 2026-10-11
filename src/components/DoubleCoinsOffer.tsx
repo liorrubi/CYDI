@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { bringIntoView } from "../app/offerVisibility";
 import { whenStreakCardClosed } from "../app/streakCardGate";
 import {
   playAchievementUnlockedSound,
@@ -317,6 +318,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
         shownRef.current = true;
         trackEvent(isBonusRound ? "reward_bonus_offer_shown" : "reward_offer_shown", funnelParams());
         onShown?.();
+        // Shown = on screen: Watch and Keep are brought into view on a short phone.
+        bringIntoView(anchorRef.current?.querySelector(".double-offer-buttons"));
       });
     }, 0);
     return () => {

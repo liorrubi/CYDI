@@ -19,9 +19,10 @@ Android 0.59.0 (versionCode 67) and web 0.59.0. Coins you already have, and ever
   that - the price is shown on the map.
 - **Paid chests:** watching an ad to double a paid chest now adds up to 500 coins. The free Daily Chest still
   doubles in full.
-- **Small screens:** on Android the Daily drawing screen is tighter while you draw, so the drawing and Done fit
-  on common phones without scrolling, and the results screen fits better on short phones and landscape
-  tablets, so Next Shape is easier to reach.
+- **Small screens:** on shorter phones, tablets in landscape and laptop-height browser windows, the drawing screen
+  keeps Back but hides the header icons while you draw, so the drawing and Done fit without scrolling in every
+  mode; the results screen fits better too. On phones the game now stays in portrait (tablets still rotate),
+  and the coin offer shows Watch and Keep side by side, both on screen.
 - **Built in but switched off for now:** a richer coin offer after Classic games, an "Unlock now" ad for a
   category you're just short of, and a **Streak Rescue**: if you miss a single day without a Streak Save, one
   optional ad on the day you come back can keep a streak of 3 days or more (at most once a week, no coins).

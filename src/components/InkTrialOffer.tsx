@@ -94,19 +94,21 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
     // Cleared if StrictMode re-runs the effect, so the render is counted exactly once - and not while a streak
     // celebration card covers it (counted once that card is closed).
     let cancelShown = () => {};
+    let cancelReveal = () => {};
     const t = window.setTimeout(() => {
       cancelShown = whenStreakCardClosed(() => {
         shownRef.current = true;
         trackEvent("reward_offer_shown", funnelParams());
         recordInkOfferRendered(ink);
         onShown?.();
-        // Shown = on screen: Watch and Not now are brought into view on a short phone.
-        bringIntoView(rootRef.current?.querySelector(".ink-offer-actions"));
+        // Shown = on screen: Watch and Not now are brought into view on a short phone (once the offer has settled).
+        cancelReveal = bringIntoView(rootRef.current?.querySelector(".ink-offer-actions"));
       });
     }, 0);
     return () => {
       window.clearTimeout(t);
       cancelShown();
+      cancelReveal();
       // Leaving the screen with the offer still open (Back, a header shortcut, Android Back): the same one skip
       // NOT NOW records. A screen that already reported through onSkipReporter, a NOT NOW or a grant settled it.
       // Not while an ad is in flight: its answer (grant / fail) settles the offer instead.

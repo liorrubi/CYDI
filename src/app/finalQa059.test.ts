@@ -22,13 +22,45 @@ test("Rewarded offers: both choices on one row and brought into view at the mome
   assert.match(css, /\.double-offer-buttons \{\n  flex-wrap: nowrap;\n\}/);
   assert.match(css, /\.double-offer-buttons > button \{\n  flex: 1 1 0;\n  min-width: 0;/);
   const coin = read("../components/DoubleCoinsOffer.tsx");
-  assert.match(coin, /onShown\?\.\(\);\s*\n\s*\/\/ Shown = on screen[^\n]*\n\s*bringIntoView\(anchorRef\.current\?\.querySelector\("\.double-offer-buttons"\)\);/);
+  assert.match(coin, /onShown\?\.\(\);\s*\n\s*\/\/ Shown = on screen[^\n]*\n\s*cancelReveal = bringIntoView\(anchorRef\.current\?\.querySelector\("\.double-offer-buttons"\)\);/);
   const ink = read("../components/InkTrialOffer.tsx");
-  assert.match(ink, /bringIntoView\(rootRef\.current\?\.querySelector\("\.ink-offer-actions"\)\);/);
+  assert.match(ink, /cancelReveal = bringIntoView\(rootRef\.current\?\.querySelector\("\.ink-offer-actions"\)\);/);
+  for (const s of [coin, ink]) assert.match(s, /cancelShown\(\);\s*\n\s*cancelReveal\(\);/, "an unmount cancels a pending reveal");
   // Layout only: the helper never touches analytics, payouts or cadence.
   const helper = read("./offerVisibility.ts");
   assert.doesNotMatch(helper, /trackEvent|addCoins|Cadence|preload/);
-  assert.match(helper, /scrollIntoView\(\{ block: "nearest"/);
+});
+
+test("offer reveal: after the pop-in, by layout position (transforms ignored), just enough, never above the top", async () => {
+  type Box = { offsetTop: number; offsetHeight: number; offsetParent: null; isConnected: boolean };
+  const scrolls: number[] = [];
+  const timers: (() => void)[] = [];
+  const g = globalThis as Record<string, unknown>;
+  class FakeEl implements Box { offsetTop = 0; offsetHeight = 0; offsetParent = null; isConnected = true; }
+  g.HTMLElement = FakeEl;
+  g.window = {
+    innerHeight: 738,
+    scrollY: 0,
+    setTimeout: (fn: () => void) => (timers.push(fn), timers.length),
+    clearTimeout: (id: number) => (timers[id - 1] = () => {}),
+    matchMedia: () => ({ matches: false }),
+    scrollTo: ({ top }: { top: number }) => scrolls.push(top),
+  };
+  const { bringIntoView, OFFER_SETTLE_MS } = await import("./offerVisibility.ts");
+  assert.ok(OFFER_SETTLE_MS >= 400, "after the longest offer entrance animation");
+  const row = (top: number, h: number) => Object.assign(new FakeEl(), { offsetTop: top, offsetHeight: h });
+  bringIntoView(row(692, 54)); // Mi 8: the vc81 measurement, 8px below the fold
+  bringIntoView(row(300, 54)); // already on screen
+  const cancel = bringIntoView(row(900, 54));
+  cancel(); // unmounted before it settled
+  bringIntoView(row(1200, 54)); // far below a short screen
+  assert.equal(scrolls.length, 0, "nothing happens before the offer has settled");
+  for (const fn of timers) fn();
+  assert.deepEqual(scrolls, [692 + 54 - 738 + 12, 1200 + 54 - 738 + 12], "just enough to show the whole row, with a 12px margin");
+  const tall = Object.assign(new FakeEl(), { offsetTop: 700, offsetHeight: 900 });
+  bringIntoView(tall);
+  timers.at(-1)!();
+  assert.equal(scrolls.at(-1), 700 - 12, "taller than the screen: its top stays on screen");
 });
 
 test("short-screen play rules: Android shell and web shell each scoped to their own wrapper, canvas untouched", () => {

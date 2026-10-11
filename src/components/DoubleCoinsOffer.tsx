@@ -313,18 +313,20 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     // as rendered (once - the timeout is cleared if StrictMode re-runs the effect) - and,
     // when a streak celebration card covers the result, only once that card is closed.
     let cancelShown = () => {};
+    let cancelReveal = () => {};
     const t = window.setTimeout(() => {
       cancelShown = whenStreakCardClosed(() => {
         shownRef.current = true;
         trackEvent(isBonusRound ? "reward_bonus_offer_shown" : "reward_offer_shown", funnelParams());
         onShown?.();
-        // Shown = on screen: Watch and Keep are brought into view on a short phone.
-        bringIntoView(anchorRef.current?.querySelector(".double-offer-buttons"));
+        // Shown = on screen: Watch and Keep are brought into view on a short phone (once the offer has settled).
+        cancelReveal = bringIntoView(anchorRef.current?.querySelector(".double-offer-buttons"));
       });
     }, 0);
     return () => {
       window.clearTimeout(t);
       cancelShown();
+      cancelReveal();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

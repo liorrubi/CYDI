@@ -50,6 +50,7 @@ import {
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { getUnlockedAchievementIds, markAchievementUnlocked } from "../services/achievementsStore";
 import { addCoins, addCoinsPending, getCoins, onCoinsChanged, revealPendingCoins, spendCoins } from "../services/coinsStore";
+import { addToStreakCard, isStreakCardOpen, whenStreakCardClosed } from "../app/streakCardGate";
 import { getUnlockedCategoryIds, nextCategoryUnlockPrice, unlockCategory } from "../services/categoryUnlockStore";
 import { isUnlockNowEligible, unlockNowCredit } from "../app/unlockNow";
 import { isRunX3ExperimentOn, isUnlockNowOn, qaForcedRunArm } from "../services/ads/coinOfferConfig";
@@ -243,9 +244,19 @@ export default function ShapeChallengeScreen({ onNavigate, initialShape }: Shape
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 0.59.0: an achievement earned on the same drawing that opened a Drawing Streak celebration card (a milestone,
+  // Save or Ember day) is listed ON that card - one celebration with every reward - instead of a second full-screen
+  // overlay right after it. Its coins were banked above as always; the counter reveal happens when the card closes.
+  useEffect(() => {
+    if (pendingAchievements.length === 0) return;
+    if (!addToStreakCard(pendingAchievements.map((a) => ({ id: a.id, title: a.name, coins: a.coinReward })))) return;
+    whenStreakCardClosed(revealPendingCoins);
+    setPendingAchievements([]);
+  }, [pendingAchievements]);
+
   // Play the fanfare each time a new achievement banner takes over the front of the queue.
   useEffect(() => {
-    if (pendingAchievements.length > 0) playAchievementUnlockedSound();
+    if (pendingAchievements.length > 0 && !isStreakCardOpen()) playAchievementUnlockedSound();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingAchievements[0]?.id]);
 
@@ -293,7 +304,7 @@ export default function ShapeChallengeScreen({ onNavigate, initialShape }: Shape
   const goToHome = () => onNavigate(toHome());
   const goToSettings = () => onNavigate(toSettings());
 
-  const achievementBanner = pendingAchievements[0] && (
+  const achievementBanner = pendingAchievements[0] && !isStreakCardOpen() && (
     <AchievementUnlockedBanner
       achievement={pendingAchievements[0]}
       onCollect={handleCollectAchievement}

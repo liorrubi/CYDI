@@ -23,7 +23,7 @@ const { ACHIEVEMENTS, computeAchievementStats, findNewlyUnlockedAchievements } =
 const { getProgress } = await import("../services/shapeChallengeProgress.ts");
 const { getUnlockedAchievementIds, markAchievementUnlocked } = await import("../services/achievementsStore.ts");
 const { syncAchievementCardUnlocks, getMegaProgress } = await import("../services/megaChallengeStore.ts");
-const { closeStreakCard, isStreakCardOpen, openStreakCard, whenStreakCardClosed } = await import("./streakCardGate.ts");
+const { addToStreakCard, closeStreakCard, getStreakCardExtras, isStreakCardOpen, onStreakCardExtras, openStreakCard, whenStreakCardClosed } = await import("./streakCardGate.ts");
 const { clearNavigationGuard, registerNavigationGuard, runNavigationGuard } = await import("./navigationGuard.ts");
 
 const STREAK_IDS = ["streak-3", "streak-7", "streak-14", "streak-30", "streak-100"];
@@ -46,6 +46,7 @@ test("the five streak achievements keep their ids, thresholds and coins - only t
   assert.deepEqual(rows, [["streak-3", 3, 100], ["streak-7", 7, 250], ["streak-14", 14, 500], ["streak-30", 30, 1200], ["streak-100", 100, 5000]]);
   for (const a of ACHIEVEMENTS.filter((x) => STREAK_IDS.includes(x.id))) {
     assert.match(a.description, /Drawing Streak/);
+    assert.equal(a.name, `${a.target}-Day Streak`, "distinct names that say the day count");
     assert.doesNotMatch(`${a.name} ${a.description}`, /visit/i);
   }
 });
@@ -159,4 +160,36 @@ test("an overlay's Back guard hands the screen's own guard back when it closes",
   assert.deepEqual(seen, ["card", "room"]);
   offScreen();
   assert.equal(runNavigationGuard(), false);
+});
+
+test("an achievement earned on the drawing that opened a streak card joins that card - one celebration, every reward", () => {
+  closeStreakCard();
+  assert.equal(addToStreakCard([{ id: "perfect-x3", title: "Perfect x3", coins: 150 }]), false, "no card: the caller shows its own overlay");
+  assert.deepEqual(getStreakCardExtras(), []);
+  openStreakCard();
+  let notified = 0;
+  const off = onStreakCardExtras(() => notified++);
+  assert.equal(addToStreakCard([{ id: "perfect-x3", title: "Perfect x3", coins: 150 }]), true);
+  addToStreakCard([{ id: "perfect-x3", title: "Perfect x3", coins: 150 }, { id: "precision", title: "Precision", coins: 250 }]);
+  assert.deepEqual(getStreakCardExtras().map((x) => x.id), ["perfect-x3", "precision"], "each achievement listed once");
+  assert.equal(notified, 2);
+  const revealed: string[] = [];
+  whenStreakCardClosed(() => revealed.push("coins"));
+  closeStreakCard();
+  assert.deepEqual(revealed, ["coins"], "the counter reveal happens when the card closes");
+  assert.deepEqual(getStreakCardExtras(), [], "a later card starts empty");
+  off();
+});
+
+test("Classic hands same-drawing achievements to the open card and shows no second overlay or fanfare", () => {
+  const s = src("../screens/ShapeChallengeScreen.tsx").replace(/\r\n/g, "\n");
+  const has = (needle: string) => assert.ok(s.includes(needle), `ShapeChallengeScreen: ${needle}`);
+  has("if (!addToStreakCard(pendingAchievements.map((a) => ({ id: a.id, title: a.name, coins: a.coinReward })))) return;\n    whenStreakCardClosed(revealPendingCoins);\n    setPendingAchievements([]);");
+  has("const achievementBanner = pendingAchievements[0] && !isStreakCardOpen() &&");
+  has("if (pendingAchievements.length > 0 && !isStreakCardOpen()) playAchievementUnlockedSound();");
+  // Coins are still banked at detection (never through the card), so nothing can pay twice.
+  has('markAchievementUnlocked(achievement.id);\n    addCoinsPending(achievement.coinReward, "achievement");');
+  const cel = src("../components/StreakCelebration.tsx");
+  assert.ok(cel.includes("onStreakCardExtras("));
+  assert.ok(cel.includes("Achievement: {x.title}"));
 });

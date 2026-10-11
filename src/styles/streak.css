@@ -396,6 +396,9 @@
   gap: 2px;
   width: min(100%, 340px);
   padding: var(--space-5) var(--space-4) var(--space-4);
+  /* Never taller than the screen (a Day 30 card with achievements on a short phone or in landscape): it scrolls. */
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   border-radius: var(--radius-lg);
   background: linear-gradient(180deg, rgba(251, 191, 36, 0.16), rgba(249, 115, 22, 0) 45%), var(--color-card);
   color: var(--color-text);

@@ -189,7 +189,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: "streak-3",
     icon: "🔥",
-    name: "Streak Keeper",
+    name: "3-Day Streak",
     description: "Reach a 3-day Drawing Streak",
     coinReward: 100,
     target: 3,
@@ -198,7 +198,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: "streak-7",
     icon: "🔥",
-    name: "Streak Keeper",
+    name: "7-Day Streak",
     description: "Reach a 7-day Drawing Streak",
     coinReward: 250,
     target: 7,
@@ -207,7 +207,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: "streak-14",
     icon: "🔥",
-    name: "Streak Keeper",
+    name: "14-Day Streak",
     description: "Reach a 14-day Drawing Streak",
     coinReward: 500,
     target: 14,
@@ -216,7 +216,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: "streak-30",
     icon: "🔥",
-    name: "Streak Keeper",
+    name: "30-Day Streak",
     description: "Reach a 30-day Drawing Streak",
     coinReward: 1200,
     target: 30,
@@ -225,7 +225,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: "streak-100",
     icon: "🔥",
-    name: "Streak Keeper",
+    name: "100-Day Streak",
     description: "Reach a 100-day Drawing Streak",
     coinReward: 5000,
     target: 100,

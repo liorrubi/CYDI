@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { EMBER_CSS_GRADIENT } from "../app/constants";
 import { registerNavigationGuard } from "../app/navigationGuard";
-import { closeStreakCard, openStreakCard } from "../app/streakCardGate";
+import { closeStreakCard, getStreakCardExtras, onStreakCardExtras, openStreakCard } from "../app/streakCardGate";
 import { earnsStreakSave, isBigStreakDay, isStreakMilestone, STREAK_MILESTONES, STREAK_SAVE_MAX } from "../app/drawingStreak";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playSelectSound, playSuccessSound } from "../engine/soundEngine";
@@ -122,6 +122,12 @@ function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onCl
   const coinsRef = useRef<HTMLDivElement | null>(null);
   const ref = useDialogA11y<HTMLDivElement>(true, { onClose });
   const next = STREAK_MILESTONES.find((m) => m.day > c.day);
+  // Achievements earned on the same drawing join this card (app/streakCardGate.ts) - one celebration, every reward.
+  const [extras, setExtras] = useState(getStreakCardExtras);
+  useEffect(() => {
+    setExtras(getStreakCardExtras());
+    return onStreakCardExtras(() => setExtras(getStreakCardExtras()));
+  }, []);
   const close = () => {
     playSelectSound();
     onClose();
@@ -148,7 +154,8 @@ function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onCl
         <h2 id="streak-celebrate-title" className="streak-celebrate-title">
           Day {c.day}!
         </h2>
-        <p className="streak-celebrate-sub">{isStreakMilestone(c.day) ? "Streak milestone reached" : "Streak Save earned"}</p>
+        <p className="streak-celebrate-sub">{isStreakMilestone(c.day) ? "Streak milestone reached" : "Streak Save earned"}
+          {extras.length > 0 && ` + ${extras.length === 1 ? "an achievement" : `${extras.length} achievements`}`}</p>
         <ul className="streak-celebrate-rewards">
           <li>
             <div ref={coinsRef} className="streak-celebrate-reward">
@@ -194,6 +201,17 @@ function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onCl
               <span className="streak-celebrate-meta">Yours to keep - in your inks</span>
             </li>
           )}
+          {extras.map((x) => (
+            <li key={x.id}>
+              <div className="streak-celebrate-reward">
+                <span className="streak-celebrate-icon" aria-hidden="true">
+                  🏆
+                </span>
+                <strong>+{x.coins.toLocaleString("en-US")} coins</strong>
+              </div>
+              <span className="streak-celebrate-meta">Achievement: {x.title}</span>
+            </li>
+          ))}
         </ul>
         {next && (
           <p className="streak-celebrate-next">

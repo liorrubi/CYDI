@@ -441,6 +441,10 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* The reward keeps one left-aligned line (a Mega card name too); the grey note beside it wraps instead. */
+  flex-shrink: 0;
+  white-space: nowrap;
+  text-align: left;
 }
 .streak-celebrate-icon {
   font-size: 1.1rem;
@@ -583,6 +587,10 @@
   font-size: 0.9rem;
   font-weight: 700;
   white-space: nowrap;
+  /* A long banner (an achievement and a Mega card inside a live game) wraps inside the screen instead of running
+     off both edges; an ordinary one stays one line. */
+  width: max-content;
+  max-width: calc(100vw - 16px);
   pointer-events: none;
   transform: translateX(-50%);
   animation: streak-toast-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
@@ -595,9 +603,13 @@
 .streak-toast-big {
   border-color: #f59e0b;
 }
+/* The rewards pill may wrap to a second line (long live-game banners): a rounded box, centred text. */
 .streak-toast-coins {
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: 12px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
   background: var(--color-accent);
   color: var(--color-on-accent);
   font-weight: 800;
@@ -710,4 +722,48 @@
   width: 100%;
   max-width: 420px;
   margin-bottom: var(--space-3);
+}
+
+/* Short landscape phones (568x320 - 915x412): the celebration card trades its big flame and padding for room, so
+   every reward row and Nice! stay on screen without scrolling inside the card. */
+@media (max-height: 420px) {
+  .streak-celebrate {
+    padding: var(--space-3) var(--space-4);
+  }
+  .streak-celebrate > .streak-flame {
+    width: 30px;
+    height: 30px;
+  }
+  .streak-celebrate-title {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+  .streak-celebrate-sub {
+    margin-bottom: var(--space-2);
+  }
+  .streak-celebrate-rewards li {
+    padding: 5px 10px;
+  }
+  .streak-celebrate-next {
+    margin-top: var(--space-2);
+  }
+  .streak-celebrate-ok {
+    min-height: 40px;
+    margin-top: var(--space-2);
+  }
+}
+
+/* Touch targets under 40px tall get an invisible tap extension (no layout change): the result screens' streak
+   chip (27px), the drawing guide switch (30px) and the Shop's section links (30px). */
+.daily-goal-chip,
+.guide-toggle,
+.shop-section-heading {
+  position: relative;
+}
+.daily-goal-chip::after,
+.guide-toggle::after,
+.shop-section-heading::after {
+  content: "";
+  position: absolute;
+  inset: -8px -4px;
 }

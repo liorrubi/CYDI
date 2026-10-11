@@ -2195,3 +2195,48 @@
     padding-top: var(--space-2);
   }
 }
+
+/* PLAY on screens up to 700px tall (360x640 phones, 320x568 = a 360px phone at "large" display size, 960x600
+   tablets in landscape): measured on the Mi 8 WebView, Done was below the fold in Special (683 / 640), 2 Players
+   (702 / 640), Classic and Daily at 960x600 (627 / 630) and everywhere at 320x568. While drawing tools are on screen,
+   the header keeps Back and its title but drops the nav icons (coins, chest, crown, achievements, share, settings) -
+   the focus Classic's own play header already has - and the spacing tightens. The canvas keeps its size and drawing
+   geometry; the result screens and every taller screen are untouched. :has() needs WebView 105+; older ones keep
+   the previous layout. */
+@media (max-height: 700px) {
+  .app-shell .app-play {
+    gap: 4px;
+    padding-top: 4px;
+  }
+
+  .app-shell .app-play-done {
+    min-height: 46px;
+  }
+
+  .app-shell .screen:has(> .pen-tools-row) > .app-header .app-header-actions,
+  .app-shell .screen:has(.mp-canvas-wrapper) .app-header .app-header-actions {
+    display: none;
+  }
+
+  .app-shell .screen:has(> .pen-tools-row) {
+    gap: 6px;
+    padding-top: var(--space-2);
+  }
+
+  .app-shell .screen:has(> .pen-tools-row) > .canvas-instruction-text {
+    margin: 0;
+  }
+
+  .app-shell .screen:has(.mp-canvas-wrapper) {
+    gap: 8px;
+    padding-top: var(--space-2);
+  }
+
+  .app-shell .screen:has(.mp-canvas-wrapper) .mp-room {
+    gap: 12px;
+  }
+
+  .app-shell .screen:has(.mp-canvas-wrapper) .mp-stage {
+    gap: 8px;
+  }
+}

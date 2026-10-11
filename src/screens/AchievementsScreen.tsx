@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import AchievementUnlockedBanner from "../components/AchievementUnlockedBanner";
 import AppHeader from "../components/AppHeader";
 import StreakStrip from "../components/StreakStrip";
 import {
@@ -7,7 +8,12 @@ import {
   achievementProgressPercent,
   computeAchievementStats,
   isAchievementUnlocked,
+  type Achievement,
 } from "../app/achievements";
+import { triggerCoinFlight } from "../engine/coinFlight";
+import { playAchievementUnlockedSound } from "../engine/soundEngine";
+import { bankNewAchievements } from "../services/achievementRewards";
+import { revealPendingCoins } from "../services/coinsStore";
 import { getUnlockedAchievementIds } from "../services/achievementsStore";
 import { getProgress } from "../services/shapeChallengeProgress";
 import { toAchievements, toHome, toInstructions, toSettings, toShapeChallenge, toShop, toSpecialChallenge } from "../app/routes";
@@ -20,11 +26,35 @@ type AchievementsScreenProps = {
 
 export default function AchievementsScreen({ from, onNavigate }: AchievementsScreenProps) {
   const [progress] = useState(() => getProgress());
-  const [unlockedIds] = useState(() => getUnlockedAchievementIds());
+  const [unlockedIds, setUnlockedIds] = useState(() => getUnlockedAchievementIds());
+  const [pending, setPending] = useState<Achievement[]>([]);
   const stats = computeAchievementStats(progress);
+
+  // An achievement shown here as reached is paid here too (it used to wait for the next Classic visit): the same
+  // shared payer and the same tap-to-collect banner as Classic. Paid once - the id list is written first.
+  useEffect(() => {
+    const paid = bankNewAchievements(getProgress(), { pending: true });
+    if (paid.length === 0) return;
+    setUnlockedIds(getUnlockedAchievementIds());
+    setPending((prev) => [...prev, ...paid]);
+  }, []);
+  useEffect(() => {
+    if (pending.length > 0) playAchievementUnlockedSound();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending[0]?.id]);
 
   return (
     <div className="screen">
+      {pending[0] && (
+        <AchievementUnlockedBanner
+          achievement={pending[0]}
+          onCollect={(el) => {
+            triggerCoinFlight(el);
+            revealPendingCoins();
+          }}
+          onDismissed={() => setPending((prev) => prev.slice(1))}
+        />
+      )}
       <AppHeader
         title="Achievements"
         onBack={() => onNavigate(from)}

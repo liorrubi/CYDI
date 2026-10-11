@@ -101,6 +101,11 @@ test("streak: Day 3 milestone is reported once per player; Day 30 grants the Emb
   const day30 = fiveDrawings(il("2026-10-21"));
   assert.equal(day30?.emberUnlocked, true);
   assert.equal(isColorUnlocked("ember"), true);
+  // The streak achievements were paid the moment their day counted (Daily drawings here - not on a later Classic visit).
+  assert.deepEqual(getSaveData().progress.achievements.filter((id) => id.startsWith("streak-")).sort(), ["streak-14", "streak-3", "streak-30", "streak-7"]);
+  // This run crossed 1,000 coins; let the client's 2 s duplicate-event window pass so a later test's identical
+  // milestone is not dropped as a repeat of this one.
+  await new Promise((r) => setTimeout(r, 2100));
 });
 
 test("Streak Save: 300 coins, at most 2 held, never spends on failure", () => {
@@ -119,6 +124,7 @@ test("Streak Rescue (store): offered on the restart day, granted once, pays noth
   fresh(0);
   updateSaveData((d) => {
     d.progress.drawingStreak = { lastDay: "2026-10-08", current: 12, best: 12, saves: 0, emberGranted: false };
+    d.progress.achievements = ["streak-3", "streak-7"]; // paid when that 12-day streak reached them
   });
   assert.deepEqual(getStreakRescueOffer(il("2026-10-10")), { from: 12, day: "2026-10-10" }, "available before today counts too");
   fiveDrawings(il("2026-10-10"));
@@ -130,13 +136,14 @@ test("Streak Rescue (store): offered on the restart day, granted once, pays noth
   assert.deepEqual(getStreakRescueOffer(il("2026-10-10")), offer, "survives a reload");
   sent.length = 0;
   // The ad was shown on the 10th and its reward arrives at 00:00:30 Israel time on the 11th.
-  assert.equal(grantStreakRescue(offer!.day), true);
-  assert.equal(grantStreakRescue(offer!.day), false, "a duplicate reward callback changes nothing");
+  assert.deepEqual(grantStreakRescue(offer!.day), { achievements: [], megaCards: [] }, "kept; 13 reaches no streak achievement");
+  assert.equal(grantStreakRescue(offer!.day), null, "a duplicate reward callback changes nothing");
   assert.equal(getCoins(), 20, "no coins");
   assert.equal(getStreakView(Date.parse("2026-10-10T21:00:30Z")).current, 13);
   assert.equal(fiveDrawings(il("2026-10-11"))?.day, 14, "continues the next day");
+  assert.equal(getCoins(), 20 + 150 + 500, "Day 14 pays its milestone and, the same moment, the 14-Day Streak achievement");
   await flush();
-  assert.equal(sent.filter((x) => x.name === "coin_earned").length, 1, "only the next day's streak coins");
+  assert.deepEqual(sent.filter((x) => x.name === "coin_earned").map((x) => x.params.coinSource).sort(), ["achievement", "daily_streak"], "the rescue itself paid nothing");
 });
 
 test("Streak Rescue: the only grant call is behind a verified ad reward (call-site audit)", async () => {
@@ -166,9 +173,10 @@ test("Streak Rescue (store) before today counts: the missed day is bridged, then
   fresh(0);
   updateSaveData((d) => {
     d.progress.drawingStreak = { lastDay: "2026-10-08", current: 12, best: 12, saves: 0, emberGranted: false };
+    d.progress.achievements = ["streak-3", "streak-7"]; // paid when that 12-day streak reached them
   });
   assert.deepEqual([getStreakView(il("2026-10-10")).status, getStreakView(il("2026-10-10")).current], ["at_risk", 12]);
-  assert.equal(grantStreakRescue("2026-10-10", il("2026-10-10")), true);
+  assert.ok(grantStreakRescue("2026-10-10", il("2026-10-10")));
   assert.equal(getCoins(), 0, "the rescue pays nothing");
   assert.equal(getStreakView(il("2026-10-10")).status, "rescued");
   let day = null;

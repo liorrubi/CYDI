@@ -85,6 +85,20 @@ export function syncAchievementCardUnlocks(): MegaCardDefinition[] {
   return newlyUnlocked;
 }
 
+/**
+ * Unlocks the cards linked to these just-earned achievements, right away (0.59.0: a Drawing Streak achievement reached
+ * in any mode). Idempotent - a card already unlocked is skipped. Returns the cards it unlocked, for the caller to show.
+ * Cards of achievements earned elsewhere are left to syncAchievementCardUnlocks, which celebrates them in the album.
+ */
+export function unlockCardsForAchievements(achievementIds: readonly string[]): MegaCardDefinition[] {
+  if (achievementIds.length === 0) return [];
+  const progress = getMegaProgress();
+  const cards = getMegaCards().filter((card) => achievementIds.includes(card.unlockAchievementId) && !progress.unlockedCardIds.includes(card.id));
+  if (cards.length === 0) return [];
+  saveMegaProgress({ ...progress, unlockedCardIds: [...progress.unlockedCardIds, ...cards.map((card) => card.id)] });
+  return cards;
+}
+
 export type MegaResultOutcome = {
   beatBest: boolean;
   isPerfect: boolean;

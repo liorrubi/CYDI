@@ -31,7 +31,7 @@ import {
   type PenColorId,
   type PenSkinId,
 } from "../app/constants";
-import { computeAchievementStats, findNewlyUnlockedAchievements, type Achievement } from "../app/achievements";
+import type { Achievement } from "../app/achievements";
 import {
   getAllShapes,
   getCategories,
@@ -48,8 +48,8 @@ import {
   primeAudioContext,
 } from "../engine/soundEngine";
 import { triggerCoinFlight } from "../engine/coinFlight";
-import { getUnlockedAchievementIds, markAchievementUnlocked } from "../services/achievementsStore";
-import { addCoins, addCoinsPending, getCoins, onCoinsChanged, revealPendingCoins, spendCoins } from "../services/coinsStore";
+import { bankNewAchievements } from "../services/achievementRewards";
+import { addCoins, getCoins, onCoinsChanged, revealPendingCoins, spendCoins } from "../services/coinsStore";
 import { addToStreakCard, isStreakCardOpen, whenStreakCardClosed } from "../app/streakCardGate";
 import { getUnlockedCategoryIds, nextCategoryUnlockPrice, unlockCategory } from "../services/categoryUnlockStore";
 import { isUnlockNowEligible, unlockNowCredit } from "../app/unlockNow";
@@ -199,14 +199,8 @@ function isCategoryAccessible(
 
 /** Marks newly-unlocked achievements as unlocked and safely credits their coins to the real balance right away - the achievement queue passed back just controls when the celebratory banner/sound/counter-reveal happens, never whether the reward is actually paid out. */
 function detectAndBankNewAchievements(progress: ShapeChallengeProgress): Achievement[] {
-  const stats = computeAchievementStats(progress);
-  const unlockedIds = getUnlockedAchievementIds();
-  const newlyUnlocked = findNewlyUnlockedAchievements(stats, unlockedIds);
-  for (const achievement of newlyUnlocked) {
-    markAchievementUnlocked(achievement.id);
-    addCoinsPending(achievement.coinReward, "achievement");
-  }
-  return newlyUnlocked;
+  // The shared achievement payer (services/achievementRewards.ts), with the coins held for the banner's reveal.
+  return bankNewAchievements(progress, { pending: true });
 }
 
 export default function ShapeChallengeScreen({ onNavigate, initialShape }: ShapeChallengeScreenProps) {

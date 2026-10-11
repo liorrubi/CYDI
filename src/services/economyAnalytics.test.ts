@@ -104,7 +104,8 @@ test("every current coin grant/spend call site names its source/sink - the audit
     "screens/MegaChallengeScreen.tsx:addCoins:mega_completion",
     "screens/MegaChallengeScreen.tsx:spendCoins:mega_card_album",
     "screens/ShapeChallengeScreen.tsx:addCoins:ad_multiplier",
-    "screens/ShapeChallengeScreen.tsx:addCoinsPending:achievement",
+    "services/achievementRewards.ts:addCoins:achievement",
+    "services/achievementRewards.ts:addCoinsPending:achievement",
     "screens/ShapeChallengeScreen.tsx:spendCoins:category_unlock",
     "screens/ShapeChallengeScreen.tsx:spendCoins:mega_unlock",
     "screens/ShopScreen.tsx:spendCoins:chest_key",
@@ -119,7 +120,7 @@ test("every current coin grant/spend call site names its source/sink - the audit
     "screens/ShapeChallengeScreen.tsx:addCoins:ad_topup",
     "services/drawingStreakStore.ts:addCoins:daily_streak",
     "services/drawingStreakStore.ts:spendCoins:streak_save",
-  ].sort(), "15 grants + 9 spends (the chest's daily/paid pair is one call) - a new call site must be added here deliberately");
+  ].sort(), "16 grants + 9 spends (the chest's daily/paid pair is one call; achievements: one payer, pending or not) - a new call site must be added here deliberately");
 });
 
 test("nothing writes the coin balance directly except coinsStore and the one-time legacy import", () => {

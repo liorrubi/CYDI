@@ -19,6 +19,7 @@ import {
   type StreakState,
   type StreakView,
 } from "../app/drawingStreak";
+import { bankStreakAchievements, type StreakAchievementRewards } from "./achievementRewards";
 import { addCoins, getCoins, spendCoins } from "./coinsStore";
 import { onStreakDayReached } from "./economyAnalytics";
 import type { StreakRoute } from "./economyBuckets";
@@ -29,8 +30,11 @@ const STREAK_UPDATED_EVENT = "cydi:streak-updated";
 const STREAK_DAY_EVENT = "cydi:streak-day";
 const STREAK_PROGRESS_EVENT = "cydi:streak-progress";
 
-/** A day was just completed (once): what it paid, the play that completed it, and the balance / Saves after it. */
-export type StreakDayEventDetail = { completion: StreakCompletion; route: StreakRoute; balance: number; saves: number };
+/**
+ * A day was just completed (once): what it paid, the play that completed it, the streak achievements (and their Mega
+ * cards) it reached - paid in the same moment - and the balance / Saves after all of it.
+ */
+export type StreakDayEventDetail = { completion: StreakCompletion; route: StreakRoute; balance: number; saves: number } & StreakAchievementRewards;
 /** A drawing counted toward a day that has not counted yet (1-4 of 5). */
 export type StreakProgressEventDetail = { drawings: number; target: number; route: StreakRoute };
 
@@ -91,10 +95,13 @@ export function recordStreakActivity(route: StreakRoute, opts: { key?: string; n
     return { completion: null, drawings: result.drawings, duplicate: false };
   }
   if (c.emberUnlocked) unlockColor(STREAK_EXCLUSIVE_INK);
-  const balance = c.coins > 0 ? addCoins(c.coins, "daily_streak", { streakDay: streakDayBucket(c.day), streakRoute: route }) : getCoins();
+  if (c.coins > 0) addCoins(c.coins, "daily_streak", { streakDay: streakDayBucket(c.day), streakRoute: route });
+  // The streak achievements this day reaches are paid NOW, in any mode (not on the next Classic visit) - once each.
+  const rewards = bankStreakAchievements(c.state.best);
+  const balance = getCoins();
   // A day this player's best streak had already passed (a restart, a restored backup) is not a first-time milestone.
   if (before.best < c.day) onStreakDayReached(c.day);
-  emit(STREAK_DAY_EVENT, { completion: c, route, balance, saves: c.state.saves } satisfies StreakDayEventDetail);
+  emit(STREAK_DAY_EVENT, { completion: c, route, balance, saves: c.state.saves, ...rewards } satisfies StreakDayEventDetail);
   return { completion: c, drawings: result.drawings, duplicate: false };
 }
 
@@ -107,16 +114,18 @@ export function getStreakRescueOffer(now: number = Date.now()): { from: number; 
 
 /**
  * A rewarded ad for the rescue offered on `offerDay` was watched to the end (call ONLY on a verified grant). Keeps
- * the streak, pays nothing. Idempotent: the offer is used up by the write, so a repeated grant changes nothing.
+ * the streak, pays no streak coins (a streak achievement it reaches is paid, as anywhere). Returns null if nothing
+ * changed. Idempotent: the offer is used up by the write, so a repeated grant changes nothing.
  * `offerDay` is the day the offer was shown, so an ad that ends just after midnight still keeps the streak.
  */
-export function grantStreakRescue(offerDay: string, now: number = Date.now()): boolean {
+export function grantStreakRescue(offerDay: string, now: number = Date.now()): StreakAchievementRewards | null {
   const before = getStreakState();
   const next = applyStreakRescue(before, offerDay, today(now));
-  if (!next) return false;
+  if (!next) return null;
   writeState(next);
   if (next.current !== before.current && before.best < next.current) onStreakDayReached(next.current);
-  return true;
+  // A rescue that carries a restarted streak past its best can reach a streak achievement: paid now, shown by the sheet.
+  return bankStreakAchievements(next.best);
 }
 
 export type BuySaveResult = "bought" | "full" | "insufficient_coins";

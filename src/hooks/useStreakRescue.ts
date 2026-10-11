@@ -4,6 +4,7 @@ import { resolveAdOutcome } from "../components/doubleOfferAdFlow";
 import { isStreakRescueOn } from "../services/ads/coinOfferConfig";
 import { isRewardedAdReadyFor, preloadRewardedAd, showRewardedAd, subscribeRewardedAdEvents } from "../services/ads";
 import { trackEvent } from "../services/analytics";
+import type { StreakAchievementRewards } from "../services/achievementRewards";
 import { getStreakRescueOffer, grantStreakRescue, onStreakChanged } from "../services/drawingStreakStore";
 import { isAndroidApp } from "../services/nativeShare";
 
@@ -21,6 +22,8 @@ export type StreakRescue = {
   note: string | null;
   /** True once a rescue was granted while this view was open. */
   granted: boolean;
+  /** A streak achievement (and its Mega card) the rescued streak reached - paid with the grant, shown by the sheet. */
+  rewards: StreakAchievementRewards | null;
   watch: () => Promise<void>;
 };
 
@@ -35,6 +38,7 @@ export function useStreakRescue(enabled = true): StreakRescue {
   const [pending, setPending] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [granted, setGranted] = useState(false);
+  const [rewards, setRewards] = useState<StreakAchievementRewards | null>(null);
   const [, setAdTick] = useState(0);
 
   const eligible = enabled && offer !== null && isAndroidApp() && isStreakRescueOn();
@@ -64,9 +68,11 @@ export function useStreakRescue(enabled = true): StreakRescue {
     setPending(false);
     if (outcome.grantSource === "ad") {
       trackEvent("reward_ad_completed", { placement: "streak_rescue" });
-      if (grantStreakRescue(offer.day)) {
+      const paid = grantStreakRescue(offer.day);
+      if (paid) {
         playChipSound();
         setGranted(true);
+        setRewards(paid);
       }
       return;
     }
@@ -78,5 +84,5 @@ export function useStreakRescue(enabled = true): StreakRescue {
     void preloadRewardedAd("streak_rescue");
   }
 
-  return { from: offer?.from ?? 0, available: eligible && (ready || pending), pending, note, granted, watch };
+  return { from: offer?.from ?? 0, available: eligible && (ready || pending), pending, note, granted, rewards, watch };
 }

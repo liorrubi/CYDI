@@ -1,7 +1,8 @@
 import { starRatingForScore } from "./constants";
 import { getAllShapes } from "../content/contentRepository";
 import { getLegacyVisitStreakBest } from "../services/dailyStreakStore";
-import { getStreakState } from "../services/drawingStreakStore";
+import { normalizeStreak } from "./drawingStreak";
+import { getSaveData } from "../services/saveStore";
 import { getSharedChallengesCount } from "../services/sharedChallengesStore";
 import { getTotalCompletedCount, type ShapeChallengeProgress } from "../services/shapeChallengeProgress";
 
@@ -40,7 +41,8 @@ export function computeAchievementStats(progress: ShapeChallengeProgress): Achie
     unlockedShapesCount,
     totalShapesCount: getAllShapes().length,
     hasCompletedFirst: unlockedShapesCount >= 1,
-    bestStreak: Math.max(getLegacyVisitStreakBest(), getStreakState().best),
+    // Read straight from the save (not drawingStreakStore), so the streak store can pay achievements without a cycle.
+    bestStreak: Math.max(getLegacyVisitStreakBest(), normalizeStreak(getSaveData().progress.drawingStreak).best),
     sharedChallengesCount: getSharedChallengesCount(),
   };
 }
@@ -277,6 +279,9 @@ export const ACHIEVEMENTS: Achievement[] = [
     currentValue: (s) => s.sharedChallengesCount,
   },
 ];
+
+/** The achievements the Drawing Streak reaches (paid the moment a day counts, in any mode - services/achievementRewards.ts). */
+export const STREAK_ACHIEVEMENT_IDS: readonly string[] = ["streak-3", "streak-7", "streak-14", "streak-30", "streak-100"];
 
 /** Returns achievements that are now unlocked but weren't in `alreadyUnlockedIds`. */
 export function findNewlyUnlockedAchievements(stats: AchievementStats, alreadyUnlockedIds: string[]): Achievement[] {

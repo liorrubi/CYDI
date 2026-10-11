@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { playSelectSound } from "../engine/soundEngine";
-import { getStreakView, onStreakChanged } from "../services/drawingStreakStore";
+import { useStreakView } from "../hooks/useStreakView";
 import StreakFlame from "./StreakFlame";
 import StreakSheet from "./StreakSheet";
 
@@ -10,9 +10,8 @@ import StreakSheet from "./StreakSheet";
  * otherwise.
  */
 export default function StreakChip({ disabled = false }: { disabled?: boolean }) {
-  const [view, setView] = useState(() => getStreakView());
+  const view = useStreakView();
   const [open, setOpen] = useState(false);
-  useEffect(() => onStreakChanged(() => setView(getStreakView())), []);
 
   const risk = view.status === "at_risk";
   const label =

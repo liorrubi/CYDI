@@ -12,12 +12,20 @@ const store = new Map<string, string>();
   removeItem: (k: string) => void store.delete(k),
   clear: () => store.clear(),
 };
-(globalThis as Record<string, unknown>).window = { addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => true, setTimeout, clearTimeout };
+// A real event target, so the streak store's day event (what the celebration shows) can be observed.
+const bus = new EventTarget();
+(globalThis as Record<string, unknown>).window = {
+  addEventListener: bus.addEventListener.bind(bus),
+  removeEventListener: bus.removeEventListener.bind(bus),
+  dispatchEvent: bus.dispatchEvent.bind(bus),
+  setTimeout,
+  clearTimeout,
+};
 
 const { getSaveData, updateSaveData, replaceSaveData } = await import("../services/saveStore.ts");
 const { createDefaultSaveData } = await import("../services/saveData.ts");
 const { getCoins } = await import("../services/coinsStore.ts");
-const { getStreakView, recordStreakActivity } = await import("../services/drawingStreakStore.ts");
+const { getStreakView, grantStreakRescue, onStreakDayCompleted, recordStreakActivity } = await import("../services/drawingStreakStore.ts");
 const { getLegacyVisitStreakBest } = await import("../services/dailyStreakStore.ts");
 const { ACHIEVEMENTS, computeAchievementStats, findNewlyUnlockedAchievements } = await import("./achievements.ts");
 const { getProgress } = await import("../services/shapeChallengeProgress.ts");
@@ -188,8 +196,106 @@ test("Classic hands same-drawing achievements to the open card and shows no seco
   has("const achievementBanner = pendingAchievements[0] && !isStreakCardOpen() &&");
   has("if (pendingAchievements.length > 0 && !isStreakCardOpen()) playAchievementUnlockedSound();");
   // Coins are still banked at detection (never through the card), so nothing can pay twice.
-  has('markAchievementUnlocked(achievement.id);\n    addCoinsPending(achievement.coinReward, "achievement");');
+  has("return bankNewAchievements(progress, { pending: true });");
   const cel = src("../components/StreakCelebration.tsx");
   assert.ok(cel.includes("onStreakCardExtras("));
   assert.ok(cel.includes("Achievement: {x.title}"));
+});
+
+// ---------------------------------------------- 0.59.0: streak achievements are paid the moment the day counts ----
+
+type DayDetail = Parameters<Parameters<typeof onStreakDayCompleted>[0]>[0];
+function completeDay(route: "classic" | "daily" | "other" | "two_players" | "multiplayer", date: string, keyPrefix?: string): DayDetail | null {
+  let detail: DayDetail | null = null;
+  const off = onStreakDayCompleted((d) => (detail = d));
+  for (let i = 0; i < 5; i++) recordStreakActivity(route, { now: il(date), key: keyPrefix ? `${keyPrefix}:${i}` : undefined });
+  off();
+  return detail;
+}
+
+for (const route of ["classic", "daily", "other", "two_players", "multiplayer"] as const) {
+  test(`Day 7 in ${route}: milestone, 7-Day Streak achievement and its Mega card are all paid at once, in one event`, () => {
+    fresh(0, { lastDay: "2026-10-10", current: 6, best: 6 });
+    markAchievementUnlocked("streak-3");
+    const coinsBefore = getCoins();
+    const d = completeDay(route, "2026-10-11");
+    assert.equal(d?.completion.day, 7);
+    assert.deepEqual(d?.achievements, [{ id: "streak-7", title: "7-Day Streak", coins: 250 }]);
+    assert.deepEqual(d?.megaCards, [{ id: "mega-sword", name: "Legendary Sword" }]);
+    assert.equal(getCoins() - coinsBefore, 100 + 250, "milestone + achievement, now - not on a later Classic visit");
+    assert.equal(d?.balance, getCoins(), "the card shows the balance after everything");
+    assert.ok(getUnlockedAchievementIds().includes("streak-7"));
+    assert.ok(getMegaProgress().unlockedCardIds.includes("mega-sword"));
+  });
+}
+
+test("paid once: a repeated round, a re-completed day, a reload and the album sync never pay or unlock again", () => {
+  fresh(0, { lastDay: "2026-10-10", current: 2, best: 2 });
+  const d = completeDay("multiplayer", "2026-10-11", "mp:ROOM:1");
+  assert.deepEqual(d?.achievements.map((a) => a.id), ["streak-3"]);
+  const coins = getCoins();
+  assert.equal(completeDay("multiplayer", "2026-10-11", "mp:ROOM:1"), null, "the same rounds again: duplicates");
+  assert.equal(completeDay("daily", "2026-10-11"), null, "today already counted");
+  replaceSaveData(JSON.parse(JSON.stringify(getSaveData())));
+  assert.deepEqual(findNewlyUnlockedAchievements(computeAchievementStats(getProgress()), getUnlockedAchievementIds()).filter((a) => STREAK_IDS.includes(a.id)), []);
+  assert.deepEqual(syncAchievementCardUnlocks(), [], "streak-3 has no card; nothing else owed");
+  assert.equal(getCoins(), coins);
+});
+
+test("several thresholds at once (a long streak from a restored backup): each paid once, cards for each", () => {
+  fresh(0, { lastDay: "2026-10-10", current: 29, best: 29 });
+  const d = completeDay("daily", "2026-10-11");
+  assert.equal(d?.completion.day, 30);
+  assert.deepEqual(d?.achievements.map((a) => a.id), ["streak-3", "streak-7", "streak-14", "streak-30"]);
+  assert.deepEqual(d?.megaCards.map((m) => m.id).sort(), ["mega-chest", "mega-phoenix", "mega-sword"]);
+  assert.equal(d?.completion.emberUnlocked, true);
+});
+
+test("a restart never pays: Day 1 after a 12-day streak (achievements already paid) reaches nothing new", () => {
+  fresh(0, { lastDay: "2026-10-08", current: 12, best: 12 });
+  markAchievementUnlocked("streak-3");
+  markAchievementUnlocked("streak-7");
+  const d = completeDay("two_players", "2026-10-11");
+  assert.equal(d?.completion.day, 1);
+  assert.deepEqual([d?.achievements, d?.megaCards], [[], []]);
+});
+
+test("legacy floor: the streak path pays only what the Drawing Streak reaches; visit-owed ones stay with Classic", () => {
+  fresh(9, { lastDay: "2026-10-10", current: 2, best: 2 });
+  const d = completeDay("other", "2026-10-11");
+  assert.equal(d?.completion.day, 3);
+  assert.deepEqual(d?.achievements.map((a) => a.id), ["streak-3"], "Day 3 of the Drawing Streak");
+  assert.ok(!getUnlockedAchievementIds().includes("streak-7"), "owed from visits (9): paid by Classic's launch check, as in 0.58");
+  assert.ok(!getMegaProgress().unlockedCardIds.includes("mega-sword"));
+});
+
+test("a Rescue that carries a restarted streak past its best pays the achievement it reaches, once", () => {
+  fresh(0, { lastDay: "2026-10-08", current: 13, best: 13 });
+  for (const id of ["streak-3", "streak-7"]) markAchievementUnlocked(id);
+  completeDay("classic", "2026-10-10"); // a missed day, no Save: today restarts at Day 1 (rescue offered)
+  const paid = grantStreakRescue("2026-10-10", il("2026-10-10"));
+  assert.deepEqual(paid?.achievements.map((a) => a.id), ["streak-14"]);
+  assert.deepEqual(paid?.megaCards.map((m) => m.id), ["mega-chest"]);
+  assert.equal(grantStreakRescue("2026-10-10", il("2026-10-10")), null, "a repeated grant changes nothing");
+});
+
+test("one payer for every achievement: Classic, the Achievements screen and the Drawing Streak all bank through it", () => {
+  const classic = src("../screens/ShapeChallengeScreen.tsx");
+  const screen = src("../screens/AchievementsScreen.tsx");
+  const store = src("../services/drawingStreakStore.ts");
+  assert.ok(classic.includes("bankNewAchievements(progress, { pending: true })"));
+  assert.ok(screen.includes("bankNewAchievements(getProgress(), { pending: true })"), "reached on the Achievements screen = paid there");
+  assert.ok(screen.includes("<AchievementUnlockedBanner"), "with the same tap-to-collect banner");
+  assert.ok(store.includes("bankStreakAchievements(c.state.best)") && store.includes("bankStreakAchievements(next.best)"));
+  for (const f of ["../screens/ShapeChallengeScreen.tsx", "../screens/AchievementsScreen.tsx", "../services/drawingStreakStore.ts"]) {
+    assert.doesNotMatch(src(f), /markAchievementUnlocked\(/, `${f}: never pays an achievement by itself`);
+  }
+});
+
+test("every streak surface reads the live view (re-read on change, on return to the app and each minute - midnight)", () => {
+  for (const f of ["../components/StreakStrip.tsx", "../components/StreakChip.tsx", "../components/StreakSheet.tsx"]) {
+    assert.ok(src(f).includes("useStreakView()"), f);
+  }
+  const hook = src("../hooks/useStreakView.ts");
+  for (const needle of ["onStreakChanged(refresh)", '"visibilitychange"', "setInterval(refresh, 60_000)"]) assert.ok(hook.includes(needle), needle);
 });

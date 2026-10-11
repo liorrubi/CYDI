@@ -5,7 +5,8 @@ import { playChipSound, playSelectSound } from "../engine/soundEngine";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useStreakRescue } from "../hooks/useStreakRescue";
 import { getCoins, onCoinsChanged } from "../services/coinsStore";
-import { buyStreakSave, getStreakState, getStreakView, onStreakChanged } from "../services/drawingStreakStore";
+import { useStreakView } from "../hooks/useStreakView";
+import { buyStreakSave, getStreakState, onStreakChanged } from "../services/drawingStreakStore";
 import StreakFlame from "./StreakFlame";
 
 type StreakSheetProps = {
@@ -62,7 +63,7 @@ function statusLine(v: StreakView): string {
  * history, no nagging. Opened from Home's streak bar, the Daily chip and the result chips.
  */
 export default function StreakSheet({ onClose, offerRescue = true }: StreakSheetProps) {
-  const [view, setView] = useState(() => getStreakView());
+  const view = useStreakView();
   const [emberOwned, setEmberOwned] = useState(() => getStreakState().emberGranted);
   const [coins, setCoins] = useState(() => getCoins());
   const rescue = useStreakRescue(offerRescue);
@@ -71,7 +72,6 @@ export default function StreakSheet({ onClose, offerRescue = true }: StreakSheet
   useEffect(
     () =>
       onStreakChanged(() => {
-        setView(getStreakView());
         setEmberOwned(getStreakState().emberGranted);
       }),
     [],
@@ -125,6 +125,12 @@ export default function StreakSheet({ onClose, offerRescue = true }: StreakSheet
           {badge && <span className={`streak-badge streak-badge-${badge.tone}`}>{badge.text}</span>}
           <p className="streak-sheet-status">{statusLine(view)}</p>
           {view.best > current && <p className="streak-sheet-best">Best: {view.best} days</p>}
+          {rescue.rewards && rescue.rewards.achievements.length > 0 && (
+            <p className="streak-sheet-best">
+              🏆 {rescue.rewards.achievements.map((a) => `${a.title} +${a.coins} 🪙`).join(" · ")}
+              {rescue.rewards.megaCards.length > 0 && ` · 🃏 ${rescue.rewards.megaCards.map((m) => m.name).join(", ")}`}
+            </p>
+          )}
           {!view.doneToday && (
             <p className="streak-today" aria-label={`Today: ${view.drawings} of ${view.target} drawings`}>
               <span className="daily-goal-dots" aria-hidden="true">

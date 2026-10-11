@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { STREAK_MILESTONES, streakRewardFor, type StreakView } from "../app/drawingStreak";
 import { playSelectSound } from "../engine/soundEngine";
-import { getStreakView, onStreakChanged } from "../services/drawingStreakStore";
+import { useStreakView } from "../hooks/useStreakView";
 import StreakFlame from "./StreakFlame";
 import StreakSheet from "./StreakSheet";
 
@@ -29,9 +29,8 @@ function subLine(v: StreakView): string {
  * streak surface (app/drawingStreak.ts viewStreak), so Home and the sheet can never disagree.
  */
 export default function StreakStrip() {
-  const [view, setView] = useState(() => getStreakView());
+  const view = useStreakView();
   const [open, setOpen] = useState(false);
-  useEffect(() => onStreakChanged(() => setView(getStreakView())), []);
 
   const next = STREAK_MILESTONES.find((m) => m.day > view.current);
   const title = view.current > 0 ? `${view.current}-day streak` : "Start a drawing streak";

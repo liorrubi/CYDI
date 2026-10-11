@@ -49,8 +49,9 @@ export default function StreakCelebration() {
   useEffect(
     () =>
       onStreakDayCompleted((d) => {
-        // Decided once, at the moment the day pays: a card (milestone / Save / Ember day, not in a live game) or a banner.
-        const card = isBigDay(d) && !isLiveGame(d);
+        // Decided once, at the moment the day pays: a card (a milestone / Save / Ember day, or a day that reached a streak
+        // achievement - not in a live game) or a banner.
+        const card = !isLiveGame(d) && (isBigDay(d) || d.achievements.length > 0);
         if (card) openStreakCard(); // offers under it wait until it closes (app/streakCardGate.ts)
         setProgress(null);
         setDay({ detail: d, card });
@@ -90,7 +91,17 @@ export default function StreakCelebration() {
 
 function rewardsText(d: StreakDayEventDetail): string {
   const c = d.completion;
-  return [`+${c.coins} 🪙`, c.saveEarned ? `+1 🛡` : "", c.emberUnlocked ? "Ember Ink" : ""].filter(Boolean).join(" · ");
+  const achievementCoins = d.achievements.reduce((sum, a) => sum + a.coins, 0);
+  return [
+    `+${c.coins} 🪙`,
+    c.saveEarned ? `+1 🛡` : "",
+    c.emberUnlocked ? "Ember Ink" : "",
+    // In a live game the day is a banner: the achievement it reached (paid now) is named there too.
+    achievementCoins > 0 ? `🏆 ${d.achievements.map((a) => a.title).join(", ")} +${achievementCoins}` : "",
+    d.megaCards.length > 0 ? `🃏 ${d.megaCards.map((m) => m.name).join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function StreakDayBanner({ detail, onDone }: { detail: StreakDayEventDetail; onDone: () => void }) {
@@ -117,6 +128,14 @@ function StreakDayBanner({ detail, onDone }: { detail: StreakDayEventDetail; onD
   );
 }
 
+/** What the card is about, in one line: the streak moment first, then the achievements it came with. */
+function cardSubtitle(c: StreakDayEventDetail["completion"], achievementCount: number): string {
+  const moment = isStreakMilestone(c.day) ? "Streak milestone reached" : c.saveEarned || earnsStreakSave(c.day) ? "Streak Save earned" : "";
+  const plural = achievementCount === 1 ? "an achievement" : `${achievementCount} achievements`;
+  if (!moment) return achievementCount === 1 ? "Achievement unlocked" : `${achievementCount} achievements unlocked`;
+  return achievementCount > 0 ? `${moment} + ${plural}` : moment;
+}
+
 function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onClose: () => void }) {
   const c = detail.completion;
   const coinsRef = useRef<HTMLDivElement | null>(null);
@@ -128,6 +147,9 @@ function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onCl
     setExtras(getStreakCardExtras());
     return onStreakCardExtras(() => setExtras(getStreakCardExtras()));
   }, []);
+  // Every achievement this drawing paid: the streak achievements the day reached, then any Classic achievement it
+  // also unlocked (added by the result screen) - each once.
+  const achievements = [...detail.achievements, ...extras.filter((x) => !detail.achievements.some((a) => a.id === x.id))];
   const close = () => {
     playSelectSound();
     onClose();
@@ -154,8 +176,7 @@ function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onCl
         <h2 id="streak-celebrate-title" className="streak-celebrate-title">
           Day {c.day}!
         </h2>
-        <p className="streak-celebrate-sub">{isStreakMilestone(c.day) ? "Streak milestone reached" : "Streak Save earned"}
-          {extras.length > 0 && ` + ${extras.length === 1 ? "an achievement" : `${extras.length} achievements`}`}</p>
+        <p className="streak-celebrate-sub">{cardSubtitle(c, achievements.length)}</p>
         <ul className="streak-celebrate-rewards">
           <li>
             <div ref={coinsRef} className="streak-celebrate-reward">
@@ -201,7 +222,7 @@ function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onCl
               <span className="streak-celebrate-meta">Yours to keep - in your inks</span>
             </li>
           )}
-          {extras.map((x) => (
+          {achievements.map((x) => (
             <li key={x.id}>
               <div className="streak-celebrate-reward">
                 <span className="streak-celebrate-icon" aria-hidden="true">
@@ -210,6 +231,17 @@ function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onCl
                 <strong>+{x.coins.toLocaleString("en-US")} coins</strong>
               </div>
               <span className="streak-celebrate-meta">Achievement: {x.title}</span>
+            </li>
+          ))}
+          {detail.megaCards.map((m) => (
+            <li key={m.id}>
+              <div className="streak-celebrate-reward">
+                <span className="streak-celebrate-icon" aria-hidden="true">
+                  🃏
+                </span>
+                <strong>{m.name}</strong>
+              </div>
+              <span className="streak-celebrate-meta">Mega card unlocked</span>
             </li>
           ))}
         </ul>

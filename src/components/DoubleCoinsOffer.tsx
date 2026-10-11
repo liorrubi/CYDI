@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { whenStreakCardClosed } from "../app/streakCardGate";
 import {
   playAchievementUnlockedSound,
   playChipSound,
@@ -282,6 +283,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     return skipStageRef.current ? { ...params, skipStage: skipStageRef.current } : params;
   };
 
+  /** True once the offer was really on screen and reported as shown (never while a streak card covers it). */
+  const shownRef = useRef(false);
   /**
    * The offer is given up (Keep, or the screen's exit forfeit via onSkipReporter): one skip event per
    * offer, on this offer's own event name. skipStage says where: "ad" when an ad was shown and closed
@@ -289,6 +292,8 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
    */
   function reportSkip() {
     recordOutcome("skipped");
+    // An offer that never became visible (still under a streak celebration card) was never shown: no skip either.
+    if (!shownRef.current) return;
     skipStageRef.current = adDismissedRef.current ? "ad" : "offer";
     try {
       trackEvent(isBonusRound ? "reward_bonus_skipped" : "reward_skipped", funnelParams());
@@ -304,12 +309,20 @@ export default function DoubleCoinsOffer({ amount, onResolved, placement, remain
     // in the report; see the reward_bonus_* block in analyticsSchema.ts for why this is
     // a separate name rather than a param. Same funnel, same placement, either way.
     // onShown fires in the same tick as offer_shown: this is the moment the offer counts
-    // as rendered (once - the timeout is cleared if StrictMode re-runs the effect).
+    // as rendered (once - the timeout is cleared if StrictMode re-runs the effect) - and,
+    // when a streak celebration card covers the result, only once that card is closed.
+    let cancelShown = () => {};
     const t = window.setTimeout(() => {
-      trackEvent(isBonusRound ? "reward_bonus_offer_shown" : "reward_offer_shown", funnelParams());
-      onShown?.();
+      cancelShown = whenStreakCardClosed(() => {
+        shownRef.current = true;
+        trackEvent(isBonusRound ? "reward_bonus_offer_shown" : "reward_offer_shown", funnelParams());
+        onShown?.();
+      });
     }, 0);
-    return () => window.clearTimeout(t);
+    return () => {
+      window.clearTimeout(t);
+      cancelShown();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

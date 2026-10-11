@@ -1,6 +1,7 @@
 import { starRatingForScore } from "./constants";
 import { getAllShapes } from "../content/contentRepository";
-import { getLongestStreak } from "../services/dailyStreakStore";
+import { getLegacyVisitStreakBest } from "../services/dailyStreakStore";
+import { getStreakState } from "../services/drawingStreakStore";
 import { getSharedChallengesCount } from "../services/sharedChallengesStore";
 import { getTotalCompletedCount, type ShapeChallengeProgress } from "../services/shapeChallengeProgress";
 
@@ -11,7 +12,11 @@ export type AchievementStats = {
   unlockedShapesCount: number;
   totalShapesCount: number;
   hasCompletedFirst: boolean;
-  longestDailyStreak: number;
+  /**
+   * 0.59.0: the streak achievements' progress = max(the frozen pre-0.59 visit-streak best, the best Drawing Streak).
+   * Only the Drawing Streak moves it from now on; the legacy value is a floor, so no progress ever goes backwards.
+   */
+  bestStreak: number;
   sharedChallengesCount: number;
 };
 
@@ -35,7 +40,7 @@ export function computeAchievementStats(progress: ShapeChallengeProgress): Achie
     unlockedShapesCount,
     totalShapesCount: getAllShapes().length,
     hasCompletedFirst: unlockedShapesCount >= 1,
-    longestDailyStreak: getLongestStreak(),
+    bestStreak: Math.max(getLegacyVisitStreakBest(), getStreakState().best),
     sharedChallengesCount: getSharedChallengesCount(),
   };
 }
@@ -184,47 +189,47 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: "streak-3",
     icon: "🔥",
-    name: "Daily Streak",
-    description: "Visit 3 days in a row",
+    name: "Streak Keeper",
+    description: "Reach a 3-day Drawing Streak",
     coinReward: 100,
     target: 3,
-    currentValue: (s) => s.longestDailyStreak,
+    currentValue: (s) => s.bestStreak,
   },
   {
     id: "streak-7",
     icon: "🔥",
-    name: "Daily Streak",
-    description: "Visit 7 days in a row",
+    name: "Streak Keeper",
+    description: "Reach a 7-day Drawing Streak",
     coinReward: 250,
     target: 7,
-    currentValue: (s) => s.longestDailyStreak,
+    currentValue: (s) => s.bestStreak,
   },
   {
     id: "streak-14",
     icon: "🔥",
-    name: "Daily Streak",
-    description: "Visit 14 days in a row",
+    name: "Streak Keeper",
+    description: "Reach a 14-day Drawing Streak",
     coinReward: 500,
     target: 14,
-    currentValue: (s) => s.longestDailyStreak,
+    currentValue: (s) => s.bestStreak,
   },
   {
     id: "streak-30",
     icon: "🔥",
-    name: "Daily Streak",
-    description: "Visit 30 days in a row",
+    name: "Streak Keeper",
+    description: "Reach a 30-day Drawing Streak",
     coinReward: 1200,
     target: 30,
-    currentValue: (s) => s.longestDailyStreak,
+    currentValue: (s) => s.bestStreak,
   },
   {
     id: "streak-100",
     icon: "🔥",
-    name: "Daily Streak",
-    description: "Visit 100 days in a row",
+    name: "Streak Keeper",
+    description: "Reach a 100-day Drawing Streak",
     coinReward: 5000,
     target: 100,
-    currentValue: (s) => s.longestDailyStreak,
+    currentValue: (s) => s.bestStreak,
   },
   {
     id: "share-1",

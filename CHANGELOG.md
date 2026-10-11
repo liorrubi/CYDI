@@ -9,6 +9,10 @@ Android 0.59.0 (versionCode 67) and web 0.59.0. Coins you already have, and ever
   a few coins, with bigger rewards and a celebration on days 3, 7, 14 and 30, and a new exclusive **Ember Ink**
   for your first 30-day streak. Your streak and today's progress (0/5 to 5/5) are on Home; tap it for the
   details. A **Streak Save** (earned along the way, or 300 coins) covers a missed day automatically.
+- **One streak:** the Drawing Streak replaces the old visit streak. The five streak achievements keep their
+  coins and Mega cards and now follow your Drawing Streak; achievements you already earned stay earned, and
+  progress you had from visits counts as your starting point, so nothing goes backwards. The streak is also
+  shown at the top of Achievements.
 - **New prices:** Purple, Green and Orange Ink now cost 750, Rainbow Ink 6,000 and Diamond Blue 9,000.
   Categories are priced by how many you've unlocked: 1,000 for your first, 1,250 for the second and 1,500 after
   that - the price is shown on the map.

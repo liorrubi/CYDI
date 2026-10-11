@@ -62,7 +62,7 @@ export type SaveData = {
     /**
      * 0.59.0 Drawing Streak (a day counts with 5 finished drawings, any mix of modes; Israel calendar day).
      * Optional: saves from older builds have none - read through drawingStreakStore.ts, which normalizes it.
-     * Separate from `dailyStreak` (app visits), which keeps driving the visit-streak achievements unchanged.
+     * The only streak: `dailyStreak` (pre-0.59 app visits) is frozen, read only as the streak achievements' progress floor.
      */
     drawingStreak?: {
       /** Israel date (YYYY-MM-DD) of the last day that counted; "" = never. */

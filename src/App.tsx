@@ -59,7 +59,6 @@ import { toAchievements, toChallengesHub, toDailyChallenge, toFriendChallengeInt
   toPlayTogether, toPlayTogetherJoin, toSeoLanding, toShapeChallenge, toSharedArtistResult, toSharedResult,
   toSiteHome } from "./app/routes";
 import { JOIN_LINK_PATH_PATTERN, resolveIncomingAppLinkId, resolveIncomingJoinCode, SHORT_LINK_PATH_PATTERN } from "./app/appLinks";
-import { recordDailyVisit } from "./services/dailyStreakStore";
 import { trackEvent } from "./services/analytics";
 import { initEconomyAnalytics } from "./services/economyAnalytics";
 import {
@@ -532,10 +531,6 @@ export default function App({ landing }: AppProps) {
     return () => {
       listenerPromise.then((listener) => listener.remove());
     };
-  }, []);
-
-  useEffect(() => {
-    recordDailyVisit();
   }, []);
 
   useEffect(() => {

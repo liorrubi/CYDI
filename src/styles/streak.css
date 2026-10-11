@@ -701,3 +701,10 @@
     display: none;
   }
 }
+
+/* 0.59.0 Achievements: the Drawing Streak bar leads the list, at the list's width. */
+.achievement-streak {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: var(--space-3);
+}

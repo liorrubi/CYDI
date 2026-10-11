@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AppHeader from "../components/AppHeader";
+import StreakStrip from "../components/StreakStrip";
 import {
   ACHIEVEMENTS,
   achievementProgressLabel,
@@ -35,6 +36,10 @@ export default function AchievementsScreen({ from, onNavigate }: AchievementsScr
         onNavigateToHome={() => onNavigate(toHome())}
         onNavigateToSettings={() => onNavigate(toSettings())}
       />
+      {/* 0.59.0: the Drawing Streak (daily consistency) leads; the achievements below are one-time accomplishments. */}
+      <div className="achievement-streak">
+        <StreakStrip />
+      </div>
       <div className="achievement-list">
         {ACHIEVEMENTS.map((achievement) => {
           const unlocked = unlockedIds.includes(achievement.id) || isAchievementUnlocked(achievement, stats);

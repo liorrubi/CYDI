@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { EMBER_CSS_GRADIENT } from "../app/constants";
+import { registerNavigationGuard } from "../app/navigationGuard";
+import { closeStreakCard, openStreakCard } from "../app/streakCardGate";
 import { earnsStreakSave, isBigStreakDay, isStreakMilestone, STREAK_MILESTONES, STREAK_SAVE_MAX } from "../app/drawingStreak";
 import { triggerCoinFlight } from "../engine/coinFlight";
 import { playSelectSound, playSuccessSound } from "../engine/soundEngine";
@@ -32,19 +34,8 @@ function isLiveGame(d: { route: string }): boolean {
   return d.route === "multiplayer" || d.route === "two_players" || liveGamesMounted > 0;
 }
 
-/**
- * The Drawing Streak's moments, for every mode, from ONE place (mounted once in App):
- *   - a small "🔥 3/5 today" pill when a drawing counts in a mode without its own streak line (Classic and the
- *     Daily show progress on their result screens);
- *   - when a day counts: a compact banner with the coins (and any Save or Ember) - on ordinary days, and on every
- *     day inside a live Multiplayer / 2 Players game;
- *   - on milestone, Save and Ember days elsewhere: one celebration card listing every reward, the new balance and
- *     the Saves held - dismissed by a tap, never repeated.
- * Each moment comes from a one-shot event fired only when the store actually pays, so a reload, a navigation or a
- * repeated completion can never show it - or pay it - twice.
- */
 export default function StreakCelebration() {
-  const [day, setDay] = useState<StreakDayEventDetail | null>(null);
+  const [day, setDay] = useState<{ detail: StreakDayEventDetail; card: boolean } | null>(null);
   const [progress, setProgress] = useState<StreakProgressEventDetail | null>(null);
 
   useEffect(
@@ -58,8 +49,11 @@ export default function StreakCelebration() {
   useEffect(
     () =>
       onStreakDayCompleted((d) => {
+        // Decided once, at the moment the day pays: a card (milestone / Save / Ember day, not in a live game) or a banner.
+        const card = isBigDay(d) && !isLiveGame(d);
+        if (card) openStreakCard(); // offers under it wait until it closes (app/streakCardGate.ts)
         setProgress(null);
-        setDay(d);
+        setDay({ detail: d, card });
       }),
     [],
   );
@@ -69,8 +63,18 @@ export default function StreakCelebration() {
     return () => window.clearTimeout(t);
   }, [progress]);
 
-  if (day && isBigDay(day) && !isLiveGame(day)) return <StreakDayCard detail={day} onClose={() => setDay(null)} />;
-  if (day) return <StreakDayBanner detail={day} onDone={() => setDay(null)} />;
+  if (day?.card) {
+    return (
+      <StreakDayCard
+        detail={day.detail}
+        onClose={() => {
+          setDay(null);
+          closeStreakCard();
+        }}
+      />
+    );
+  }
+  if (day) return <StreakDayBanner detail={day.detail} onDone={() => setDay(null)} />;
   if (progress) {
     return (
       <div className="streak-toast streak-toast-progress" role="status">
@@ -118,15 +122,25 @@ function StreakDayCard({ detail, onClose }: { detail: StreakDayEventDetail; onCl
   const coinsRef = useRef<HTMLDivElement | null>(null);
   const ref = useDialogA11y<HTMLDivElement>(true, { onClose });
   const next = STREAK_MILESTONES.find((m) => m.day > c.day);
+  const close = () => {
+    playSelectSound();
+    onClose();
+  };
   useEffect(() => {
     playSuccessSound();
     const t = window.setTimeout(() => triggerCoinFlight(coinsRef.current), 450);
     return () => window.clearTimeout(t);
   }, []);
-  const close = () => {
-    playSelectSound();
-    onClose();
-  };
+  // Android Back closes the card (like Nice!) instead of leaving the screen underneath it.
+  useEffect(
+    () =>
+      registerNavigationGuard(() => {
+        close();
+        return true;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   return (
     <div className="streak-celebrate-backdrop" onClick={close}>
       <div ref={ref} className="streak-celebrate" role="dialog" aria-modal="true" aria-labelledby="streak-celebrate-title" onClick={(e) => e.stopPropagation()}>

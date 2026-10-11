@@ -36,7 +36,7 @@ import { runtimeCatalogCounts } from "./siteShapes";
 import ModePreview from "./ModePreview";
 import type { ShapeDefinition } from "../content/contentRepository";
 import { getCoins } from "../services/coinsStore";
-import { getCurrentStreak } from "../services/dailyStreakStore";
+import { getStreakView } from "../services/drawingStreakStore";
 import { DAILY_PRIZE_COINS, MP_ROOM_CODE_LENGTH } from "../content/publicFacts";
 import {
   DRAWING_CHALLENGES_HREF,
@@ -83,8 +83,8 @@ export default function SiteHome({ onPlayClassic, onOpenGameMenu, onDailyChallen
   // The real balance, never a mocked one - and hidden entirely for a visitor who
   // has not earned any yet, so a first-time viewer is not shown a zero.
   const [coins] = useState(() => getCoins());
-  // A real local value, read once - no network call on a marketing page.
-  const [streak] = useState(() => getCurrentStreak());
+  // A real local value, read once - no network call on a marketing page. 0.59.0: the Drawing Streak, the only streak.
+  const [streak] = useState(() => getStreakView().current);
   // Which step of the loop the hero is on, so the card's rule row below it can
   // mark the same one. The row is part of the approved layout, not an addition.
   const [heroPhase, setHeroPhase] = useState<HeroPhase>("see");
@@ -348,7 +348,7 @@ export default function SiteHome({ onPlayClassic, onOpenGameMenu, onDailyChallen
       {/*
         * Secondary on purpose: a single slim card AFTER the three modes, not a
         * feature grid. It reads one real local value - the player's current
-        * streak - and otherwise just opens the existing Daily Challenge flow.
+        * Drawing Streak - and otherwise just opens the existing Daily Challenge flow.
         * No daily logic, no network call, nothing duplicated.
         */}
       <section className="site-band" aria-labelledby="site-daily-heading">

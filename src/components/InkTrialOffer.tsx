@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { whenStreakCardClosed } from "../app/streakCardGate";
 import { penColorById } from "../app/constants";
 import { TRIAL_PLAYS } from "../app/inkTrialPolicy";
 import { playChipSound, playSelectSound, playSuccessSound } from "../engine/soundEngine";
@@ -88,15 +89,20 @@ export default function InkTrialOffer({ ink, surface, placement, context, onShow
   useEffect(() => {
     void preloadRewardedAd(placement);
     onSkipReporter?.(reportSkip);
-    // Cleared if StrictMode re-runs the effect, so the render is counted exactly once.
+    // Cleared if StrictMode re-runs the effect, so the render is counted exactly once - and not while a streak
+    // celebration card covers it (counted once that card is closed).
+    let cancelShown = () => {};
     const t = window.setTimeout(() => {
-      shownRef.current = true;
-      trackEvent("reward_offer_shown", funnelParams());
-      recordInkOfferRendered(ink);
-      onShown?.();
+      cancelShown = whenStreakCardClosed(() => {
+        shownRef.current = true;
+        trackEvent("reward_offer_shown", funnelParams());
+        recordInkOfferRendered(ink);
+        onShown?.();
+      });
     }, 0);
     return () => {
       window.clearTimeout(t);
+      cancelShown();
       // Leaving the screen with the offer still open (Back, a header shortcut, Android Back): the same one skip
       // NOT NOW records. A screen that already reported through onSkipReporter, a NOT NOW or a grant settled it.
       // Not while an ad is in flight: its answer (grant / fail) settles the offer instead.

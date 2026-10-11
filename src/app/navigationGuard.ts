@@ -16,11 +16,15 @@ type Guard = () => boolean;
 
 let guard: Guard | null = null;
 
-/** Registers the guard for the screen currently in front. Returns the unregister function, so an effect can `return registerNavigationGuard(...)`. */
+/**
+ * Registers the guard for the screen (or overlay) currently in front. Returns the unregister function, so an effect
+ * can `return registerNavigationGuard(...)`. An overlay opened over a guarded screen hands the guard back on close.
+ */
 export function registerNavigationGuard(next: Guard): () => void {
+  const previous = guard;
   guard = next;
   return () => {
-    if (guard === next) guard = null;
+    if (guard === next) guard = previous;
   };
 }
 

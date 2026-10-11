@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { whenStreakCardClosed } from "../app/streakCardGate";
 import { penColorById } from "../app/constants";
 import { TRIAL_EXTENSION_PLAYS, extensionAdStep } from "../app/inkTrialPolicy";
 import { playChipSound, playSelectSound, playSuccessSound } from "../engine/soundEngine";
@@ -94,13 +95,18 @@ export default function InkTrialCta({ ink, surface, placement, sessionGames, onV
     if (extensionOffered) void preloadRewardedAd(placement);
     // Counted once it is really on screen (the timeout is cleared if StrictMode re-runs the effect), and a CTA left
     // without a choice reports `dismissed` exactly once. Not while the extension's ad is on screen: its answer settles it.
+    // Not while a streak celebration card covers it: counted once that card is closed.
+    let cancelShown = () => {};
     const t = window.setTimeout(() => {
-      shownRef.current = true;
-      markInkCtaShown(ink, surface, deferredInterstitial);
-      if (extensionOffered) trackEvent("reward_offer_shown", funnelParams());
+      cancelShown = whenStreakCardClosed(() => {
+        shownRef.current = true;
+        markInkCtaShown(ink, surface, deferredInterstitial);
+        if (extensionOffered) trackEvent("reward_offer_shown", funnelParams());
+      });
     }, 0);
     return () => {
       window.clearTimeout(t);
+      cancelShown();
       if (shownRef.current && !decidedRef.current && !adPendingRef.current) {
         decidedRef.current = true;
         recordInkCtaOutcome(ink, "dismissed", surface);

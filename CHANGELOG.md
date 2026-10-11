@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.59.1 - 2026-10-11
+
+Web 0.59.1 only. Android stays 0.59.0 (versionCode 67); no game, Worker logic, data or settings change.
+
+- **Drawing Streak on the website:** /whats-new has an October 2026 entry for the Drawing Streak, and /how-to-play has a short
+  "The Drawing Streak" section after "The Daily Challenge" (a day counts at 5 drawings in any mix of modes; coins every day,
+  bigger rewards and a celebration on days 3, 7, 14 and 30, Ember Ink for the first 30-day streak; a Streak Save covers a
+  missed day). Copy only - no new page, route, script or analytics.
+
 ## 0.59.0 - 2026-10-09
 
 Android 0.59.0 (versionCode 67) and web 0.59.0. Coins you already have, and everything you already own, stay exactly as they are.

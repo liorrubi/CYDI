@@ -332,6 +332,16 @@ const HOW_TO_PLAY: ContentPage = {
         `${DAILY_PRIZE_COINS[2]} coins, waiting to be claimed the next time they open the game.`,
     },
 
+    { kind: "h2", text: "The Drawing Streak", id: "drawing-streak" },
+    {
+      kind: "p",
+      html:
+        "Play on consecutive days to build a streak. A day counts when you finish five drawings in any mix of " +
+        "modes. Every day pays a few coins; days 3, 7, 14 and 30 pay more and get a celebration, and your first " +
+        "30-day streak earns Ember Ink. If you miss a day, a Streak Save &mdash; earned along the way or bought for " +
+        "300 coins &mdash; covers it automatically.",
+    },
+
     { kind: "h2", text: "2 Players on one phone", id: "two-players" },
     {
       kind: "p",
@@ -1004,7 +1014,7 @@ const ACCESSIBILITY: ContentPage = {
  * the engineering detail the changelog carries. Nothing here is generated or
  * fetched: it is edited by hand at release time, like the changelog itself.
  */
-const WHATS_NEW_LAST_UPDATED = "28 September 2026";
+const WHATS_NEW_LAST_UPDATED = "11 October 2026";
 
 const WHATS_NEW: ContentPage = {
   path: "/whats-new",
@@ -1019,6 +1029,17 @@ const WHATS_NEW: ContentPage = {
       html:
         "CYDI is made by two people and updated often. This page lists what has changed for players, newest " +
         'first. For how the game itself works, see <a href="/how-to-play">How to play</a>.',
+    },
+
+    { kind: "h2", text: "October 2026" },
+    {
+      kind: "ul",
+      items: [
+        "<strong>11 October</strong> - Drawing Streak. Play on consecutive days to build a streak: a day counts " +
+          "once you finish 5 drawings, in any mix of modes. Every day pays a few coins, with bigger rewards and a " +
+          "celebration on days 3, 7, 14 and 30, plus Ember Ink for the first 30-day streak. A Streak Save, earned " +
+          "along the way or bought for 300 coins, covers a missed day. Your streak is shown on the Home screen.",
+      ],
     },
 
     { kind: "h2", text: "September 2026" },

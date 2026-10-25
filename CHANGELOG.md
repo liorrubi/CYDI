@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.59.2 - 2026-10-25
+
+Web 0.59.2 only. Android stays 0.59.0 (versionCode 67); no game, Worker logic, data or settings change.
+
+- **Seven challenge pages get their own guides:** the Dog, Cat, Triangle, Lightning Bolt, Gear, Star and Heart practice pages
+  were still one shared template with a paragraph swapped. Each now explains its own shape: how the scorer shares its comparison
+  points across that shape's parts, a scored example with the attempt drawn over the target and a table of what each typical
+  mistake costs, and three drills taken from the shape's geometry. The numbers come from the game's real scorer, computed at
+  build time and committed, so the pages run no scorer and make no request. Copy and static images only - no new page, route,
+  script or analytics; titles, canonicals and the sitemap are unchanged.
+
 ## 0.59.1 - 2026-10-11
 
 Web 0.59.1 only. Android stays 0.59.0 (versionCode 67); no game, Worker logic, data or settings change.

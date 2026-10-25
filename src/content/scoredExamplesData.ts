@@ -239,6 +239,395 @@ export const SCORED_EXAMPLES: ScoredExampleData[] = [
       }
     ],
     "image": "/images/seo/draw-a-bear-from-memory-scored-example.svg"
+  },
+  {
+    "path": "/draw-a-dog-from-memory",
+    "shapeId": "ani-dog",
+    "partShares": [
+      {
+        "name": "Head outline",
+        "percent": 44,
+        "points": 56
+      },
+      {
+        "name": "Floppy ears",
+        "percent": 39,
+        "points": 49
+      },
+      {
+        "name": "Eyes",
+        "percent": 8,
+        "points": 10
+      },
+      {
+        "name": "Nose, muzzle line and mouth",
+        "percent": 9,
+        "points": 12
+      }
+    ],
+    "rows": [
+      {
+        "label": "The same hand, no mistake",
+        "total": 88,
+        "shapeMatch": 85,
+        "coverage": 99,
+        "smoothness": 71,
+        "scale": 99
+      },
+      {
+        "label": "Ears 35% smaller and set higher on the head",
+        "total": 72,
+        "shapeMatch": 62,
+        "coverage": 94,
+        "smoothness": 70,
+        "scale": 99
+      },
+      {
+        "label": "Nose, muzzle line and mouth drawn higher, close to the eyes",
+        "total": 81,
+        "shapeMatch": 75,
+        "coverage": 100,
+        "smoothness": 71,
+        "scale": 99
+      },
+      {
+        "label": "The mouth left out",
+        "total": 70,
+        "shapeMatch": 60,
+        "coverage": 97,
+        "smoothness": 72,
+        "scale": 99
+      }
+    ],
+    "image": "/images/seo/draw-a-dog-from-memory-scored-example.svg"
+  },
+  {
+    "path": "/draw-a-cat-from-memory",
+    "shapeId": "ani-cat",
+    "partShares": [
+      {
+        "name": "Head outline, with the two ear points",
+        "percent": 60,
+        "points": 77
+      },
+      {
+        "name": "Eyes",
+        "percent": 10,
+        "points": 12
+      },
+      {
+        "name": "Nose and W-shaped mouth",
+        "percent": 11,
+        "points": 14
+      },
+      {
+        "name": "The four whiskers",
+        "percent": 20,
+        "points": 25
+      }
+    ],
+    "rows": [
+      {
+        "label": "The same hand, no mistake",
+        "total": 88,
+        "shapeMatch": 85,
+        "coverage": 100,
+        "smoothness": 71,
+        "scale": 100
+      },
+      {
+        "label": "Whiskers drawn 30% shorter and lower on the cheeks",
+        "total": 68,
+        "shapeMatch": 57,
+        "coverage": 97,
+        "smoothness": 71,
+        "scale": 96
+      },
+      {
+        "label": "Ear points drawn 60% shorter",
+        "total": 76,
+        "shapeMatch": 70,
+        "coverage": 95,
+        "smoothness": 73,
+        "scale": 94
+      },
+      {
+        "label": "The whiskers left out",
+        "total": 61,
+        "shapeMatch": 50,
+        "coverage": 74,
+        "smoothness": 71,
+        "scale": 92
+      }
+    ],
+    "image": "/images/seo/draw-a-cat-from-memory-scored-example.svg"
+  },
+  {
+    "path": "/draw-a-triangle-from-memory",
+    "shapeId": "polygon-3",
+    "partShares": [
+      {
+        "name": "Base",
+        "percent": 33,
+        "points": 43
+      },
+      {
+        "name": "Left side",
+        "percent": 33,
+        "points": 43
+      },
+      {
+        "name": "Right side",
+        "percent": 33,
+        "points": 43
+      }
+    ],
+    "rows": [
+      {
+        "label": "The same hand, no mistake",
+        "total": 91,
+        "shapeMatch": 88,
+        "coverage": 99,
+        "smoothness": 94,
+        "scale": 98
+      },
+      {
+        "label": "Apex drifts 8% of the width off the centre line",
+        "total": 77,
+        "shapeMatch": 68,
+        "coverage": 99,
+        "smoothness": 94,
+        "scale": 98
+      },
+      {
+        "label": "Base tilts 7° with the apex held in place",
+        "total": 84,
+        "shapeMatch": 78,
+        "coverage": 99,
+        "smoothness": 94,
+        "scale": 96
+      },
+      {
+        "label": "Drawn 30% too tall for its width",
+        "total": 79,
+        "shapeMatch": 75,
+        "coverage": 99,
+        "smoothness": 94,
+        "scale": 86
+      }
+    ],
+    "image": "/images/seo/draw-a-triangle-from-memory-scored-example.svg"
+  },
+  {
+    "path": "/draw-a-lightning-bolt-from-memory",
+    "shapeId": "sym-lightning",
+    "partShares": [
+      {
+        "name": "Upper arm - the two edges that meet at the top tip",
+        "percent": 36,
+        "points": 46
+      },
+      {
+        "name": "The two horizontal steps",
+        "percent": 17,
+        "points": 22
+      },
+      {
+        "name": "Lower arm - the two edges that meet at the bottom tip",
+        "percent": 46,
+        "points": 59
+      }
+    ],
+    "rows": [
+      {
+        "label": "The same hand, no mistake",
+        "total": 93,
+        "shapeMatch": 92,
+        "coverage": 100,
+        "smoothness": 90,
+        "scale": 98
+      },
+      {
+        "label": "Bottom tip drawn halfway under the top tip",
+        "total": 79,
+        "shapeMatch": 72,
+        "coverage": 97,
+        "smoothness": 89,
+        "scale": 99
+      },
+      {
+        "label": "The two steps drawn at the same height",
+        "total": 87,
+        "shapeMatch": 82,
+        "coverage": 99,
+        "smoothness": 89,
+        "scale": 99
+      },
+      {
+        "label": "An extra kink added to the long lower edge",
+        "total": 89,
+        "shapeMatch": 85,
+        "coverage": 99,
+        "smoothness": 87,
+        "scale": 98
+      }
+    ],
+    "image": "/images/seo/draw-a-lightning-bolt-from-memory-scored-example.svg"
+  },
+  {
+    "path": "/draw-a-gear-from-memory",
+    "shapeId": "gear-8",
+    "partShares": [
+      {
+        "name": "Tooth tips - the eight flat tops",
+        "percent": 17,
+        "points": 22
+      },
+      {
+        "name": "Tooth sides - sixteen flanks",
+        "percent": 52,
+        "points": 66
+      },
+      {
+        "name": "Gaps between teeth - eight floors",
+        "percent": 31,
+        "points": 40
+      }
+    ],
+    "rows": [
+      {
+        "label": "The same hand, no mistake",
+        "total": 91,
+        "shapeMatch": 89,
+        "coverage": 99,
+        "smoothness": 68,
+        "scale": 99
+      },
+      {
+        "label": "Six teeth instead of eight",
+        "total": 71,
+        "shapeMatch": 61,
+        "coverage": 89,
+        "smoothness": 76,
+        "scale": 98
+      },
+      {
+        "label": "Teeth bunched on one side, gaps stretched on the other",
+        "total": 79,
+        "shapeMatch": 73,
+        "coverage": 99,
+        "smoothness": 68,
+        "scale": 100
+      },
+      {
+        "label": "Tooth tips and shoulders rounded off",
+        "total": 88,
+        "shapeMatch": 87,
+        "coverage": 97,
+        "smoothness": 66,
+        "scale": 96
+      }
+    ],
+    "image": "/images/seo/draw-a-gear-from-memory-scored-example.svg"
+  },
+  {
+    "path": "/draw-a-perfect-star",
+    "shapeId": "star-5",
+    "partShares": [
+      {
+        "name": "Top arm",
+        "percent": 20,
+        "points": 26
+      },
+      {
+        "name": "The two upper arms",
+        "percent": 40,
+        "points": 51
+      },
+      {
+        "name": "The two lower legs",
+        "percent": 40,
+        "points": 51
+      }
+    ],
+    "rows": [
+      {
+        "label": "The same hand, no mistake",
+        "total": 93,
+        "shapeMatch": 92,
+        "coverage": 99,
+        "smoothness": 84,
+        "scale": 99
+      },
+      {
+        "label": "One arm drawn 30% short",
+        "total": 75,
+        "shapeMatch": 67,
+        "coverage": 94,
+        "smoothness": 86,
+        "scale": 94
+      },
+      {
+        "label": "Inner corners pushed 40% further out",
+        "total": 79,
+        "shapeMatch": 72,
+        "coverage": 89,
+        "smoothness": 86,
+        "scale": 99
+      },
+      {
+        "label": "Bottom two tips drawn a tenth of the star's width closer together",
+        "total": 85,
+        "shapeMatch": 81,
+        "coverage": 95,
+        "smoothness": 84,
+        "scale": 99
+      }
+    ],
+    "image": "/images/seo/draw-a-perfect-star-scored-example.svg"
+  },
+  {
+    "path": "/draw-a-perfect-heart",
+    "shapeId": "sym-heart",
+    "partShares": [
+      {
+        "name": "Lobes and the dip between them",
+        "percent": 47,
+        "points": 60
+      },
+      {
+        "name": "The two sides running down to the point",
+        "percent": 53,
+        "points": 68
+      }
+    ],
+    "rows": [
+      {
+        "label": "The same hand, no mistake",
+        "total": 94,
+        "shapeMatch": 93,
+        "coverage": 99,
+        "smoothness": 89,
+        "scale": 100
+      },
+      {
+        "label": "Right lobe drawn 18% narrower than the left",
+        "total": 83,
+        "shapeMatch": 79,
+        "coverage": 94,
+        "smoothness": 89,
+        "scale": 95
+      },
+      {
+        "label": "Bottom point drawn 8% of the width off the centre line",
+        "total": 90,
+        "shapeMatch": 87,
+        "coverage": 99,
+        "smoothness": 89,
+        "scale": 100
+      }
+    ],
+    "image": "/images/seo/draw-a-perfect-heart-scored-example.svg"
   }
 ];
 

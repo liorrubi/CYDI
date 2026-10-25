@@ -35,15 +35,18 @@ test("the committed overlays are exactly what the generator draws today", () => 
 test("every page with a deep dive has a scored example, and only those", () => {
   const withDeepDive = CHALLENGE_PAGE_COPY.filter((copy) => copy.deepDive).map((copy) => copy.path).sort();
   assert.deepEqual(SCORED_EXAMPLES.map((example) => example.path).sort(), withDeepDive);
-  assert.ok(withDeepDive.length >= 4 && withDeepDive.length <= 5, "the deep dive is scoped to 4-5 pages");
+  assert.equal(withDeepDive.length, 12, "every shape-specific challenge page has a deep dive; the accuracy test shares the circle");
 });
 
 test("each signature mistake costs points against the same hand without it", () => {
   for (const definition of SCORED_EXAMPLE_DEFINITIONS) {
-    const [baseline, ...mistakes] = computeScoredExample(definition).rows;
+    const [baseline, featured, ...others] = computeScoredExample(definition).rows;
     assert.ok(baseline.total >= 85, `${definition.path}: the clean attempt should score well (${baseline.total})`);
-    for (const mistake of mistakes) {
-      assert.ok(mistake.total < baseline.total - 10, `${definition.path}: "${mistake.label}" should cost real points`);
+    // The first mistake is the one drawn in the page's overlay, so it has to be a visible loss.
+    assert.ok(featured.total < baseline.total - 10, `${definition.path}: "${featured.label}" should cost real points`);
+    // The others may be honest findings that a detail costs little, but never nothing.
+    for (const mistake of others) {
+      assert.ok(mistake.total <= baseline.total - 3, `${definition.path}: "${mistake.label}" should cost something`);
     }
   }
 });

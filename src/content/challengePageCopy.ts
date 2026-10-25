@@ -86,6 +86,13 @@ const owlExample = scored("/draw-an-owl-from-memory");
 const pigExample = scored("/draw-a-pig-from-memory");
 const snailExample = scored("/draw-a-snail-from-memory");
 const bearExample = scored("/draw-a-bear-from-memory");
+const dogExample = scored("/draw-a-dog-from-memory");
+const catExample = scored("/draw-a-cat-from-memory");
+const triangleExample = scored("/draw-a-triangle-from-memory");
+const lightningExample = scored("/draw-a-lightning-bolt-from-memory");
+const gearExample = scored("/draw-a-gear-from-memory");
+const starExample = scored("/draw-a-perfect-star");
+const heartExample = scored("/draw-a-perfect-heart");
 
 const ACCURACY_TEST: ChallengePageCopy = {
   path: "/drawing-accuracy-test",
@@ -166,6 +173,35 @@ const PERFECT_STAR: ChallengePageCopy = {
     width: 400,
     height: 400,
   },
+  deepDive: {
+    scorerHeading: "Five arms, a fifth of the line each",
+    scorerParagraphs: [
+      `The star is one closed line of ten straight edges, and the scorer spreads its ${RESAMPLE_POINTS} comparison points along it by length. The top arm gets ${starExample.partShares[0].percent}% of them (${starExample.partShares[0].points} points), the two upper arms ${starExample.partShares[1].percent}% between them and the two lower legs ${starExample.partShares[2].percent}% - a fifth each. No arm counts for more than another, so there is no arm to get wrong for free.`,
+      "Because the outline is closed, the scorer tries every starting point in both directions: begin at any tip and go either way round. What it does not forgive is an arm of the wrong length or a corner on the wrong ring - shape match is held to the worst-matching tenth of the outline, and one stunted arm is a fifth of it.",
+    ],
+    exampleHeading: "A short arm, a fat star, drooping legs",
+    exampleParagraphs: [
+      `The same hand, with nothing wrong, scores ${starExample.rows[0].total}. Pull one tip in so that its arm comes out 30% short and the star scores ${starExample.rows[1].total}: shape match falls from ${starExample.rows[0].shapeMatch} to ${starExample.rows[1].shapeMatch}, while the other four arms are drawn exactly as before.`,
+      `Push all five inner corners 40% further out and the star starts to turn into a flower: ${starExample.rows[2].total}, with coverage down to ${starExample.rows[2].coverage}, because the fatter outline holds more line than the target does. Bring the two bottom tips a tenth of the star's width closer together and the total is ${starExample.rows[3].total}.`,
+    ],
+    exampleImageAlt: "The five-point star target in grey with a freehand star drawn over it in blue, its upper-left arm visibly shorter than the target's",
+    exampleImageCaption: `One arm 30% short, over the target. Scored by the game's own scorer: ${starExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for a straighter star",
+    drills: [
+      {
+        title: "Two rings",
+        body: "Picture two circles around the centre: the tips on one about 70% of the canvas across, the inner corners on a second about 30% across - the inner ring sits 43% of the way out to the tips. Land the corners on that inner ring and the star keeps its points.",
+      },
+      {
+        title: "Level pairs",
+        body: "The two side tips sit level with each other, about 39% of the way down the canvas, and the two bottom tips level with each other at about 78%, roughly 41% of the canvas apart. Check each pair against the other before you move on.",
+      },
+      {
+        title: "Compare the last arm with the first",
+        body: "Draw the five tips in order, and before the line closes compare the last arm with the first. It is the one that has to meet the start, which makes it the one most likely to have been stretched or squeezed on the way round.",
+      },
+    ],
+  },
 };
 
 const PERFECT_HEART: ChallengePageCopy = {
@@ -185,6 +221,35 @@ const PERFECT_HEART: ChallengePageCopy = {
     width: 400,
     height: 400,
   },
+  deepDive: {
+    scorerHeading: "A curve with no corners to hide behind",
+    scorerParagraphs: [
+      `The heart is one smooth closed curve, and the scorer spreads its ${RESAMPLE_POINTS} comparison points along it by length: ${heartExample.partShares[0].percent}% (${heartExample.partShares[0].points} points) on the two lobes and the dip between them, ${heartExample.partShares[1].percent}% (${heartExample.partShares[1].points}) on the two sides that run down to the bottom point. The long slopes are a little more of the line than the lobes are.`,
+      "There is no corner to aim at - the only sharp places are the dip at the top and the point at the bottom - so the scorer is comparing curve with curve. It tries every starting point in both directions, so where you begin and which way you go round cost nothing; what counts is how closely each half of the outline follows the target's.",
+    ],
+    exampleHeading: "A narrower lobe, or a wandering point",
+    exampleParagraphs: [
+      `The same hand, with nothing wrong, scores ${heartExample.rows[0].total}. Draw the right lobe 18% narrower than the left and the heart scores ${heartExample.rows[1].total}: shape match falls from ${heartExample.rows[0].shapeMatch} to ${heartExample.rows[1].shapeMatch}, and scale from ${heartExample.rows[0].scale} to ${heartExample.rows[1].scale} too, because a heart with a narrow side is a smaller heart.`,
+      `Let the bottom point wander 8% of the width off the centre line instead and the total is ${heartExample.rows[2].total}. In this example an off-centre point costs less than a plainly narrower lobe: the drifting point moves only the lowest stretch of the outline, where the narrow lobe moves a whole side of it.`,
+    ],
+    exampleImageAlt: "The heart target in grey with a freehand heart drawn over it in blue, its right lobe visibly narrower than the target's",
+    exampleImageCaption: `Right lobe 18% narrower than the left, over the target. Scored by the game's own scorer: ${heartExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for an even heart",
+    drills: [
+      {
+        title: "One vertical, two landmarks",
+        body: "Before you draw, picture a vertical line down the middle of the canvas. The dip between the lobes sits on it about 45% of the way down, and the bottom point sits on it at about 88%.",
+      },
+      {
+        title: "Match the lobes",
+        body: "Each lobe peaks about 14% of the canvas to one side of the centre line and about 13% above the dip - the same on both sides. The heart is widest almost level with the dip, so draw the outer curves bulging out there before they turn down.",
+      },
+      {
+        title: "Keep bending",
+        body: "The target is 61% of the canvas wide and 55% tall, a little wider than it is tall. The outer curves keep bending all the way down into the point; a heart that comes out much wider than tall has probably gone flat on its sides.",
+      },
+    ],
+  },
 };
 
 const DOG_FROM_MEMORY: ChallengePageCopy = {
@@ -193,8 +258,38 @@ const DOG_FROM_MEMORY: ChallengePageCopy = {
   detailHeading: "Where the ears go",
   paragraphs: [
     "Look at the dog for a couple of seconds. It disappears, the canvas clears, and you draw it back from memory - ears, muzzle, eyes and all. The score comes straight after, with your line laid over the target so you can see exactly where your memory drifted.",
-    "Drawing from memory is a different problem from tracing. The outline is gone when your hand starts moving, so what you are really redrawing is what you noticed: how far apart the ears sit, how low the muzzle hangs, how wide the head is against its height. Most people get the head about right and discover the ears moved.",
+    "Drawing from memory is a different problem from tracing. The outline is gone when your hand starts moving, so what you are really redrawing is what you noticed: how far apart the ears sit, how low the muzzle hangs, how wide the head is against its height. It is easy to get the head about right and discover the ears moved.",
+    "The target is built from eight separate pieces: a head about as wide as it is tall, two floppy ears, two eyes, a small round nose, a short muzzle line and a two-stroke mouth. The ears are the unusual part. Each is a closed loop that straddles the head's outline - roughly half of it inside the head and half outside - so the ears stick out past the sides of the face instead of sitting on top of it.",
   ],
+  deepDive: {
+    scorerHeading: "Why the ears outweigh the eyes",
+    scorerParagraphs: [
+      `The dog is eight separate parts, and the scorer spreads its ${RESAMPLE_POINTS} comparison points along the line by length. The head outline carries ${dogExample.partShares[0].percent}% of them (${dogExample.partShares[0].points} points). The two floppy ears carry ${dogExample.partShares[1].percent}% - ${dogExample.partShares[1].points} points, nearly as many as the head itself. The eyes get ${dogExample.partShares[2].percent}%, and the nose, muzzle line and mouth together ${dogExample.partShares[3].percent}%: the features that make it a dog's face are the smallest part of the score.`,
+      "Stroke order is not scored, so draw the parts in whatever order suits you. What is scored is that every part is there and in the right place, which is what the next section prices.",
+    ],
+    exampleHeading: "Ears, a misplaced muzzle, a missing mouth",
+    exampleParagraphs: [
+      `The same hand, with nothing wrong, scores ${dogExample.rows[0].total}. Draw both ears 35% smaller and set higher on the head and the dog scores ${dogExample.rows[1].total}: shape match falls from ${dogExample.rows[0].shapeMatch} to ${dogExample.rows[1].shapeMatch}, while coverage only slips from ${dogExample.rows[0].coverage} to ${dogExample.rows[1].coverage}, because nearly all the line is still there, just not where the ears belong.`,
+      `Slide the nose, muzzle line and mouth up until they crowd the eyes and the score is ${dogExample.rows[2].total} - a smaller loss, from a group that is only ${dogExample.partShares[3].percent}% of the line. Leave the mouth out altogether and it falls to ${dogExample.rows[3].total}, a bigger loss than moving the whole muzzle. A misplaced part still lines up roughly with the target; a missing one gives the target's points nothing to line up with, so even a crude mouth is worth drawing.`,
+    ],
+    exampleImageAlt: "The dog target in grey with a freehand dog drawn over it in blue, both ears visibly smaller and set higher on the head than the target's",
+    exampleImageCaption: `Ears 35% smaller and set higher, over the target. Scored by the game's own scorer: ${dogExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for the dog",
+    drills: [
+      {
+        title: "Ears astride the outline",
+        body: "Draw the head, then each ear so that it straddles the outline: about half its width inside the head, half outside. Each ear starts just below the top of the head and hangs to about 70% of the way down, so it is around three-fifths as tall as the head.",
+      },
+      {
+        title: "Eyes at 43%",
+        body: "Put the eye centres about 43% of the way down the head - above the middle, not on it - and about a third of the head's width apart.",
+      },
+      {
+        title: "One stack under the eyes",
+        body: "Everything below the eyes sits on the centre line: the nose about 64% of the way down the head, a short line dropping from it, then a mouth no wider than about a quarter of the head.",
+      },
+    ],
+  },
 };
 
 const CAT_FROM_MEMORY: ChallengePageCopy = {
@@ -203,8 +298,38 @@ const CAT_FROM_MEMORY: ChallengePageCopy = {
   detailHeading: "A face, not a list of features",
   paragraphs: [
     "The cat is on screen for a couple of seconds. Then it is gone, the canvas clears, and you draw it back from memory - the head, the two ears, the eyes and the whiskers. Your line is scored against the target and laid over it afterwards, so you can see which part of it you remembered and which part you invented.",
-    "A face is harder to redraw than it looks, because the features have to land in the right place relative to each other, not just be present. Most people get a good head and then find the ears too small and the whiskers too low.",
+    "A face is harder to redraw than it looks, because the features have to land in the right place relative to each other, not just be present. It is easy to get a good head and then find the ears too small and the whiskers too low.",
+    "The cat's ears are not separate shapes: they are built into the head's outline. The line rises to a point on each side and drops into a notch at the crown between them, and each tip stands about a fifth of the head's height above that notch. The four whiskers are straight lines that start inside the face and run out past the outline - the upper pair angled up as they leave, the lower pair angled slightly down.",
   ],
+  deepDive: {
+    scorerHeading: "Whiskers are a fifth of the cat",
+    scorerParagraphs: [
+      `The cat is nine separate parts. The head outline, with both ear points, carries ${catExample.partShares[0].percent}% of the ${RESAMPLE_POINTS} comparison points. The four whiskers - plain straight lines, the plainest part of the drawing - carry ${catExample.partShares[3].percent}% (${catExample.partShares[3].points} points): twice what the two eyes get (${catExample.partShares[1].percent}%) and more than the nose and W-shaped mouth together (${catExample.partShares[2].percent}%).`,
+      "Four short lines are easy to treat as decoration. To the scorer they are a fifth of the drawing, which is why the next section prices what happens when they are drawn short, drawn low, or left out.",
+    ],
+    exampleHeading: "What whiskers and ear points cost",
+    exampleParagraphs: [
+      `The same hand, with nothing wrong, scores ${catExample.rows[0].total}. Draw the whiskers 30% shorter and a little lower on the cheeks and it scores ${catExample.rows[1].total}: shape match falls from ${catExample.rows[0].shapeMatch} to ${catExample.rows[1].shapeMatch}. Four lines that look like detail cost ${catExample.rows[0].total - catExample.rows[1].total} points.`,
+      `Ear points drawn 60% shorter - stubby bumps instead of points - cost ${catExample.rows[0].total - catExample.rows[2].total}, for a total of ${catExample.rows[2].total}. Leave the whiskers out altogether and it is ${catExample.rows[3].total}, with coverage down to ${catExample.rows[3].coverage}, because a fifth of the line is simply missing.`,
+    ],
+    exampleImageAlt: "The cat target in grey with a freehand cat drawn over it in blue, its four whiskers visibly shorter and lower on the cheeks than the target's",
+    exampleImageCaption: `Whiskers 30% shorter and lower, over the target. Scored by the game's own scorer: ${catExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for the cat",
+    drills: [
+      {
+        title: "Whiskers cross the outline",
+        body: "Draw the head first, then start each whisker inside the face and run it out past the outline. Each is about a third as long as the head is wide, and its tip ends about a tenth of the head's width outside the outline.",
+      },
+      {
+        title: "Up above, down below",
+        body: "The upper whisker on each side leaves the face angled up by about 12°; the lower one angles down by about 6° - the lower pair is the flatter of the two.",
+      },
+      {
+        title: "Climb to the tip, drop to the notch",
+        body: "Draw the crown as a climb to a point on each side with a notch between them. The two tips are about three-quarters of the head's width apart, and each stands about a fifth of the head's height above the notch.",
+      },
+    ],
+  },
 };
 
 const BEAR_FROM_MEMORY: ChallengePageCopy = {
@@ -365,8 +490,38 @@ const LIGHTNING_FROM_MEMORY: ChallengePageCopy = {
   detailHeading: "Less symmetrical than you remember",
   paragraphs: [
     "The bolt is on screen for a couple of seconds, then it is gone and the canvas is empty. You draw it back from memory - one unbroken line, all straight edges, no curves anywhere - and your attempt is scored against the target and laid over it afterwards, so you can see exactly where the angles went.",
-    "A lightning bolt is the shape everyone thinks they know. What memory drops is that it is not symmetrical: the upper arm leans one way, the lower arm leans back the other, and the step between them sits off-centre rather than in the middle. The other common miss is the corner count - people add zigzags that are not there, because a bolt feels busier than it is.",
+    "A lightning bolt is the shape everyone thinks they know, which is exactly why the details slip. It is one closed outline of six corners and no curves: a top tip, a bottom tip, and two short horizontal steps between them, the right one a little higher than the left. It is twice as tall as it is wide - 80% of the canvas high, 40% wide - and nothing about it is symmetrical.",
+    "What gives it away is how the edges lean. Measured from vertical, the long edge running up to the right from the bottom tip leans about 36°, while the edge on the same side running down from the top tip is almost upright, at about 9°. On the left, the upper edge leans about 32° and the lower one about 18°. The easy slip is to even all of that out into a tidy Z, with the bottom tip straight under the top one; adding an extra kink is the other.",
   ],
+  deepDive: {
+    scorerHeading: "Where the line is, and where the scorer looks",
+    scorerParagraphs: [
+      `The bolt is one line of six straight edges, and the scorer spreads its ${RESAMPLE_POINTS} comparison points along it by length. The lower arm - the two edges that meet at the bottom tip - holds ${lightningExample.partShares[2].percent}% of them (${lightningExample.partShares[2].points} points), the upper arm ${lightningExample.partShares[0].percent}%, and the two short horizontal steps only ${lightningExample.partShares[1].percent}% between them.`,
+      "A bolt has no small features for a near-miss to hide in: a tip that is out of place moves a whole arm, and shape match is held to the worst-matching tenth of the outline. So where the two tips sit matters more than how the steps are drawn, which is what the example below measures.",
+    ],
+    exampleHeading: "The tips against the steps",
+    exampleParagraphs: [
+      `With nothing wrong, the same hand scores ${lightningExample.rows[0].total}. Draw the bottom tip halfway under the top tip - a drift of a tenth of the canvas, enough to make the bolt look straighter - and it scores ${lightningExample.rows[1].total}: shape match falls from ${lightningExample.rows[0].shapeMatch} to ${lightningExample.rows[1].shapeMatch}.`,
+      `The details that look important cost less. Both steps at the same height: ${lightningExample.rows[2].total}. An extra kink in the long lower edge: ${lightningExample.rows[3].total}. Each costs less than half of what one drifting tip costs.`,
+    ],
+    exampleImageAlt: "The lightning bolt target in grey with a freehand bolt drawn over it in blue, its bottom tip visibly further right than the target's, closer to being under the top tip",
+    exampleImageCaption: `Bottom tip drawn halfway under the top tip, over the target. Scored by the game's own scorer: ${lightningExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for the bolt",
+    drills: [
+      {
+        title: "Tips first",
+        body: "Place the two tips before you draw anything else: the top tip about 55% of the way across the canvas and 10% down, the bottom tip at 35% across and 90% down. The bottom tip sits 20% of the canvas to the left of the top one - half the bolt's width.",
+      },
+      {
+        title: "Two steps, two heights",
+        body: "The steps are the one place the bolt runs level: the left one about 50% of the way down the canvas, the right one about 8% higher, at 42%, and nearly the same length (18% and 20% of the canvas). Keep the right step higher than the left.",
+      },
+      {
+        title: "Count to six",
+        body: "Name the corners as you draw: top, out left, in, bottom, out right, in - six, and then back to the top. A seventh means you have added a kink.",
+      },
+    ],
+  },
 };
 
 const TRIANGLE_FROM_MEMORY: ChallengePageCopy = {
@@ -375,8 +530,38 @@ const TRIANGLE_FROM_MEMORY: ChallengePageCopy = {
   detailHeading: "Why the base never comes out level",
   paragraphs: [
     "Three straight lines and three corners, on screen for a couple of seconds, then gone. You draw it back from memory onto an empty canvas, and your attempt is scored against the target and laid over it afterwards, so you can see exactly where it went.",
-    "It is the shape people are most confident about and least accurate at. Freehand, the base tilts - almost nobody draws it level - the apex drifts off the centre line, and the two sides come out at different lengths, so what felt like an even triangle reads as a lean. The edges bow slightly too: a hand drawing at speed curves where it means to go straight.",
+    "It looks like the easiest shape in the library, and it is the one with the least to hide behind. The target is an equilateral triangle: three sides of the same length, three 60° corners, a perfectly level base and an apex straight above the middle of it. Freehand, each of those can slip - the base tilts, the apex drifts off the centre line, one side comes out longer than the other - and the edges bow slightly as a hand drawing at speed curves where it means to go straight.",
+    "It is 59% of the canvas wide and 51% tall, so its height is about 0.87 of its width. With no features to carry the drawing, three straight lines either meet where they should or they do not.",
   ],
+  deepDive: {
+    scorerHeading: "Three equal sides, three chances to be wrong",
+    scorerParagraphs: [
+      `The triangle is one closed line, and the scorer spreads its ${RESAMPLE_POINTS} comparison points evenly along it: about ${triangleExample.partShares[0].points} for each of the three sides, ${triangleExample.partShares[0].percent}% apiece. Where you start, and which way round you go, are not scored - every starting point is tried in both directions - so the order of the corners is yours.`,
+      "What is scored is where each side ends up. Shape match can be no better than the worst-matching tenth of the outline allows, so one side that has strayed does more damage than a slight wobble spread over all three - which is what an apex drifting off the centre line does.",
+    ],
+    exampleHeading: "Apex, tilt or proportions: what each slip costs",
+    exampleParagraphs: [
+      `The same hand, with nothing wrong, scores ${triangleExample.rows[0].total}. Let the apex drift 8% of the triangle's width off the centre line and it scores ${triangleExample.rows[1].total}: shape match falls from ${triangleExample.rows[0].shapeMatch} to ${triangleExample.rows[1].shapeMatch}. Nothing is missing and the size is unchanged - coverage is ${triangleExample.rows[1].coverage}, scale ${triangleExample.rows[1].scale} - but the two sides are now different lengths.`,
+      `Tilt the base by 7°, holding the apex in place, and the total is ${triangleExample.rows[2].total}. Draw the triangle 30% too tall for its width and it is ${triangleExample.rows[3].total}, with scale down to ${triangleExample.rows[3].scale} as the drawing outgrows the target's size.`,
+    ],
+    exampleImageAlt: "The triangle target in grey with a freehand triangle drawn over it in blue, its apex visibly to one side of the target's apex so the two sides are different lengths",
+    exampleImageCaption: `Apex 8% of the width off the centre line, over the target. Scored by the game's own scorer: ${triangleExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for the triangle",
+    drills: [
+      {
+        title: "Level base first",
+        body: "Draw the base on its own, left to right, as a level line about 59% of the canvas wide - the target's base sits about two-thirds of the way down the canvas - and only then go up to the apex.",
+      },
+      {
+        title: "Apex over the midpoint",
+        body: "The apex sits exactly above the middle of the base, and about 0.87 of the base's length above it. Mark the midpoint in your head before you leave the base.",
+      },
+      {
+        title: "Compare the two sides",
+        body: "Judge the two sloping sides against each other, not against the base: they should be the same length and meet the base at the same 60° angle. A side that is visibly longer means the apex has drifted.",
+      },
+    ],
+  },
 };
 
 const GEAR_FROM_MEMORY: ChallengePageCopy = {
@@ -385,8 +570,38 @@ const GEAR_FROM_MEMORY: ChallengePageCopy = {
   detailHeading: "Nobody remembers the number",
   paragraphs: [
     "A cog with eight teeth, on screen for a couple of seconds, then gone. You draw it back from memory onto an empty canvas, and your attempt is scored against the target and laid over it afterwards, so you can see which teeth landed and which ones you invented.",
-    "The trap is that nobody remembers a number. You remember “a gear”, and then you draw however many teeth feel right - which is almost never eight. Even with the count correct, the spacing goes: teeth bunch on one side and the gaps stretch on the other, because the eye keeps the shape and drops the rhythm. The teeth also have flat tops and square shoulders, and a hand drawing at speed rounds them off.",
+    "The trap is that a gear is remembered as an idea, not as a count. You remember “a gear”, and then you draw however many teeth feel right - which is easily not eight. Even with the count correct, the spacing is what slips: teeth bunch on one side and the gaps stretch on the other, because the eye keeps the shape and drops the rhythm.",
+    "The target is one closed outline of 32 corners. Each of the eight teeth is a short trapezoid - 18° wide where it joins the ring and a flat 10.8° across its top - and they are spaced 45° apart, so each gap is wider than the tooth beside it. The gear is 72% of the canvas across, and the teeth stand only about 10% of the canvas tall.",
   ],
+  deepDive: {
+    scorerHeading: "A gear is mostly sides and gaps",
+    scorerParagraphs: [
+      `The gear is one closed line, and the scorer spreads its ${RESAMPLE_POINTS} comparison points along it by length. The sixteen sides of the teeth hold ${gearExample.partShares[1].percent}% of them (${gearExample.partShares[1].points} points) and the eight gaps between teeth ${gearExample.partShares[2].percent}%. The eight flat tops - the part that looks most like a tooth - hold only ${gearExample.partShares[0].percent}%.`,
+      "The scorer tries every starting point in both directions, so where you begin and which way you go round never matter. What matters is that the teeth land where the target's do around the ring: shape match is held to the worst-matching tenth of the outline, and a gear with the wrong number of teeth is wrong all the way round.",
+    ],
+    exampleHeading: "Tooth count, spacing and rounding",
+    exampleParagraphs: [
+      `The same hand, with nothing wrong, scores ${gearExample.rows[0].total}. Draw six teeth instead of eight - a clean, even gear, just the wrong one - and it scores ${gearExample.rows[1].total}, with coverage down to ${gearExample.rows[1].coverage}: ${gearExample.rows[0].total - gearExample.rows[1].total} points for getting the count wrong.`,
+      `Keep eight teeth but let each sit up to 9° from its place - a fifth of the 45° between teeth, so they bunch on one side and spread on the other - and it scores ${gearExample.rows[2].total}. Round the tops and shoulders into bumps and it barely matters: ${gearExample.rows[3].total}. The scorer is looking for the count and the spacing, not for sharp corners.`,
+    ],
+    exampleImageAlt: "The eight-tooth gear target in grey with a freehand gear drawn over it in blue that has only six teeth, spaced further apart",
+    exampleImageCaption: `Six teeth instead of eight, over the target. Scored by the game's own scorer: ${gearExample.rows[1].total} / 100.`,
+    drillsHeading: "Three drills for the gear",
+    drills: [
+      {
+        title: "Teeth at the compass points",
+        body: "Eight teeth means one at the top, bottom, left and right, and one in each diagonal between them. Mark those eight places in your head before you start and aim a tooth at each.",
+      },
+      {
+        title: "Gaps wider than teeth",
+        body: "At the ring, each tooth is 18° wide and each gap 27° - a gap is half as wide again as a tooth. Draw the gaps wider than the teeth.",
+      },
+      {
+        title: "Short, tapering teeth",
+        body: "The teeth stand only about 10% of the canvas tall against a gear 72% across, and their tops are narrower than their roots (10.8° against 18°). Draw them as short trapezoids, not as long spikes.",
+      },
+    ],
+  },
 };
 
 export const CHALLENGE_PAGE_COPY: ChallengePageCopy[] = [

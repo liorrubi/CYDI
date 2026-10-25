@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.59.3 - 2026-10-25
+
+Web 0.59.3 only. Android stays 0.59.0 (versionCode 67); no game, Worker logic, data or settings change.
+
+- **Deep-dive tables fit narrow phones:** on the twelve challenge pages with a scoring breakdown, the "scored example" table is
+  about 330px wide and was clipped by up to roughly 50px on a 320px-wide screen, hiding part of its last column. Both tables now
+  scroll sideways inside their own frame, so every column can be reached and the page itself never scrolls sideways. Layout only -
+  no copy, scoring, route or page-source change; wider screens look exactly as before.
+
 ## 0.59.2 - 2026-10-25
 
 Web 0.59.2 only. Android stays 0.59.0 (versionCode 67); no game, Worker logic, data or settings change.

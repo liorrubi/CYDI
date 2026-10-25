@@ -1540,10 +1540,29 @@
 }
 
 /* Deep-dive tables: the scorer's share per part, and a scored example. */
+
+/*
+ * The five-column scored-example table is about 330px wide at its narrowest (its
+ * numeric headers do not wrap), which is wider than the column on a 320px phone.
+ * It scrolls inside this wrapper instead of being clipped by the page, so the last
+ * column stays reachable and the page itself never scrolls sideways.
+ */
+.site-datatable-scroll {
+  max-width: 68ch;
+  margin-top: 22px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.site-datatable-scroll:focus-visible {
+  outline: 2px solid var(--site-cta);
+  outline-offset: 2px;
+}
+
 .site-datatable {
   width: 100%;
   max-width: 68ch;
-  margin-top: 22px;
+  margin-top: 0;
   border-collapse: collapse;
   font-size: 14px;
   color: var(--color-text);
@@ -2495,6 +2514,15 @@
   .site-faq,
   .site-guide-with-figure {
     grid-template-columns: 1fr;
+  }
+
+  /* minmax(0, ...) so a wide table scrolls in its wrapper instead of stretching the column. */
+  .site-guide-with-figure {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-guide-with-figure > * {
+    min-width: 0;
   }
 
   .site-hero-bloom {

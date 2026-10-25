@@ -224,6 +224,7 @@ export default function SeoPracticePage({ path, shape, onPractice, onPlay }: Seo
                     {paragraph}
                   </p>
                 ))}
+                <div className="site-datatable-scroll" role="region" aria-label="Each part's share of the line" tabIndex={0}>
                 <table className="site-datatable">
                   <caption>Each part's share of the line, and of the scorer's comparison points</caption>
                   <thead>
@@ -252,6 +253,7 @@ export default function SeoPracticePage({ path, shape, onPractice, onPlay }: Seo
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
           </section>
@@ -269,6 +271,7 @@ export default function SeoPracticePage({ path, shape, onPractice, onPlay }: Seo
                       {paragraph}
                     </p>
                   ))}
+                  <div className="site-datatable-scroll" role="region" aria-label="Scored attempts" tabIndex={0}>
                   <table className="site-datatable">
                     <caption>Scored by the game's own scorer, out of 100</caption>
                     <thead>
@@ -300,6 +303,7 @@ export default function SeoPracticePage({ path, shape, onPractice, onPlay }: Seo
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
                 <figure className="site-guide-figure">
                   <img
